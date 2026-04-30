@@ -5,6 +5,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 
+from supabase import create_client
+
 from app.core.auth import CurrentUser, get_current_user
 from app.core.config import settings
 from app.core.database import get_supabase_admin
@@ -59,9 +61,10 @@ def _mint_token(user_id: str, tenant_id: str, role: str, email: str) -> str:
 @router.post("/login", response_model=TokenResponse)
 async def login(body: LoginRequest) -> TokenResponse:
     """Authenticate with email + password. Returns a signed JWT."""
-    client = get_supabase_admin()
+    # Use a FRESH anon client for sign-in — never mutate the cached admin client's session.
+    anon_client = create_client(settings.supabase_url, settings.supabase_anon_key)
     try:
-        resp = client.auth.sign_in_with_password({"email": body.email, "password": body.password})
+        resp = anon_client.auth.sign_in_with_password({"email": body.email, "password": body.password})
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials") from exc
 
@@ -69,9 +72,10 @@ async def login(body: LoginRequest) -> TokenResponse:
     if not supabase_user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    # Fetch the platform user record (has tenant_id + role)
+    # Use admin client (service role) to fetch platform user — bypasses RLS.
+    admin = get_supabase_admin()
     user_row = (
-        client.table("users")
+        admin.table("users")
         .select("id, tenant_id, role, status")
         .eq("id", str(supabase_user.id))
         .single()

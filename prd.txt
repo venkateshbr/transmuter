@@ -1,0 +1,707 @@
+Value Creation Platform: Comprehensive PRD & Feature List
+
+1. Product Overview
+Product Name: Transmuter Tagline: Value Creation Platform for Transformation Programs Positioning: AI-powered command center for enterprise transformation programs Operated By: ishirock Logged-in User Context: Transformation Office (role-based access)
+Core Purpose: Transmuter enables transformation offices to manage, track, and govern enterprise initiatives end-to-end — from ideation through scoping, in-progress execution, and completion — with real-time visibility into value creation, milestones, risks, KPIs, financials, and meeting cadences.
+
+2. Platform Architecture
+Navigation Structure
+The platform uses a persistent top navigation bar with the following primary sections:
+Nav Item	URL	Description
+Dashboard	/	Personal command center
+Initiatives	/initiatives/pipeline	Portfolio management
+Progress Monitor	/progress	Milestones, actions, status, dependencies
+Meetings	/meetings	Meeting cadence management
+People	/people	User & team management
+Admin	/admin	System administration (Coming Soon)
++ Transmuter (AI)	—	Right-panel AI assistant
+Global Header Elements:
+* Transmuter logo (with orange period branding)
+* Logged-in user name + role (e.g., "Transformation Office")
+* User avatar button → Profile dropdown
+* "??" help/loading indicator
+* "+ Transmuter" AI assistant toggle
+User Profile Dropdown (top-right avatar):
+* Display name + email address
+* Help & FAQ
+* Edit Profile
+* Sign Out
+
+3. Module 1 — My Dashboard
+URL: / Purpose: Personalized at-a-glance overview of the user's initiatives, milestones, and actions
+3.1 Filters
+Three dropdown filters that update all dashboard widgets simultaneously:
+* All Business Units — filter by organizational BU
+* All Workstreams — filter by workstream
+* All RAG — filter by Red/Amber/Green status
+3.2 Executive Summary Button
+* Orange primary CTA button: + Executive Summary
+* Generates/exports a portfolio-level executive summary document
+3.3 My Milestones Widget
+* Shows milestones assigned to the logged-in user across all initiatives
+* Badge shows total count (e.g., "2")
+* Each milestone row shows: milestone name, parent initiative name, due status ("Due today" in red, or relative days)
+* Clicking a milestone navigates to the parent initiative detail
+3.4 My Actions Widget
+* Shows action items assigned to the logged-in user from meeting sessions
+* Badge shows total count (e.g., "3")
+* Each action shows: action description, source meeting + date, due status
+* Clicking an action navigates to the source meeting
+3.5 Pipeline Value Card
+    * Displays portfolio-level financial summary:
+    * Plan value (e.g., $0m)
+    * Actual value
+* Links to Initiatives Pipeline
+3.6 Pipeline by Stage Widget
+* Visual breakdown of initiatives by lifecycle stage (Scoping → In-Progress → Complete)
+* "View Pipeline" link → navigates to full pipeline
+* Tooltip: "What is Pipeline by Stage?"
+3.7 Summary Stat Cards
+* Total Initiatives — total count, links to pipeline
+* At Risk — count of red-RAG initiatives, links to pipeline filtered by red
+* Pending Approvals — count of initiatives awaiting gate approval, links to governance
+3.8 RAG Breakdown Widget
+* Visual breakdown of all initiatives by Red/Amber/Green health status
+* Tooltip explanation available
+3.9 Portfolio Pressure Gauge
+* Semi-circular gauge visualization (0–10 scale)
+* Displays aggregate portfolio pressure score
+* Shows "Low/Medium/High" classification
+* Shows average of active initiatives
+* Tooltip: "What is Portfolio Pressure?"
+3.10 Risk Heatmap Widget
+* 3×3 matrix grid: Impact (High/Medium/Low) vs Likelihood (Low/Medium/High)
+* Each cell shows count of risks at that intersection
+* Cells are color-coded: red=High, orange=Medium, teal/green=Low
+* Each cell is clickable → links to /pmo/risks filtered by that impact/likelihood combination
+* "Open register →" link to full risk register
+* Tooltip: "What is Risk Heatmap?"
+3.11 KPI Pulse Widget
+* Shows KPIs with actuals across all initiatives
+* Currently shows placeholder if no actuals have been entered
+3.12 Value Bridge Widget
+* Three-column layout: Benefits, Costs, Net
+* Each column shows: Base Case, High Case, Actual rows (in USD)
+* Legend: Base · High · Actual
+* Tooltip: "What is Value Bridge?"
+3.13 Recent Activity Widget
+* Shows status update activity across all the user's initiatives
+* Shows count of updates
+* Tooltip: "What is Recent activity?"
+
+4. Module 2 — Initiatives (Portfolio)
+4.1 Pipeline View
+URL: /initiatives/pipeline
+Page Header:
+* Title: "Initiatives." with count subtitle (e.g., "56 initiatives across 2 stages")
+* Filter bar: All Business Units, All Workstreams, All RAG, All Stages, All Priorities
+* View toggle: Pipeline (list) | Matrix (2×2 chart)
+* Search bar (text search across initiative names)
+* + New Initiative button (orange)
+* Export Portfolio link → downloads full CSV via /api/export/initiative?all=true
+Pipeline List Columns:
+* Expand row toggle (chevron)
+* RAG — color dot (Green/Amber/Red)
+* Initiative — initiative name (clickable link)
+* Priority — High/Medium/Low badge
+* Workstream — workstream tag
+* Business Unit — business unit name
+* Planned Value — financial range (e.g., $0.12m–$0.18m)
+* Actual Value
+Sortable columns: Initiative, Priority, Workstream, Business Unit, Planned Value
+Pipeline Stages Shown:
+1. Scoping — (header shows financial range, e.g., $32.11m–$46.52m)
+2. In-Progress — (header shows financial range)
+3. Complete — (shows "No initiatives at this stage")
+Initiative Types observed:
+* Revenue Growth, Cost Reduction, Cost Avoidance, Compliance, Capability Building
+Priority Levels: High, Medium, Low
+Workstreams:
+* People and Culture (HR), ERP (Finance), Southeast Asia, Australia & New Zealand, North Asia, Group Commercial, Group Productivity
+Countries/Business Units:
+* Group, Singapore, Hong Kong, Malaysia, Thailand, Indonesia, Vietnam, Philippines, Cambodia, Myanmar, Laos, India, China, Japan, South Korea, Taiwan, Australia, New Zealand, UAE
+Initiative Tags: Automation, Offshoring, Commercial, Other
+
+4.2 Matrix View
+URL: /initiatives/matrix Purpose: Impact vs. complexity analysis of the portfolio
+Filter: Country dropdown (All Countries + individual country options)
+Four Quadrants:
+Quadrant	X-axis	Y-axis	Description
+Quick Wins	Early Stage (L0–L2)	High Impact	High-value, relatively easy initiatives
+Strategic Bets	Late Stage (L3–L5)	High Impact	High-value but complex/long-horizon
+Fill-Ins	Early Stage (L0–L2)	Low Impact	Lower value, smaller scope
+Review	Late Stage (L3–L5)	Low Impact	Low-value, complex — candidates for deprioritization
+Each initiative card shows: truncated name + planned value + RAG color dot
+
+4.3 Initiative Detail Page
+URL: /initiatives/{uuid}
+Header Section:
+* Breadcrumb: Initiatives → Initiative Name
+* Initiative title (large heading) + edit pencil icon
+* Short executive summary description
+* Metadata tags: Initiative ID (e.g., ALQ-043), RAG/On-Track status, Workstream, Country, Type tag, Priority, Due date
+* Initiative Owner avatar + name (top right)
+* Edit Initiative button (link to /initiatives/{uuid}/edit)
+* Import/Export button
+* Lifecycle stage progress indicator: Scoping → In-Progress → Complete (with I/O toggle)
+Tab Navigation (8 tabs):
+Tab 1: Overview
+* Executive Summary section (editable inline with pencil icon)
+* Context and Problem Statement (editable)
+* Value Logic (editable)
+* Timeline section: Planned Start, Actual Start, Planned End, Actual End + "Edit dates" button
+* Notes region: "Add" button, free-form notes capture
+* Action Items region: "Add" button, linked action tracking
+    * Value Metrics cards (right sidebar):
+    * Revenue Uplift — Plan (base/high case shown)
+    * Revenue Uplift — Actual
+    * Gross Margin — Plan
+    * Gross Margin — Actual
+    * Costs — Plan (with line item count)
+    * Costs — Actual
+    * Days Until Planned End
+    * Actual Result (Revenue actual − costs actual)
+* KPI Indicators table: KPI name, This Quarter, This Year, All Time columns
+    * Pressure Widget: Overall score (x/10), classified Low/Medium/High, with sub-scores:
+    * Schedule (0–2.5)
+    * Milestone health (0–2.0)
+    * Risk exposure (0–2.0)
+    * KPI performance (0–1.5)
+    * Financial (0–1.0)
+    * Self reported (0–1.0)
+    * Each sub-score has an info tooltip explaining the methodology
+    * Initiative Team section:
+    * Initiative Owner (with "Change initiative owner" button)
+    * Group Owner (clickable to assign)
+    * Team members list + "Add" button
+Tab 2: Financials
+* Summary — All years section with year-by-year toggle (All, 2026, 2027, 2028, 2029, 2030)
+    * Summary cards:
+    * Gross Margin Plan (USD)
+    * Gross Margin Actual (USD)
+    * Gross Margin Plan (%)
+    * Gross Margin Actual (%)
+    * Costs Plan (Recurring)
+    * Costs Actual (Recurring)
+    * Net Value (Plan) — highlighted dark
+    * Net Value (Actual)
+* Financials table with year/quarter toggle (2026–2030) + Full Year + All Years
+* View modes: Summary | Advanced
+    * Financial rows:
+    * Revenue Uplift section: Planned (base case), Planned (high case), Actual Revenue Uplift
+    * Gross Margin section: Planned (base), Planned (high), Actual Gross Margin
+    * Gross Margin Uplift (%) section: base/high/actual
+    * Costs section: individual cost line items (e.g., Implementation Cost), with actual rows
+* Columns: Q1, Q2, Q3, Q4, Full Year, All Years
+Tab 3: Milestones
+* Header: "Milestones." with total count + "X due soon" alert
+* Search bar — search milestones by text
+* Sort dropdown — "Manual order" (default) + other sort options
+* Filter button
+* + New Milestone button (orange)
+    * Milestone table columns:
+    * Status (Complete, In progress, Not started) with color indicator
+    * Priority (High/Med/Low badge)
+    * Pressure score (numeric, with color)
+    * Milestone name (truncated text)
+    * Owner (avatar)
+    * Due Date (color-coded red if overdue)
+    * Expand chevron
+Expanded Milestone Detail (inline):
+* Full milestone title
+* Description (with "Add one" prompt if empty)
+* Owner avatar
+* Plan Start / Actual Start / Plan End / Actual End dates
+    * Pressure panel (right):
+    * Total score (x/10) + Low/Medium/High classification
+    * "Reach 0 direct" indicator
+        * Sub-scores:
+        * Blast radius (0–3.5)
+        * Dependent urgency (0–2.5)
+        * Cluster bonus (0–1.5)
+        * Slack penalty (0–1.5)
+        * Checklist (0–0.5)
+        * Self status (0–0.5)
+    * Progress bar for each sub-score
+* Checklist section
+* Dependencies section
+Tab 4: KPIs
+* Year/quarter toggle (2026–2030)
+* View: Summary | Advanced
+* + Add KPI button (orange)
+* KPIs grouped by category (e.g., "Gross margin 1 KPI", "Operational 3 KPIs")
+    * Each KPI card shows:
+    * KPI name + type badge (e.g., OPERATIONAL)
+    * Frequency + unit (e.g., Quarterly · Percentage %)
+    * "No actuals yet" status indicator
+    * Edit (pencil) + Delete (trash) icons
+    * Table with rows: Base Case, High Case, Actual, Indicator
+    * Columns: Q1, Q2, Q3, Q4, Full Year, All Years
+Tab 5: Risks
+* Header: "Risks." with count (e.g., "3 identified")
+* Search bar — search risks
+* Sort dropdown — "Risk Rating" (default)
+* Filter button
+* + New Risk button (orange)
+    * Risk table columns:
+    * Status (Open/Closed dot indicator)
+    * Risk description
+    * Rating (High/Medium/Low badge)
+    * Impact (High/Medium/Low badge)
+    * Likelihood (High/Medium/Low badge)
+    * Type (Operational, People, Financial, Technology)
+    * Owner (avatar)
+    * Expand chevron
+* + Add risk inline row at bottom
+Tab 6: Status Updates
+* Header: "Status Updates." with count
+* + New Draft button
+    * Each status update card shows:
+    * RAG indicator (Green/Amber/Red badge)
+    * Author avatar + name
+    * Date submitted
+    * Summary — narrative paragraph
+    * Achievements — bulleted list
+    * Issues — bulleted list
+    * Next Steps — (below fold)
+Tab 7: Gates
+* Stage Gates section
+    * Shows gate cards (G1, G2, etc.) with:
+    * Gate label (G1 = "Next Gate", G2 = "Future")
+    * Exit criteria checklist (checkboxes)
+    * Auto-validated criteria (marked "auto") vs. manual criteria
+    * Gate submission panel:
+    * Gate name + description (e.g., "G1 — Move to In-Progress")
+    * Stage transition label (e.g., "scoping → execution")
+    * Exit Criteria list with met/unmet indicators
+    * Count of criteria met (e.g., "7/7 met")
+    * Gate decision options
+Tab 8: Summary & Results
+* Header: "Summary & Results." + "Draft" status indicator
+* Planned Value vs. Realised Value side-by-side cards
+* Final Summary — rich text editor (H2, H3, B, I, U, Lists, Quote formatting)
+* Lessons Learned — rich text editor
+
+4.4 New/Edit Initiative Form
+URL: /initiatives/{uuid}/edit and (implied) /initiatives/new
+Form Fields:
+Field	Type	Notes
+Initiative Name	Text input	Required
+Workstream	Dropdown	Required — all workstreams
+Owner	Dropdown	Required — all platform users
+Group Owner	Dropdown	Optional — all platform users
+Initiative Type	Dropdown	Revenue Growth, Cost Reduction, Cost Avoidance, Compliance, Capability Building
+Impact Type	Dropdown	Recurring, One-off
+Theme	Dropdown	Custom themes (e.g., "Test")
+Country	Dropdown	19 countries + "Group"
+Initiative Tag	Dropdown	Automation, Offshoring, Commercial, Other
+Priority	Dropdown	High, Medium, Low
+Start Date	Date picker	dd/mm/yyyy
+Expected Completion Date	Date picker	dd/mm/yyyy
+Summary	Textarea	Executive summary
+Value Logic	Textarea	Logic behind the financial model
+Dependencies	Textarea	Cross-initiative or external dependencies
+Form Actions:
+* Update Initiative — save changes (primary orange)
+* Cancel — discard changes
+* Archive — archive the initiative (non-destructive)
+* Delete — permanently delete (destructive, red)
+
+5. Module 3 — Progress Monitor
+URL: /progress Purpose: Portfolio-level milestone, action item, status update compliance, and dependency tracking
+5.1 Milestone Tracker (/progress)
+    * Summary stats bar:
+    * Total (all milestones)
+    * Not Started
+    * On Track
+    * At Risk (orange)
+    * Completed
+    * Overdue (red)
+* Filters: All Business Units, All Workstreams, All RAG
+* Priority filter pills: High, Medium, Low
+* Search bar
+* Milestone list columns: Name, Initiative (linked), Due date, Pressure score, Status badge
+5.2 Action Items (/progress/action-items)
+    * Summary stats bar:
+    * Total
+    * Open
+    * In Progress
+    * Completed
+    * Cancelled
+    * Overdue (red)
+* Filters: All Business Units, All Workstreams, All RAG
+* Priority filter pills: High, Medium, Low
+* Search bar
+* Action items list columns: Description (with source meeting + date), Initiative (linked), Assignee, Due date, Priority badge, Status badge
+5.3 Status Updates (/progress/status-updates)
+    * Summary stats bar:
+    * Total Initiatives
+    * On Time (green)
+    * Overdue (orange)
+    * Nuclear (red) — severely overdue
+* Filters: All Business Units, All Workstreams, All RAG
+    * Sub-tabs:
+    * Compliance — list of all initiatives with their submission status
+    * Recent Updates — chronological feed of submitted updates
+    * Nudge Log — record of automated reminder nudges sent
+* Compliance tab filter pills: All / Nuclear / Overdue / On Time
+* Compliance list columns: Status badge, Initiative name, Owner, Last Update date, Days since last update, Nudges count, Nudge bell icon (send manual nudge)
+5.4 Dependencies (/progress/dependencies)
+    * Summary stats bar:
+    * Total Dependencies
+    * Blocking (Overdue) (red)
+    * At Risk (orange)
+    * Resolved (teal)
+* Filters: All Business Units, All Workstreams, All RAG
+* Dependency Milestones section — milestones shared across initiatives
+    * Cross-Milestone Dependencies table:
+    * Depends On (Upstream milestone)
+    * → arrow
+    * Milestone (Downstream milestone)
+    * Initiative
+    * Status badge
+
+6. Module 4 — Meetings
+URL: /meetings Purpose: Manage recurring transformation office meeting cadences
+6.1 Meeting List Page
+* Header: "Meetings." with count (e.g., "5 meetings across 3 workstreams")
+* Filters: All Workstreams, All Scopes, All Recurrences, All Owners
+* View toggle: Tiles | List
+* Search bar
+* + New Meeting button (orange)
+Meeting Card (Tile view) shows:
+* Meeting name (with colored left border by workstream)
+* Workstream + scope + recurrence frequency
+* Description text
+* Stats: Initiatives count, Attendees count, Open Actions count
+* Owner avatar + name
+* "Last:" date
+Observed meeting types: Weekly, Workstream-scoped, All-scoped
+6.2 Meeting Detail Page
+URL: /meetings/{uuid}
+Header:
+* Meeting name + "WEEKLY" badge
+* Metadata: Workstream · Scope · Owner name
+* Admin button (gear icon)
+* Start Session button (orange, flame icon) — creates a new live meeting session
+Stats row:
+* Initiatives (count)
+* Attendees (count)
+* Sessions (count)
+* Open Actions (count)
+Meeting Minutes section:
+    * List of past sessions by date, each showing:
+    * Date
+    * "TRANSCRIPT" badge — audio/video transcript was uploaded
+    * "AI OPTIMISED" badge — AI has processed and structured the notes
+    * "COMPLETED" status badge
+    * Expand chevron (to view session notes inline)
+Next Agenda section:
+* Carries forward into every new session as the starting checklist
+* "Add agenda item..." text input
+* "Link to initiative (optional)" dropdown
+* "Add" button
+* Items linked to an initiative open that initiative when clicked during a live session
+Attendees section:
+* Avatar grid of all recurring attendees with names
+Initiatives & Topics section:
+* Cards for each initiative linked to this meeting
+* Each card shows: INITIATIVE label, initiative name, stage (Scoping), RAG color badge, "Add to agenda" link
+* + Manage Initiatives button
+* + Add Topic button (for non-initiative agenda items)
+
+7. Module 5 — People
+URL: /people Purpose: User management, role assignment, workstream mapping
+7.1 Users Tab
+* Count badge (e.g., "82")
+* Filters: All roles dropdown, All statuses dropdown
+* Search bar
+* + Add User button (orange)
+* User list columns: Person (avatar + name + email + title), Role badge, Workstreams tags, Pressure score, Status badge, Expand chevron
+Expanded User Detail:
+* Status section: Active / Ghost / Deactivated indicator with description
+* Last Login date
+* Profile section: Title, Department, Market, Phone, Timezone
+* Workstreams section: Assigned workstream tags, or "Not assigned to any workstream"
+* Action buttons: Edit, Convert to ghost, Deactivate
+* On Their Plate section: Shows their current active initiatives/milestones/actions
+User Roles observed:
+* Transformation Office (admin/viewer)
+* Initiative Owner
+* Workstream Lead
+User Statuses:
+* Active — has platform access, appears in pickers
+* Ghost — visible but no login access
+* Deactivated
+7.2 Pending Invites Tab
+* List of invited users who haven't yet accepted
+
+8. Module 6 — PMO / Governance
+8.1 Governance (/pmo/governance)
+    * Summary stats:
+    * Health Score (x/4 format)
+    * Pending Gates count
+    * Approved Gates count
+    * Rejected Gates count
+    * Gate Submissions table:
+    * Initiative name (linked)
+    * Gate (G1, G2, etc.)
+    * Status badge (Approved/Pending/Rejected)
+    * Submitted date
+    * Decided date
+    * Commentary
+8.2 Risk Register (/pmo/risks)
+    * Summary stats bar:
+    * Total Open (count)
+    * High Impact (red count)
+    * Medium Impact (orange count)
+    * Low Impact (teal count)
+    * Escalated count
+    * Mitigating count
+* Filters: All Business Units, All Workstreams, All RAG
+    * Risk Heat Map (3×3 grid, clickable cells):
+    * Axes: Impact (High/Medium/Low) × Likelihood (High/Medium/Low)
+    * Color-coded: High risk = red/pink, Medium = orange, Low = teal
+    * Each cell shows risk count
+* By Type horizontal bar chart: Operational, People, Financial, Technology
+* By Status section: Open count badge
+    * Risk list table columns:
+    * Risk description (truncated + expandable)
+    * Initiative (linked)
+    * Type tag
+    * Impact badge
+    * Likelihood badge
+    * Status badge
+    * Mitigation text (truncated)
+
+9. Module 7 — Transmuter AI Assistant
+Trigger: "+ Transmuter" button in top navigation Behavior: Slides in as a right-side panel overlay
+Panel Header:
+* Transmuter logo/icon
+* "Portfolio assistant" subtitle
+* Close (×) button
+Panel Body:
+* "Ask Transmuter" heading
+* Description: "Query initiatives, milestones, check risks, generate reports."
+    * Suggested prompts (pre-built quick queries):
+    * "Show me at-risk initiatives"
+    * "What milestones are due this week?"
+    * "Summarize the portfolio"
+* Free-text input: "Ask Transmuter..." text box
+* Submit button (arrow icon)
+Context Awareness: The assistant is context-aware — it has access to all portfolio data including initiatives, milestones, risks, and KPIs.
+
+10. Onboarding / Welcome Tour
+Trigger: Shown on first load of the platform (or when session hasn't completed tour) Type: 5-slide modal carousel with skip option
+Slide	Title	Content
+1	Welcome to Transmuter.	"Value creation platform for transformation programs. Your AI-powered command center."
+2	Your Initiative Pipeline.	"Track every initiative from Scoping through In-Progress to Complete. Stage gates keep quality high."
+3	Real-Time Value Creation Health.	"RAG status, KPIs, milestones, risks — everything at a glance. AI flags what needs attention."
+4	AI-Powered Intelligence.	"Transmuter generates briefings, detects dependencies, drafts status updates, and nudges your team."
+5	Let's Get Started.	"Your portfolio is ready. Explore the dashboard or ask Transmuter anything." + "Don't show this again" checkbox
+Navigation controls: Back ←, Next →, SKIP, dot indicators, and final "Enter Transmuter →" CTA
+
+11. Admin Module
+URL: /admin Status: Coming Soon (placeholder page) Intended purpose: System administration
+
+12. Complete Feature List
+Portfolio Management
+*  Initiative pipeline view (list) with multi-column sorting
+*  Initiative matrix view (2×2 impact/complexity chart)
+*  56+ initiatives across multiple lifecycle stages (Scoping, In-Progress, Complete)
+*  Multi-dimensional filtering: Business Unit, Workstream, RAG, Stage, Priority
+*  Full-text search across initiatives
+*  Create new initiative
+*  Edit initiative metadata (name, owner, workstream, type, country, tag, dates, etc.)
+*  Archive initiative
+*  Delete initiative
+*  Export portfolio to CSV
+Initiative Detail & Tracking
+*  Executive summary (editable inline)
+*  Context & problem statement (editable)
+*  Value logic documentation (editable)
+*  Timeline management (planned/actual start & end dates)
+*  Notes capture (freeform)
+*  Action items (linked to initiative)
+*  Initiative ownership (Owner + Group Owner)
+*  Team management (add/remove team members)
+*  Initiative lifecycle stage progression (Scoping → In-Progress → Complete)
+*  Import/Export per initiative
+Financial Management
+*  Multi-year financial planning (2026–2030 horizon)
+*  Quarterly financial tracking (Q1–Q4 granularity)
+*  Revenue uplift tracking (base case, high case, actual)
+*  Gross margin tracking (USD and %)
+*  Cost tracking (recurring cost line items)
+*  Net value calculation (benefits minus costs)
+*  Summary vs. Advanced financial views
+*  Value Bridge analysis (portfolio-level)
+*  Pipeline Value aggregation
+Milestone Management
+*  Per-initiative milestone list with status/priority/pressure
+*  Milestone creation
+*  Milestone status tracking (Not started, In progress, Complete)
+*  Manual milestone ordering
+*  Milestone search & filtering
+*  Milestone due date tracking with overdue detection
+*  Inline milestone expansion showing pressure breakdown
+*  Milestone checklist items
+*  Milestone dependency mapping
+    *  Pressure scoring per milestone (0–10 scale, 6 sub-components):
+    * Blast radius, Dependent urgency, Cluster bonus, Slack penalty, Checklist, Self status
+*  Portfolio-level Milestone Tracker with stats (Total, Not Started, On Track, At Risk, Completed, Overdue)
+*  Priority filter on milestone tracker (High/Medium/Low)
+KPI Management
+*  Per-initiative KPI creation
+*  KPI types: Gross Margin, Operational, and custom
+*  KPI frequency tracking (Quarterly)
+*  KPI unit types (%, Hours, etc.)
+*  Base case, high case, and actual tracking per quarter
+*  Multi-year KPI history (2026–2030)
+*  KPI pulse widget on dashboard
+*  Summary vs. Advanced KPI views
+Risk Management
+*  Per-initiative risk register
+*  Risk creation
+*  Risk attributes: description, rating, impact, likelihood, type, owner, mitigation
+*  Risk types: Operational, People, Financial, Technology
+*  Risk status: Open/Closed
+*  Risk sorting by rating
+*  Risk search & filtering
+*  Portfolio-level Risk Register (aggregated)
+*  Risk Heat Map (3×3 Impact × Likelihood matrix)
+*  Risk breakdown by type (bar chart)
+*  Risk breakdown by status
+*  Risk escalation tracking
+*  Mitigation tracking
+Status Updates
+*  Draft and submit status updates per initiative
+*  Structured update format: Summary, Achievements, Issues, Next Steps
+*  RAG rating on each update
+*  Author and date timestamping
+*  Status update history per initiative
+*  Portfolio-level status update compliance tracking
+*  Compliance statuses: On Time, Overdue, Nuclear
+*  Nudge functionality (send reminders to initiative owners)
+*  Nudge log tracking
+Stage Gate Governance
+*  Two-gate model: G1 (Scoping → In-Progress) + G2 (In-Progress → Complete)
+*  Auto-validated gate criteria (e.g., "Owner is assigned", "Description is provided")
+*  Manual gate criteria review
+*  Criteria met/total tracking (e.g., "7/7 met")
+*  Gate submission for approval
+*  Gate decision workflow (Approve/Reject) with commentary
+*  Portfolio-level governance dashboard (Health Score, Pending/Approved/Rejected gates)
+*  Gate health score (x/4 format)
+Meeting Management
+*  Meeting series creation (recurring cadence)
+*  Meeting types: Weekly, bi-weekly, etc.
+*  Meeting scoping: Workstream-level or All
+*  Tile and List views for meeting catalog
+*  Multi-filter: Workstream, Scope, Recurrence, Owner
+*  Meeting detail page with sessions history
+*  Persistent Next Agenda (carries forward session to session)
+*  Agenda item creation with optional initiative link
+*  Meeting attendee management
+*  Initiative + topic linking to meetings
+*  Start Session — live meeting mode
+*  Session completion tracking
+*  Transcript upload (TRANSCRIPT badge)
+*  AI-optimized meeting notes (AI OPTIMISED badge)
+*  Meeting stats: Initiatives, Attendees, Sessions, Open Actions
+*  Action items captured from meetings
+Dependencies
+*  Cross-initiative dependency mapping (upstream/downstream milestones)
+*  Dependency milestone visualization
+*  Blocking dependency detection
+*  Dependency status tracking (Active, At Risk, Resolved)
+*  Portfolio-level dependencies view
+People & User Management
+*  82+ user platform with full user directory
+*  User roles: Transformation Office, Initiative Owner, Workstream Lead
+*  User statuses: Active, Ghost, Deactivated
+*  User profile: title, department, market, phone, timezone
+*  Workstream assignment per user
+*  Pressure score per user (workload indicator)
+*  "On their plate" view (user's active items)
+*  Invite new users (Pending Invites tab)
+*  Add user flow
+*  Edit user profile
+*  Convert user to ghost
+*  Deactivate user
+*  Role-based access control
+*  Filter users by role and status
+AI Assistant (Transmuter)
+*  Right-panel AI chat interface
+*  Portfolio-aware context (full data access)
+*  Suggested prompt shortcuts
+*  Natural language querying
+*  Suggested use cases: at-risk initiatives, due milestones, portfolio summaries, briefing generation, dependency detection, status update drafting, team nudging
+Dashboard & Analytics
+*  Personalized "My Dashboard" (user-scoped)
+*  My Milestones widget (user's assigned milestones)
+*  My Actions widget (user's assigned meeting actions)
+*  Portfolio Pressure gauge (semi-circular, 0–10)
+*  RAG Breakdown chart
+*  Pipeline by Stage visual
+*  Risk Heatmap widget (clickable)
+*  KPI Pulse widget
+*  Value Bridge widget (Benefits/Costs/Net)
+*  Recent Activity feed
+*  Executive Summary generation/export
+*  Dashboard filters (Business Unit, Workstream, RAG)
+*  Context-aware help tooltips (? buttons on each widget)
+System & UX
+*  Onboarding 5-slide welcome tour
+*  "Don't show this again" for onboarding
+*  Global search across initiatives
+*  Breadcrumb navigation
+*  Persistent top nav across all pages
+*  User profile dropdown (Help & FAQ, Edit Profile, Sign Out)
+*  Unique initiative IDs (e.g., ALQ-043)
+*  Footer branding (ishirock |  Transmuter)
+*  Admin panel (Coming Soon)
+
+13. Key Data Entities & Relationships
+
+Organization
+  └── Business Units (e.g., Group, Singapore, Hong Kong...)
+       └── Workstreams (e.g., North Asia, Southeast Asia, Group Commercial...)
+            └── Initiatives (56+ in portfolio)
+                 ├── Milestones (19 per initiative, avg)
+                 │    └── Dependencies (cross-initiative)
+                 ├── KPIs (5 per initiative, avg)
+                 ├── Risks (3 per initiative, avg)
+                 ├── Status Updates (timestamped, structured)
+                 ├── Stage Gates (G1, G2)
+                 ├── Financials (multi-year, quarterly)
+                 └── Team (Owner, Group Owner, Members)
+
+Meetings
+  └── Sessions (recurring instances)
+       ├── Agenda Items (linked to Initiatives)
+       ├── Action Items (assigned to users)
+       ├── Transcript (uploadable)
+       └── AI-Optimized Notes
+
+People
+  └── Users (82 in platform)
+       ├── Role (Transformation Office / Initiative Owner / Workstream Lead)
+       ├── Status (Active / Ghost / Deactivated)
+       └── Workstream Assignments
+
+14. Notable UX Patterns
+* Inline Expansion: Milestones and risks expand in-place rather than navigating away
+* Pressure Scoring: Every milestone and initiative has a numerically computed "pressure" score with transparent sub-component breakdowns and tooltips explaining methodology
+* Dual Financial Cases: All financial entries support Base Case + High Case + Actual for scenario planning
+* RAG System: Red/Amber/Green health classification pervasive across all entities
+* Context Help: Every dashboard widget has a "?" button with explanatory tooltip
+* AI Badges on Meetings: Sessions display "TRANSCRIPT" and "AI OPTIMISED" badges to indicate enriched content
+* Nudging System: Platform can automatically detect and send nudges to initiative owners who haven't submitted status updates, with a full Nudge Log
+* "Nuclear" Status: Beyond "Overdue," the platform uses "Nuclear" as a severity escalation for severely late status updates
+
+Document compiled by reviewing all navigation sections, dashboard widgets, initiative detail tabs (Overview, Financials, Milestones, KPIs, Risks, Status Updates, Gates, Summary), Progress Monitor sub-sections, Meetings, People, PMO/Governance, Risk Register, Matrix View, Edit Initiative form, AI Assistant panel, user profile menu, and onboarding flow.
+
+
+
+

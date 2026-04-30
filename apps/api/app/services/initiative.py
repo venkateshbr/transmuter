@@ -1,0 +1,191 @@
+"""Initiative service — business logic layer."""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from uuid import UUID, uuid4
+
+from fastapi import HTTPException, status
+from supabase import Client
+
+from app.domain.initiatives import (
+    InitiativeCounts,
+    InitiativeCreate,
+    InitiativeDetail,
+    InitiativeListItem,
+    InitiativeListResponse,
+    InitiativeUpdate,
+    PressureBreakdown,
+)
+from app.repositories.initiative import InitiativeRepository
+
+
+class InitiativeService:
+    def __init__(self, client: Client, tenant_id: UUID) -> None:
+        self._repo = InitiativeRepository(client, tenant_id)
+        self._tenant_id = tenant_id
+
+    def list_initiatives(
+        self,
+        workstream_id: str | None = None,
+        rag_status: str | None = None,
+        stage: str | None = None,
+        priority: str | None = None,
+        search: str | None = None,
+        sort_by: str = "initiative_code",
+        sort_desc: bool = False,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> InitiativeListResponse:
+        rows, total = self._repo.list(
+            workstream_id=workstream_id,
+            rag_status=rag_status,
+            stage=stage,
+            priority=priority,
+            search=search,
+            sort_by=sort_by,
+            sort_desc=sort_desc,
+            page=page,
+            page_size=page_size,
+        )
+        items = [self._to_list_item(r) for r in rows]
+        return InitiativeListResponse(items=items, total=total, page=page, page_size=page_size)
+
+    def get_initiative(self, initiative_id: str) -> InitiativeDetail:
+        row = self._repo.get(initiative_id)
+        if not row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Initiative not found")
+        counts = self._repo.get_counts(initiative_id)
+        return self._to_detail(row, counts)
+
+    def create_initiative(self, data: InitiativeCreate, created_by: UUID) -> InitiativeDetail:
+        # Generate unique code — retry up to 5 times on conflict
+        for _ in range(5):
+            code = self._repo.next_code()
+            try:
+                row = self._repo.create({
+                    "id": str(uuid4()),
+                    "tenant_id": str(self._tenant_id),
+                    "initiative_code": code,
+                    "name": data.name,
+                    "workstream_id": str(data.workstream_id) if data.workstream_id else None,
+                    "owner_id": str(data.owner_id) if data.owner_id else None,
+                    "group_owner_id": str(data.group_owner_id) if data.group_owner_id else None,
+                    "type": data.type,
+                    "impact_type": data.impact_type,
+                    "theme": data.theme,
+                    "country": data.country,
+                    "tag": data.tag,
+                    "priority": data.priority,
+                    "summary": data.summary,
+                    "value_logic": data.value_logic,
+                    "dependencies_text": data.dependencies_text,
+                    "planned_start": data.planned_start.isoformat() if data.planned_start else None,
+                    "planned_end": data.planned_end.isoformat() if data.planned_end else None,
+                    "rag_status": "green",
+                    "stage": "scoping",
+                })
+                break
+            except Exception as exc:
+                if "unique" in str(exc).lower() and "initiative_code" in str(exc).lower():
+                    continue
+                raise
+        else:
+            raise HTTPException(status_code=500, detail="Could not generate unique initiative code")
+
+        return self.get_initiative(row["id"])
+
+    def update_initiative(self, initiative_id: str, data: InitiativeUpdate) -> InitiativeDetail:
+        self._assert_exists(initiative_id)
+        patch = {k: v for k, v in data.model_dump(exclude_none=True).items()}
+        # Serialize date fields
+        for date_field in ("planned_start", "actual_start", "planned_end", "actual_end"):
+            if date_field in patch and patch[date_field] is not None:
+                patch[date_field] = patch[date_field].isoformat()
+        # UUID fields
+        for uuid_field in ("workstream_id", "owner_id", "group_owner_id"):
+            if uuid_field in patch and patch[uuid_field] is not None:
+                patch[uuid_field] = str(patch[uuid_field])
+        patch["updated_at"] = datetime.now(timezone.utc).isoformat()
+        self._repo.update(initiative_id, patch)
+        return self.get_initiative(initiative_id)
+
+    def archive_initiative(self, initiative_id: str) -> InitiativeDetail:
+        self._assert_exists(initiative_id)
+        self._repo.archive(initiative_id)
+        return self.get_initiative(initiative_id)
+
+    def delete_initiative(self, initiative_id: str) -> None:
+        self._assert_exists(initiative_id)
+        self._repo.delete(initiative_id)
+
+    def export_csv(self) -> str:
+        return self._repo.export_csv()
+
+    # ── Helpers ───────────────────────────────────────────────────────────────
+
+    def _assert_exists(self, initiative_id: str) -> None:
+        if not self._repo.get(initiative_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Initiative not found")
+
+    @staticmethod
+    def _to_list_item(row: dict) -> InitiativeListItem:  # type: ignore[type-arg]
+        ws = row.get("workstreams") or {}
+        owner = row.get("users") or {}
+        return InitiativeListItem(
+            id=row["id"],
+            initiative_code=row["initiative_code"],
+            name=row["name"],
+            workstream_id=row.get("workstream_id"),
+            workstream_name=ws.get("name") if isinstance(ws, dict) else None,
+            owner_id=row.get("owner_id"),
+            owner_name=owner.get("display_name") if isinstance(owner, dict) else None,
+            type=row.get("type"),
+            priority=row["priority"],
+            rag_status=row["rag_status"],
+            stage=row["stage"],
+            country=row.get("country"),
+            tag=row.get("tag"),
+            planned_value_base=None,
+            planned_value_high=None,
+            actual_value=None,
+            pressure_score=str(row["pressure_score"]) if row.get("pressure_score") is not None else None,
+            archived_at=row.get("archived_at"),
+        )
+
+    @staticmethod
+    def _to_detail(row: dict, counts: dict) -> InitiativeDetail:  # type: ignore[type-arg]
+        ws = row.get("workstreams") or {}
+        sub = row.get("pressure_sub") or {}
+        return InitiativeDetail(
+            id=row["id"],
+            initiative_code=row["initiative_code"],
+            name=row["name"],
+            workstream_id=row.get("workstream_id"),
+            workstream_name=ws.get("name") if isinstance(ws, dict) else None,
+            owner_id=row.get("owner_id"),
+            owner_name=row.get("_owner_name"),
+            group_owner_id=row.get("group_owner_id"),
+            group_owner_name=row.get("_group_owner_name"),
+            type=row.get("type"),
+            impact_type=row.get("impact_type"),
+            theme=row.get("theme"),
+            country=row.get("country"),
+            tag=row.get("tag"),
+            priority=row["priority"],
+            rag_status=row["rag_status"],
+            stage=row["stage"],
+            summary=row.get("summary"),
+            value_logic=row.get("value_logic"),
+            dependencies_text=row.get("dependencies_text"),
+            planned_start=row.get("planned_start"),
+            actual_start=row.get("actual_start"),
+            planned_end=row.get("planned_end"),
+            actual_end=row.get("actual_end"),
+            pressure_score=str(row["pressure_score"]) if row.get("pressure_score") is not None else None,
+            pressure_breakdown=PressureBreakdown(**sub) if sub else None,
+            counts=InitiativeCounts(**counts),
+            archived_at=row.get("archived_at"),
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
