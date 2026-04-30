@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+
+  # ── Spec Schema Validation (Sthira #24) ───────────────────────────────────
+  validate-specs:
+    name: Validate agent/skill/workflow specs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install -g ajv-cli
+      - name: Validate AgentSpec files
+        run: |
+          for f in agents/specs/*.yaml; do
+            echo "Validating $f..."
+            ajv validate -s schemas/agent_spec.json -d "$f" --spec=draft2020 || exit 1
+          done
+      - name: Validate WorkflowSpec files
+        run: |
+          for f in workflows/*.yaml; do
+            echo "Validating $f..."
+            ajv validate -s schemas/workflow_spec.json -d "$f" --spec=draft2020 || exit 1
+          done
+
+  # ── Backend: Lint + Type Check + Tests ────────────────────────────────────
+  backend:
+    name: Backend (ruff + mypy + pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install uv
+      - run: uv sync
+      - name: Lint
+        run: uv run ruff check app/ tests/
+      - name: Format check
+        run: uv run ruff format --check app/ tests/
+      - name: Type check
+        run: uv run mypy app/
+        continue-on-error: true   # strict mypy: warn only during ramp-up
+      - name: Tests
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          LANGFUSE_SECRET_KEY: ""
+          LANGFUSE_PUBLIC_KEY: ""
+        run: uv run pytest tests/ -v --tb=short
+
+  # ── Frontend: Lint + Build ────────────────────────────────────────────────
+  frontend:
+    name: Frontend (ng lint + ng build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - name: Lint
+        run: npx ng lint
+        continue-on-error: true   # lint: warn only until rules stabilise
+      - name: Build
+        run: npx ng build --configuration=production
+
+  # ── Agent Evals (main branch only) ───────────────────────────────────────
+  evals:
+    name: Agent evals
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs: [backend]
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install uv && uv sync
+      - name: Run evals
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+          LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+        run: uv run pytest tests/evals/ -v --tb=short
+        continue-on-error: true   # evals advisory until datasets are built

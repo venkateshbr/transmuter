@@ -1,0 +1,100 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+@import "tailwindcss";
+
+/* ── Design Tokens (Light Theme) ── */
+:root {
+  --t-bg:             #f8f9fb;
+  --t-surface:        #ffffff;
+  --t-surface-raised: #f0f2f5;
+  --t-border:         #e2e6ea;
+  --t-text-primary:   #0f1117;
+  --t-text-secondary: #6b7280;
+  --t-accent:         #f97316;   /* orange — brand colour */
+  --t-accent-hover:   #ea6c0c;
+  --t-red:            #ef4444;
+  --t-amber:          #f59e0b;
+  --t-green:          #22c55e;
+  --t-teal:           #14b8a6;
+  --t-sidebar-width:  240px;
+}
+
+/* ── Dark Theme ── */
+.dark {
+  --t-bg:             #0d0f14;
+  --t-surface:        #161920;
+  --t-surface-raised: #1e2128;
+  --t-border:         #2a2d36;
+  --t-text-primary:   #e8eaf0;
+  --t-text-secondary: #9ca3af;
+  --t-accent:         #f97316;
+  --t-accent-hover:   #fb923c;
+}
+
+/* ── Global Base ── */
+body {
+  @apply bg-[var(--t-bg)] text-[var(--t-text-primary)] font-sans;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* ── Reusable Component Classes ── */
+@layer utilities {
+
+  /* Buttons */
+  .btn-primary {
+    @apply bg-[var(--t-accent)] hover:bg-[var(--t-accent-hover)]
+           text-white font-medium px-4 py-2 rounded-lg
+           transition-colors duration-150 cursor-pointer;
+  }
+  .btn-secondary {
+    @apply bg-[var(--t-surface-raised)] hover:bg-[var(--t-border)]
+           text-[var(--t-text-primary)] font-medium px-4 py-2 rounded-lg
+           border border-[var(--t-border)] transition-colors duration-150;
+  }
+  .btn-ghost {
+    @apply text-[var(--t-text-secondary)] hover:text-[var(--t-text-primary)]
+           hover:bg-[var(--t-surface-raised)] px-3 py-2 rounded-lg
+           transition-colors duration-150;
+  }
+
+  /* Cards */
+  .card {
+    @apply bg-[var(--t-surface)] border border-[var(--t-border)]
+           rounded-xl shadow-sm p-5;
+  }
+  .glass-panel {
+    @apply bg-[var(--t-surface)]/80 backdrop-blur-sm
+           border border-[var(--t-border)] rounded-xl shadow-sm;
+  }
+
+  /* Inputs */
+  .input-field {
+    @apply bg-[var(--t-surface-raised)] border border-[var(--t-border)]
+           text-[var(--t-text-primary)] placeholder-[var(--t-text-secondary)]
+           rounded-lg px-3 py-2 w-full text-sm
+           focus:outline-none focus:ring-2 focus:ring-[var(--t-accent)]
+           transition duration-150;
+  }
+
+  /* RAG status badges */
+  .badge-green  { @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300; }
+  .badge-amber  { @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300; }
+  .badge-red    { @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300; }
+  .badge-teal   { @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300; }
+  .badge-gray   { @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300; }
+
+  /* Pressure score colors */
+  .pressure-low    { @apply text-green-600 dark:text-green-400; }
+  .pressure-medium { @apply text-amber-600 dark:text-amber-400; }
+  .pressure-high   { @apply text-red-600 dark:text-red-400; }
+
+  /* Nav items */
+  .nav-item {
+    @apply flex items-center gap-3 px-3 py-2 rounded-lg text-sm
+           text-[var(--t-text-secondary)] hover:text-[var(--t-text-primary)]
+           hover:bg-[var(--t-surface-raised)] transition-colors duration-150
+           cursor-pointer;
+  }
+  .nav-item.active {
+    @apply bg-[var(--t-surface-raised)] text-[var(--t-text-primary)] font-medium;
+  }
+}
