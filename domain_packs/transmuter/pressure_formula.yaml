@@ -1,76 +1,403 @@
 domain_pack: transmuter
-version: "1.0.0"
+version: "1.1.0"
 
-# Pressure scoring: deterministic formula, NOT AI-generated.
-# Used at both Initiative level (aggregate) and Milestone level (per-item).
-# Scale: 0–10 (higher = more pressure / higher urgency).
+# Pressure scoring: fully deterministic, formula-driven. NOT AI-generated.
+# Computed on every save of a milestone or initiative.
+# Scale: 0–10. Higher = more pressure / higher urgency.
+# Thresholds: Low 0–3.3, Medium 3.4–6.6, High 6.7–10
+
+# ─────────────────────────────────────────────
+# MILESTONE PRESSURE  (per milestone, max = 10)
+# ─────────────────────────────────────────────
+# Rationale: measures how urgently a milestone demands attention.
+# Combines structural risk (who depends on it) with temporal risk (how soon).
 
 milestone_pressure:
-  total_max: 10
+  total_max: 10.0
+  thresholds:
+    low:    [0.0, 3.3]
+    medium: [3.4, 6.6]
+    high:   [6.7, 10.0]
+
   components:
+
     blast_radius:
       max: 3.5
-      description: Number and severity of downstream milestones that depend on this one
-      # TODO: confirm exact formula with stakeholder (B-7)
-      formula: "min(downstream_count * severity_weight, 3.5)"
+      description: >
+        How many milestones depend on this one (directly or transitively).
+        Captures structural criticality — a blocker for many things is high pressure.
+      formula: |
+        # Count direct + transitive downstream milestones
+        direct_dependents   = count(milestones where this milestone is in their depends_on)
+        indirect_dependents = count(transitive downstream milestones, depth > 1)
+
+        weighted_blast = (direct_dependents * 1.0) + (indirect_dependents * 0.4)
+
+        blast_radius = clamp(weighted_blast, 0, 3.5)
+      examples:
+        - "0 dependents → 0.0"
+        - "1 direct → 1.0"
+        - "2 direct → 2.0"
+        - "3 direct + 2 indirect → 3.5 (capped)"
+
     dependent_urgency:
       max: 2.5
-      description: How urgent are the downstream milestones that depend on this
-      formula: "TBD — confirm with stakeholder"
+      description: >
+        How soon the downstream milestones that depend on this one are due.
+        A dependency that is blocking something due tomorrow is far more urgent
+        than one blocking something due in six months.
+      formula: |
+        urgency_scores = []
+        for each direct downstream milestone:
+            days_to_downstream_due = (downstream.planned_end - today).days
+            if   days_to_downstream_due <  0:  urgency = 1.0   # downstream already overdue
+            elif days_to_downstream_due <= 7:  urgency = 0.85
+            elif days_to_downstream_due <= 14: urgency = 0.60
+            elif days_to_downstream_due <= 30: urgency = 0.35
+            elif days_to_downstream_due <= 60: urgency = 0.15
+            else:                              urgency = 0.0
+
+        dependent_urgency = clamp(sum(urgency_scores), 0, 2.5)
+      examples:
+        - "No dependents → 0.0"
+        - "1 dependent due in 3 days → 0.85"
+        - "2 dependents due in <7 days → 1.7"
+        - "3+ urgent dependents → 2.5 (capped)"
+
     cluster_bonus:
       max: 1.5
-      description: Milestone is part of a cluster with multiple concurrent pressures
-      formula: "TBD"
+      description: >
+        Penalty when the milestone is part of a struggling cluster — i.e. multiple
+        sibling milestones in the same initiative are also at-risk or overdue.
+        A milestone that is one of several concurrent problems deserves extra attention.
+      formula: |
+        # Siblings = other milestones in the same initiative
+        struggling_siblings = count(
+            sibling milestones where
+            status == 'overdue'
+            OR (status != 'complete' AND planned_end < today)
+            OR pressure_score > 6.0   # already high-pressure sibling
+        )
+        cluster_bonus = clamp(struggling_siblings * 0.5, 0, 1.5)
+      examples:
+        - "0 struggling siblings → 0.0"
+        - "1 struggling sibling → 0.5"
+        - "2 struggling siblings → 1.0"
+        - "3+ → 1.5 (capped)"
+
     slack_penalty:
       max: 1.5
-      description: How much buffer exists before the due date; penalty increases as slack shrinks
-      formula: "max(0, 1.5 - (days_remaining / total_days) * 1.5)"
+      description: >
+        Penalty that grows as the milestone's due date approaches (or passes).
+        Uses RELATIVE slack (fraction of planned duration remaining) so a 2-week
+        milestone with 2 days left is treated the same as a 6-month milestone
+        with proportionally the same buffer remaining. Falls back to absolute days
+        when no planned_start is set.
+      formula: |
+        if status == 'complete':
+            slack_penalty = 0.0
+
+        elif planned_end < today:       # overdue
+            slack_penalty = 1.5
+
+        elif planned_start IS NOT NULL and planned_end IS NOT NULL:
+            total_duration = max((planned_end - planned_start).days, 1)
+            days_remaining = (planned_end - today).days
+            slack_ratio = days_remaining / total_duration  # 1.0=full slack, 0.0=no slack
+            # Quadratic curve: gentle until ~50% used, then rises steeply
+            elapsed_ratio = 1.0 - slack_ratio
+            slack_penalty = clamp(elapsed_ratio ** 1.5 * 1.5, 0, 1.5)
+
+        else:   # no planned_start — fall back to absolute days
+            days_remaining = (planned_end - today).days
+            if   days_remaining <= 0:   slack_penalty = 1.5
+            elif days_remaining <= 7:   slack_penalty = 1.2
+            elif days_remaining <= 14:  slack_penalty = 0.8
+            elif days_remaining <= 30:  slack_penalty = 0.4
+            elif days_remaining <= 60:  slack_penalty = 0.15
+            else:                       slack_penalty = 0.0
+      examples:
+        - "Complete → 0.0"
+        - "Overdue → 1.5"
+        - "50% of planned duration elapsed → ~0.53"
+        - "90% of planned duration elapsed → ~1.43"
+        - "7 days left (no start date) → 1.2"
+
     checklist:
       max: 0.5
-      description: Proportion of checklist items still incomplete
-      formula: "0.5 * (incomplete_items / total_items)"
+      description: >
+        Fraction of checklist items not yet ticked. Rewards completion hygiene
+        and surfaces milestones where execution hasn't started.
+      formula: |
+        if total_checklist_items == 0:
+            checklist = 0.0
+        else:
+            pct_incomplete = incomplete_items / total_checklist_items
+            checklist = pct_incomplete * 0.5
+      examples:
+        - "No checklist → 0.0"
+        - "All items complete → 0.0"
+        - "Half complete → 0.25"
+        - "Nothing done → 0.5"
+
     self_status:
       max: 0.5
-      description: Milestone's own reported status (overdue = max pressure)
-      values:
-        not_started: 0.0
-        in_progress: 0.25
-        overdue: 0.5
-        complete: 0.0
+      description: >
+        The milestone's own reported status. Overdue = max. Not started but
+        past planned_start is penalised (owner hasn't acted). Complete = 0.
+      formula: |
+        if   status == 'complete':                            self_status = 0.0
+        elif status == 'overdue':                             self_status = 0.5
+        elif status == 'in_progress':                         self_status = 0.2
+        elif status == 'not_started' and planned_start < today:
+            # Started date has passed but owner hasn't begun
+            days_late_to_start = (today - planned_start).days
+            self_status = clamp(0.1 + days_late_to_start * 0.02, 0.1, 0.5)
+        elif status == 'not_started':                         self_status = 0.1
+      examples:
+        - "Complete → 0.0"
+        - "Not started (future) → 0.1"
+        - "In progress → 0.2"
+        - "Not started but 10 days past planned start → 0.3"
+        - "Overdue → 0.5"
 
-  thresholds:
-    low: 0-3
-    medium: 3-6
-    high: 6-10
+  # Final score
+  calculation: |
+    milestone_pressure = blast_radius + dependent_urgency + cluster_bonus
+                       + slack_penalty + checklist + self_status
+    # Capped at 10.0; rounded to 1 decimal place for display
+
+
+# ─────────────────────────────────────────────
+# INITIATIVE PRESSURE  (per initiative, max = 10)
+# ─────────────────────────────────────────────
+# Rationale: portfolio-level health signal rolled up from initiative signals.
+# Surfaces initiatives that are drifting before they become crises.
 
 initiative_pressure:
-  total_max: 10
-  description: Aggregate pressure score rolled up from initiative-level signals
+  total_max: 10.0
+  thresholds:
+    low:    [0.0, 3.3]
+    medium: [3.4, 6.6]
+    high:   [6.7, 10.0]
+
   components:
+
     schedule:
       max: 2.5
-      description: How far off-track planned vs actual timeline
+      description: >
+        How far behind schedule the initiative is, measured as the gap between
+        expected progress (time elapsed / total planned duration) and actual
+        progress (milestones complete / total milestones). If no milestones exist,
+        falls back to proximity to planned_end.
+      formula: |
+        if stage == 'complete':
+            schedule = 0.0
+
+        elif planned_end < today:
+            schedule = 2.5   # past due date
+
+        elif total_milestones > 0 and planned_start IS NOT NULL:
+            total_days = max((planned_end - planned_start).days, 1)
+            days_elapsed = (today - planned_start).days
+            expected_pct = clamp(days_elapsed / total_days, 0.0, 1.0)
+            actual_pct = complete_milestones / total_milestones
+            gap = max(expected_pct - actual_pct, 0.0)   # only penalise falling behind
+            schedule = clamp(gap * 2.5, 0, 2.5)
+
+        else:
+            days_remaining = (planned_end - today).days
+            if   days_remaining <= 7:   schedule = 2.0
+            elif days_remaining <= 14:  schedule = 1.5
+            elif days_remaining <= 30:  schedule = 1.0
+            elif days_remaining <= 60:  schedule = 0.5
+            else:                       schedule = 0.0
+      examples:
+        - "On track (actual pct ≥ expected pct) → 0.0"
+        - "50% elapsed, 0% milestones complete → 1.25"
+        - "Past planned_end → 2.5"
+
     milestone_health:
       max: 2.0
-      description: Proportion of milestones at-risk or overdue
+      description: >
+        Proportion of non-complete milestones that are overdue or critically at-risk
+        (within 7 days of due date). A portfolio of late milestones is a leading
+        indicator of initiative failure.
+      formula: |
+        if total_milestones == 0:
+            milestone_health = 0.0
+        else:
+            critical = count(milestones where
+                status != 'complete'
+                AND (
+                    planned_end < today                          # overdue
+                    OR (planned_end - today).days <= 7           # due very soon
+                    OR pressure_score > 6.0                      # self high-pressure
+                )
+            )
+            pct_critical = critical / total_milestones
+            milestone_health = clamp(pct_critical * 2.0, 0, 2.0)
+      examples:
+        - "All milestones healthy → 0.0"
+        - "25% of milestones critical → 0.5"
+        - "50% critical → 1.0"
+        - "All critical → 2.0"
+
     risk_exposure:
       max: 2.0
-      description: Count and severity of open high/medium risks
+      description: >
+        Open risk count weighted by rating. High-rated risks dominate; medium risks
+        contribute meaningfully. Closed risks do not count.
+      formula: |
+        open_high   = count(risks where status='open' and rating='high')
+        open_medium = count(risks where status='open' and rating='medium')
+        open_low    = count(risks where status='open' and rating='low')
+
+        raw_exposure = (open_high * 0.8) + (open_medium * 0.3) + (open_low * 0.1)
+        risk_exposure = clamp(raw_exposure, 0, 2.0)
+      examples:
+        - "No open risks → 0.0"
+        - "1 high risk → 0.8"
+        - "2 high + 1 medium → 1.9"
+        - "3+ high risks → 2.0 (capped)"
+
     kpi_performance:
       max: 1.5
-      description: Actuals vs target across KPIs
+      description: >
+        Fraction of KPIs whose latest actual falls below the base case target.
+        No actuals recorded = 0.5 (moderate uncertainty penalty — data is overdue).
+      formula: |
+        kpis_with_actuals = count(kpis where at least one KPIEntry.value_actual IS NOT NULL)
+
+        if kpis_with_actuals == 0:
+            kpi_performance = 0.5   # no data = uncertainty penalty
+
+        else:
+            underperforming = count(kpis where
+                latest_actual < value_base   # actual below base case
+            )
+            pct_underperforming = underperforming / kpis_with_actuals
+            kpi_performance = clamp(pct_underperforming * 1.5, 0, 1.5)
+      examples:
+        - "No actuals yet → 0.5"
+        - "All KPIs meeting base case → 0.0"
+        - "Half of KPIs below base case → 0.75"
+        - "All KPIs below base case → 1.5"
+
     financial:
       max: 1.0
-      description: Actuals vs planned financials
+      description: >
+        Gap between planned net value (base case) and actual net value so far,
+        as a fraction of planned net. Only penalises negative gaps (actual < plan).
+        No actuals = 0.0 (no penalty until data is present).
+      formula: |
+        planned_revenue = sum(financial_entries.revenue_uplift_base)
+        planned_costs   = sum(financial_cost_lines.amount_plan)
+        planned_net     = planned_revenue - planned_costs
+
+        actual_revenue  = sum(financial_entries.revenue_uplift_actual)
+        actual_costs    = sum(financial_cost_lines.amount_actual)
+        actual_net      = actual_revenue - actual_costs
+
+        if planned_net == 0 or (actual_revenue == 0 and actual_costs == 0):
+            financial = 0.0   # no actuals yet — don't penalise
+
+        else:
+            gap_ratio = max(0, (planned_net - actual_net) / abs(planned_net))
+            financial = clamp(gap_ratio, 0, 1.0)
+      examples:
+        - "No actuals → 0.0"
+        - "Actual net = planned net → 0.0"
+        - "Actual net is 50% below plan → 0.5"
+        - "Actual net is 100% below plan (or negative) → 1.0"
+
     self_reported:
       max: 1.0
-      description: Initiative owner's last RAG status
-      values:
-        green: 0.0
-        amber: 0.5
-        red: 1.0
+      description: >
+        The initiative owner's last RAG status update. Staleness also contributes:
+        an overdue status update raises pressure even if last report was Green.
+      formula: |
+        last_update = most recent StatusUpdate where is_draft=false
 
+        if last_update IS NULL:
+            # Never submitted — treat as nuclear stale
+            self_reported = 1.0
+
+        else:
+            days_since_update = (today - last_update.submitted_at).days
+
+            base_score = {
+                'green': 0.0,
+                'amber': 0.5,
+                'red':   1.0,
+            }[last_update.rag_status]
+
+            # Staleness bonus on top of RAG score (max +0.5)
+            if   days_since_update > 30:  staleness_bonus = 0.5
+            elif days_since_update > 14:  staleness_bonus = 0.25
+            else:                         staleness_bonus = 0.0
+
+            self_reported = clamp(base_score + staleness_bonus, 0, 1.0)
+      examples:
+        - "Green, updated 3 days ago → 0.0"
+        - "Amber, updated 3 days ago → 0.5"
+        - "Green, last updated 20 days ago → 0.25 (staleness)"
+        - "Red, updated today → 1.0"
+        - "Amber, last updated 35 days ago → 1.0 (capped)"
+        - "No update ever → 1.0"
+
+  calculation: |
+    initiative_pressure = schedule + milestone_health + risk_exposure
+                        + kpi_performance + financial + self_reported
+    # Capped at 10.0; rounded to 1 decimal place for display
+
+
+# ─────────────────────────────────────────────
+# USER PRESSURE  (per user, shown in People module)
+# ─────────────────────────────────────────────
+# Simple workload indicator for the People directory.
+
+user_pressure:
+  total_max: 10.0
+  description: >
+    Weighted average of the pressure scores of all active initiatives/milestones
+    owned by this user. Serves as a workload / overload indicator.
+  formula: |
+    owned_milestones = milestones where owner_id = user.id and status != 'complete'
+    owned_initiatives = initiatives where owner_id = user.id and stage != 'complete'
+
+    if count(owned_milestones) == 0 and count(owned_initiatives) == 0:
+        user_pressure = 0.0
+    else:
+        # Weight milestones at 0.6, initiative-level at 0.4
+        avg_milestone_pressure   = avg(milestone.pressure_score for milestone in owned_milestones) or 0
+        avg_initiative_pressure  = avg(initiative.pressure_score for initiative in owned_initiatives) or 0
+        user_pressure = clamp(avg_milestone_pressure * 0.6 + avg_initiative_pressure * 0.4, 0, 10.0)
   thresholds:
-    low: 0-3
-    medium: 3-6
-    high: 6-10
+    low:    [0.0, 3.3]
+    medium: [3.4, 6.6]
+    high:   [6.7, 10.0]
+
+
+# ─────────────────────────────────────────────
+# IMPLEMENTATION NOTES
+# ─────────────────────────────────────────────
+implementation_notes:
+  language: python
+  type: decimal_arithmetic  # Use Decimal throughout — never float
+  trigger: >
+    Recalculate milestone pressure on: milestone save, dependency change, checklist item change.
+    Recalculate initiative pressure on: any child entity save (milestone, risk, KPI, status update, financial).
+    Recalculate user pressure on: initiative/milestone pressure change.
+  storage: >
+    Store computed pressure_score as NUMERIC(4,1) on milestones and initiatives tables.
+    Store sub-scores as NUMERIC(4,2) each for transparency (shown in the UI tooltip breakdown).
+  python_helper: |
+    # apps/api/app/domain/pressure.py
+    from decimal import Decimal, ROUND_HALF_UP
+
+    def clamp(value: Decimal, min_val: Decimal, max_val: Decimal) -> Decimal:
+        return max(min_val, min(value, max_val))
+
+    def round_pressure(value: Decimal) -> Decimal:
+        return value.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)

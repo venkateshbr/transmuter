@@ -1,80 +1,141 @@
 domain_pack: transmuter
-version: "1.0.0"
+version: "1.1.0"
 
 # Stage gate criteria for Transmuter initiatives.
-# auto = validated programmatically from DB state
-# manual = requires human reviewer to check/tick
+#
+# Design: ALL criteria are MANUAL (human-reviewed checklists).
+# Admins can add/edit/remove criteria per gate via the Admin UI or by editing this file.
+# No programmatic auto-validation — the governance reviewer ticks each item.
+#
+# To add a custom criterion: copy any entry below and set configurable: true.
+# The application loads these as the DEFAULT template; tenants can override per their org.
+
+configurable: true   # Admin UI can add/edit/remove criteria per tenant
 
 gates:
 
   G1:
     label: "G1 — Move to In-Progress"
-    description: Initiative meets readiness criteria to begin execution
+    description: >
+      Initiative meets readiness criteria to begin execution.
+      All items must be ticked by a Transformation Office reviewer before the stage advances.
     from_stage: scoping
     to_stage: in_progress
     criteria:
+
       - id: g1-01
-        description: "Initiative owner is assigned"
-        type: auto
-        check: "initiative.owner_id IS NOT NULL"
+        label: "Owner assigned"
+        guidance: "An initiative owner is named and has accepted ownership."
+        configurable: true
+        default: true
+
       - id: g1-02
-        description: "Executive summary is provided"
-        type: auto
-        check: "initiative.summary IS NOT NULL AND length(initiative.summary) > 50"
+        label: "Executive summary documented"
+        guidance: "A clear, concise description of what the initiative is and why it matters."
+        configurable: true
+        default: true
+
       - id: g1-03
-        description: "Value logic is documented"
-        type: auto
-        check: "initiative.value_logic IS NOT NULL AND length(initiative.value_logic) > 20"
+        label: "Value logic documented"
+        guidance: "The financial or strategic rationale is written out (how value will be created or cost avoided)."
+        configurable: true
+        default: true
+
       - id: g1-04
-        description: "At least one milestone is defined"
-        type: auto
-        check: "count(milestones) >= 1"
+        label: "At least one milestone defined"
+        guidance: "The initiative has a concrete first milestone with an owner and a due date."
+        configurable: true
+        default: true
+
       - id: g1-05
-        description: "Planned end date is set"
-        type: auto
-        check: "initiative.planned_end IS NOT NULL"
+        label: "Planned end date set"
+        guidance: "A realistic target completion date has been entered."
+        configurable: true
+        default: true
+
       - id: g1-06
-        description: "At least one KPI is defined"
-        type: auto
-        check: "count(kpis) >= 1"
+        label: "At least one KPI defined"
+        guidance: "A measurable success indicator is in place (operational or financial KPI)."
+        configurable: true
+        default: true
+
       - id: g1-07
-        description: "Financial baseline (base case revenue or cost) is entered"
-        type: auto
-        check: "count(financial_entries WHERE value_base IS NOT NULL) >= 1"
+        label: "Financial baseline entered"
+        guidance: "Base case revenue uplift or cost estimate has been entered in the Financials tab."
+        configurable: true
+        default: true
+
       - id: g1-08
-        description: "Workstream is assigned"
-        type: auto
-        check: "initiative.workstream_id IS NOT NULL"
-      # NOTE: extend this list after confirming full G1 criteria with stakeholder (gap B-8)
+        label: "Workstream assigned"
+        guidance: "The initiative is linked to the correct workstream for reporting and governance."
+        configurable: true
+        default: true
+
+      - id: g1-09
+        label: "Dependencies identified"
+        guidance: "Known cross-initiative or external dependencies have been documented (or explicitly noted as none)."
+        configurable: true
+        default: true
+
+      - id: g1-10
+        label: "Risks reviewed"
+        guidance: "At least an initial risk scan has been done; major risks are captured in the Risk register."
+        configurable: true
+        default: true
 
   G2:
     label: "G2 — Move to Complete"
-    description: Initiative has delivered its intended value and is ready to close
+    description: >
+      Initiative has delivered its intended value and is ready to close.
+      All items must be ticked by a Transformation Office reviewer before the stage advances.
     from_stage: in_progress
     to_stage: complete
     criteria:
+
       - id: g2-01
-        description: "All milestones are marked complete or formally waived"
-        type: auto
-        check: "count(milestones WHERE status != 'complete') = 0"
+        label: "All milestones complete or formally waived"
+        guidance: "Every milestone is marked Complete, or a formal waiver decision has been recorded with commentary."
+        configurable: true
+        default: true
+
       - id: g2-02
-        description: "Final status update submitted with Green or Amber RAG"
-        type: auto
-        check: "latest_status_update.rag_status IN ('green', 'amber')"
+        label: "Final status update submitted"
+        guidance: "A non-draft status update has been submitted for the final reporting period."
+        configurable: true
+        default: true
+
       - id: g2-03
-        description: "Actual financial outcomes are entered"
-        type: auto
-        check: "count(financial_entries WHERE value_actual IS NOT NULL) >= 1"
+        label: "Financial actuals entered"
+        guidance: "Actual financial outcomes (revenue, costs) are recorded in the Financials tab."
+        configurable: true
+        default: true
+
       - id: g2-04
-        description: "All KPI actuals entered for the final period"
-        type: auto
-        check: "count(kpi_entries WHERE value_actual IS NOT NULL) >= 1"
+        label: "KPI actuals entered for final period"
+        guidance: "Actuals for the final reporting period are entered for all KPIs."
+        configurable: true
+        default: true
+
       - id: g2-05
-        description: "Final summary and lessons learned documented"
-        type: manual
-        guidance: "Review the Summary & Results tab for completeness"
+        label: "Final summary and lessons learned documented"
+        guidance: "The Summary & Results tab has a final summary and at least one lessons learned entry."
+        configurable: true
+        default: true
+
       - id: g2-06
-        description: "All high-rated risks are closed or have a mitigation plan"
-        type: auto
-        check: "count(risks WHERE rating='high' AND status='open' AND mitigation IS NULL) = 0"
-      # NOTE: extend this list after confirming full G2 criteria with stakeholder (gap B-8)
+        label: "All high-rated risks closed or mitigated"
+        guidance: "No open high-rated risks remain without a documented mitigation or closure reason."
+        configurable: true
+        default: true
+
+      - id: g2-07
+        label: "Value realised vs. planned reviewed"
+        guidance: "Planned value vs. actual value has been reviewed and the delta explained."
+        configurable: true
+        default: true
+
+      - id: g2-08
+        label: "Handover / BAU transition plan confirmed"
+        guidance: "If ongoing operations are required post-initiative, the receiving team has confirmed readiness."
+        configurable: true
+        default: false   # off by default — enable for relevant initiative types
