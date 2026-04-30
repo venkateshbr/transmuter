@@ -1,5 +1,8 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
-@import "tailwindcss";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 /* ── Design Tokens (Light Theme) ── */
 :root {
@@ -9,13 +12,12 @@
   --t-border:         #e2e6ea;
   --t-text-primary:   #0f1117;
   --t-text-secondary: #6b7280;
-  --t-accent:         #f97316;   /* orange — brand colour */
+  --t-accent:         #f97316;
   --t-accent-hover:   #ea6c0c;
   --t-red:            #ef4444;
   --t-amber:          #f59e0b;
   --t-green:          #22c55e;
   --t-teal:           #14b8a6;
-  --t-sidebar-width:  240px;
 }
 
 /* ── Dark Theme ── */
@@ -32,69 +34,109 @@
 
 /* ── Global Base ── */
 body {
-  @apply bg-[var(--t-bg)] text-[var(--t-text-primary)] font-sans;
+  background: var(--t-bg);
+  color: var(--t-text-primary);
+  font-family: 'Inter', sans-serif;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 /* ── Reusable Component Classes ── */
-@layer utilities {
+@layer components {
 
-  /* Buttons */
   .btn-primary {
-    @apply bg-[var(--t-accent)] hover:bg-[var(--t-accent-hover)]
-           text-white font-medium px-4 py-2 rounded-lg
-           transition-colors duration-150 cursor-pointer;
+    @apply inline-flex items-center font-medium px-4 py-2 rounded-lg
+           cursor-pointer transition-colors duration-150 border-none;
+    background: var(--t-accent);
+    color: #fff;
   }
+  .btn-primary:hover { background: var(--t-accent-hover); }
+
   .btn-secondary {
-    @apply bg-[var(--t-surface-raised)] hover:bg-[var(--t-border)]
-           text-[var(--t-text-primary)] font-medium px-4 py-2 rounded-lg
-           border border-[var(--t-border)] transition-colors duration-150;
-  }
-  .btn-ghost {
-    @apply text-[var(--t-text-secondary)] hover:text-[var(--t-text-primary)]
-           hover:bg-[var(--t-surface-raised)] px-3 py-2 rounded-lg
+    @apply inline-flex items-center font-medium px-4 py-2 rounded-lg
            transition-colors duration-150;
+    background: var(--t-surface-raised);
+    color: var(--t-text-primary);
+    border: 1px solid var(--t-border);
+  }
+  .btn-secondary:hover { background: var(--t-border); }
+
+  .btn-ghost {
+    @apply px-3 py-2 rounded-lg transition-colors duration-150;
+    background: transparent;
+    border: none;
+    color: var(--t-text-secondary);
+    cursor: pointer;
+  }
+  .btn-ghost:hover {
+    background: var(--t-surface-raised);
+    color: var(--t-text-primary);
   }
 
-  /* Cards */
   .card {
-    @apply bg-[var(--t-surface)] border border-[var(--t-border)]
-           rounded-xl shadow-sm p-5;
+    @apply rounded-xl shadow-sm p-5;
+    background: var(--t-surface);
+    border: 1px solid var(--t-border);
   }
+
   .glass-panel {
-    @apply bg-[var(--t-surface)]/80 backdrop-blur-sm
-           border border-[var(--t-border)] rounded-xl shadow-sm;
+    @apply rounded-xl shadow-sm backdrop-blur-sm;
+    background: rgba(255,255,255,0.8);
+    border: 1px solid var(--t-border);
   }
+  .dark .glass-panel { background: rgba(22,25,32,0.8); }
 
-  /* Inputs */
   .input-field {
-    @apply bg-[var(--t-surface-raised)] border border-[var(--t-border)]
-           text-[var(--t-text-primary)] placeholder-[var(--t-text-secondary)]
-           rounded-lg px-3 py-2 w-full text-sm
-           focus:outline-none focus:ring-2 focus:ring-[var(--t-accent)]
+    @apply rounded-lg px-3 py-2 w-full text-sm outline-none
            transition duration-150;
+    background: var(--t-surface-raised);
+    border: 1px solid var(--t-border);
+    color: var(--t-text-primary);
+  }
+  .input-field::placeholder { color: var(--t-text-secondary); }
+  .input-field:focus {
+    border-color: var(--t-accent);
+    box-shadow: 0 0 0 2px rgba(249,115,22,0.2);
   }
 
-  /* RAG status badges */
-  .badge-green  { @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300; }
-  .badge-amber  { @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300; }
-  .badge-red    { @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300; }
-  .badge-teal   { @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300; }
-  .badge-gray   { @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300; }
+  /* RAG badges */
+  .badge-green {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+    background: #dcfce7; color: #166534;
+  }
+  .dark .badge-green { background: rgba(34,197,94,0.15); color: #86efac; }
 
-  /* Pressure score colors */
-  .pressure-low    { @apply text-green-600 dark:text-green-400; }
-  .pressure-medium { @apply text-amber-600 dark:text-amber-400; }
-  .pressure-high   { @apply text-red-600 dark:text-red-400; }
+  .badge-amber {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+    background: #fef3c7; color: #92400e;
+  }
+  .dark .badge-amber { background: rgba(245,158,11,0.15); color: #fcd34d; }
+
+  .badge-red {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+    background: #fee2e2; color: #991b1b;
+  }
+  .dark .badge-red { background: rgba(239,68,68,0.15); color: #fca5a5; }
+
+  .badge-teal {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+    background: #ccfbf1; color: #134e4a;
+  }
+
+  .badge-gray {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+    background: #f3f4f6; color: #374151;
+  }
+  .dark .badge-gray { background: #374151; color: #d1d5db; }
 
   /* Nav items */
   .nav-item {
     @apply flex items-center gap-3 px-3 py-2 rounded-lg text-sm
-           text-[var(--t-text-secondary)] hover:text-[var(--t-text-primary)]
-           hover:bg-[var(--t-surface-raised)] transition-colors duration-150
-           cursor-pointer;
+           transition-colors duration-150 cursor-pointer no-underline;
+    color: var(--t-text-secondary);
   }
-  .nav-item.active {
-    @apply bg-[var(--t-surface-raised)] text-[var(--t-text-primary)] font-medium;
+  .nav-item:hover, .nav-item.active {
+    background: var(--t-surface-raised);
+    color: var(--t-text-primary);
   }
+  .nav-item.active { @apply font-medium; }
 }
