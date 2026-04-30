@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://transmuter.app/schemas/workflow_spec.json",
+  "title": "WorkflowSpec",
+  "description": "DAG-based agentic workflow specification",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "inputs", "steps"],
+  "properties": {
+    "apiVersion": { "type": "string", "const": "agentic/v1" },
+    "kind": { "type": "string", "const": "WorkflowSpec" },
+    "metadata": {
+      "type": "object",
+      "required": ["name", "domain_pack"],
+      "properties": {
+        "name": { "type": "string" },
+        "domain_pack": { "type": "string" },
+        "description": { "type": "string" },
+        "trigger": { "type": "string", "enum": ["user_action", "scheduled", "webhook", "event"] }
+      }
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "type"],
+        "properties": {
+          "name": { "type": "string" },
+          "type": { "type": "string" },
+          "required": { "type": "boolean" },
+          "description": { "type": "string" }
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "type": "string", "enum": ["agent_skill", "hitl", "condition", "parallel"] },
+          "agent": { "type": "string" },
+          "skill": { "type": "string" },
+          "depends_on": { "type": "array", "items": { "type": "string" } },
+          "parallel_with": { "type": "array", "items": { "type": "string" } },
+          "inputs": { "type": "object" },
+          "outputs": { "type": "object" },
+          "approval_from": { "type": "string" },
+          "timeout_hours": { "type": "number" }
+        }
+      }
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "source": { "type": "string" }
+        }
+      }
+    }
+  }
+}

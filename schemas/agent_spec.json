@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://transmuter.app/schemas/agent_spec.json",
+  "title": "AgentSpec",
+  "description": "Domain-agnostic specification for a Transmuter framework agent",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "identity", "runtime", "guardrails"],
+  "properties": {
+    "apiVersion": { "type": "string", "const": "agentic/v1" },
+    "kind": { "type": "string", "const": "AgentSpec" },
+    "metadata": {
+      "type": "object",
+      "required": ["name", "description"],
+      "properties": {
+        "name": { "type": "string", "description": "Agent identifier (lowercase, no spaces)" },
+        "description": { "type": "string", "description": "One-line description shown to orchestrator" },
+        "domain_pack": { "type": "string", "description": "Domain pack this agent is scoped to" }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "required": ["display_name", "role", "autonomy_level"],
+      "properties": {
+        "display_name": { "type": "string" },
+        "role": { "type": "string" },
+        "autonomy_level": {
+          "type": "string",
+          "enum": ["L0", "L1", "L2", "L3"],
+          "description": "L0=none, L1=suggest, L2=draft, L3=auto"
+        },
+        "can_create_issues": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Issue types this agent may create"
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "properties": {
+        "context_loading": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": { "type": "string" },
+              "command": { "type": "string" },
+              "description": { "type": "string" }
+            }
+          }
+        },
+        "context_scope": {
+          "type": "string",
+          "enum": ["full", "broad", "narrow"],
+          "description": "How much project context this agent loads"
+        }
+      }
+    },
+    "guardrails": {
+      "type": "object",
+      "properties": {
+        "confidence_gate": { "type": "number", "minimum": 0, "maximum": 1 },
+        "approval_required": { "type": "string" },
+        "can_write_code": { "type": "boolean" },
+        "can_close_issues": { "type": "boolean" },
+        "can_merge_prs": { "type": "boolean" },
+        "pii_masking_required": { "type": "boolean" }
+      }
+    },
+    "evaluation": {
+      "type": "object",
+      "properties": {
+        "correction_rate_threshold": { "type": "number" },
+        "eval_dataset": { "type": "string" },
+        "judge_model": { "type": "string" }
+      }
+    },
+    "memory": {
+      "type": "object",
+      "properties": {
+        "project_docs": { "type": "string" },
+        "artifact": { "type": "string", "description": "The living doc this agent owns" }
+      }
+    },
+    "skills": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "List of SkillSpec names this agent has access to"
+    }
+  }
+}

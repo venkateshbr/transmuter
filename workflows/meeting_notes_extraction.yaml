@@ -1,0 +1,96 @@
+apiVersion: agentic/v1
+kind: WorkflowSpec
+metadata:
+  name: meeting_notes_extraction
+  domain_pack: transmuter
+  description: >
+    Processes an uploaded meeting transcript and extracts structured agenda items,
+    action items (with assignee suggestions), and initiative status updates.
+    Sets AI-OPTIMISED badge on session after HITL approval.
+  trigger: user_action
+
+inputs:
+  - name: session_id
+    type: uuid
+    required: true
+  - name: transcript_text
+    type: string
+    required: true
+  - name: linked_initiative_ids
+    type: array
+    required: false
+    description: Initiative IDs already linked to this meeting
+  - name: attendee_user_ids
+    type: array
+    required: false
+  - name: tenant_id
+    type: uuid
+    required: true
+  - name: reviewer_user_id
+    type: uuid
+    required: true
+
+steps:
+  - id: chunk_transcript
+    type: agent_skill
+    agent: netra
+    skill: transcript_chunking
+    inputs:
+      transcript: "{{inputs.transcript_text}}"
+    outputs:
+      chunks: array
+
+  - id: extract_action_items
+    type: agent_skill
+    agent: netra
+    skill: action_item_extraction
+    depends_on: [chunk_transcript]
+    parallel_with: [extract_decisions]
+    inputs:
+      chunks: "{{steps.chunk_transcript.outputs.chunks}}"
+      attendees: "{{inputs.attendee_user_ids}}"
+    outputs:
+      action_items: array  # [{description, suggested_assignee_id, due_date, priority}]
+
+  - id: extract_decisions
+    type: agent_skill
+    agent: netra
+    skill: meeting_decisions_extraction
+    depends_on: [chunk_transcript]
+    parallel_with: [extract_action_items]
+    inputs:
+      chunks: "{{steps.chunk_transcript.outputs.chunks}}"
+      linked_initiatives: "{{inputs.linked_initiative_ids}}"
+    outputs:
+      decisions: array
+      initiative_updates: array  # initiative-level status signals
+
+  - id: human_review
+    type: hitl
+    depends_on: [extract_action_items, extract_decisions]
+    approval_from: reviewer_user_id
+    timeout_hours: 24
+    ui_context:
+      panel: meeting_notes_review
+      fields_shown: [action_items, decisions, initiative_updates]
+
+  - id: persist_session_notes
+    type: agent_skill
+    agent: karya
+    skill: persist_meeting_session_results
+    depends_on: [human_review]
+    inputs:
+      session_id: "{{inputs.session_id}}"
+      action_items: "{{steps.human_review.approved_data.action_items}}"
+      decisions: "{{steps.human_review.approved_data.decisions}}"
+      initiative_updates: "{{steps.human_review.approved_data.initiative_updates}}"
+      tenant_id: "{{inputs.tenant_id}}"
+    outputs:
+      action_item_ids: array
+      ai_optimised: boolean
+
+outputs:
+  - name: action_item_ids
+    source: "{{steps.persist_session_notes.outputs.action_item_ids}}"
+  - name: ai_optimised
+    source: "{{steps.persist_session_notes.outputs.ai_optimised}}"

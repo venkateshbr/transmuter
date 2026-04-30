@@ -1,0 +1,76 @@
+domain_pack: transmuter
+version: "1.0.0"
+
+# Pressure scoring: deterministic formula, NOT AI-generated.
+# Used at both Initiative level (aggregate) and Milestone level (per-item).
+# Scale: 0–10 (higher = more pressure / higher urgency).
+
+milestone_pressure:
+  total_max: 10
+  components:
+    blast_radius:
+      max: 3.5
+      description: Number and severity of downstream milestones that depend on this one
+      # TODO: confirm exact formula with stakeholder (B-7)
+      formula: "min(downstream_count * severity_weight, 3.5)"
+    dependent_urgency:
+      max: 2.5
+      description: How urgent are the downstream milestones that depend on this
+      formula: "TBD — confirm with stakeholder"
+    cluster_bonus:
+      max: 1.5
+      description: Milestone is part of a cluster with multiple concurrent pressures
+      formula: "TBD"
+    slack_penalty:
+      max: 1.5
+      description: How much buffer exists before the due date; penalty increases as slack shrinks
+      formula: "max(0, 1.5 - (days_remaining / total_days) * 1.5)"
+    checklist:
+      max: 0.5
+      description: Proportion of checklist items still incomplete
+      formula: "0.5 * (incomplete_items / total_items)"
+    self_status:
+      max: 0.5
+      description: Milestone's own reported status (overdue = max pressure)
+      values:
+        not_started: 0.0
+        in_progress: 0.25
+        overdue: 0.5
+        complete: 0.0
+
+  thresholds:
+    low: 0-3
+    medium: 3-6
+    high: 6-10
+
+initiative_pressure:
+  total_max: 10
+  description: Aggregate pressure score rolled up from initiative-level signals
+  components:
+    schedule:
+      max: 2.5
+      description: How far off-track planned vs actual timeline
+    milestone_health:
+      max: 2.0
+      description: Proportion of milestones at-risk or overdue
+    risk_exposure:
+      max: 2.0
+      description: Count and severity of open high/medium risks
+    kpi_performance:
+      max: 1.5
+      description: Actuals vs target across KPIs
+    financial:
+      max: 1.0
+      description: Actuals vs planned financials
+    self_reported:
+      max: 1.0
+      description: Initiative owner's last RAG status
+      values:
+        green: 0.0
+        amber: 0.5
+        red: 1.0
+
+  thresholds:
+    low: 0-3
+    medium: 3-6
+    high: 6-10

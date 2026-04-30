@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://transmuter.app/schemas/skill_spec.json",
+  "title": "SkillSpec",
+  "description": "Specification for an agent skill: contract, behavior, security, telemetry",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "contract", "behavior"],
+  "properties": {
+    "apiVersion": { "type": "string", "const": "agentic/v1" },
+    "kind": { "type": "string", "const": "SkillSpec" },
+    "metadata": {
+      "type": "object",
+      "required": ["name", "version", "owner_agent"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "owner_agent": { "type": "string" },
+        "description": { "type": "string" }
+      }
+    },
+    "contract": {
+      "type": "object",
+      "required": ["input_schema", "output_schema"],
+      "properties": {
+        "input_schema": { "type": "object", "description": "JSON Schema for input" },
+        "output_schema": { "type": "object", "description": "JSON Schema for output" }
+      }
+    },
+    "behavior": {
+      "type": "object",
+      "required": ["deterministic", "idempotent"],
+      "properties": {
+        "deterministic": { "type": "boolean" },
+        "idempotent": { "type": "boolean" },
+        "side_effects": {
+          "type": "array",
+          "items": { "type": "string", "enum": ["db_write", "external_api", "file_write", "email", "none"] }
+        },
+        "retries": {
+          "type": "object",
+          "properties": {
+            "max": { "type": "integer" },
+            "backoff": { "type": "string", "enum": ["none", "linear", "exponential"] }
+          }
+        },
+        "timeout_ms": { "type": "integer" }
+      }
+    },
+    "security": {
+      "type": "object",
+      "properties": {
+        "scopes_required": { "type": "array", "items": { "type": "string" } },
+        "pii_sensitivity": { "type": "string", "enum": ["none", "low", "medium", "high"] },
+        "audit_required": { "type": "boolean" }
+      }
+    },
+    "telemetry": {
+      "type": "object",
+      "properties": {
+        "trace_provider": { "type": "string" },
+        "metric_name": { "type": "string" }
+      }
+    },
+    "implementation": {
+      "type": "object",
+      "properties": {
+        "handler": { "type": "string", "description": "Path to implementation" },
+        "fallback": { "type": "string", "description": "What to do if skill fails" }
+      }
+    }
+  }
+}

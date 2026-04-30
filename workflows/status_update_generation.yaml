@@ -1,0 +1,87 @@
+apiVersion: agentic/v1
+kind: WorkflowSpec
+metadata:
+  name: status_update_generation
+  domain_pack: transmuter
+  description: >
+    Drafts a structured status update for an initiative using current portfolio data.
+    Pulls milestones, KPIs, risks, and recent activity to compose a RAG-annotated
+    narrative. HITL: initiative owner edits and submits.
+  trigger: user_action
+
+inputs:
+  - name: initiative_id
+    type: uuid
+    required: true
+  - name: tenant_id
+    type: uuid
+    required: true
+  - name: owner_user_id
+    type: uuid
+    required: true
+  - name: period_start
+    type: date
+    required: false
+    description: Start of the reporting period (defaults to last update date)
+  - name: period_end
+    type: date
+    required: false
+    description: End of the reporting period (defaults to today)
+
+steps:
+  - id: gather_context
+    type: agent_skill
+    agent: dhruva
+    skill: initiative_context_pull
+    inputs:
+      initiative_id: "{{inputs.initiative_id}}"
+      tenant_id: "{{inputs.tenant_id}}"
+      period_start: "{{inputs.period_start}}"
+      period_end: "{{inputs.period_end}}"
+    outputs:
+      milestones_summary: object
+      kpis_summary: object
+      risks_summary: object
+      last_update: object nullable
+      financials_summary: object
+
+  - id: draft_update
+    type: agent_skill
+    agent: netra
+    skill: status_update_drafting
+    depends_on: [gather_context]
+    inputs:
+      initiative_context: "{{steps.gather_context.outputs}}"
+    outputs:
+      rag_status: enum[red, amber, green]
+      summary: string
+      achievements: string
+      issues: string
+      next_steps: string
+      confidence: number
+
+  - id: human_review
+    type: hitl
+    depends_on: [draft_update]
+    approval_from: owner_user_id
+    timeout_hours: 72
+    ui_context:
+      panel: status_update_editor
+      prefilled_fields: [rag_status, summary, achievements, issues, next_steps]
+
+  - id: submit_update
+    type: agent_skill
+    agent: karya
+    skill: submit_status_update
+    depends_on: [human_review]
+    inputs:
+      initiative_id: "{{inputs.initiative_id}}"
+      tenant_id: "{{inputs.tenant_id}}"
+      author_id: "{{inputs.owner_user_id}}"
+      update_data: "{{steps.human_review.approved_data}}"
+    outputs:
+      status_update_id: uuid
+
+outputs:
+  - name: status_update_id
+    source: "{{steps.submit_update.outputs.status_update_id}}"

@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+dist/
+*.egg-info/
+.eggs/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Node / Angular
+node_modules/
+.angular/
+apps/web/dist/
+
+# macOS
+.DS_Store
+.obsidian/
+
+# Editors
+.idea/
+.vscode/
+
+# Supabase local
+supabase/.temp/
+supabase/.branches/
+
+# Docker
+*.log

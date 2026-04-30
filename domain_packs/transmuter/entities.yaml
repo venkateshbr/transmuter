@@ -1,0 +1,263 @@
+domain_pack: transmuter
+
+entities:
+
+  Organization:
+    description: Top-level tenant entity
+    fields:
+      - id: uuid PK
+      - name: string required
+      - slug: string unique
+      - created_at: timestamptz
+    rls: tenant_id = id
+
+  BusinessUnit:
+    description: Org sub-division (e.g. Singapore, Hong Kong, Group)
+    fields:
+      - id: uuid PK
+      - tenant_id: uuid FK(Organization)
+      - name: string required
+      - code: string  # short label
+    rls: tenant_id
+
+  Workstream:
+    description: Functional stream within a BU (e.g. North Asia, ERP, People & Culture)
+    fields:
+      - id: uuid PK
+      - tenant_id: uuid FK(Organization)
+      - business_unit_id: uuid FK(BusinessUnit) nullable
+      - name: string required
+    rls: tenant_id
+
+  Initiative:
+    description: Core entity — a transformation initiative from scoping to completion
+    fields:
+      - id: uuid PK
+      - tenant_id: uuid FK(Organization)
+      - initiative_code: string unique  # e.g. ALQ-043
+      - name: string required
+      - workstream_id: uuid FK(Workstream)
+      - owner_id: uuid FK(User)
+      - group_owner_id: uuid FK(User) nullable
+      - type: enum[revenue_growth, cost_reduction, cost_avoidance, compliance, capability_building]
+      - impact_type: enum[recurring, one_off]
+      - theme: string nullable
+      - country: string  # ISO or "Group"
+      - tag: enum[automation, offshoring, commercial, other] nullable
+      - priority: enum[high, medium, low]
+      - rag_status: enum[red, amber, green]
+      - stage: enum[scoping, in_progress, complete]
+      - summary: text nullable
+      - value_logic: text nullable
+      - dependencies_text: text nullable
+      - planned_start: date nullable
+      - actual_start: date nullable
+      - planned_end: date nullable
+      - actual_end: date nullable
+      - archived_at: timestamptz nullable
+      - created_at: timestamptz
+      - updated_at: timestamptz
+    rls: tenant_id
+    pressure_score: computed  # see pressure_formula.yaml
+
+  Milestone:
+    description: Time-bound deliverable within an initiative
+    fields:
+      - id: uuid PK
+      - tenant_id: uuid FK(Organization)
+      - initiative_id: uuid FK(Initiative)
+      - name: string required
+      - description: text nullable
+      - owner_id: uuid FK(User) nullable
+      - priority: enum[high, medium, low]
+      - status: enum[not_started, in_progress, complete]
+      - sort_order: integer  # for manual ordering
+      - planned_start: date nullable
+      - actual_start: date nullable
+      - planned_end: date nullable
+      - actual_end: date nullable
+      - created_at: timestamptz
+    rls: tenant_id
+    pressure_score: computed  # 6 sub-components
+
+  KPI:
+    description: Key performance indicator tracked against an initiative
+    fields:
+      - id: uuid PK
+      - tenant_id: uuid FK(Organization)
+      - initiative_id: uuid FK(Initiative)
+      - name: string required
+      - type: enum[gross_margin, operational, custom]
+      - category: string nullable
+      - frequency: enum[quarterly, monthly, annual]
+      - unit: string  # e.g. "%", "USD", "Hours"
+      - created_at: timestamptz
+    rls: tenant_id
+
+  KPIEntry:
+    description: Actual/base/high case values per period
+    fields:
+      - id: uuid PK
+      - tenant_id: uuid FK(Organization)
+      - kpi_id: uuid FK(KPI)
+      - year: integer
+      - quarter: integer  # 1-4; null for annual
+      - value_base: "NUMERIC(15,4) nullable"
+      - value_high: "NUMERIC(15,4) nullable"
+      - value_actual: "NUMERIC(15,4) nullable"
+    rls: tenant_id
+
+  Risk:
+    description: Risk identified against an initiative
+    fields:
+      - id: uuid PK
+      - tenant_id: uuid FK(Organization)
+      - initiative_id: uuid FK(Initiative)
+      - description: text required
+      - type: enum[operational, people, financial, technology]
+      - impact: enum[high, medium, low]
+      - likelihood: enum[high, medium, low]
+      - rating: enum[high, medium, low]  # computed from impact x likelihood
+      - status: enum[open, closed]
+      - owner_id: uuid FK(User) nullable
+      - mitigation: text nullable
+      - escalated: boolean default false
+      - created_at: timestamptz
+    rls: tenant_id
+
+  StatusUpdate:
+    description: Structured periodic update submitted by initiative owner
+    fields:
+      - id: uuid PK
+      - tenant_id: uuid FK(Organization)
+      - initiative_id: uuid FK(Initiative)
+      - author_id: uuid FK(User)
+      - rag_status: enum[red, amber, green]
+      - summary: text
+      - achievements: text nullable  # structured list
+      - issues: text nullable
+      - next_steps: text nullable
+      - submitted_at: timestamptz
+      - is_draft: boolean default true
+    rls: tenant_id
+
+  StageGate:
+    description: Gate definition for a stage transition (G1, G2)
+    fields:
+      - id: uuid PK
+      - tenant_id: uuid FK(Organization)
+      - initiative_id: uuid FK(Initiative)
+      - gate_number: integer  # 1 or 2
+      - label: string  # e.g. "G1 — Move to In-Progress"
+      - from_stage: string
+      - to_stage: string
+    rls: tenant_id
+
+  GateSubmission:
+    description: A submission for gate approval/rejection
+    fields:
+      - id: uuid PK
+      - tenant_id: uuid FK(Organization)
+      - gate_id: uuid FK(StageGate)
+      - submitted_by_id: uuid FK(User)
+      - submitted_at: timestamptz
+      - decision: enum[pending, approved, rejected] default pending
+      - decided_by_id: uuid FK(User) nullable
+      - decided_at: timestamptz nullable
+      - commentary: text nullable
+    rls: tenant_id
+
+  Financial:
+    description: Financial model attached to an initiative (multi-year)
+    fields:
+      - id: uuid PK
+      - tenant_id: uuid FK(Organization)
+      - initiative_id: uuid FK(Initiative)
+      - year: integer
+      - quarter: integer nullable  # null = full year summary
+      - revenue_uplift_base: "NUMERIC(15,4)"
+      - revenue_uplift_high: "NUMERIC(15,4)"
+      - revenue_uplift_actual: "NUMERIC(15,4)"
+      - gross_margin_base: "NUMERIC(15,4)"
+      - gross_margin_high: "NUMERIC(15,4)"
+      - gross_margin_actual: "NUMERIC(15,4)"
+      - gross_margin_pct_base: "NUMERIC(8,4)"
+      - gross_margin_pct_high: "NUMERIC(8,4)"
+      - gross_margin_pct_actual: "NUMERIC(8,4)"
+    rls: tenant_id
+
+  FinancialCostLine:
+    description: Individual cost line items within the financial model
+    fields:
+      - id: uuid PK
+      - tenant_id: uuid FK(Organization)
+      - initiative_id: uuid FK(Initiative)
+      - name: string  # e.g. "Implementation Cost"
+      - year: integer
+      - quarter: integer nullable
+      - amount_plan: "NUMERIC(15,4)"
+      - amount_actual: "NUMERIC(15,4)"
+      - is_recurring: boolean default false
+    rls: tenant_id
+
+  Meeting:
+    description: Recurring meeting series
+    fields:
+      - id: uuid PK
+      - tenant_id: uuid FK(Organization)
+      - name: string required
+      - workstream_id: uuid FK(Workstream) nullable
+      - scope: enum[workstream, all]
+      - recurrence: enum[weekly, biweekly, monthly, ad_hoc]
+      - description: text nullable
+      - owner_id: uuid FK(User)
+      - created_at: timestamptz
+    rls: tenant_id
+
+  MeetingSession:
+    description: A single instance of a recurring meeting
+    fields:
+      - id: uuid PK
+      - tenant_id: uuid FK(Organization)
+      - meeting_id: uuid FK(Meeting)
+      - session_date: date
+      - status: enum[scheduled, in_progress, completed]
+      - has_transcript: boolean default false
+      - ai_optimised: boolean default false
+      - transcript_text: text nullable
+      - notes: text nullable
+      - created_at: timestamptz
+    rls: tenant_id
+
+  ActionItem:
+    description: Action item captured from a meeting session
+    fields:
+      - id: uuid PK
+      - tenant_id: uuid FK(Organization)
+      - session_id: uuid FK(MeetingSession)
+      - initiative_id: uuid FK(Initiative) nullable
+      - description: text required
+      - assignee_id: uuid FK(User) nullable
+      - priority: enum[high, medium, low]
+      - status: enum[open, in_progress, completed, cancelled]
+      - due_date: date nullable
+      - created_at: timestamptz
+    rls: tenant_id
+
+  User:
+    description: Platform user
+    fields:
+      - id: uuid PK (= Supabase auth.users.id)
+      - tenant_id: uuid FK(Organization)
+      - email: string unique  # PII
+      - display_name: string  # PII
+      - phone: string nullable  # PII
+      - title: string nullable
+      - department: string nullable
+      - market: string nullable
+      - timezone: string nullable
+      - role: enum[transformation_office, initiative_owner, workstream_lead]
+      - status: enum[active, ghost, deactivated]
+      - last_login_at: timestamptz nullable
+      - created_at: timestamptz
+    rls: tenant_id

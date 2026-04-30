@@ -1,0 +1,80 @@
+domain_pack: transmuter
+version: "1.0.0"
+
+# Stage gate criteria for Transmuter initiatives.
+# auto = validated programmatically from DB state
+# manual = requires human reviewer to check/tick
+
+gates:
+
+  G1:
+    label: "G1 — Move to In-Progress"
+    description: Initiative meets readiness criteria to begin execution
+    from_stage: scoping
+    to_stage: in_progress
+    criteria:
+      - id: g1-01
+        description: "Initiative owner is assigned"
+        type: auto
+        check: "initiative.owner_id IS NOT NULL"
+      - id: g1-02
+        description: "Executive summary is provided"
+        type: auto
+        check: "initiative.summary IS NOT NULL AND length(initiative.summary) > 50"
+      - id: g1-03
+        description: "Value logic is documented"
+        type: auto
+        check: "initiative.value_logic IS NOT NULL AND length(initiative.value_logic) > 20"
+      - id: g1-04
+        description: "At least one milestone is defined"
+        type: auto
+        check: "count(milestones) >= 1"
+      - id: g1-05
+        description: "Planned end date is set"
+        type: auto
+        check: "initiative.planned_end IS NOT NULL"
+      - id: g1-06
+        description: "At least one KPI is defined"
+        type: auto
+        check: "count(kpis) >= 1"
+      - id: g1-07
+        description: "Financial baseline (base case revenue or cost) is entered"
+        type: auto
+        check: "count(financial_entries WHERE value_base IS NOT NULL) >= 1"
+      - id: g1-08
+        description: "Workstream is assigned"
+        type: auto
+        check: "initiative.workstream_id IS NOT NULL"
+      # NOTE: extend this list after confirming full G1 criteria with stakeholder (gap B-8)
+
+  G2:
+    label: "G2 — Move to Complete"
+    description: Initiative has delivered its intended value and is ready to close
+    from_stage: in_progress
+    to_stage: complete
+    criteria:
+      - id: g2-01
+        description: "All milestones are marked complete or formally waived"
+        type: auto
+        check: "count(milestones WHERE status != 'complete') = 0"
+      - id: g2-02
+        description: "Final status update submitted with Green or Amber RAG"
+        type: auto
+        check: "latest_status_update.rag_status IN ('green', 'amber')"
+      - id: g2-03
+        description: "Actual financial outcomes are entered"
+        type: auto
+        check: "count(financial_entries WHERE value_actual IS NOT NULL) >= 1"
+      - id: g2-04
+        description: "All KPI actuals entered for the final period"
+        type: auto
+        check: "count(kpi_entries WHERE value_actual IS NOT NULL) >= 1"
+      - id: g2-05
+        description: "Final summary and lessons learned documented"
+        type: manual
+        guidance: "Review the Summary & Results tab for completeness"
+      - id: g2-06
+        description: "All high-rated risks are closed or have a mitigation plan"
+        type: auto
+        check: "count(risks WHERE rating='high' AND status='open' AND mitigation IS NULL) = 0"
+      # NOTE: extend this list after confirming full G2 criteria with stakeholder (gap B-8)

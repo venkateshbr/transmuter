@@ -1,0 +1,97 @@
+id: transmuter
+display_name: "Transmuter — Value Creation Platform"
+version: "1.0.0"
+operator: ishirock
+
+tech_stack:
+  backend: fastapi
+  backend_version: "0.115+"
+  language: python
+  language_version: "3.12+"
+  frontend: angular18
+  database: supabase-postgres
+  agent_framework: pydanticai
+  llm_gateway: openrouter
+  queue: procrastinate
+  observability: langfuse
+  auth: supabase-auth
+
+tenancy:
+  model: multi-tenant
+  isolation: rls
+  tenant_id_field: tenant_id
+  tenant_table: organizations
+
+entities:
+  - Organization
+  - BusinessUnit
+  - Workstream
+  - Initiative
+  - Milestone
+  - MilestoneChecklist
+  - MilestoneDependency
+  - KPI
+  - KPIEntry
+  - Risk
+  - StatusUpdate
+  - StageGate
+  - GateSubmission
+  - Financial
+  - FinancialEntry
+  - Meeting
+  - MeetingSession
+  - AgendaItem
+  - ActionItem
+  - User
+  - UserWorkstream
+
+roles:
+  - transformation_office   # admin/viewer — full portfolio access
+  - initiative_owner        # manages their own initiative
+  - workstream_lead         # monitors all initiatives in their workstream
+
+domain_rules:
+  - All financial values use NUMERIC(15,4) in DB, Decimal in Python, strings in JSON
+  - All queries are scoped by tenant_id; RLS enforced
+  - Never send raw PII to external LLM APIs — mask before sending
+  - Pressure score is deterministic (formula-driven, not AI)
+  - Agents never block core platform functionality (graceful degradation)
+  - All data mutations are append-only in audit log
+
+artifacts:
+  sdlc_protocol: "docs/team/SDLC_PROTOCOL.md"
+  architecture_doc: "docs/team/ARCHITECTURE.md"
+  prd: "docs/team/PRD.md"
+  design_system: "docs/team/DESIGN_SYSTEM.md"
+  codebase_review: "docs/team/CODEBASE_REVIEW.md"
+  test_strategy: "docs/team/TEST_STRATEGY.md"
+  runbook: "docs/team/RUNBOOK.md"
+  security_review: "docs/team/SECURITY_REVIEW.md"
+  frontend_review: "docs/team/FRONTEND_REVIEW.md"
+
+pii_fields:
+  - users.email
+  - users.phone
+  - users.display_name
+
+evals_path: "tests/evals"
+judge_model: "claude-sonnet-4-6"
+trace_provider: langfuse
+
+agents:
+  - vishwa
+  - vastu
+  - netra
+  - chitra
+  - rupa
+  - karya
+  - aksha
+  - sthira
+  - prahari
+  - dhruva
+
+workflows:
+  - initiative_intake
+  - status_update_generation
+  - governance_gate_check
+  - meeting_notes_extraction

@@ -1,0 +1,84 @@
+apiVersion: agentic/v1
+kind: WorkflowSpec
+metadata:
+  name: initiative_intake
+  domain_pack: transmuter
+  description: >
+    Accepts raw initiative input (text or partial form) and returns a fully structured
+    initiative record with auto-suggested KPIs and pre-populated risk patterns.
+    HITL checkpoint before saving to DB.
+  trigger: user_action
+
+inputs:
+  - name: raw_text
+    type: string
+    required: true
+    description: Free-form initiative description from the user
+  - name: tenant_id
+    type: uuid
+    required: true
+  - name: submitter_user_id
+    type: uuid
+    required: true
+
+steps:
+  - id: extract_fields
+    type: agent_skill
+    agent: netra
+    skill: initiative_field_extraction
+    inputs:
+      text: "{{inputs.raw_text}}"
+      entities: "{{domain_pack.entities}}"
+    outputs:
+      initiative_draft: object
+      confidence: number
+
+  - id: suggest_kpis
+    type: agent_skill
+    agent: netra
+    skill: kpi_suggestion
+    depends_on: [extract_fields]
+    parallel_with: [scan_risks]
+    inputs:
+      initiative_type: "{{steps.extract_fields.outputs.initiative_draft.type}}"
+      initiative_name: "{{steps.extract_fields.outputs.initiative_draft.name}}"
+      value_logic: "{{steps.extract_fields.outputs.initiative_draft.value_logic}}"
+    outputs:
+      suggested_kpis: array
+
+  - id: scan_risks
+    type: agent_skill
+    agent: netra
+    skill: risk_pattern_scan
+    depends_on: [extract_fields]
+    parallel_with: [suggest_kpis]
+    inputs:
+      initiative_draft: "{{steps.extract_fields.outputs.initiative_draft}}"
+    outputs:
+      suggested_risks: array
+
+  - id: human_review
+    type: hitl
+    depends_on: [suggest_kpis, scan_risks]
+    approval_from: submitter_user_id
+    timeout_hours: 48
+    ui_context:
+      panel: initiative_intake_review
+      fields_shown: [initiative_draft, suggested_kpis, suggested_risks]
+
+  - id: persist
+    type: agent_skill
+    agent: karya
+    skill: create_initiative_with_suggestions
+    depends_on: [human_review]
+    inputs:
+      initiative_data: "{{steps.human_review.approved_data.initiative_draft}}"
+      kpis: "{{steps.human_review.approved_data.suggested_kpis}}"
+      risks: "{{steps.human_review.approved_data.suggested_risks}}"
+      tenant_id: "{{inputs.tenant_id}}"
+    outputs:
+      initiative_id: uuid
+
+outputs:
+  - name: initiative_id
+    source: "{{steps.persist.outputs.initiative_id}}"

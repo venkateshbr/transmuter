@@ -1,0 +1,82 @@
+apiVersion: agentic/v1
+kind: WorkflowSpec
+metadata:
+  name: governance_gate_check
+  domain_pack: transmuter
+  description: >
+    Evaluates an initiative against its next stage gate criteria. Auto-validates all
+    programmatic criteria, presents results for governance review, and records the decision.
+  trigger: user_action
+
+inputs:
+  - name: initiative_id
+    type: uuid
+    required: true
+  - name: gate_number
+    type: integer
+    required: true
+    description: "1 for G1 (Scoping→In-Progress), 2 for G2 (In-Progress→Complete)"
+  - name: tenant_id
+    type: uuid
+    required: true
+  - name: submitter_user_id
+    type: uuid
+    required: true
+  - name: reviewer_user_id
+    type: uuid
+    required: true
+
+steps:
+  - id: auto_validate
+    type: agent_skill
+    agent: karya
+    skill: gate_criteria_auto_validation
+    inputs:
+      initiative_id: "{{inputs.initiative_id}}"
+      gate_number: "{{inputs.gate_number}}"
+      tenant_id: "{{inputs.tenant_id}}"
+      gate_definitions: "{{domain_pack.gates}}"
+    outputs:
+      criteria_results: array  # [{criterion_id, met: bool, auto: bool, value: any}]
+      all_auto_criteria_met: boolean
+      criteria_met_count: integer
+      criteria_total_count: integer
+
+  - id: governance_review
+    type: hitl
+    depends_on: [auto_validate]
+    approval_from: reviewer_user_id
+    timeout_hours: 120
+    ui_context:
+      panel: gate_submission_review
+      fields_shown: [criteria_results, criteria_met_count, criteria_total_count]
+    decision_options:
+      - label: Approved
+        value: approved
+      - label: Rejected
+        value: rejected
+      - label: Conditional
+        value: conditional
+
+  - id: record_decision
+    type: agent_skill
+    agent: karya
+    skill: record_gate_decision
+    depends_on: [governance_review]
+    inputs:
+      initiative_id: "{{inputs.initiative_id}}"
+      gate_number: "{{inputs.gate_number}}"
+      tenant_id: "{{inputs.tenant_id}}"
+      decision: "{{steps.governance_review.decision}}"
+      commentary: "{{steps.governance_review.commentary}}"
+      decided_by_id: "{{inputs.reviewer_user_id}}"
+      advance_stage: "{{steps.governance_review.decision == 'approved'}}"
+    outputs:
+      submission_id: uuid
+      new_stage: string nullable
+
+outputs:
+  - name: submission_id
+    source: "{{steps.record_decision.outputs.submission_id}}"
+  - name: new_stage
+    source: "{{steps.record_decision.outputs.new_stage}}"
