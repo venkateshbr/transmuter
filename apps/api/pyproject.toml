@@ -72,3 +72,9 @@ testpaths = ["tests"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
+
+
+# Run commands (from apps/api/ directory):
+#   uv run uvicorn app.main:app --reload --port 8000
+#   uv run --extra dev pytest tests/ -v
+#   uv run ruff check app/
