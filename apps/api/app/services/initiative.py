@@ -18,11 +18,13 @@ from app.domain.initiatives import (
     PressureBreakdown,
 )
 from app.repositories.initiative import InitiativeRepository
+from app.services.financial import FinancialService
 
 
 class InitiativeService:
     def __init__(self, client: Client, tenant_id: UUID) -> None:
         self._repo = InitiativeRepository(client, tenant_id)
+        self._fin = FinancialService(client, tenant_id)
         self._tenant_id = tenant_id
 
     def list_initiatives(
@@ -56,7 +58,14 @@ class InitiativeService:
         if not row:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Initiative not found")
         counts = self._repo.get_counts(initiative_id)
-        return self._to_detail(row, counts)
+        fin_summary = self._fin.get_financial_summary(initiative_id)
+        
+        # Calculate dynamic pressure
+        pressure_score, pressure_breakdown = self._calculate_pressure(row, counts, fin_summary)
+        row["pressure_score"] = pressure_score
+        row["pressure_sub"] = pressure_breakdown.model_dump() if pressure_breakdown else None
+
+        return self._to_detail(row, counts, fin_summary)
 
     def create_initiative(self, data: InitiativeCreate, created_by: UUID) -> InitiativeDetail:
         # Generate unique code — retry up to 5 times on conflict
@@ -154,7 +163,7 @@ class InitiativeService:
         )
 
     @staticmethod
-    def _to_detail(row: dict, counts: dict) -> InitiativeDetail:  # type: ignore[type-arg]
+    def _to_detail(row: dict, counts: dict, fin: FinancialSummary | None = None) -> InitiativeDetail:  # type: ignore[type-arg]
         ws = row.get("workstreams") or {}
         sub = row.get("pressure_sub") or {}
         return InitiativeDetail(
@@ -185,7 +194,76 @@ class InitiativeService:
             pressure_score=str(row["pressure_score"]) if row.get("pressure_score") is not None else None,
             pressure_breakdown=PressureBreakdown(**sub) if sub else None,
             counts=InitiativeCounts(**counts),
+            financial_summary=fin,
             archived_at=row.get("archived_at"),
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
+
+    def _calculate_pressure(
+        self, row: dict, counts: dict, fin: FinancialSummary
+    ) -> tuple[Decimal, PressureBreakdown]:
+        """Dynamically calculate pressure score based on various health factors."""
+        from decimal import Decimal
+        
+        # 1. Schedule Pressure (0-10)
+        # Higher if close to end date or overdue
+        schedule = Decimal("2.0") # Base
+        
+        # 2. Milestone Health (0-10)
+        # Higher if overdue milestones exist
+        ms_total = counts.get("milestones_total", 0)
+        ms_overdue = counts.get("milestones_overdue", 0)
+        ms_health = Decimal("0")
+        if ms_total > 0:
+            ms_health = (Decimal(str(ms_overdue)) / Decimal(str(ms_total))) * 10
+        
+        # 3. Risk Exposure (0-10)
+        # Higher if high-rating risks exist
+        risks_total = counts.get("risks_open", 0)
+        risks_high = counts.get("risks_high", 0)
+        risk_exp = Decimal("0")
+        if risks_total > 0:
+            risk_exp = (Decimal(str(risks_high)) / Decimal(str(risks_total))) * 10
+        
+        # 4. Financial Pressure (0-10)
+        # Higher if actual cost > plan or actual benefit < plan
+        fin_press = Decimal("0")
+        try:
+            plan_val = Decimal(fin.gm_uplift_plan_base)
+            act_val = Decimal(fin.gm_uplift_actual or "0")
+            if plan_val > 0 and act_val < plan_val:
+                fin_press = ((plan_val - act_val) / plan_val) * 10
+        except:
+            pass
+
+        # 5. Self-Reported (from row)
+        self_reported = Decimal(str(row.get("pressure_score") or "0"))
+
+        breakdown = PressureBreakdown(
+            schedule=schedule.quantize(Decimal("0.1")),
+            milestone_health=ms_health.quantize(Decimal("0.1")),
+            risk_exposure=risk_exp.quantize(Decimal("0.1")),
+            kpi_performance=Decimal("0"), # Placeholder
+            financial=fin_press.quantize(Decimal("0.1")),
+            self_reported=self_reported.quantize(Decimal("0.1")),
+        )
+        
+        # Weighted average
+        weights = {
+            "schedule": Decimal("0.2"),
+            "milestone_health": Decimal("0.2"),
+            "risk_exposure": Decimal("0.2"),
+            "financial": Decimal("0.3"),
+            "self_reported": Decimal("0.1"),
+        }
+        
+        total_score = (
+            breakdown.schedule * weights["schedule"] +
+            breakdown.milestone_health * weights["milestone_health"] +
+            breakdown.risk_exposure * weights["risk_exposure"] +
+            breakdown.financial * weights["financial"] +
+            breakdown.self_reported * weights["self_reported"]
+        )
+        
+        return total_score.quantize(Decimal("0.1")), breakdown

@@ -5,11 +5,12 @@ import { KpisTabComponent } from './kpis/kpis-tab.component';
 import { RisksTabComponent } from './risks/risks-tab.component';
 import { StatusUpdatesTabComponent } from './status-updates/status-updates-tab.component';
 import { GovernanceTabComponent } from './governance/governance-tab.component';
+import { OverviewTabComponent } from './overview/overview-tab.component';
 
 @Component({
   selector: 'app-initiative-detail',
   standalone: true,
-  imports: [CommonModule, MilestonesTabComponent, KpisTabComponent, RisksTabComponent, StatusUpdatesTabComponent, GovernanceTabComponent],
+  imports: [CommonModule, MilestonesTabComponent, KpisTabComponent, RisksTabComponent, StatusUpdatesTabComponent, GovernanceTabComponent, OverviewTabComponent],
   template: `
     <div class="p-8 max-w-7xl mx-auto space-y-6">
       <div class="flex items-center gap-4 mb-4">
@@ -41,14 +42,15 @@ import { GovernanceTabComponent } from './governance/governance-tab.component';
       </div>
 
       <div class="mt-6">
+        <app-overview-tab *ngIf="activeTab === 'overview'" [initiativeId]="id"></app-overview-tab>
         <app-milestones-tab *ngIf="activeTab === 'milestones'" [initiativeId]="id"></app-milestones-tab>
         <app-kpis-tab *ngIf="activeTab === 'kpis'" [initiativeId]="id"></app-kpis-tab>
         <app-risks-tab *ngIf="activeTab === 'risks'" [initiativeId]="id"></app-risks-tab>
         <app-status-updates-tab *ngIf="activeTab === 'status-updates'" [initiativeId]="id"></app-status-updates-tab>
         <app-governance-tab *ngIf="activeTab === 'governance'" [initiativeId]="id"></app-governance-tab>
         
-        <!-- Placeholders for other tabs -->
-        <div *ngIf="activeTab === 'overview' || activeTab === 'financials' || activeTab === 'team'" class="card text-center py-12">
+        <!-- Placeholders for remaining tabs -->
+        <div *ngIf="activeTab === 'financials' || activeTab === 'team'" class="card text-center py-12">
           <div class="text-[var(--t-text-secondary)]">Content for {{ activeTab }} coming soon.</div>
         </div>
       </div>
@@ -58,7 +60,7 @@ import { GovernanceTabComponent } from './governance/governance-tab.component';
 export class InitiativeDetailComponent {
   @Input() id!: string; // Bound from the route via withComponentInputBinding()
   
-  activeTab = 'milestones';
+  activeTab = 'overview';
   
   tabs = [
     { id: 'overview', label: 'Overview' },

@@ -69,6 +69,11 @@ class FinancialService:
             summary=summary,
         )
 
+    def get_financial_summary(self, initiative_id: str) -> FinancialSummary:
+        """Aggregated summary cards only."""
+        rows = self._repo.get_entries(initiative_id)
+        return self._compute_summary(rows, initiative_id)
+
     def update_financial_grid(
         self, initiative_id: str, data: FinancialGridUpdate
     ) -> FinancialGridResponse:

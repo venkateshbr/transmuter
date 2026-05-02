@@ -9,6 +9,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.domain.financials import FinancialSummary
+
 
 # ── Enums ─────────────────────────────────────────────────────────────────────
 
@@ -135,6 +137,7 @@ class InitiativeDetail(BaseModel):
     pressure_score: str | None
     pressure_breakdown: PressureBreakdown | None
     counts: InitiativeCounts
+    financial_summary: FinancialSummary | None = None
     archived_at: str | None
     created_at: str
     updated_at: str
