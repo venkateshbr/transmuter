@@ -148,3 +148,7 @@ When updating `TEST_STRATEGY.md`, always append to the Changelog section:
 - **All test scenarios in `docs/test/` are the canonical reference** — always check and update them when writing new tests or running regression
 - **Agent regression now has per-agent scenario files** — when any registered ERP agent changes, run the relevant file in `docs/test/agent_scenarios/` plus the linked E2E suite from `docs/test/regression_suites.md`.
 - **CRITICAL: Always ground test scenarios in the actual codebase** — reference real API endpoints, real agent names from `registry.py`, real validation rules from `ACCOUNTING_RULES.md`. Never write generic/placeholder tests. If unsure about an implementation detail, read the source code first.
+- **NO SMOKE OR MOCK TESTS** — All tests must be real, interacting with real database contexts and sample data.
+- **BROWSER UI TESTING**: UI must be tested via the browser agent on real DOM.
+- **END-TO-END VERIFICATION**: Always test through the frontend to ensure full integration. When seeding data (initiatives, etc.), perform it through the UI, verify it is stored in the database, and then verify it again in the frontend UI.
+- **PORT CONFIGURATION**: The Angular application now runs on port **4300**. Ensure all browser tests use this port.

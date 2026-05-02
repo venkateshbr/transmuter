@@ -4,32 +4,38 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Design Tokens (Light Theme) ── */
+/* ── Design Tokens (Light Theme — Purple / White / Lavender) ── */
 :root {
-  --t-bg:             #f8f9fb;
+  --t-bg:             #f8f7fc;
   --t-surface:        #ffffff;
-  --t-surface-raised: #f0f2f5;
-  --t-border:         #e2e6ea;
-  --t-text-primary:   #0f1117;
-  --t-text-secondary: #6b7280;
-  --t-accent:         #f97316;
-  --t-accent-hover:   #ea6c0c;
+  --t-surface-raised: #f0eef5;
+  --t-border:         #e4e0ee;
+  --t-text-primary:   #1a1035;
+  --t-text-secondary: #6b6280;
+  --t-accent:         #7c3aed;
+  --t-accent-hover:   #6d28d9;
+  --t-accent-soft:    rgba(124,58,237,0.08);
+  --t-accent-ring:    rgba(124,58,237,0.25);
+  --t-accent-gradient: linear-gradient(135deg, #7c3aed, #a855f7);
   --t-red:            #ef4444;
   --t-amber:          #f59e0b;
-  --t-green:          #22c55e;
+  --t-green:          #10b981;
   --t-teal:           #14b8a6;
 }
 
 /* ── Dark Theme ── */
 .dark {
-  --t-bg:             #0d0f14;
-  --t-surface:        #161920;
-  --t-surface-raised: #1e2128;
-  --t-border:         #2a2d36;
-  --t-text-primary:   #e8eaf0;
-  --t-text-secondary: #9ca3af;
-  --t-accent:         #f97316;
-  --t-accent-hover:   #fb923c;
+  --t-bg:             #0c0a14;
+  --t-surface:        #16132a;
+  --t-surface-raised: #1e1a35;
+  --t-border:         #2a2545;
+  --t-text-primary:   #ece8f5;
+  --t-text-secondary: #a099b4;
+  --t-accent:         #a78bfa;
+  --t-accent-hover:   #c4b5fd;
+  --t-accent-soft:    rgba(167,139,250,0.12);
+  --t-accent-ring:    rgba(167,139,250,0.30);
+  --t-accent-gradient: linear-gradient(135deg, #a78bfa, #c084fc);
 }
 
 /* ── Global Base ── */
@@ -45,49 +51,66 @@ body {
 
   .btn-primary {
     @apply inline-flex items-center font-medium px-4 py-2 rounded-lg
-           cursor-pointer transition-colors duration-150 border-none;
-    background: var(--t-accent);
+           cursor-pointer transition-all duration-200 border-none;
+    background: var(--t-accent-gradient);
+    box-shadow: 0 2px 8px var(--t-accent-ring);
     color: #fff;
   }
-  .btn-primary:hover { background: var(--t-accent-hover); }
+  .btn-primary:hover {
+    background: linear-gradient(135deg, var(--t-accent-hover), #9333ea);
+    box-shadow: 0 4px 14px var(--t-accent-ring);
+    transform: translateY(-1px);
+  }
+  .btn-primary:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 4px var(--t-accent-ring);
+  }
 
   .btn-secondary {
     @apply inline-flex items-center font-medium px-4 py-2 rounded-lg
-           transition-colors duration-150;
+           transition-all duration-200;
     background: var(--t-surface-raised);
     color: var(--t-text-primary);
     border: 1px solid var(--t-border);
   }
-  .btn-secondary:hover { background: var(--t-border); }
+  .btn-secondary:hover {
+    background: var(--t-border);
+    border-color: var(--t-accent);
+  }
 
   .btn-ghost {
-    @apply px-3 py-2 rounded-lg transition-colors duration-150;
+    @apply px-3 py-2 rounded-lg transition-all duration-200;
     background: transparent;
     border: none;
     color: var(--t-text-secondary);
     cursor: pointer;
   }
   .btn-ghost:hover {
-    background: var(--t-surface-raised);
-    color: var(--t-text-primary);
+    background: var(--t-accent-soft);
+    color: var(--t-accent);
   }
 
   .card {
     @apply rounded-xl shadow-sm p-5;
     background: var(--t-surface);
     border: 1px solid var(--t-border);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .card:hover {
+    border-color: var(--t-accent);
+    box-shadow: 0 4px 16px var(--t-accent-ring);
   }
 
   .glass-panel {
     @apply rounded-xl shadow-sm backdrop-blur-sm;
-    background: rgba(255,255,255,0.8);
+    background: rgba(255,255,255,0.85);
     border: 1px solid var(--t-border);
   }
-  .dark .glass-panel { background: rgba(22,25,32,0.8); }
+  .dark .glass-panel { background: rgba(22,19,42,0.85); }
 
   .input-field {
     @apply rounded-lg px-3 py-2 w-full text-sm outline-none
-           transition duration-150;
+           transition duration-200;
     background: var(--t-surface-raised);
     border: 1px solid var(--t-border);
     color: var(--t-text-primary);
@@ -95,7 +118,7 @@ body {
   .input-field::placeholder { color: var(--t-text-secondary); }
   .input-field:focus {
     border-color: var(--t-accent);
-    box-shadow: 0 0 0 2px rgba(249,115,22,0.2);
+    box-shadow: 0 0 0 2px var(--t-accent-ring);
   }
 
   /* RAG badges */
@@ -103,7 +126,7 @@ body {
     @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
     background: #dcfce7; color: #166534;
   }
-  .dark .badge-green { background: rgba(34,197,94,0.15); color: #86efac; }
+  .dark .badge-green { background: rgba(16,185,129,0.15); color: #86efac; }
 
   .badge-amber {
     @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
@@ -121,22 +144,33 @@ body {
     @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
     background: #ccfbf1; color: #134e4a;
   }
+  .dark .badge-teal { background: rgba(20,184,166,0.15); color: #5eead4; }
 
   .badge-gray {
     @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
     background: #f3f4f6; color: #374151;
   }
-  .dark .badge-gray { background: #374151; color: #d1d5db; }
+  .dark .badge-gray { background: rgba(107,114,128,0.15); color: #d1d5db; }
+
+  .badge-purple {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+    background: #ede9fe; color: #6d28d9;
+  }
+  .dark .badge-purple { background: rgba(167,139,250,0.15); color: #c4b5fd; }
 
   /* Nav items */
   .nav-item {
     @apply flex items-center gap-3 px-3 py-2 rounded-lg text-sm
-           transition-colors duration-150 cursor-pointer no-underline;
+           transition-all duration-200 cursor-pointer no-underline;
     color: var(--t-text-secondary);
   }
-  .nav-item:hover, .nav-item.active {
-    background: var(--t-surface-raised);
-    color: var(--t-text-primary);
+  .nav-item:hover {
+    background: var(--t-accent-soft);
+    color: var(--t-accent);
   }
-  .nav-item.active { @apply font-medium; }
+  .nav-item.active {
+    background: var(--t-accent-soft);
+    color: var(--t-accent);
+    @apply font-medium;
+  }
 }

@@ -12,14 +12,6 @@ from app.core.config import settings
 bearer = HTTPBearer()
 
 
-class TokenPayload(BaseModel):
-    sub: str          # user id
-    tenant_id: str
-    role: str         # transformation_office | initiative_owner | workstream_lead
-    email: str
-    exp: int
-
-
 class CurrentUser(BaseModel):
     id: UUID
     tenant_id: UUID
@@ -27,32 +19,48 @@ class CurrentUser(BaseModel):
     email: str
 
 
-def decode_token(token: str) -> TokenPayload:
-    try:
-        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
-        return TokenPayload(**payload)
-    except (JWTError, KeyError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"},
-        ) from exc
-
-
 async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer)],
 ) -> CurrentUser:
-    payload = decode_token(credentials.credentials)
+    token = credentials.credentials
+    
+    try:
+        # Decode and verify using our own secret
+        payload = jwt.decode(
+            token, 
+            settings.jwt_secret, 
+            algorithms=[settings.jwt_algorithm]
+        )
+        
+        user_id = payload.get("sub")
+        tenant_id = payload.get("tenant_id")
+        role = payload.get("role")
+        email = payload.get("email")
 
-    if datetime.fromtimestamp(payload.exp, tz=timezone.utc) < datetime.now(tz=timezone.utc):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
+        if not user_id or not tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, 
+                detail="Invalid token payload"
+            )
 
-    return CurrentUser(
-        id=UUID(payload.sub),
-        tenant_id=UUID(payload.tenant_id),
-        role=payload.role,
-        email=payload.email,
-    )
+        return CurrentUser(
+            id=UUID(user_id),
+            tenant_id=UUID(tenant_id),
+            role=role or "viewer",
+            email=email or "",
+        )
+    except JWTError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid JWT: {str(exc)}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Auth failure: {str(exc)}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 def require_role(*roles: str):

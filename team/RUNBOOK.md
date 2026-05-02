@@ -24,7 +24,7 @@
 
 ```
                     ┌─────────────┐
-     Users ───────▶ │  Frontend   │ (Angular 18, port 4200)
+     Users ───────▶ │  Frontend   │ (Angular 18, port 4300)
                     │  (Nginx)    │
                     └──────┬──────┘
                            │ HTTP
@@ -49,7 +49,7 @@
 |---------|-----------|------|---------|
 | Backend | FastAPI + Uvicorn | 8010 | API + agent orchestration |
 | Worker | Procrastinate + PG | — | Background agent jobs |
-| Frontend | Angular 18 + Nginx | 4200 (dev), 80 (prod) | Web UI |
+| Frontend | Angular 18 + Nginx | 4300 (dev), 80 (prod) | Web UI |
 | Database | Supabase (PG 15+) | — | Cloud-managed PostgreSQL |
 | LLM Gateway | OpenRouter | — | AI model routing |
 | Observability | Logfire (optional) | — | Traces + metrics |

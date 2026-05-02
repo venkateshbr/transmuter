@@ -1,5 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 
@@ -109,7 +109,9 @@ const STAGE_LABELS: Record<string, string> = {
            style="color:var(--t-text-secondary)">
           Export CSV ↗
         </a>
-        <button class="btn-primary text-sm flex items-center gap-2">
+        <button class="btn-primary text-sm flex items-center gap-2"
+                (click)="openNewInitiative()"
+                aria-label="Create new initiative">
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
             <path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
           </svg>
@@ -441,10 +443,16 @@ export class PipelineComponent {
     STAGE_ORDER.filter(s => (this.grouped()[s]?.length ?? 0) > 0).length
   );
 
+  private readonly router = inject(Router);
+
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     this.reload();
+  }
+
+  openNewInitiative(): void {
+    this.router.navigate(['/initiatives/new']);
   }
 
   reload(): void {

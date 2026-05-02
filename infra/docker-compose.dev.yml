@@ -49,15 +49,15 @@ services:
     image: node:20-alpine
     working_dir: /app
     ports:
-      - "4200:4200"
+      - "4300:4300"
     volumes:
       - ../apps/web:/app
       - /app/node_modules
-    command: npm run start -- --host 0.0.0.0 --port 4200
+    command: npm run start -- --host 0.0.0.0 --port 4300
     environment:
       - NODE_ENV=development
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:4200"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:4300"]
       interval: 15s
       timeout: 5s
       retries: 5
