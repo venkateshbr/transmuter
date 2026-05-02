@@ -4,6 +4,8 @@
 @tailwind components;
 @tailwind utilities;
 
+@import 'handsontable/dist/handsontable.full.min.css';
+
 /* ── Design Tokens (Light Theme — Purple / White / Lavender) ── */
 :root {
   --t-bg:             #f8f7fc;
@@ -173,4 +175,37 @@ body {
     color: var(--t-accent);
     @apply font-medium;
   }
+}
+
+/* ── Handsontable Custom Theme ── */
+.hot-theme-transmuter .handsontable th, 
+.hot-theme-transmuter .handsontable td {
+  border-color: var(--t-border) !important;
+  font-family: inherit;
+}
+.hot-theme-transmuter .handsontable thead th .relative {
+  padding: 8px;
+  background: var(--t-surface-raised);
+  color: var(--t-text-secondary);
+  font-size: 10px;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+.hot-theme-transmuter .handsontable td {
+  padding: 6px 8px;
+  background: var(--t-surface);
+  color: var(--t-text-primary);
+}
+.hot-theme-transmuter .handsontable .htLeft.font-bold {
+  background: var(--t-surface-raised);
+}
+.hot-theme-transmuter .handsontable .area {
+  background: var(--t-accent-soft) !important;
+}
+.hot-theme-transmuter .handsontable .selection {
+  background: var(--t-accent) !important;
+}
+.hot-theme-transmuter .handsontable td.htPlaceholder {
+  color: var(--t-text-secondary) !important;
 }

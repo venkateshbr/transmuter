@@ -6,11 +6,12 @@ import { RisksTabComponent } from './risks/risks-tab.component';
 import { StatusUpdatesTabComponent } from './status-updates/status-updates-tab.component';
 import { GovernanceTabComponent } from './governance/governance-tab.component';
 import { OverviewTabComponent } from './overview/overview-tab.component';
+import { FinancialsTabComponent } from './financials/financials-tab.component';
 
 @Component({
   selector: 'app-initiative-detail',
   standalone: true,
-  imports: [CommonModule, MilestonesTabComponent, KpisTabComponent, RisksTabComponent, StatusUpdatesTabComponent, GovernanceTabComponent, OverviewTabComponent],
+  imports: [CommonModule, MilestonesTabComponent, KpisTabComponent, RisksTabComponent, StatusUpdatesTabComponent, GovernanceTabComponent, OverviewTabComponent, FinancialsTabComponent],
   template: `
     <div class="p-8 max-w-7xl mx-auto space-y-6">
       <div class="flex items-center gap-4 mb-4">
@@ -48,9 +49,10 @@ import { OverviewTabComponent } from './overview/overview-tab.component';
         <app-risks-tab *ngIf="activeTab === 'risks'" [initiativeId]="id"></app-risks-tab>
         <app-status-updates-tab *ngIf="activeTab === 'status-updates'" [initiativeId]="id"></app-status-updates-tab>
         <app-governance-tab *ngIf="activeTab === 'governance'" [initiativeId]="id"></app-governance-tab>
+        <app-financials-tab *ngIf="activeTab === 'financials'" [initiativeId]="id"></app-financials-tab>
         
         <!-- Placeholders for remaining tabs -->
-        <div *ngIf="activeTab === 'financials' || activeTab === 'team'" class="card text-center py-12">
+        <div *ngIf="activeTab === 'team'" class="card text-center py-12">
           <div class="text-[var(--t-text-secondary)]">Content for {{ activeTab }} coming soon.</div>
         </div>
       </div>

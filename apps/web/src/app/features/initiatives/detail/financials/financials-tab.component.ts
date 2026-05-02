@@ -1,25 +1,45 @@
-import { Component, Input, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, Input, OnInit, inject, signal, computed, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ApiService } from '../../../../core/services/api.service';
 
 interface FinancialEntry {
   year: number;
   quarter: number | null;
+  month: number | null;
   revenue_uplift_base: string;
   revenue_uplift_high: string;
   revenue_uplift_actual: string | null;
+  revenue_uplift_pct_base: string;
+  revenue_uplift_pct_high: string;
+  revenue_uplift_pct_actual: string | null;
   gross_margin_base: string;
   gross_margin_high: string;
   gross_margin_actual: string | null;
   gm_pct_base: string;
   gm_pct_high: string;
   gm_pct_actual: string | null;
+  gm_uplift_base: string;
+  gm_uplift_high: string;
+  gm_uplift_actual: string | null;
+  gm_uplift_pct_base: string;
+  gm_uplift_pct_high: string;
+  gm_uplift_pct_actual: string | null;
 }
 
 interface FinancialSummary {
+  revenue_uplift_plan_base: string;
+  revenue_uplift_plan_high: string;
+  revenue_uplift_actual: string | null;
   gross_margin_plan_base: string;
   gross_margin_plan_high: string;
   gross_margin_actual: string | null;
+  gm_uplift_plan_base: string;
+  gm_uplift_plan_high: string;
+  gm_uplift_actual: string | null;
+  costs_recurring_plan: string;
+  costs_recurring_actual: string | null;
+  costs_one_off_plan: string;
+  costs_one_off_actual: string | null;
   costs_plan: string;
   costs_actual: string | null;
   net_value_plan: string;
@@ -62,10 +82,16 @@ interface CostLineListResponse {
   total: number;
 }
 
+import { HotTableModule } from '@handsontable/angular-wrapper';
+import { registerAllModules } from 'handsontable/registry';
+
+// register Handsontable's modules
+registerAllModules();
+
 @Component({
   selector: 'app-financials-tab',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, HotTableModule],
   template: `
     <div class="space-y-6">
       <!-- Year toggle -->
@@ -113,85 +139,37 @@ interface CostLineListResponse {
         </div>
       }
 
-      <!-- Quarterly grid table -->
+      <!-- Excel-like Financial Grid -->
       @if (filteredEntries().length > 0) {
-        <div class="card p-0 overflow-x-auto">
-          <table class="w-full text-sm" style="border-collapse:collapse">
-            <thead>
-              <tr style="border-bottom:1px solid var(--t-border)">
-                <th class="text-left px-4 py-3 text-[10px] font-semibold uppercase"
-                    style="color:var(--t-text-secondary)">Metric</th>
-                @for (q of [1,2,3,4]; track q) {
-                  <th class="text-right px-4 py-3 text-[10px] font-semibold uppercase"
-                      style="color:var(--t-text-secondary)">Q{{ q }}</th>
-                }
-                <th class="text-right px-4 py-3 text-[10px] font-semibold uppercase"
-                    style="color:var(--t-accent)">Full Year</th>
-              </tr>
-            </thead>
-            <tbody>
-              <!-- Revenue Uplift section -->
-              <tr style="background:var(--t-surface-raised)">
-                <td colspan="6" class="px-4 py-2 text-xs font-semibold uppercase"
-                    style="color:var(--t-text-secondary)">Revenue Uplift</td>
-              </tr>
-              @for (row of revenueRows(); track row.label) {
-                <tr style="border-bottom:1px solid var(--t-border)"
-                    class="hover:bg-[var(--t-surface-raised)] transition-colors">
-                  <td class="px-4 py-2.5 text-sm" style="color:var(--t-text-secondary)">{{ row.label }}</td>
-                  @for (val of row.values; track $index) {
-                    <td class="text-right px-4 py-2.5 font-mono text-sm"
-                        [style.color]="val === '—' ? 'var(--t-text-secondary)' : 'var(--t-text-primary)'">
-                      {{ val }}
-                    </td>
-                  }
-                </tr>
-              }
-              <!-- Gross Margin section -->
-              <tr style="background:var(--t-surface-raised)">
-                <td colspan="6" class="px-4 py-2 text-xs font-semibold uppercase"
-                    style="color:var(--t-text-secondary)">Gross Margin</td>
-              </tr>
-              @for (row of marginRows(); track row.label) {
-                <tr style="border-bottom:1px solid var(--t-border)"
-                    class="hover:bg-[var(--t-surface-raised)] transition-colors">
-                  <td class="px-4 py-2.5 text-sm" style="color:var(--t-text-secondary)">{{ row.label }}</td>
-                  @for (val of row.values; track $index) {
-                    <td class="text-right px-4 py-2.5 font-mono text-sm"
-                        [style.color]="val === '—' ? 'var(--t-text-secondary)' : 'var(--t-text-primary)'">
-                      {{ val }}
-                    </td>
-                  }
-                </tr>
-              }
-              <!-- Costs section -->
-              @if (costLines().length > 0) {
-                <tr style="background:var(--t-surface-raised)">
-                  <td colspan="6" class="px-4 py-2 text-xs font-semibold uppercase"
-                      style="color:var(--t-text-secondary)">Costs</td>
-                </tr>
-                @for (cl of costLines(); track cl.id) {
-                  <tr style="border-bottom:1px solid var(--t-border)"
-                      class="hover:bg-[var(--t-surface-raised)] transition-colors">
-                    <td class="px-4 py-2.5 text-sm" style="color:var(--t-text-secondary)">
-                      {{ cl.name }}
-                      @if (cl.is_recurring) {
-                        <span class="badge-purple ml-1">Recurring</span>
-                      }
-                    </td>
-                    <td class="text-right px-4 py-2.5 font-mono text-sm"
-                        colspan="4" style="color:var(--t-text-primary)">
-                      {{ formatMoney(cl.amount_plan) }}
-                    </td>
-                    <td class="text-right px-4 py-2.5 font-mono text-sm"
-                        style="color:var(--t-text-primary)">
-                      {{ cl.amount_actual ? formatMoney(cl.amount_actual) : '—' }}
-                    </td>
-                  </tr>
-                }
-              }
-            </tbody>
-          </table>
+        <div class="card p-4">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-semibold uppercase tracking-wider" style="color:var(--t-text-secondary)">
+              Financial Entry Grid ({{ selectedYear() === 0 ? 'All Years' : selectedYear() }})
+            </h3>
+            <button (click)="saveGrid()" class="btn-primary py-1.5 px-4 text-xs">Save Changes</button>
+          </div>
+          
+          <div class="handsontable-container overflow-hidden rounded-lg border" style="border-color:var(--t-border)">
+            <hot-table
+              #hot
+              [data]="hotData()"
+              [colHeaders]="hotColHeaders"
+              [columns]="hotColumns"
+              [rowHeaders]="true"
+              [height]="400"
+              [licenseKey]="'non-commercial-and-evaluation'"
+              [stretchH]="'all'"
+              [contextMenu]="true"
+              [fixedColumnsLeft]="1"
+              [manualColumnResize]="true"
+              [manualRowResize]="true"
+              (afterChange)="onHotChange($event)"
+              class="hot-theme-transmuter">
+            </hot-table>
+          </div>
+          <p class="text-[10px] mt-3" style="color:var(--t-text-secondary)">
+            * Use Ctrl+C / Ctrl+V to copy-paste from Excel. All changes are saved locally until you click "Save Changes".
+          </p>
         </div>
       }
 
@@ -271,6 +249,7 @@ interface CostLineListResponse {
 })
 export class FinancialsTabComponent implements OnInit {
   @Input() initiativeId = '';
+  @ViewChild('hot', { static: false }) hotRegisterer!: any;
 
   private readonly api = inject(ApiService);
 
@@ -280,13 +259,95 @@ export class FinancialsTabComponent implements OnInit {
   valueBridge = signal<ValueBridge | null>(null);
   selectedYear = signal(0); // 0 = All Years
   viewMode = signal<'summary' | 'advanced'>('summary');
-
-  readonly years = [0, 2026, 2027, 2028, 2029, 2030];
+  readonly years = [2026, 2027, 2028, 2029, 2030];
   readonly bridgeColumns = [
     { key: 'gross_margin', label: 'Benefits' },
     { key: 'costs', label: 'Costs' },
     { key: 'net', label: 'Net' },
   ];
+
+  hotColHeaders = [
+    'Period', 
+    'Rev Uplift (Base)', 'Rev Uplift (High)', 'Rev Uplift (Actual)',
+    'GM Uplift (Base)', 'GM Uplift (High)', 'GM Uplift (Actual)',
+    'Recurring (Plan)', 'Recurring (Actual)',
+    'One-time (Plan)', 'One-time (Actual)'
+  ];
+
+  hotColumns = [
+    { data: 'period', readOnly: true, className: 'htLeft font-bold' },
+    { data: 'revenue_uplift_base', type: 'numeric', numericFormat: { pattern: '$0,0.00' } },
+    { data: 'revenue_uplift_high', type: 'numeric', numericFormat: { pattern: '$0,0.00' } },
+    { data: 'revenue_uplift_actual', type: 'numeric', numericFormat: { pattern: '$0,0.00' } },
+    { data: 'gm_uplift_base', type: 'numeric', numericFormat: { pattern: '$0,0.00' } },
+    { data: 'gm_uplift_high', type: 'numeric', numericFormat: { pattern: '$0,0.00' } },
+    { data: 'gm_uplift_actual', type: 'numeric', numericFormat: { pattern: '$0,0.00' } },
+    { data: 'costs_recurring_plan', type: 'numeric', numericFormat: { pattern: '$0,0.00' } },
+    { data: 'costs_recurring_actual', type: 'numeric', numericFormat: { pattern: '$0,0.00' } },
+    { data: 'costs_one_off_plan', type: 'numeric', numericFormat: { pattern: '$0,0.00' } },
+    { data: 'costs_one_off_actual', type: 'numeric', numericFormat: { pattern: '$0,0.00' } },
+  ];
+
+  hotData = computed(() => {
+    const entries = this.grid()?.entries || [];
+    const costs = this.costLines();
+    const yr = this.selectedYear();
+    
+    // Build 12 monthly rows + 4 quarterly rows for the selected year
+    const data: any[] = [];
+    const targetYear = yr === 0 ? 2026 : yr; // Default to 2026 if all years (just for the grid)
+
+    // Helper to find entry
+    const findEntry = (m: number | null, q: number | null) => 
+      entries.find(e => e.year === targetYear && e.month === m && e.quarter === q);
+
+    // Helper to sum costs for period
+    const sumCosts = (m: number | null, q: number | null, recurring: boolean) => {
+      return costs
+        .filter(c => c.year === targetYear && c.month === m && c.quarter === q && c.is_recurring === recurring)
+        .reduce((sum, c) => sum + parseFloat(c.amount_plan || '0'), 0);
+    };
+
+    // 12 Months
+    for (let m = 1; m <= 12; m++) {
+      const e = findEntry(m, null);
+      data.push({
+        period: `Month ${m}`,
+        month: m,
+        quarter: null,
+        year: targetYear,
+        revenue_uplift_base: e?.revenue_uplift_base || 0,
+        revenue_uplift_high: e?.revenue_uplift_high || 0,
+        revenue_uplift_actual: e?.revenue_uplift_actual || null,
+        gm_uplift_base: e?.gm_uplift_base || 0,
+        gm_uplift_high: e?.gm_uplift_high || 0,
+        gm_uplift_actual: e?.gm_uplift_actual || null,
+        costs_recurring_plan: sumCosts(m, null, true),
+        costs_one_off_plan: sumCosts(m, null, false),
+      });
+    }
+
+    // 4 Quarters
+    for (let q = 1; q <= 4; q++) {
+      const e = findEntry(null, q);
+      data.push({
+        period: `Quarter ${q}`,
+        month: null,
+        quarter: q,
+        year: targetYear,
+        revenue_uplift_base: e?.revenue_uplift_base || 0,
+        revenue_uplift_high: e?.revenue_uplift_high || 0,
+        revenue_uplift_actual: e?.revenue_uplift_actual || null,
+        gm_uplift_base: e?.gm_uplift_base || 0,
+        gm_uplift_high: e?.gm_uplift_high || 0,
+        gm_uplift_actual: e?.gm_uplift_actual || null,
+        costs_recurring_plan: sumCosts(null, q, true),
+        costs_one_off_plan: sumCosts(null, q, false),
+      });
+    }
+
+    return data;
+  });
 
   filteredEntries = computed(() => {
     const g = this.grid();
@@ -300,9 +361,9 @@ export class FinancialsTabComponent implements OnInit {
     const s = this.grid()?.summary;
     if (!s) return [];
     return [
-      { label: 'Gross Margin Plan', value: this.formatMoney(s.gross_margin_plan_base), highlight: false },
-      { label: 'Gross Margin Actual', value: s.gross_margin_actual ? this.formatMoney(s.gross_margin_actual) : '—', highlight: false },
-      { label: 'Costs Plan', value: this.formatMoney(s.costs_plan), highlight: false },
+      { label: 'GM Uplift Plan', value: this.formatMoney(s.gm_uplift_plan_base), highlight: false },
+      { label: 'GM Uplift Actual', value: s.gm_uplift_actual ? this.formatMoney(s.gm_uplift_actual) : '—', highlight: false },
+      { label: 'Total Costs Plan', value: this.formatMoney(s.costs_plan), highlight: false },
       { label: 'Net Value (Plan)', value: this.formatMoney(s.net_value_plan), highlight: true },
     ];
   });
@@ -342,11 +403,41 @@ export class FinancialsTabComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    this.selectedYear.set(2026); // Default to current planning year
     if (!this.initiativeId) {
       this.loading.set(false);
       return;
     }
     this._loadData();
+  }
+
+  onHotChange(changes: any): void {
+    if (!changes) return;
+    // We can handle real-time calculations here if needed
+  }
+
+  saveGrid(): void {
+    const hotInstance = (this.hotRegisterer as any).hotInstance;
+    if (!hotInstance) return;
+    
+    const data = hotInstance.getSourceData();
+    const entries = data.map((d: any) => ({
+      year: d.year,
+      quarter: d.quarter,
+      month: d.month,
+      revenue_uplift_base: d.revenue_uplift_base,
+      revenue_uplift_high: d.revenue_uplift_high,
+      revenue_uplift_actual: d.revenue_uplift_actual,
+      gm_uplift_base: d.gm_uplift_base,
+      gm_uplift_high: d.gm_uplift_high,
+      gm_uplift_actual: d.gm_uplift_actual,
+    }));
+
+    this.loading.set(true);
+    this.api.put(`/initiatives/${this.initiativeId}/financials`, { entries }).subscribe({
+      next: () => this._loadData(),
+      error: () => this.loading.set(false),
+    });
   }
 
   formatMoney(val: string | null): string {
