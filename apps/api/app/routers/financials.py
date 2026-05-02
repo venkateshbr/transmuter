@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi.responses import Response
 
 from app.core.auth import CurrentUser, get_current_user
 from app.core.database import get_supabase_admin
@@ -45,6 +46,37 @@ async def update_financials(
 ) -> FinancialGridResponse:
     """Upsert the full financial grid for an initiative."""
     return svc.update_financial_grid(initiative_id, body)
+
+
+@router.get("/initiatives/{initiative_id}/financials/export.xlsx")
+async def export_financials_workbook(
+    initiative_id: str,
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> Response:
+    """Export financial entries and cost lines as an XLSX workbook."""
+    workbook = svc.export_workbook(initiative_id)
+    return Response(
+        content=workbook,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="initiative-{initiative_id}-financials.xlsx"'
+            )
+        },
+    )
+
+
+@router.post(
+    "/initiatives/{initiative_id}/financials/import.xlsx",
+    response_model=FinancialGridResponse,
+)
+async def import_financials_workbook(
+    initiative_id: str,
+    svc: Annotated[FinancialService, Depends(_svc)],
+    file: UploadFile = File(...),
+) -> FinancialGridResponse:
+    """Import financial entries and cost lines from an XLSX workbook."""
+    return svc.import_workbook(initiative_id, await file.read())
 
 
 # ── Cost Lines ────────────────────────────────────────────────────────────────

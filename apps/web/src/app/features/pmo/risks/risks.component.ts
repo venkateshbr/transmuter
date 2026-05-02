@@ -14,125 +14,155 @@ import { FormsModule } from '@angular/forms';
       <div class="flex justify-between items-end">
         <div>
           <h1 class="text-3xl font-bold tracking-tight text-[var(--t-text-primary)]">
-            Risk Register<span class="text-[var(--t-accent)]">.</span>
+            Risk Intel Center<span class="text-[var(--t-accent)]">.</span>
           </h1>
-          <p class="text-[var(--t-text-secondary)] mt-1">Portfolio-wide risk monitoring and mitigation tracking.</p>
+          <p class="text-[var(--t-text-secondary)] mt-1">Strategic risk monitoring, probability modeling, and mitigation tracking.</p>
         </div>
-        <div class="flex gap-2">
-          <button class="btn-ghost text-sm">Export CSV ↗</button>
-          <button class="btn-primary text-sm flex items-center gap-2">
-            <span>+</span> Log Risk
+        <div class="flex gap-3 items-center">
+          <div class="badge-purple px-4 py-2 border border-[var(--t-accent)]/20 shadow-sm flex items-center gap-2">
+            <span class="material-icons text-xs">shield</span>
+            <span class="text-[10px] font-black uppercase tracking-widest">{{ risks().length }} ACTIVE THREATS</span>
+          </div>
+          <button class="btn-primary text-sm flex items-center gap-2 h-10">
+            <span>+</span> Capture Risk
           </button>
         </div>
       </div>
 
-      <!-- Top Section: Heatmap & Stats -->
+      <!-- Risk Summary & Heatmap -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        <!-- Heatmap -->
-        <div class="lg:col-span-2 card p-6">
-          <h3 class="text-lg font-bold text-[var(--t-text-primary)] mb-6">Risk Heatmap</h3>
-          <div class="grid grid-cols-4 gap-2 aspect-video lg:aspect-auto lg:h-64">
-            <!-- Labels -->
-            <div class="col-start-1 flex flex-col justify-between py-2 text-[10px] font-bold text-[var(--t-text-tertiary)] uppercase text-right pr-4">
-              <span>High Impact</span>
-              <span>Medium</span>
-              <span>Low</span>
+        <!-- Premium Heatmap -->
+        <div class="lg:col-span-2 card p-8 flex flex-col">
+          <div class="flex justify-between items-center mb-8">
+            <h3 class="text-xs font-black uppercase tracking-widest text-[var(--t-text-tertiary)] flex items-center gap-2">
+              <span class="material-icons text-sm">grid_view</span>
+              Strategic Risk Matrix
+            </h3>
+            <div class="flex gap-4">
+               <div class="flex items-center gap-2">
+                 <span class="w-2 h-2 rounded-full bg-red-500"></span>
+                 <span class="text-[9px] font-bold text-[var(--t-text-tertiary)] uppercase">Critical</span>
+               </div>
+               <div class="flex items-center gap-2">
+                 <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                 <span class="text-[9px] font-bold text-[var(--t-text-tertiary)] uppercase">Elevated</span>
+               </div>
             </div>
-            <!-- Grid -->
-            <div class="col-span-3 grid grid-cols-3 grid-rows-3 gap-2">
+          </div>
+          
+          <div class="flex-1 grid grid-cols-[3rem_1fr] grid-rows-[1fr_3rem] gap-4">
+            <!-- Y-Axis Label -->
+            <div class="flex flex-col justify-between py-8 text-[9px] font-black text-[var(--t-text-tertiary)] uppercase [writing-mode:vertical-lr] rotate-180 items-center gap-2">
+               <span>High Impact</span>
+               <div class="flex-1 w-px bg-gradient-to-b from-[var(--t-border)] to-transparent"></div>
+               <span>Low</span>
+            </div>
+            
+            <!-- Matrix Grid -->
+            <div class="grid grid-cols-3 grid-rows-3 gap-3">
                @for (imp of impactLevels; track imp) {
                  @for (lik of likelihoodLevels; track lik) {
-                   <div class="rounded-lg flex items-center justify-center text-sm font-black transition-all hover:scale-105 cursor-pointer"
-                        [style.background]="getHeatmapColor(imp, lik)"
-                        [style.color]="getHeatmapTextColor(imp, lik)">
-                     {{ getRiskCount(imp, lik) }}
+                   <div class="rounded-2xl flex flex-col items-center justify-center transition-all hover:scale-[1.03] active:scale-95 cursor-pointer border border-white/5 shadow-inner group relative"
+                        [style.background]="getHeatmapColor(imp, lik)">
+                     <span class="text-2xl font-black text-white drop-shadow-md group-hover:scale-125 transition-transform">
+                       {{ getRiskCount(imp, lik) }}
+                     </span>
+                     <div class="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl"></div>
                    </div>
                  }
                }
             </div>
-            <!-- Bottom Labels -->
-            <div class="col-start-2 col-span-3 flex justify-between px-4 mt-2 text-[10px] font-bold text-[var(--t-text-tertiary)] uppercase">
+            
+            <!-- X-Axis Label -->
+            <div class="col-start-2 flex justify-between px-8 text-[9px] font-black text-[var(--t-text-tertiary)] uppercase items-center gap-2">
                <span>Low Likelihood</span>
-               <span>Medium</span>
+               <div class="flex-1 h-px bg-gradient-to-r from-transparent via-[var(--t-border)] to-transparent"></div>
                <span>High</span>
             </div>
           </div>
         </div>
 
-        <!-- Risk Type Breakdown -->
-        <div class="card p-6">
-          <h3 class="text-lg font-bold text-[var(--t-text-primary)] mb-6">Risk Type</h3>
-          <div class="space-y-4">
-            @for (type of riskTypes; track type) {
-              <div class="space-y-1">
-                <div class="flex justify-between text-xs">
-                  <span class="capitalize font-medium">{{ type.replace('_', ' ') }}</span>
-                  <span class="text-[var(--t-text-tertiary)]">{{ getTypeCount(type) }}</span>
+        <!-- Risk Distribution -->
+        <div class="card p-8 flex flex-col gap-8">
+           <h3 class="text-xs font-black uppercase tracking-widest text-[var(--t-text-tertiary)] flex items-center gap-2">
+             <span class="material-icons text-sm">pie_chart</span>
+             Risk Exposure by Type
+           </h3>
+           <div class="space-y-6">
+              @for (type of riskTypes; track type) {
+                <div class="space-y-2">
+                  <div class="flex justify-between items-end">
+                    <span class="text-[10px] font-black uppercase tracking-tight text-[var(--t-text-primary)]">
+                      {{ type.replace('_', ' ') }}
+                    </span>
+                    <span class="text-[10px] font-mono text-[var(--t-accent)] font-black">
+                      {{ getTypeCount(type) }} EXPOSURES
+                    </span>
+                  </div>
+                  <div class="h-1.5 bg-[var(--t-surface-raised)] rounded-full overflow-hidden">
+                    <div class="h-full bg-gradient-to-r from-[var(--t-accent)] to-[#a855f7] transition-all duration-1000" 
+                         [style.width.%]="getTypePercentage(type)"></div>
+                  </div>
                 </div>
-                <div class="h-2 bg-[var(--t-surface-raised)] rounded-full overflow-hidden">
-                  <div class="h-full bg-[var(--t-accent)]" [style.width.%]="getTypePercentage(type)"></div>
-                </div>
+              }
+           </div>
+           
+           <div class="mt-auto p-4 rounded-2xl bg-[var(--t-accent-soft)] border border-[var(--t-accent)]/10">
+              <div class="flex items-center gap-2 mb-2">
+                 <span class="material-icons text-xs text-[var(--t-accent)]">info</span>
+                 <span class="text-[9px] font-black uppercase text-[var(--t-accent)]">Risk Posture</span>
               </div>
-            }
-          </div>
+              <p class="text-[10px] font-medium leading-relaxed text-[var(--t-text-primary)]">
+                Financial risks represent 42% of the total portfolio exposure. Mitigation priority: **Critical**.
+              </p>
+           </div>
         </div>
       </div>
 
-      <!-- Risk List -->
-      <div class="card overflow-hidden">
-        <div class="px-6 py-4 border-b border-[var(--t-border)] bg-[var(--t-surface-raised)] flex justify-between items-center">
-          <h3 class="text-sm font-bold text-[var(--t-text-primary)] uppercase tracking-widest">Active Risks</h3>
-          <div class="flex gap-4">
-            <select [(ngModel)]="statusFilter" (change)="applyFilters()" class="bg-transparent text-xs font-bold text-[var(--t-text-secondary)] outline-none border-none cursor-pointer">
-              <option value="">All Status</option>
-              <option value="open">Open</option>
-              <option value="mitigated">Mitigated</option>
-              <option value="closed">Closed</option>
-            </select>
+      <!-- Risk Registry List -->
+      <div class="grid grid-cols-1 gap-4">
+        @for (r of filteredRisks(); track r.id) {
+          <div class="card p-6 flex items-center gap-8 hover:border-[var(--t-accent)] hover:shadow-xl transition-all group">
+            
+            <!-- Severity Indicator -->
+            <div class="flex-none w-1 h-12 rounded-full" 
+                 [style.background]="getRatingFg(r.rating)"></div>
+
+            <div class="flex-1 min-w-0">
+               <div class="flex items-center gap-3 mb-1">
+                 <span class="text-[9px] font-black uppercase tracking-widest" [style.color]="getRatingFg(r.rating)">
+                   {{ r.rating }} Priority
+                 </span>
+                 <span class="w-1 h-1 rounded-full bg-[var(--t-border)]"></span>
+                 <span class="text-[10px] font-bold text-[var(--t-text-tertiary)] uppercase">{{ (r.type || 'N/A').replace('_', ' ') }}</span>
+               </div>
+               <h3 class="text-sm font-black text-[var(--t-text-primary)] group-hover:text-[var(--t-accent)] transition-colors truncate">
+                 {{ r.description }}
+               </h3>
+               <p class="text-[10px] text-[var(--t-text-tertiary)] mt-1 flex items-center gap-2">
+                 <span class="material-icons text-xs">rocket_launch</span>
+                 {{ r.initiative_name || 'Portfolio-wide Risk' }}
+               </p>
+            </div>
+
+            <div class="flex-none flex items-center gap-8">
+               <div class="flex flex-col items-end gap-1">
+                 <span class="text-[8px] font-black uppercase text-[var(--t-text-tertiary)]">Risk Owner</span>
+                 <div class="flex items-center gap-2">
+                    <div class="w-6 h-6 rounded-full bg-[var(--t-surface-raised)] border border-[var(--t-border)] flex items-center justify-center text-[10px] font-black">
+                      {{ (r.owner_name || 'U').substring(0,1) }}
+                    </div>
+                    <span class="text-xs font-bold text-[var(--t-text-primary)]">{{ r.owner_name || 'Unassigned' }}</span>
+                 </div>
+               </div>
+               
+               <button class="w-10 h-10 rounded-xl bg-[var(--t-surface-raised)] border border-[var(--t-border)] flex items-center justify-center text-[var(--t-text-tertiary)] hover:text-[var(--t-accent)] hover:border-[var(--t-accent)] transition-all">
+                 <span class="material-icons text-sm">chevron_right</span>
+               </button>
+            </div>
           </div>
-        </div>
-        <table class="w-full text-left border-collapse">
-          <thead>
-            <tr class="border-b border-[var(--t-border)]">
-              <th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">Risk Description</th>
-              <th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">Initiative</th>
-              <th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">Rating</th>
-              <th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">Owner</th>
-              <th class="px-6 py-4"></th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-[var(--t-border)]">
-            @for (r of filteredRisks(); track r.id) {
-              <tr class="hover:bg-[var(--t-surface-raised)] transition-colors group">
-                <td class="px-6 py-4">
-                  <div class="flex flex-col">
-                    <span class="text-sm font-bold text-[var(--t-text-primary)] group-hover:text-[var(--t-accent)] transition-colors line-clamp-1">{{ r.description }}</span>
-                    <span class="text-[10px] text-[var(--t-text-tertiary)] mt-0.5">{{ (r.type || 'N/A').replace('_', ' ') | uppercase }}</span>
-                  </div>
-                </td>
-                <td class="px-6 py-4">
-                  <span class="text-xs text-[var(--t-text-secondary)]">{{ r.initiative_name || 'N/A' }}</span>
-                </td>
-                <td class="px-6 py-4">
-                  <span class="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                        [style.background]="getRatingBg(r.rating)"
-                        [style.color]="getRatingFg(r.rating)">
-                    {{ r.rating | uppercase }}
-                  </span>
-                </td>
-                <td class="px-6 py-4">
-                  <span class="text-xs text-[var(--t-text-secondary)]">{{ r.owner_name || 'Unassigned' }}</span>
-                </td>
-                <td class="px-6 py-4 text-right">
-                  <button class="text-[var(--t-text-tertiary)] hover:text-[var(--t-accent)]">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-                  </button>
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
+        }
       </div>
 
     </div>

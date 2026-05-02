@@ -86,6 +86,6 @@ def test_governance_lifecycle(admin_token, init_id):
     assert resp.json()["decision"] == "approved"
 
     # 4. Verify Initiative Stage Updated
-    resp = client.get("/initiatives", headers=auth(admin_token))
-    init = next(i for i in resp.json()["items"] if i["id"] == init_id)
-    assert init["stage"] == "in_progress"
+    resp = client.get(f"/initiatives/{init_id}", headers=auth(admin_token))
+    assert resp.status_code == 200
+    assert resp.json()["stage"] == "in_progress"

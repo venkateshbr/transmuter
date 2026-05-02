@@ -88,7 +88,7 @@ class InitiativeRepository:
         # PostgREST can't join the same table twice; fetch user names separately.
         result = (
             self._c.table("initiatives")
-            .select("*, workstreams(name)")
+            .select("*, workstreams(id, name, business_unit_id, business_units(id, name))")
             .eq("tenant_id", self._tid)
             .eq("id", initiative_id)
             .maybe_single()
@@ -109,6 +109,41 @@ class InitiativeRepository:
             row["_group_owner_name"] = g.data["display_name"] if (g and g.data) else None
 
         return row
+
+    def get_team_members(self, initiative_id: str) -> list[dict]:  # type: ignore[type-arg]
+        result = (
+            self._c.table("initiative_team")
+            .select("*, users(display_name, email)")
+            .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
+            .order("created_at")
+            .execute()
+        )
+        return result.data or []
+
+    def get_kpi_indicator_rows(self, initiative_id: str) -> tuple[list[dict], list[dict]]:  # type: ignore[type-arg]
+        kpis_result = (
+            self._c.table("kpis")
+            .select("id, name, unit")
+            .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
+            .order("created_at")
+            .execute()
+        )
+        kpis = kpis_result.data or []
+        if not kpis:
+            return [], []
+        kpi_ids = [row["id"] for row in kpis]
+        entries_result = (
+            self._c.table("kpi_entries")
+            .select("kpi_id, year, quarter, value_base, value_high, value_actual")
+            .eq("tenant_id", self._tid)
+            .in_("kpi_id", kpi_ids)
+            .order("year")
+            .order("quarter", nullsfirst=True)
+            .execute()
+        )
+        return kpis, entries_result.data or []
 
     def get_counts(self, initiative_id: str) -> dict:  # type: ignore[type-arg]
         """Fetch aggregate counts for the detail page header."""

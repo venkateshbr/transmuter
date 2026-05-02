@@ -33,80 +33,111 @@ import { RouterLink } from '@angular/router';
             <option value="delayed">Delayed</option>
             <option value="complete">Complete</option>
           </select>
-          <input [(ngModel)]="searchQuery" (input)="applyFilters()" placeholder="Search milestones..." class="input-field text-xs h-9 w-48" />
+          <input [(ngModel)]="searchQuery" (input)="applyFilters()" placeholder="Search..." class="input-field text-xs h-9 w-48" />
         </div>
       </div>
 
-      <!-- Milestone Table -->
-      <div class="card overflow-hidden">
-        <table class="w-full text-left border-collapse">
-          <thead>
-            <tr class="bg-[var(--t-surface-raised)] border-b border-[var(--t-border)]">
-              <th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">Milestone</th>
-              <th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">Status</th>
-              <th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)] text-center">Pressure</th>
-              <th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">Owner</th>
-              <th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">Planned End</th>
-              <th class="px-6 py-4"></th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-[var(--t-border)]">
-            @for (m of filteredMilestones(); track m.id) {
-              <tr class="hover:bg-[var(--t-surface-raised)] transition-colors group">
-                <td class="px-6 py-4">
-                  <div class="flex flex-col">
-                    <span class="text-sm font-bold text-[var(--t-text-primary)] group-hover:text-[var(--t-accent)] transition-colors">
-                      {{ m.name }}
-                    </span>
-                    <span class="text-[10px] text-[var(--t-text-tertiary)] mt-0.5">ID: {{ m.id.substring(0, 8) }}</span>
-                  </div>
-                </td>
-                <td class="px-6 py-4">
-                  <span class="badge" [class]="getStatusClass(m.status)">
-                    {{ m.status | uppercase }}
-                  </span>
-                </td>
-                <td class="px-6 py-4">
-                  <div class="flex flex-col items-center gap-1">
-                    <span class="text-xs font-mono font-bold" [style.color]="getPressureColor(m.pressure_score)">
-                      {{ m.pressure_score || '0.0' }}
-                    </span>
-                    <div class="w-12 h-1 bg-[var(--t-border)] rounded-full overflow-hidden">
-                       <div class="h-full transition-all duration-500"
-                            [style.width.%]="(m.pressure_score || 0) * 10"
-                            [style.background]="getPressureColor(m.pressure_score)"></div>
-                    </div>
-                  </div>
-                </td>
-                <td class="px-6 py-4">
-                  <div class="flex items-center gap-2">
-                    <div class="w-6 h-6 rounded-full bg-gradient-to-br from-[var(--t-accent)] to-[#a855f7] flex items-center justify-center text-[10px] text-white font-bold">
-                      {{ (m.owner_name || 'U').substring(0,1) }}
-                    </div>
-                    <span class="text-xs text-[var(--t-text-secondary)]">{{ m.owner_name || 'Unassigned' }}</span>
-                  </div>
-                </td>
-                <td class="px-6 py-4">
-                  <span class="text-xs font-mono text-[var(--t-text-secondary)]">
-                    {{ m.planned_end | date:'MMM d, y' }}
-                  </span>
-                </td>
-                <td class="px-6 py-4 text-right">
-                  <button class="text-[var(--t-text-tertiary)] hover:text-[var(--t-accent)] transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
-                  </button>
-                </td>
-              </tr>
-            }
-            @if (filteredMilestones().length === 0) {
-              <tr>
-                <td colspan="6" class="px-6 py-12 text-center text-xs text-[var(--t-text-tertiary)]">
-                  No milestones found matching your criteria.
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
+      <!-- Stats Summary -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="card p-4 flex items-center gap-4">
+          <div class="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-500">
+            <span class="material-icons text-xl">event</span>
+          </div>
+          <div>
+            <p class="text-[10px] font-bold text-[var(--t-text-tertiary)] uppercase tracking-wider">Total</p>
+            <p class="text-xl font-black text-[var(--t-text-primary)]">{{ milestones().length }}</p>
+          </div>
+        </div>
+        <div class="card p-4 flex items-center gap-4">
+          <div class="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center text-red-500">
+            <span class="material-icons text-xl">warning</span>
+          </div>
+          <div>
+            <p class="text-[10px] font-bold text-[var(--t-text-tertiary)] uppercase tracking-wider">Delayed</p>
+            <p class="text-xl font-black text-red-500">{{ getDelayedCount() }}</p>
+          </div>
+        </div>
+        <div class="card p-4 flex items-center gap-4">
+          <div class="w-10 h-10 rounded-xl bg-[var(--t-accent-soft)] flex items-center justify-center text-[var(--t-accent)]">
+            <span class="material-icons text-xl">schedule</span>
+          </div>
+          <div>
+            <p class="text-[10px] font-bold text-[var(--t-text-tertiary)] uppercase tracking-wider">Due Soon</p>
+            <p class="text-xl font-black text-[var(--t-accent)]">{{ getDueSoonCount() }}</p>
+          </div>
+        </div>
+        <div class="card p-4 flex items-center gap-4">
+          <div class="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center text-green-500">
+            <span class="material-icons text-xl">check_circle</span>
+          </div>
+          <div>
+            <p class="text-[10px] font-bold text-[var(--t-text-tertiary)] uppercase tracking-wider">Complete</p>
+            <p class="text-xl font-black text-green-500">{{ getCompleteCount() }}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Milestone Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        @for (m of filteredMilestones(); track m.id) {
+          <div class="card p-6 flex flex-col hover:border-[var(--t-accent)] hover:shadow-xl transition-all group cursor-pointer"
+               [routerLink]="['/initiatives', m.initiative_id]">
+            
+            <div class="flex justify-between items-start mb-4">
+              <span class="badge" [class]="getStatusClass(m.status)">
+                {{ m.status | uppercase }}
+              </span>
+              <div class="flex flex-col items-end">
+                <span class="text-[10px] font-bold text-[var(--t-text-tertiary)] uppercase">Due</span>
+                <span class="text-xs font-mono font-bold" [class.text-red-500]="isDelayed(m)">
+                  {{ m.planned_end | date:'MMM d, y' }}
+                </span>
+              </div>
+            </div>
+
+            <h3 class="text-lg font-bold text-[var(--t-text-primary)] group-hover:text-[var(--t-accent)] transition-colors line-clamp-2 min-h-[3.5rem]">
+              {{ m.name }}
+            </h3>
+
+            <div class="mt-4 flex items-center gap-2">
+              <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-[var(--t-surface-raised)] text-[var(--t-accent)]">
+                {{ m.initiative_code || 'GEN' }}
+              </span>
+              <span class="text-[10px] font-bold text-[var(--t-text-tertiary)] truncate">
+                {{ m.initiative_name }}
+              </span>
+            </div>
+
+            <div class="mt-6 pt-6 border-t border-[var(--t-border)] flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded-full bg-[var(--t-surface-raised)] border border-[var(--t-border)] flex items-center justify-center text-[10px] font-bold">
+                  {{ (m.owner_name || 'U').substring(0,1) }}
+                </div>
+                <span class="text-[10px] font-bold text-[var(--t-text-secondary)]">{{ m.owner_name || 'Unassigned' }}</span>
+              </div>
+              <div class="flex flex-col items-end gap-1">
+                <div class="flex items-center gap-1">
+                   <span class="text-[9px] font-black uppercase tracking-tighter text-[var(--t-text-tertiary)]">Pressure</span>
+                   <span class="text-[10px] font-black" [style.color]="getPressureColor(m.pressure_score)">
+                     {{ m.pressure_score || '0.0' }}
+                   </span>
+                </div>
+                <div class="w-16 h-1 bg-[var(--t-border)] rounded-full overflow-hidden">
+                   <div class="h-full transition-all duration-500"
+                        [style.width.%]="(m.pressure_score || 0) * 10"
+                        [style.background]="getPressureColor(m.pressure_score)"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        }
+        
+        @if (filteredMilestones().length === 0) {
+          <div class="col-span-full py-24 text-center border-2 border-dashed border-[var(--t-border)] rounded-3xl opacity-50">
+             <span class="material-icons text-4xl mb-2 text-[var(--t-text-tertiary)]">event_busy</span>
+             <p class="text-sm font-medium">No milestones found matching your criteria.</p>
+          </div>
+        }
       </div>
 
     </div>
@@ -163,5 +194,28 @@ export class MilestonesComponent implements OnInit {
     if (s < 3.4) return 'var(--t-green)';
     if (s < 6.7) return 'var(--t-amber)';
     return 'var(--t-red)';
+  }
+
+  getDelayedCount(): number {
+    return this.milestones().filter(m => m.status === 'delayed').length;
+  }
+
+  getDueSoonCount(): number {
+    const now = new Date();
+    const soon = new Date();
+    soon.setDate(now.getDate() + 14);
+    return this.milestones().filter(m => {
+      const d = new Date(m.planned_end);
+      return m.status !== 'complete' && d >= now && d <= soon;
+    }).length;
+  }
+
+  getCompleteCount(): number {
+    return this.milestones().filter(m => m.status === 'complete').length;
+  }
+
+  isDelayed(m: any): boolean {
+    if (m.status === 'complete') return false;
+    return new Date(m.planned_end) < new Date();
   }
 }

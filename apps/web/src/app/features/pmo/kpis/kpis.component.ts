@@ -14,124 +14,123 @@ import { FormsModule } from '@angular/forms';
       <div class="flex justify-between items-end">
         <div>
           <h1 class="text-3xl font-bold tracking-tight text-[var(--t-text-primary)]">
-            Performance KPIs<span class="text-[var(--t-accent)]">.</span>
+            Performance Engine<span class="text-[var(--t-accent)]">.</span>
           </h1>
-          <p class="text-[var(--t-text-secondary)] mt-1">Real-time tracking of portfolio health and value realization.</p>
+          <p class="text-[var(--t-text-secondary)] mt-1">Real-time value realization tracking across strategic portfolio pillars.</p>
         </div>
-        <div class="flex gap-2">
-          <button class="btn-ghost text-sm">Download Report</button>
-          <button class="btn-primary text-sm flex items-center gap-2">
-            <span>+</span> Configure KPI
+        <div class="flex gap-3">
+          <div class="badge-purple px-4 py-2 border border-[var(--t-accent)]/20 shadow-sm flex items-center gap-2">
+            <span class="material-icons text-xs">trending_up</span>
+            <span class="text-[10px] font-black uppercase tracking-widest">{{ pulse()?.health_score }}% PORTFOLIO EFFICIENCY</span>
+          </div>
+          <button class="btn-primary text-sm flex items-center gap-2 h-10">
+            <span>+</span> Define Metric
           </button>
         </div>
       </div>
 
-      <!-- Pulse Cards -->
+      <!-- High-Fidelity KPI Pulse -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" *ngIf="pulse()">
-        <div class="card p-6 flex flex-col justify-between group hover:border-[var(--t-accent)] transition-all">
-          <span class="text-[10px] font-bold text-[var(--t-text-tertiary)] uppercase tracking-widest">Total Metrics</span>
-          <div class="flex items-baseline gap-2 mt-2">
-            <span class="text-4xl font-black text-[var(--t-text-primary)]">{{ pulse()?.total_kpis }}</span>
+        
+        <div class="card p-8 bg-gradient-to-br from-[var(--t-surface)] to-[var(--t-accent-soft)]/20 border-l-4 border-[var(--t-accent)]">
+          <div class="flex justify-between items-start mb-6">
+            <span class="text-[10px] font-black text-[var(--t-text-tertiary)] uppercase tracking-widest">Global Reach</span>
+            <span class="material-icons text-[var(--t-accent)] text-xl">language</span>
           </div>
-          <div class="mt-4 h-1 bg-[var(--t-surface-raised)] rounded-full overflow-hidden">
-            <div class="h-full bg-[var(--t-accent)]" style="width: 100%"></div>
-          </div>
+          <p class="text-3xl font-black text-[var(--t-text-primary)]">{{ pulse()?.total_kpis }}</p>
+          <p class="text-[10px] font-bold text-[var(--t-text-secondary)] uppercase mt-2">Active Strategic Metrics</p>
         </div>
 
-        <div class="card p-6 flex flex-col justify-between group hover:border-green-500/50 transition-all">
-          <span class="text-[10px] font-bold text-[var(--t-text-tertiary)] uppercase tracking-widest">On Track</span>
-          <div class="flex items-baseline gap-2 mt-2">
-            <span class="text-4xl font-black text-green-500">{{ pulse()?.hitting_base }}</span>
-            <span class="text-xs text-[var(--t-text-tertiary)]">KPIs</span>
+        <div class="card p-8 border-l-4 border-green-500">
+          <div class="flex justify-between items-start mb-6">
+            <span class="text-[10px] font-black text-[var(--t-text-tertiary)] uppercase tracking-widest">Base Target Hit</span>
+            <span class="material-icons text-green-500 text-xl">check_circle</span>
           </div>
-          <div class="mt-4 h-1 bg-[var(--t-surface-raised)] rounded-full overflow-hidden">
-            <div class="h-full bg-green-500" [style.width.%]="(pulse()?.hitting_base || 0) / (pulse()?.total_kpis || 1) * 100"></div>
-          </div>
+          <p class="text-3xl font-black text-green-500">{{ pulse()?.hitting_base }}</p>
+          <p class="text-[10px] font-bold text-[var(--t-text-secondary)] uppercase mt-2">Performing Above Threshold</p>
         </div>
 
-        <div class="card p-6 flex flex-col justify-between group hover:border-red-500/50 transition-all">
-          <span class="text-[10px] font-bold text-[var(--t-text-tertiary)] uppercase tracking-widest">Off Track</span>
-          <div class="flex items-baseline gap-2 mt-2">
-            <span class="text-4xl font-black text-red-500">{{ pulse()?.missing_base }}</span>
-            <span class="text-xs text-[var(--t-text-tertiary)]">KPIs</span>
+        <div class="card p-8 border-l-4 border-red-500">
+          <div class="flex justify-between items-start mb-6">
+            <span class="text-[10px] font-black text-[var(--t-text-tertiary)] uppercase tracking-widest">Variance Alert</span>
+            <span class="material-icons text-red-500 text-xl">warning</span>
           </div>
-          <div class="mt-4 h-1 bg-[var(--t-surface-raised)] rounded-full overflow-hidden">
-            <div class="h-full bg-red-500" [style.width.%]="(pulse()?.missing_base || 0) / (pulse()?.total_kpis || 1) * 100"></div>
-          </div>
+          <p class="text-3xl font-black text-red-500">{{ pulse()?.missing_base }}</p>
+          <p class="text-[10px] font-bold text-[var(--t-text-secondary)] uppercase mt-2">Metrics Underperforming</p>
         </div>
 
-        <div class="card p-6 flex flex-col justify-between bg-[var(--t-accent)] text-white border-none shadow-[0_10px_40px_rgba(124,58,237,0.3)]">
-          <span class="text-[10px] font-bold opacity-80 uppercase tracking-widest">Health Score</span>
-          <div class="flex items-baseline gap-2 mt-2">
-            <span class="text-4xl font-black">{{ pulse()?.health_score }}%</span>
+        <div class="card p-8 bg-gradient-to-br from-[var(--t-accent)] to-[#a855f7] text-white border-none shadow-xl shadow-purple-500/20">
+          <div class="flex justify-between items-start mb-6">
+            <span class="text-[10px] font-black opacity-70 uppercase tracking-widest">Value Score</span>
+            <span class="material-icons opacity-70 text-xl">insights</span>
           </div>
-          <p class="text-[10px] font-medium opacity-80 mt-4 leading-tight">Average performance across all tracked value levers.</p>
+          <p class="text-3xl font-black">{{ pulse()?.health_score }}%</p>
+          <p class="text-[10px] font-bold opacity-70 uppercase mt-2">Realized Portfolio Yield</p>
         </div>
       </div>
 
-      <!-- KPI List -->
-      <div class="card overflow-hidden">
-        <div class="px-6 py-4 border-b border-[var(--t-border)] bg-[var(--t-surface-raised)] flex justify-between items-center">
-          <h3 class="text-sm font-bold text-[var(--t-text-primary)] uppercase tracking-widest">Global Metrics Registry</h3>
-          <div class="flex gap-4">
-            <input type="text" placeholder="Search KPIs..." 
-                   class="bg-transparent border-b border-[var(--t-border)] text-xs py-1 focus:border-[var(--t-accent)] outline-none text-[var(--t-text-primary)]"
-                   [(ngModel)]="searchQuery">
-          </div>
-        </div>
-        <table class="w-full text-left border-collapse">
-          <thead>
-            <tr class="border-b border-[var(--t-border)]">
-              <th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">Metric</th>
-              <th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">Initiative</th>
-              <th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">Frequency</th>
-              <th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">Latest Actual</th>
-              <th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">Status</th>
-              <th class="px-6 py-4"></th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-[var(--t-border)]">
-            @for (kpi of filteredKpis(); track kpi.id) {
-              <tr class="hover:bg-[var(--t-surface-raised)] transition-colors group">
-                <td class="px-6 py-4">
-                  <div class="flex flex-col">
-                    <span class="text-sm font-bold text-[var(--t-text-primary)] group-hover:text-[var(--t-accent)] transition-colors">{{ kpi.name }}</span>
-                    <span class="text-[10px] text-[var(--t-text-tertiary)] mt-0.5 uppercase tracking-tighter">{{ kpi.type }}</span>
-                  </div>
-                </td>
-                <td class="px-6 py-4">
-                  <span class="text-xs text-[var(--t-text-secondary)]">{{ kpi.initiative_code || 'Portfolio' }}</span>
-                </td>
-                <td class="px-6 py-4">
-                  <span class="text-[10px] font-bold uppercase text-[var(--t-text-tertiary)]">{{ kpi.frequency }}</span>
-                </td>
-                <td class="px-6 py-4">
-                  <div class="flex flex-col">
-                    @if (getLatestEntry(kpi); as latest) {
-                      <span class="text-sm font-black text-[var(--t-text-primary)]">{{ latest.value_actual || '-' }} {{ kpi.unit }}</span>
-                      <span class="text-[10px] text-[var(--t-text-tertiary)]">Base: {{ latest.value_base }}</span>
-                    } @else {
-                      <span class="text-[var(--t-text-tertiary)] italic text-xs">No entries</span>
-                    }
-                  </div>
-                </td>
-                <td class="px-6 py-4">
-                  <div class="flex items-center gap-2">
-                    <div class="w-2 h-2 rounded-full" [style.background]="getStatusColor(kpi)"></div>
-                    <span class="text-[10px] font-bold uppercase tracking-widest" [style.color]="getStatusColor(kpi)">
-                      {{ getStatusText(kpi) }}
+      <!-- KPI Grid: The "Metric Wall" -->
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        @for (kpi of filteredKpis(); track kpi.id) {
+          <div class="card p-6 flex flex-col gap-6 hover:border-[var(--t-accent)] hover:shadow-2xl transition-all group relative overflow-hidden">
+            
+            <!-- Background Glow on Hover -->
+            <div class="absolute -right-8 -top-8 w-32 h-32 bg-[var(--t-accent)]/5 rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+
+            <div class="flex justify-between items-start">
+               <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="text-[8px] font-black px-1.5 py-0.5 rounded bg-[var(--t-surface-raised)] text-[var(--t-text-tertiary)] uppercase">
+                      {{ kpi.type }}
                     </span>
+                    <span class="text-[8px] font-black text-[var(--t-accent)] uppercase tracking-widest">{{ kpi.frequency }}</span>
                   </div>
-                </td>
-                <td class="px-6 py-4 text-right">
-                  <button class="text-[var(--t-text-tertiary)] hover:text-[var(--t-accent)] transition-colors">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12c0 1.2-4.03 6-9 6s-9-4.8-9-6c0-1.2 4.03-6 9-6s9 4.8 9 6Z"/><circle cx="12" cy="12" r="3"/></svg>
-                  </button>
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
+                  <h3 class="text-sm font-black text-[var(--t-text-primary)] truncate group-hover:text-[var(--t-accent)] transition-colors">
+                    {{ kpi.name }}
+                  </h3>
+               </div>
+               <div class="flex flex-col items-end">
+                  @if (getLatestEntry(kpi); as latest) {
+                    <span class="text-lg font-black" [style.color]="getStatusColor(kpi)">
+                      {{ latest.value_actual }}<small class="ml-1 text-[10px] opacity-70">{{ kpi.unit }}</small>
+                    </span>
+                    <div class="flex items-center gap-1">
+                       <span class="material-icons text-[10px]" [style.color]="getStatusColor(kpi)">
+                         {{ parseFloat(latest.value_actual) >= parseFloat(latest.value_base || '0') ? 'north_east' : 'south_east' }}
+                       </span>
+                       <span class="text-[8px] font-bold text-[var(--t-text-tertiary)] uppercase">vs {{ latest.value_base }}</span>
+                    </div>
+                  }
+               </div>
+            </div>
+
+            <!-- Mini Sparkline Placeholder -->
+            <div class="h-16 flex items-end gap-1 px-2">
+               @for (i of [1,2,3,4,5,6,7,8,9,10]; track i) {
+                 <div class="flex-1 rounded-t-sm transition-all duration-500 bg-[var(--t-surface-raised)] group-hover:bg-[var(--t-accent-soft)]"
+                      [style.height.%]="20 + (i * 7) % 80"></div>
+               }
+            </div>
+
+            <div class="flex justify-between items-center pt-4 border-t border-[var(--t-border)]/50">
+               <div class="flex items-center gap-2">
+                  <span class="text-[9px] font-black text-[var(--t-text-tertiary)] uppercase">Initiative</span>
+                  <span class="text-[9px] font-black text-[var(--t-text-secondary)]">{{ kpi.initiative_code || 'PORTFOLIO' }}</span>
+               </div>
+               <button class="w-8 h-8 rounded-lg bg-[var(--t-surface-raised)] flex items-center justify-center text-[var(--t-text-tertiary)] hover:text-[var(--t-accent)] hover:bg-[var(--t-accent-soft)] transition-all">
+                 <span class="material-icons text-xs">open_in_new</span>
+               </button>
+            </div>
+          </div>
+        }
+
+        @if (filteredKpis().length === 0) {
+           <div class="col-span-full py-24 text-center border-2 border-dashed border-[var(--t-border)] rounded-[2rem] opacity-50">
+              <span class="material-icons text-4xl mb-2 text-[var(--t-text-tertiary)]">analytics</span>
+              <p class="text-sm font-black uppercase tracking-widest">No Performance Data</p>
+              <p class="text-xs font-bold text-[var(--t-text-tertiary)] mt-1">Configure your first KPI to begin tracking value.</p>
+           </div>
+        }
       </div>
 
     </div>
@@ -142,6 +141,7 @@ import { FormsModule } from '@angular/forms';
 })
 export class KPIsComponent implements OnInit {
   private readonly api = inject(ApiService);
+  protected readonly parseFloat = parseFloat;
   
   kpis = signal<any[]>([]);
   pulse = signal<any | null>(null);

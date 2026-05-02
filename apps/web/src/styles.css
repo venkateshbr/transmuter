@@ -1,10 +1,10 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Material+Icons&display=swap");
+@import 'handsontable/styles/handsontable.min.css';
+@import 'handsontable/styles/ht-theme-main.min.css';
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import 'handsontable/dist/handsontable.full.min.css';
 
 /* ── Design Tokens (Light Theme — Purple / White / Lavender) ── */
 :root {
@@ -46,6 +46,27 @@ body {
   color: var(--t-text-primary);
   font-family: 'Inter', sans-serif;
   transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.material-icons {
+  direction: ltr;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  font-family: 'Material Icons';
+  font-feature-settings: 'liga';
+  font-style: normal;
+  font-weight: normal;
+  letter-spacing: normal;
+  line-height: 1;
+  overflow: hidden;
+  text-rendering: optimizeLegibility;
+  text-transform: none;
+  white-space: nowrap;
+  word-wrap: normal;
+  -webkit-font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
 }
 
 /* ── Reusable Component Classes ── */
@@ -175,6 +196,26 @@ body {
     color: var(--t-accent);
     @apply font-medium;
   }
+
+  /* Overlay & Modals */
+  .overlay {
+    @apply fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-sm;
+    background: rgba(0,0,0,0.4);
+  }
+  .dark .overlay { background: rgba(0,0,0,0.6); }
+
+  .modal-content {
+    @apply w-full max-w-lg;
+    animation: modal-enter 0.2s ease-out;
+  }
+
+  /* Animations */
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes modal-enter {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  .animate-fade-in { animation: fade-in 0.3s ease-out; }
 }
 
 /* ── Handsontable Custom Theme ── */
@@ -208,4 +249,12 @@ body {
 }
 .hot-theme-transmuter .handsontable td.htPlaceholder {
   color: var(--t-text-secondary) !important;
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.animate-spin-slow {
+  animation: spin-slow 8s linear infinite;
 }

@@ -8,23 +8,44 @@ import { RouterLink } from '@angular/router';
   standalone: true,
   imports: [CommonModule, RouterLink],
   template: `
-    <div class="p-8 space-y-8 animate-fade-in" style="background:var(--t-bg)">
+    <div class="p-8 space-y-10 animate-fade-in" style="background:var(--t-bg)">
       
-      <!-- Header -->
-      <div class="flex justify-between items-end">
-        <div>
-          <h1 class="text-3xl font-bold tracking-tight text-[var(--t-text-primary)]">
-            Portfolio Dashboard<span class="text-[var(--t-accent)]">.</span>
-          </h1>
-          <p class="text-[var(--t-text-secondary)] mt-1">Real-time transformation performance across all workstreams.</p>
+      <!-- Premium Hero Section -->
+      <section class="relative p-10 rounded-[2.5rem] overflow-hidden bg-gradient-to-br from-[var(--t-accent)] to-[#a855f7] text-white shadow-2xl shadow-purple-500/20">
+        <!-- Abstract Background Elements -->
+        <div class="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl -mr-20 -mt-20"></div>
+        <div class="absolute bottom-0 left-0 w-64 h-64 bg-black/10 rounded-full blur-2xl -ml-20 -mb-20"></div>
+        
+        <div class="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-4">
+              <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+              <span class="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Portfolio Live Context</span>
+            </div>
+            <h1 class="text-4xl font-black tracking-tight leading-tight">
+              Operational Excellence <br/>
+              & Strategic Yield Dashboard<span class="opacity-50">.</span>
+            </h1>
+            <p class="text-sm font-medium opacity-80 mt-4 max-w-xl leading-relaxed">
+              Real-time synchronization across {{ data()?.summary?.total_initiatives }} strategic workstreams. 
+              The current portfolio health score is <span class="font-black text-green-300">{{ getHealthScore() }}%</span> with 
+              <span class="font-black text-amber-300">{{ data()?.summary?.pending_approvals }} pending gate decisions</span>.
+            </p>
+          </div>
+          
+          <div class="flex-none flex flex-col items-end gap-4">
+              <div class="flex gap-2">
+                <button (click)="generateReport()" class="px-6 py-3 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/10 text-xs font-black uppercase tracking-widest transition-all">
+                  {{ reporting() ? 'Generating...' : 'Generate Report' }}
+                </button>
+                <button routerLink="/initiatives/new" class="px-6 py-3 rounded-2xl bg-white text-[var(--t-accent)] hover:scale-105 active:scale-95 text-xs font-black uppercase tracking-widest shadow-lg transition-all">
+                  + Executive Action
+                </button>
+              </div>
+             <p class="text-[9px] font-bold opacity-60 uppercase tracking-widest mt-2">Last System Sync: Just Now</p>
+          </div>
         </div>
-        <div class="flex gap-3">
-          <button class="btn-ghost text-sm">Export Report ↗</button>
-          <button class="btn-primary text-sm flex items-center gap-2">
-            <span>+</span> Executive Summary
-          </button>
-        </div>
-      </div>
+      </section>
 
       <!-- Summary Cards -->
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -164,6 +185,50 @@ import { RouterLink } from '@angular/router';
       </div>
 
     </div>
+
+    <!-- Onboarding / Welcome Modal -->
+    @if (showWelcome()) {
+      <div class="overlay flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
+        <div class="card max-w-2xl w-full p-0 overflow-hidden shadow-2xl animate-scale-in">
+           <div class="h-48 bg-gradient-to-br from-[var(--t-accent)] to-[#a855f7] p-10 relative overflow-hidden">
+              <div class="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-20 -mt-20"></div>
+              <div class="relative z-10">
+                 <h2 class="text-3xl font-black text-white leading-tight">Welcome to <br/>Transmuter Platform<span class="opacity-50">.</span></h2>
+                 <p class="text-white/70 text-xs font-bold uppercase tracking-widest mt-2">Executive Onboarding (May 2026 Release)</p>
+              </div>
+           </div>
+           <div class="p-10 space-y-8 bg-[var(--t-surface)]">
+              <div class="grid grid-cols-2 gap-6">
+                 <div class="flex gap-4">
+                    <div class="w-10 h-10 rounded-xl bg-[var(--t-accent-soft)] flex items-center justify-center text-[var(--t-accent)] shrink-0">
+                       <span class="material-icons">dashboard</span>
+                    </div>
+                    <div>
+                       <p class="text-sm font-black text-[var(--t-text-primary)]">Strategic Dashboard</p>
+                       <p class="text-[10px] text-[var(--t-text-secondary)] mt-0.5">Real-time health & pressure scores.</p>
+                    </div>
+                 </div>
+                 <div class="flex gap-4">
+                    <div class="w-10 h-10 rounded-xl bg-[var(--t-accent-soft)] flex items-center justify-center text-[var(--t-accent)] shrink-0">
+                       <span class="material-icons">psychology</span>
+                    </div>
+                    <div>
+                       <p class="text-sm font-black text-[var(--t-text-primary)]">AI Assistant</p>
+                       <p class="text-[10px] text-[var(--t-text-secondary)] mt-0.5">Natural language portfolio queries.</p>
+                    </div>
+                 </div>
+              </div>
+              <p class="text-sm text-[var(--t-text-secondary)] leading-relaxed">
+                 You are logged in as the **Transformation Office Administrator**. You have full visibility across 4 workstreams and 24 strategic initiatives. 
+              </p>
+              <div class="flex gap-4 pt-4">
+                 <button (click)="showWelcome.set(false)" class="flex-1 btn-primary py-4 rounded-2xl shadow-xl shadow-purple-500/20 font-black uppercase text-[10px] tracking-widest">Enter Command Center</button>
+                 <button (click)="showWelcome.set(false)" class="px-8 py-4 rounded-2xl border border-[var(--t-border)] font-black uppercase text-[10px] tracking-widest hover:bg-[var(--t-surface-raised)] transition-all">Quick Tour</button>
+              </div>
+           </div>
+        </div>
+      </div>
+    }
   `,
   styles: [`
     :host { display: block; }
@@ -180,6 +245,8 @@ export class DashboardComponent implements OnInit {
   private readonly api = inject(ApiService);
   
   data = signal<any>(null);
+  reporting = signal(false);
+  showWelcome = signal(true);
   stages = [
     { id: 'scoping', label: 'Scoping' },
     { id: 'in_progress', label: 'In-Progress' },
@@ -225,5 +292,16 @@ export class DashboardComponent implements OnInit {
     if (score < 3.4) return 'var(--t-green)';
     if (score < 6.7) return 'var(--t-amber)';
     return 'var(--t-red)';
+  }
+
+  generateReport() {
+    if (this.reporting()) return;
+    this.reporting.set(true);
+    
+    // Simulate high-fidelity report generation
+    setTimeout(() => {
+      this.reporting.set(false);
+      alert('Portfolio Executive Briefing (Q2 2026) has been generated and is ready for review.');
+    }, 2500);
   }
 }

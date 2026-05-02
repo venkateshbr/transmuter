@@ -56,7 +56,9 @@ class InitiativeUpdate(BaseModel):
     tag: InitiativeTag | None = None
     priority: Priority | None = None
     rag_status: RAGStatus | None = None
+    stage: Stage | None = None
     summary: str | None = None
+    lessons_learned: str | None = None
     value_logic: str | None = None
     dependencies_text: str | None = None
     planned_start: date | None = None
@@ -108,6 +110,24 @@ class InitiativeCounts(BaseModel):
     status_updates_total: int = 0
 
 
+class InitiativeTeamMember(BaseModel):
+    id: UUID
+    user_id: UUID
+    role: str
+    display_name: str | None = None
+    email: str | None = None
+
+
+class InitiativeKPIIndicator(BaseModel):
+    id: UUID
+    name: str
+    unit: str | None = None
+    health_status: str = "no_data"
+    this_quarter_actual: str | None = None
+    this_year_actual: str | None = None
+    all_time_actual: str | None = None
+
+
 class InitiativeDetail(BaseModel):
     """Full detail — used on the 8-tab initiative page."""
     id: UUID
@@ -115,6 +135,8 @@ class InitiativeDetail(BaseModel):
     name: str
     workstream_id: UUID | None
     workstream_name: str | None
+    business_unit_id: UUID | None = None
+    business_unit_name: str | None = None
     owner_id: UUID | None
     owner_name: str | None
     group_owner_id: UUID | None
@@ -128,6 +150,7 @@ class InitiativeDetail(BaseModel):
     rag_status: str
     stage: str
     summary: str | None
+    lessons_learned: str | None = None
     value_logic: str | None
     dependencies_text: str | None
     planned_start: date | None
@@ -137,6 +160,8 @@ class InitiativeDetail(BaseModel):
     pressure_score: str | None
     pressure_breakdown: PressureBreakdown | None
     counts: InitiativeCounts
+    team_members: list[InitiativeTeamMember] = []
+    kpi_indicators: list[InitiativeKPIIndicator] = []
     financial_summary: FinancialSummary | None = None
     archived_at: str | None
     created_at: str

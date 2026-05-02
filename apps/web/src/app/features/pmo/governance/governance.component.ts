@@ -15,124 +15,146 @@ import { FormsModule } from '@angular/forms';
       <div class="flex justify-between items-end">
         <div>
           <h1 class="text-3xl font-bold tracking-tight text-[var(--t-text-primary)]">
-            Governance Dashboard<span class="text-[var(--t-accent)]">.</span>
+            Governance Authority<span class="text-[var(--t-accent)]">.</span>
           </h1>
-          <p class="text-[var(--t-text-secondary)] mt-1">Stage gate review, approvals, and portfolio compliance tracking.</p>
+          <p class="text-[var(--t-text-secondary)] mt-1">Centralized stage-gate oversight and portfolio compliance management.</p>
         </div>
         @if (auth.getRole() === 'transformation_office') {
-          <div class="flex gap-2">
-            <span class="badge-purple px-4 py-2 border border-[var(--t-accent)]/20 shadow-sm">
-              <span class="w-2 h-2 rounded-full bg-[var(--t-accent)] animate-pulse mr-2"></span>
-              Transformation Office Active
+          <div class="badge-purple px-4 py-2 border border-[var(--t-accent)]/20 shadow-lg flex items-center gap-2">
+            <span class="relative flex h-2 w-2">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--t-accent)] opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2 w-2 bg-[var(--t-accent)]"></span>
             </span>
+            <span class="text-[10px] font-black uppercase tracking-widest">Transformation Office Active</span>
           </div>
         }
       </div>
 
-      <!-- Stats Row -->
+      <!-- Governance Stats -->
       <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div class="card bg-gradient-to-br from-[var(--t-surface)] to-[var(--t-accent-soft)]">
-          <div class="text-[10px] uppercase tracking-widest text-[var(--t-text-tertiary)] font-bold mb-1">Total Submissions</div>
-          <div class="text-3xl font-bold text-[var(--t-text-primary)]">{{ submissions().length }}</div>
+        <div class="card p-6 flex items-center gap-4">
+          <div class="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500">
+            <span class="material-icons text-2xl">file_present</span>
+          </div>
+          <div>
+            <p class="text-[10px] font-black text-[var(--t-text-tertiary)] uppercase tracking-wider">Total Queue</p>
+            <p class="text-2xl font-black text-[var(--t-text-primary)]">{{ submissions().length }}</p>
+          </div>
         </div>
-        <div class="card">
-          <div class="text-[10px] uppercase tracking-widest text-[var(--t-text-tertiary)] font-bold mb-1">Pending Review</div>
-          <div class="text-3xl font-bold text-[var(--t-accent)]">{{ getCount('pending') }}</div>
+        <div class="card p-6 flex items-center gap-4 border-l-4 border-[var(--t-accent)]">
+          <div class="w-12 h-12 rounded-2xl bg-[var(--t-accent-soft)] flex items-center justify-center text-[var(--t-accent)]">
+            <span class="material-icons text-2xl">pending_actions</span>
+          </div>
+          <div>
+            <p class="text-[10px] font-black text-[var(--t-text-tertiary)] uppercase tracking-wider">Awaiting Decision</p>
+            <p class="text-2xl font-black text-[var(--t-accent)]">{{ getCount('pending') }}</p>
+          </div>
         </div>
-        <div class="card">
-          <div class="text-[10px] uppercase tracking-widest text-[var(--t-text-tertiary)] font-bold mb-1">Approved</div>
-          <div class="text-3xl font-bold text-[var(--t-green)]">{{ getCount('approved') }}</div>
+        <div class="card p-6 flex items-center gap-4">
+          <div class="w-12 h-12 rounded-2xl bg-green-500/10 flex items-center justify-center text-green-500">
+            <span class="material-icons text-2xl">verified_user</span>
+          </div>
+          <div>
+            <p class="text-[10px] font-black text-[var(--t-text-tertiary)] uppercase tracking-wider">Total Approved</p>
+            <p class="text-2xl font-black text-green-500">{{ getCount('approved') }}</p>
+          </div>
         </div>
-        <div class="card">
-          <div class="text-[10px] uppercase tracking-widest text-[var(--t-text-tertiary)] font-bold mb-1">Rejected</div>
-          <div class="text-3xl font-bold text-[var(--t-red)]">{{ getCount('rejected') }}</div>
+        <div class="card p-6 flex items-center gap-4">
+          <div class="w-12 h-12 rounded-2xl bg-red-500/10 flex items-center justify-center text-red-500">
+            <span class="material-icons text-2xl">gpp_bad</span>
+          </div>
+          <div>
+            <p class="text-[10px] font-black text-[var(--t-text-tertiary)] uppercase tracking-wider">Total Rejected</p>
+            <p class="text-2xl font-black text-red-500">{{ getCount('rejected') }}</p>
+          </div>
         </div>
       </div>
 
-      <!-- Governance Table -->
-      <div class="card !p-0 overflow-hidden border-[var(--t-border)]">
-        <div class="p-6 border-b border-[var(--t-border)] bg-[var(--t-surface-raised)]/50 flex justify-between items-center">
-          <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Stage Gate Submissions</h3>
-          <button (click)="fetchSubmissions()" class="btn-ghost text-xs">
-            Refresh Data
-          </button>
-        </div>
+      <!-- Submissions Grid -->
+      <div class="grid grid-cols-1 gap-6">
+        @for (s of submissions(); track s.id) {
+          <div class="card p-6 flex items-center gap-8 hover:border-[var(--t-accent)] hover:shadow-xl transition-all group">
+            
+            <!-- Gate Indicator -->
+            <div class="flex-none flex flex-col items-center justify-center w-20 h-20 rounded-3xl bg-[var(--t-surface-raised)] border border-[var(--t-border)] group-hover:border-[var(--t-accent)]/30 transition-all">
+              <span class="text-[10px] font-black text-[var(--t-text-tertiary)] uppercase">Gate</span>
+              <span class="text-3xl font-black text-[var(--t-accent)]">{{ s.gate_number }}</span>
+            </div>
+
+            <!-- Initiative Detail -->
+            <div class="flex-1 min-w-0">
+               <div class="flex items-center gap-3 mb-1">
+                 <span class="text-[10px] font-black px-2 py-0.5 rounded bg-[var(--t-accent-soft)] text-[var(--t-accent)]">
+                   TRN-{{ s.initiative_id.substring(0,3).toUpperCase() }}
+                 </span>
+                 <span class="text-xs font-bold text-[var(--t-text-secondary)] uppercase tracking-tighter italic">Pending Transformation Review</span>
+               </div>
+               <h3 class="text-lg font-black text-[var(--t-text-primary)] truncate">
+                 Review Submission for Phase {{ s.gate_number }} Transition
+               </h3>
+               <div class="mt-2 flex items-center gap-6">
+                 <div class="flex items-center gap-2">
+                    <div class="w-5 h-5 rounded-full bg-[var(--t-surface-raised)] flex items-center justify-center">
+                       <span class="material-icons text-[10px] text-[var(--t-text-tertiary)]">person</span>
+                    </div>
+                    <span class="text-[10px] font-bold text-[var(--t-text-tertiary)] uppercase">Submitted by</span>
+                    <span class="text-[10px] font-black text-[var(--t-text-secondary)]">{{ s.submitted_by_name || 'System' }}</span>
+                 </div>
+                 <div class="flex items-center gap-2">
+                    <span class="material-icons text-xs text-[var(--t-text-tertiary)]">schedule</span>
+                    <span class="text-[10px] font-bold text-[var(--t-text-secondary)] uppercase">{{ s.submitted_at | date:'MMM d, HH:mm' }}</span>
+                 </div>
+               </div>
+            </div>
+
+            <!-- AI Insight Placeholder -->
+            <div class="hidden xl:flex flex-none w-64 p-4 rounded-2xl bg-[var(--t-surface-raised)] border border-[var(--t-border)] flex-col gap-2">
+               <div class="flex items-center gap-2">
+                  <span class="material-icons text-xs text-[var(--t-accent)]">psychology</span>
+                  <span class="text-[8px] font-black uppercase tracking-widest text-[var(--t-accent)]">AI Recommendation</span>
+               </div>
+               <p class="text-[10px] font-medium leading-relaxed text-[var(--t-text-secondary)] italic">
+                 "Critical milestones are 100% complete. Financial variance is within 5% tolerance. Approval suggested."
+               </p>
+            </div>
+
+            <!-- Status & Actions -->
+            <div class="flex-none flex items-center gap-6">
+              <div class="flex flex-col items-end gap-1">
+                <span class="text-[8px] font-black uppercase text-[var(--t-text-tertiary)]">Current Status</span>
+                <span class="badge !px-4 !py-1.5" [class]="getDecisionClass(s.decision)">
+                  {{ s.decision | uppercase }}
+                </span>
+              </div>
+
+              <div class="h-10 w-px bg-[var(--t-border)]"></div>
+
+              <div class="flex gap-2">
+                @if (s.decision === 'pending' && auth.getRole() === 'transformation_office') {
+                  <button (click)="decide(s.id, 'approved')" class="w-10 h-10 rounded-xl bg-green-500 text-white flex items-center justify-center shadow-lg shadow-green-500/20 hover:scale-110 active:scale-95 transition-all">
+                    <span class="material-icons">check</span>
+                  </button>
+                  <button (click)="decide(s.id, 'rejected')" class="w-10 h-10 rounded-xl bg-red-500 text-white flex items-center justify-center shadow-lg shadow-red-500/20 hover:scale-110 active:scale-95 transition-all">
+                    <span class="material-icons">close</span>
+                  </button>
+                } @else {
+                  <button class="w-10 h-10 rounded-xl bg-[var(--t-surface-raised)] border border-[var(--t-border)] text-[var(--t-text-tertiary)] flex items-center justify-center hover:text-[var(--t-accent)] hover:border-[var(--t-accent)] transition-all">
+                    <span class="material-icons text-sm">visibility</span>
+                  </button>
+                }
+              </div>
+            </div>
+
+          </div>
+        }
         
-        <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse">
-            <thead>
-              <tr class="bg-[var(--t-bg-page)] border-b border-[var(--t-border)]">
-                <th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">Initiative</th>
-                <th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">Gate</th>
-                <th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">Submitted</th>
-                <th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">Status</th>
-                <th class="px-6 py-4 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">Decision By</th>
-                <th class="px-6 py-4"></th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-[var(--t-border)]">
-              @for (s of submissions(); track s.id) {
-                <tr class="hover:bg-[var(--t-surface-raised)] transition-colors group">
-                  <td class="px-6 py-4">
-                    <div class="flex flex-col">
-                      <span class="text-sm font-bold text-[var(--t-text-primary)]">TRN-{{ s.initiative_id.substring(0,3).toUpperCase() }}</span>
-                      <span class="text-[10px] text-[var(--t-text-tertiary)] font-mono">{{ s.initiative_id.substring(0,8) }}</span>
-                    </div>
-                  </td>
-                  <td class="px-6 py-4">
-                    <div class="flex items-center gap-2">
-                      <div class="w-7 h-7 rounded-lg bg-[var(--t-accent-soft)] text-[var(--t-accent)] text-xs flex items-center justify-center font-bold border border-[var(--t-accent)]/10">
-                        G{{ s.gate_number }}
-                      </div>
-                      <span class="text-xs text-[var(--t-text-secondary)]">Gate Review</span>
-                    </div>
-                  </td>
-                  <td class="px-6 py-4">
-                    <div class="flex flex-col">
-                      <span class="text-xs text-[var(--t-text-primary)] font-medium">{{ s.submitted_by_name || 'System' }}</span>
-                      <span class="text-[10px] text-[var(--t-text-tertiary)]">{{ s.submitted_at | date:'MMM d, HH:mm' }}</span>
-                    </div>
-                  </td>
-                  <td class="px-6 py-4">
-                    <span class="badge" [class]="getDecisionClass(s.decision)">
-                      {{ s.decision | uppercase }}
-                    </span>
-                  </td>
-                  <td class="px-6 py-4">
-                    @if (s.decided_by_name) {
-                      <div class="flex flex-col">
-                        <span class="text-xs text-[var(--t-text-primary)] font-medium">{{ s.decided_by_name }}</span>
-                        <span class="text-[10px] text-[var(--t-text-tertiary)]">{{ s.decided_at | date:'MMM d, HH:mm' }}</span>
-                      </div>
-                    } @else {
-                      <span class="text-[10px] text-[var(--t-text-tertiary)] italic">Awaiting Decision</span>
-                    }
-                  </td>
-                  <td class="px-6 py-4 text-right">
-                    @if (s.decision === 'pending' && auth.getRole() === 'transformation_office') {
-                      <div class="flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button (click)="decide(s.id, 'approved')" class="btn-primary !py-1 !px-3 text-[10px] h-7">Approve</button>
-                        <button (click)="decide(s.id, 'rejected')" class="btn-secondary !py-1 !px-3 text-[10px] h-7 !text-red-500 !border-red-500/20">Reject</button>
-                      </div>
-                    }
-                  </td>
-                </tr>
-              }
-              @if (submissions().length === 0) {
-                <tr>
-                  <td colspan="6" class="px-6 py-12 text-center">
-                    <div class="flex flex-col items-center gap-2 opacity-40">
-                      <svg class="w-8 h-8 text-[var(--t-text-tertiary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                      <span class="text-xs text-[var(--t-text-tertiary)] font-medium tracking-wide uppercase">No Submissions Found</span>
-                    </div>
-                  </td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        </div>
+        @if (submissions().length === 0) {
+          <div class="py-24 text-center border-2 border-dashed border-[var(--t-border)] rounded-[2rem] opacity-50">
+             <span class="material-icons text-4xl mb-2 text-[var(--t-text-tertiary)]">inventory_2</span>
+             <p class="text-sm font-black uppercase tracking-widest">Decision Queue Empty</p>
+             <p class="text-xs font-bold text-[var(--t-text-tertiary)] mt-1">All stage-gate submissions have been processed.</p>
+          </div>
+        }
       </div>
 
     </div>

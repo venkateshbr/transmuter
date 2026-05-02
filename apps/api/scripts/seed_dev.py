@@ -9,7 +9,6 @@ Usage:
 Idempotent: checks if org already exists before inserting.
 """
 
-import asyncio
 import os
 import sys
 from datetime import date, timedelta
@@ -37,6 +36,55 @@ def d(days_from_today: int) -> str:
 def dec(v: float) -> str:
     """Return Decimal-accurate string for monetary values."""
     return str(Decimal(str(v)))
+
+
+def find_auth_user_id_by_email(c: Client, email: str) -> str | None:
+    """Find an Auth user by email using the service-role admin API."""
+    page = 1
+    per_page = 100
+    while True:
+        users = c.auth.admin.list_users(page=page, per_page=per_page)
+        if not users:
+            return None
+        for user in users:
+            if getattr(user, "email", None) == email:
+                return str(user.id)
+        if len(users) < per_page:
+            return None
+        page += 1
+
+
+def ensure_auth_user(c: Client, org_id: str, user: dict[str, object]) -> str:
+    """Create or refresh a deterministic dev Auth user and return its user id."""
+    email = str(user["email"])
+    password = str(user["password"])
+    role = str(user["role"])
+    display_name = str(user["display_name"])
+
+    existing_auth_id = find_auth_user_id_by_email(c, email)
+    if existing_auth_id:
+        c.auth.admin.update_user_by_id(existing_auth_id, {
+            "password": password,
+            "email_confirm": True,
+            "user_metadata": {
+                "tenant_id": org_id,
+                "role": role,
+                "display_name": display_name,
+            },
+        })
+        return existing_auth_id
+
+    auth_resp = c.auth.admin.create_user({
+        "email": email,
+        "password": password,
+        "email_confirm": True,
+        "user_metadata": {
+            "tenant_id": org_id,
+            "role": role,
+            "display_name": display_name,
+        },
+    })
+    return str(auth_resp.user.id)
 
 
 # ── Seed Functions ─────────────────────────────────────────────────────────────
@@ -218,26 +266,24 @@ def seed_users(c: Client, org_id: str, ws_ids: dict[str, str]) -> dict[str, str]
             c.table("users").select("id").eq("tenant_id", org_id).eq("email", u["email"]).execute()
         )
         if existing_platform.data:
-            ids[u["label"]] = existing_platform.data[0]["id"]
-            print(f"  User already exists: {u['email']}")
+            user_id = existing_platform.data[0]["id"]
+            try:
+                ensured_auth_id = ensure_auth_user(c, org_id, u)
+                if ensured_auth_id != user_id:
+                    print(
+                        f"  WARNING: Auth/platform id mismatch for {u['email']} "
+                        f"(platform={user_id}, auth={ensured_auth_id})"
+                    )
+            except Exception as e:
+                print(f"  WARNING: Auth refresh failed for {u['email']} ({e})")
+            ids[u["label"]] = user_id
+            print(f"  User already exists: {u['email']} (auth refreshed)")
             continue
 
-        # Create Supabase Auth user
         try:
-            auth_resp = c.auth.admin.create_user({
-                "email": u["email"],
-                "password": u["password"],
-                "email_confirm": True,
-                "user_metadata": {
-                    "tenant_id": org_id,
-                    "role": u["role"],
-                    "display_name": u["display_name"],
-                },
-            })
-            user_id = auth_resp.user.id
+            user_id = ensure_auth_user(c, org_id, u)
         except Exception as e:
-            # User may already exist in Auth but not in platform table
-            print(f"  Auth create failed for {u['email']} ({e}) — skipping")
+            print(f"  Auth ensure failed for {u['email']} ({e}) — skipping")
             continue
 
         # Create platform user record
@@ -793,6 +839,223 @@ def seed_financials(c: Client, org_id: str, init_ids: dict[str, str]) -> None:
     print(f"  Created {len(entries)} financial entries + {len(cost_lines)} cost lines")
 
 
+def seed_meetings(
+    c: Client,
+    org_id: str,
+    ws_ids: dict[str, str],
+    init_ids: dict[str, str],
+    user_ids: dict[str, str],
+) -> None:
+    """Seed deterministic meeting data for real API and browser UI tests."""
+    meetings = [
+        {
+            "label": "steering",
+            "name": "Transformation Steering Committee",
+            "workstream_id": None,
+            "scope": "all",
+            "recurrence": "weekly",
+            "description": (
+                "Weekly steering cadence for portfolio risks, value delivery, and decisions."
+            ),
+            "owner": "admin1",
+            "attendees": ["admin1", "owner1", "owner3", "wslead1"],
+            "initiatives": ["rev_asia", "cost_erp", "cost_offshoring"],
+            "agenda": [
+                {"text": "Portfolio value and RAG review", "initiative": None},
+                {"text": "North Asia revenue acceleration blockers", "initiative": "rev_asia"},
+                {"text": "ERP data migration risks", "initiative": "cost_erp"},
+            ],
+            "sessions": [
+                {
+                    "date": d(-7),
+                    "status": "completed",
+                    "notes": (
+                        "Reviewed value delivery, ERP migration risks, and offshoring timeline."
+                    ),
+                    "has_transcript": True,
+                    "ai_optimised": True,
+                    "actions": [
+                        {
+                            "description": "Prepare ERP data cleansing recovery plan",
+                            "assignee": "owner3",
+                            "initiative": "cost_erp",
+                            "priority": "high",
+                            "status": "open",
+                            "due_in_days": 5,
+                        }
+                    ],
+                }
+            ],
+        },
+        {
+            "label": "north_asia",
+            "name": "North Asia Workstream Review",
+            "workstream_id": ws_ids.get("North Asia"),
+            "scope": "workstream",
+            "recurrence": "weekly",
+            "description": (
+                "Workstream review for North Asia growth initiatives and account execution."
+            ),
+            "owner": "wslead1",
+            "attendees": ["wslead1", "owner1", "admin2"],
+            "initiatives": ["rev_asia"],
+            "agenda": [
+                {"text": "Japan pilot account conversion", "initiative": "rev_asia"},
+                {"text": "Korea launch dependency review", "initiative": "rev_asia"},
+            ],
+            "sessions": [
+                {
+                    "date": d(-3),
+                    "status": "completed",
+                    "notes": (
+                        "Japan pilot remains ahead of base case. "
+                        "Korea launch dependency needs legal input."
+                    ),
+                    "has_transcript": False,
+                    "ai_optimised": False,
+                    "actions": [
+                        {
+                            "description": "Confirm Korea launch regulatory checklist",
+                            "assignee": "owner1",
+                            "initiative": "rev_asia",
+                            "priority": "medium",
+                            "status": "in_progress",
+                            "due_in_days": 7,
+                        }
+                    ],
+                }
+            ],
+        },
+    ]
+
+    for meeting in meetings:
+        existing = (
+            c.table("meetings")
+            .select("id")
+            .eq("tenant_id", org_id)
+            .eq("name", meeting["name"])
+            .execute()
+        )
+        if existing.data:
+            meeting_id = existing.data[0]["id"]
+        else:
+            inserted = c.table("meetings").insert({
+                "tenant_id": org_id,
+                "name": meeting["name"],
+                "workstream_id": meeting["workstream_id"],
+                "scope": meeting["scope"],
+                "recurrence": meeting["recurrence"],
+                "description": meeting["description"],
+                "owner_id": user_ids.get(str(meeting["owner"])),
+            }).execute()
+            meeting_id = inserted.data[0]["id"]
+
+        for attendee in meeting["attendees"]:
+            user_id = user_ids.get(str(attendee))
+            if not user_id:
+                continue
+            exists = (
+                c.table("meeting_attendees")
+                .select("id")
+                .eq("tenant_id", org_id)
+                .eq("meeting_id", meeting_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            if not exists.data:
+                c.table("meeting_attendees").insert({
+                    "tenant_id": org_id,
+                    "meeting_id": meeting_id,
+                    "user_id": user_id,
+                }).execute()
+
+        for initiative in meeting["initiatives"]:
+            initiative_id = init_ids.get(str(initiative))
+            if not initiative_id:
+                continue
+            exists = (
+                c.table("meeting_initiatives")
+                .select("id")
+                .eq("tenant_id", org_id)
+                .eq("meeting_id", meeting_id)
+                .eq("initiative_id", initiative_id)
+                .execute()
+            )
+            if not exists.data:
+                c.table("meeting_initiatives").insert({
+                    "tenant_id": org_id,
+                    "meeting_id": meeting_id,
+                    "initiative_id": initiative_id,
+                }).execute()
+
+        for sort_order, agenda in enumerate(meeting["agenda"], start=1):
+            initiative_key = agenda.get("initiative")
+            initiative_id = init_ids.get(str(initiative_key)) if initiative_key else None
+            exists = (
+                c.table("agenda_items")
+                .select("id")
+                .eq("tenant_id", org_id)
+                .eq("meeting_id", meeting_id)
+                .eq("text", agenda["text"])
+                .execute()
+            )
+            if not exists.data:
+                c.table("agenda_items").insert({
+                    "tenant_id": org_id,
+                    "meeting_id": meeting_id,
+                    "initiative_id": initiative_id,
+                    "text": agenda["text"],
+                    "sort_order": sort_order,
+                }).execute()
+
+        for session in meeting["sessions"]:
+            existing_session = (
+                c.table("meeting_sessions")
+                .select("id")
+                .eq("tenant_id", org_id)
+                .eq("meeting_id", meeting_id)
+                .eq("session_date", session["date"])
+                .execute()
+            )
+            if existing_session.data:
+                session_id = existing_session.data[0]["id"]
+            else:
+                inserted = c.table("meeting_sessions").insert({
+                    "tenant_id": org_id,
+                    "meeting_id": meeting_id,
+                    "session_date": session["date"],
+                    "status": session["status"],
+                    "has_transcript": session["has_transcript"],
+                    "ai_optimised": session["ai_optimised"],
+                    "notes": session["notes"],
+                }).execute()
+                session_id = inserted.data[0]["id"]
+
+            for action in session["actions"]:
+                exists = (
+                    c.table("action_items")
+                    .select("id")
+                    .eq("tenant_id", org_id)
+                    .eq("session_id", session_id)
+                    .eq("description", action["description"])
+                    .execute()
+                )
+                if exists.data:
+                    continue
+                c.table("action_items").insert({
+                    "tenant_id": org_id,
+                    "session_id": session_id,
+                    "initiative_id": init_ids.get(str(action["initiative"])),
+                    "description": action["description"],
+                    "assignee_id": user_ids.get(str(action["assignee"])),
+                    "priority": action["priority"],
+                    "status": action["status"],
+                    "due_date": d(int(action["due_in_days"])),
+                }).execute()
+
+    print(f"  Seeded {len(meetings)} meetings with agenda, sessions, and actions")
+
+
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -842,11 +1105,14 @@ def main() -> None:
     print("\n11. Financials...")
     seed_financials(c, org_id, init_ids)
 
+    print("\n12. Meetings...")
+    seed_meetings(c, org_id, ws_ids, init_ids, user_ids)
+
     print("\n=== Seed complete ===")
     print(f"\n  Org ID   : {org_id}")
-    print(f"  Admin    : admin@ishirock.dev / Transmuter2026!")
-    print(f"  Owner    : owner.revenue@ishirock.dev / Transmuter2026!")
-    print(f"  WS Lead  : lead.na@ishirock.dev / Transmuter2026!")
+    print("  Admin    : admin@ishirock.dev / Transmuter2026!")
+    print("  Owner    : owner.revenue@ishirock.dev / Transmuter2026!")
+    print("  WS Lead  : lead.na@ishirock.dev / Transmuter2026!")
     print(f"\n  Initiatives: {len(init_ids)} seeded (TRN-001 through TRN-005)")
 
 

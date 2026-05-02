@@ -144,9 +144,9 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-        <!-- Path A: Manual Form -->
+        <!-- Path A: Guided Form -->
         <div class="card path-card p-6" (click)="currentPath = 'form'"
-             role="button" tabindex="0" aria-label="Create initiative manually"
+             role="button" tabindex="0" aria-label="Create initiative with Transmuter"
              (keydown.enter)="currentPath = 'form'">
           <div class="w-12 h-12 rounded-xl flex items-center justify-center mb-4"
                style="background:var(--t-accent-soft)">
@@ -156,10 +156,10 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
             </svg>
           </div>
           <h3 class="text-lg font-semibold mb-2" style="color:var(--t-text-primary)">
-            Create Manually
+            Create with Transmuter
           </h3>
           <p class="text-sm" style="color:var(--t-text-secondary)">
-            Fill in the initiative details step by step. Define the scope, financials, and team.
+            Use a guided intake flow with reviewable defaults for scope, value logic, and delivery ownership.
           </p>
         </div>
 
@@ -181,11 +181,12 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
           <p class="text-sm" style="color:var(--t-text-secondary)">
             Upload a pre-filled Transmuter Excel template with all initiative data.
           </p>
-          <a href="/api/initiatives/template" class="text-xs mt-3 inline-block"
-             style="color:var(--t-accent)" (click)="$event.stopPropagation()"
-             aria-label="Download blank template">
-            ↓ Download blank template
-          </a>
+          <button class="text-xs mt-3 inline-block underline"
+                  style="color:var(--t-accent)"
+                  (click)="downloadTemplate($event)"
+                  aria-label="Download blank initiative template">
+            Download blank template
+          </button>
         </div>
       </div>
     </div>
@@ -213,6 +214,16 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
       </div>
 
       <div class="card p-6">
+        <div class="mb-5 rounded-xl border p-4 flex items-start gap-3"
+             style="background:var(--t-accent-soft);border-color:var(--t-border)">
+          <span class="material-icons text-base mt-0.5" style="color:var(--t-accent)">auto_awesome</span>
+          <div>
+            <p class="text-xs font-bold uppercase tracking-wider mb-1" style="color:var(--t-text-primary)">Transmuter intake</p>
+            <p class="text-sm" style="color:var(--t-text-secondary)">
+              Capture the minimum viable case first. Financials, KPIs, risks, and milestones can be refined from the initiative detail tabs after creation.
+            </p>
+          </div>
+        </div>
 
         <!-- STEP 1: Basic Details -->
         <div *ngIf="formStep === 1" class="space-y-5 animate-in">
@@ -258,6 +269,12 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
                 <option value="one_off">One-off</option>
               </select>
             </div>
+          </div>
+
+          <div>
+            <label for="init-theme" class="field-label">Theme</label>
+            <input id="init-theme" type="text" class="input-field"
+                   [(ngModel)]="form.theme" placeholder="e.g. Finance automation">
           </div>
 
           <div class="grid grid-cols-2 gap-4">
@@ -439,6 +456,15 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
           <button class="btn-ghost text-xs" (click)="clearUpload()" aria-label="Remove uploaded file">✕</button>
         </div>
 
+        <div *ngIf="uploadPreview()" class="mt-4 rounded-xl border p-4"
+             style="border-color:var(--t-border);background:var(--t-bg)">
+          <p class="text-[10px] font-bold uppercase tracking-wider mb-2" style="color:var(--t-text-secondary)">Preview</p>
+          <p class="text-sm font-bold" style="color:var(--t-text-primary)">{{ uploadPreview()?.name }}</p>
+          <p class="text-xs mt-1" style="color:var(--t-text-secondary)">
+            {{ uploadPreview()?.country || 'No country' }} · {{ uploadPreview()?.priority || 'medium' }} priority
+          </p>
+        </div>
+
         <div class="flex items-center justify-between mt-6 pt-5 border-t"
              style="border-color:var(--t-border)">
           <button class="btn-ghost text-sm" (click)="currentPath = 'chooser'"
@@ -478,6 +504,7 @@ export class CreateInitiativeComponent {
   readonly workstreams = signal<WorkstreamOption[]>([]);
   readonly users = signal<UserOption[]>([]);
   readonly uploadedFileName = signal<string | null>(null);
+  readonly uploadPreview = signal<any | null>(null);
 
   private uploadedFile: File | null = null;
 
@@ -488,6 +515,7 @@ export class CreateInitiativeComponent {
     group_owner_id: '',
     type: '',
     impact_type: '',
+    theme: '',
     country: '',
     tag: '',
     priority: 'medium',
@@ -537,6 +565,7 @@ export class CreateInitiativeComponent {
     if (this.form.group_owner_id) payload['group_owner_id'] = this.form.group_owner_id;
     if (this.form.type) payload['type'] = this.form.type;
     if (this.form.impact_type) payload['impact_type'] = this.form.impact_type;
+    if (this.form.theme) payload['theme'] = this.form.theme;
     if (this.form.country) payload['country'] = this.form.country;
     if (this.form.tag) payload['tag'] = this.form.tag;
     if (this.form.priority) payload['priority'] = this.form.priority;
@@ -573,6 +602,7 @@ export class CreateInitiativeComponent {
     if (file && (file.name.endsWith('.xlsx') || file.name.endsWith('.xls'))) {
       this.uploadedFile = file;
       this.uploadedFileName.set(file.name);
+      this.previewUpload(file);
     }
   }
 
@@ -582,12 +612,44 @@ export class CreateInitiativeComponent {
     if (file) {
       this.uploadedFile = file;
       this.uploadedFileName.set(file.name);
+      this.previewUpload(file);
     }
   }
 
   clearUpload(): void {
     this.uploadedFile = null;
     this.uploadedFileName.set(null);
+    this.uploadPreview.set(null);
+  }
+
+  downloadTemplate(event?: Event): void {
+    event?.stopPropagation();
+    this.api.getBlob('/initiatives/template').subscribe({
+      next: blob => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'transmuter-initiative-template.xlsx';
+        link.click();
+        URL.revokeObjectURL(url);
+      },
+      error: () => this.error.set('Failed to download initiative template.'),
+    });
+  }
+
+  previewUpload(file: File): void {
+    const body = new FormData();
+    body.append('file', file);
+    this.api.postForm<any>('/initiatives/import/preview', body).subscribe({
+      next: preview => {
+        this.uploadPreview.set(preview);
+        this.error.set(null);
+      },
+      error: err => {
+        this.uploadPreview.set(null);
+        this.error.set(err?.error?.detail ?? 'Failed to preview template. Please check the file format.');
+      },
+    });
   }
 
   submitUpload(): void {
@@ -599,9 +661,7 @@ export class CreateInitiativeComponent {
     const formData = new FormData();
     formData.append('file', this.uploadedFile);
 
-    // Note: Using HttpClient directly since ApiService doesn't handle FormData
-    // The upload endpoint will be POST /initiatives/import
-    this.api.post<{ id: string }>('/initiatives/import', formData).subscribe({
+    this.api.postForm<{ id: string }>('/initiatives/import', formData).subscribe({
       next: result => {
         this.submitting.set(false);
         this.router.navigate(['/initiatives', result.id]);

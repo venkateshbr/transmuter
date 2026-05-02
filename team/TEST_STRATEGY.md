@@ -19,6 +19,15 @@
 
 ## Test Infrastructure Summary
 
+### Transmuter Acceptance Standard
+- Smoke tests do not count as acceptance criteria.
+- Mocked API responses do not count as acceptance criteria for product workflows.
+- Acceptance requires real API tests against a running API and deterministic seeded sample data.
+- Acceptance requires browser UI tests against the real Angular app and real API.
+- Tests must reset or isolate sample data predictably; no test may depend on manually created browser state.
+- Aksha sign-off must include real sample-data UI/API verification for touched workflows.
+- Existing unit tests and TestClient tests may remain as developer checks, but they do not replace real API + browser UI acceptance.
+
 ### Backend
 - **Framework**: pytest + pytest-asyncio
 - **Test Files**: 24 (includes scripts and debug files)

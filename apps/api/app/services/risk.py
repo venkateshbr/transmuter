@@ -53,8 +53,10 @@ class RiskService:
         row = self._repo.create(initiative_id, payload)
         return self._to_item(row)
 
-    def update_risk(self, risk_id: str, data: RiskUpdate) -> RiskItem:
-        existing = self._assert_exists(risk_id)
+    def update_risk(
+        self, initiative_id: str, risk_id: str, data: RiskUpdate,
+    ) -> RiskItem:
+        existing = self._assert_belongs_to_initiative(risk_id, initiative_id)
         patch = data.model_dump(exclude_unset=True)
         
         # Determine new impact/likelihood combining patch + existing
@@ -70,8 +72,8 @@ class RiskService:
         row = self._repo.update(risk_id, patch)
         return self._to_item(row)
 
-    def delete_risk(self, risk_id: str) -> None:
-        self._assert_exists(risk_id)
+    def delete_risk(self, initiative_id: str, risk_id: str) -> None:
+        self._assert_belongs_to_initiative(risk_id, initiative_id)
         self._repo.delete(risk_id)
 
     # ── Heatmap ──────────────────────────────────────────────────────
@@ -108,6 +110,17 @@ class RiskService:
     def _assert_exists(self, risk_id: str) -> dict[str, Any]:
         row = self._repo.get(risk_id)
         if not row:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Risk not found",
+            )
+        return row
+
+    def _assert_belongs_to_initiative(
+        self, risk_id: str, initiative_id: str,
+    ) -> dict[str, Any]:
+        row = self._assert_exists(risk_id)
+        if row.get("initiative_id") != initiative_id:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Risk not found",

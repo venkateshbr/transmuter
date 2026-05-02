@@ -161,7 +161,11 @@ class MilestoneRepository:
         """Get dependencies where this milestone is downstream."""
         result = (
             self._c.table("milestone_dependencies")
-            .select("*")
+            .select(
+                "*, "
+                "upstream:milestones!upstream_milestone_id(id, name), "
+                "downstream:milestones!downstream_milestone_id(id, name)"
+            )
             .eq("tenant_id", self._tid)
             .eq("downstream_milestone_id", milestone_id)
             .execute()

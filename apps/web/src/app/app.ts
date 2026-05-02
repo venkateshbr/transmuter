@@ -135,13 +135,13 @@ interface Message {
           </div>
 
           <div class="p-4 border-t border-[var(--t-border)] flex gap-2">
-            <input [ngModel]="aiQuery()"
-                   (ngModelChange)="aiQuery.set($event)"
+            <input [ngModel]="aiQueryText()"
+                   (ngModelChange)="aiQueryText.set($event)"
                    (keyup.enter)="sendMessage()"
                    placeholder="Ask Transmuter..."
                    class="input-field flex-1 text-sm" />
             <button (click)="sendMessage()" 
-                    [disabled]="aiLoading() || !aiQuery()"
+                    [disabled]="aiLoading() || !aiQueryText()"
                     class="btn-primary px-3" aria-label="Send">→</button>
           </div>
         </aside>
@@ -167,7 +167,7 @@ export class App {
 
   protected readonly aiPanelOpen = signal(false);
   protected readonly aiLoading = signal(false);
-  protected readonly aiQuery = signal('');
+  protected readonly aiQueryText = signal('');
   protected readonly messages = signal<Message[]>([]);
 
   protected readonly navItems: NavItem[] = [
@@ -191,12 +191,12 @@ export class App {
   ];
 
   protected setQuery(prompt: string): void {
-    this.aiQuery.set(prompt);
+    this.aiQueryText.set(prompt);
     this.sendMessage();
   }
 
   protected sendMessage(): void {
-    const currentQuery = this.aiQuery();
+    const currentQuery = this.aiQueryText();
     if (!currentQuery || this.aiLoading()) return;
 
     const userMsg: Message = {
@@ -206,7 +206,7 @@ export class App {
     };
     
     this.messages.update(msgs => [...msgs, userMsg]);
-    this.aiQuery.set('');
+    this.aiQueryText.set('');
     this.aiLoading.set(true);
 
     this.api.post<any>('/ai/chat', { query: currentQuery }).subscribe({

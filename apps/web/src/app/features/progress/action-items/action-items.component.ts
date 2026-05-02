@@ -32,53 +32,67 @@ import { RouterLink } from '@angular/router';
             <option value="in_progress">In Progress</option>
             <option value="completed">Completed</option>
           </select>
-          <button class="btn-primary text-sm h-9 flex items-center gap-2">
-            <span>+</span> Log Action
-          </button>
         </div>
       </div>
 
-      <!-- Action Items List -->
-      <div class="grid grid-cols-1 gap-4">
+      <!-- Action Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         @for (item of filteredItems(); track item.id) {
-          <div class="card p-5 flex items-center gap-6 hover:border-[var(--t-accent)] transition-all group">
-            <div class="flex-none">
-              <input type="checkbox" [checked]="item.status === 'completed'" 
-                     class="w-6 h-6 rounded-full border-2 border-[var(--t-border)] text-[var(--t-accent)] focus:ring-[var(--t-accent)] cursor-pointer">
-            </div>
+          <div class="card p-6 flex flex-col hover:border-[var(--t-accent)] hover:shadow-xl transition-all group">
             
-            <div class="flex-1">
-              <h3 class="text-sm font-bold text-[var(--t-text-primary)] group-hover:text-[var(--t-accent)] transition-colors">
-                {{ item.description }}
-              </h3>
-              <div class="flex items-center gap-4 mt-2">
-                <span class="text-[10px] font-bold uppercase tracking-widest text-[var(--t-accent)]">
-                  {{ item.initiatives?.initiative_code || 'General' }}
-                </span>
-                <span class="text-[10px] text-[var(--t-text-tertiary)] flex items-center gap-1">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                  Due {{ item.due_date | date:'MMM d' }}
-                </span>
-                <span class="text-[10px] text-[var(--t-text-tertiary)] flex items-center gap-1">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                  {{ item.users?.display_name || 'Unassigned' }}
-                </span>
+            <div class="flex justify-between items-start mb-4">
+              <div class="flex items-center gap-3">
+	                 <input type="checkbox" [checked]="item.status === 'completed'"
+                          (change)="toggleComplete(item)"
+                          aria-label="Toggle action item complete"
+	                        class="w-5 h-5 rounded-full border-2 border-[var(--t-border)] text-[var(--t-accent)] focus:ring-[var(--t-accent)] cursor-pointer transition-all">
+                 <span class="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-[var(--t-surface-raised)] text-[var(--t-text-tertiary)]">
+                   {{ item.priority }}
+                 </span>
               </div>
+              <span class="text-[10px] font-mono font-bold" [class.text-red-500]="isOverdue(item)">
+                Due {{ item.due_date | date:'MMM d' }}
+              </span>
             </div>
 
-            <div class="flex-none flex items-center gap-3">
-              <span class="badge" [class]="getPriorityClass(item.priority)">
-                {{ item.priority | uppercase }}
-              </span>
-              <button class="text-[var(--t-text-tertiary)] hover:text-[var(--t-accent)]">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
-              </button>
+            <h3 class="text-base font-bold text-[var(--t-text-primary)] group-hover:text-[var(--t-accent)] transition-colors line-clamp-2 min-h-[3rem]">
+              {{ item.description }}
+            </h3>
+
+            <div class="mt-4 flex items-center gap-2">
+               <span class="material-icons text-sm text-[var(--t-accent)]">rocket_launch</span>
+               <span class="text-[10px] font-bold text-[var(--t-text-secondary)] truncate">
+                 {{ item.initiatives?.name || 'General Platform' }}
+               </span>
+            </div>
+
+            <div class="mt-6 pt-6 border-t border-[var(--t-border)] flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="w-7 h-7 rounded-full bg-gradient-to-br from-[var(--t-accent)] to-[#a855f7] flex items-center justify-center text-[10px] text-white font-black shadow-sm">
+                  {{ (item.users?.display_name || 'U').substring(0,1) }}
+                </div>
+                <div class="flex flex-col">
+                  <span class="text-[10px] font-black text-[var(--t-text-primary)]">{{ item.users?.display_name || 'Unassigned' }}</span>
+                  <span class="text-[8px] font-bold uppercase text-[var(--t-text-tertiary)]">Owner</span>
+                </div>
+              </div>
+              
+              <div class="flex gap-1">
+	                <button (click)="cycleStatus(item)" class="w-8 h-8 rounded-lg bg-[var(--t-surface-raised)] flex items-center justify-center text-[var(--t-text-tertiary)] hover:text-[var(--t-accent)] hover:bg-[var(--t-accent-soft)] transition-all" aria-label="Cycle action item status">
+	                  <span class="material-icons text-sm">edit</span>
+	                </button>
+	                <button (click)="deleteItem(item.id)" class="w-8 h-8 rounded-lg bg-[var(--t-surface-raised)] flex items-center justify-center text-[var(--t-text-tertiary)] hover:text-red-500 hover:bg-red-500/10 transition-all" aria-label="Delete action item">
+	                  <span class="material-icons text-sm">delete_outline</span>
+	                </button>
+              </div>
             </div>
           </div>
         }
+        
         @if (filteredItems().length === 0) {
-          <div class="py-24 text-center">
-            <p class="text-xs text-[var(--t-text-tertiary)]">No action items found.</p>
+          <div class="col-span-full py-24 text-center border-2 border-dashed border-[var(--t-border)] rounded-3xl opacity-50">
+             <span class="material-icons text-4xl mb-2 text-[var(--t-text-tertiary)]">assignment_turned_in</span>
+             <p class="text-sm font-medium">No action items found matching your criteria.</p>
           </div>
         }
       </div>
@@ -94,7 +108,7 @@ export class ActionItemsComponent implements OnInit {
   
   items = signal<any[]>([]);
   filteredItems = signal<any[]>([]);
-  statusFilter = 'open';
+  statusFilter = '';
 
   ngOnInit() {
     this.fetchItems();
@@ -115,6 +129,34 @@ export class ActionItemsComponent implements OnInit {
     this.filteredItems.set(filtered);
   }
 
+  toggleComplete(item: any) {
+    const status = item.status === 'completed' ? 'open' : 'completed';
+    this.updateItem(item.id, { status });
+  }
+
+  cycleStatus(item: any) {
+    const next = item.status === 'open'
+      ? 'in_progress'
+      : item.status === 'in_progress'
+        ? 'completed'
+        : 'open';
+    this.updateItem(item.id, { status: next });
+  }
+
+  deleteItem(id: string) {
+    this.api.delete(`/action-items/${id}`).subscribe(() => {
+      this.items.set(this.items().filter(item => item.id !== id));
+      this.applyFilters();
+    });
+  }
+
+  private updateItem(id: string, body: Record<string, string>) {
+    this.api.put<any>(`/action-items/${id}`, body).subscribe(updated => {
+      this.items.set(this.items().map(item => item.id === id ? updated : item));
+      this.applyFilters();
+    });
+  }
+
   getPriorityClass(p: string): string {
     switch (p) {
       case 'high': return 'bg-red-500/10 text-red-500 border-red-500/20';
@@ -122,5 +164,10 @@ export class ActionItemsComponent implements OnInit {
       case 'low': return 'bg-green-500/10 text-green-500 border-green-500/20';
       default: return '';
     }
+  }
+
+  isOverdue(item: any): boolean {
+    if (item.status === 'completed') return false;
+    return new Date(item.due_date) < new Date();
   }
 }

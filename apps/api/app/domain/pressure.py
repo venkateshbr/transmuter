@@ -190,9 +190,11 @@ def _slack_penalty(
         remaining = (planned_end - today).days
         slack_ratio = Decimal(str(remaining)) / Decimal(str(total_dur))
         elapsed = D1 - slack_ratio
-        # Quadratic curve: elapsed^1.5 * 1.5
-        raw = (float(elapsed) ** 1.5) * 1.5
-        return clamp(Decimal(str(raw)), D0, Decimal("1.5"))
+        if elapsed <= D0:
+            return D0
+        # Curve: elapsed^1.5 * 1.5, using Decimal arithmetic.
+        raw = elapsed * elapsed.sqrt() * Decimal("1.5")
+        return clamp(raw, D0, Decimal("1.5"))
 
     # Absolute days fallback
     days_remaining = (planned_end - today).days

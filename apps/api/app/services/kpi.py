@@ -119,8 +119,10 @@ class KPIService:
             entries=[],
         )
 
-    def update_kpi(self, kpi_id: str, data: KPIUpdate) -> KPIItem:
-        self._assert_exists(kpi_id)
+    def update_kpi(
+        self, initiative_id: str, kpi_id: str, data: KPIUpdate,
+    ) -> KPIItem:
+        self._assert_belongs_to_initiative(kpi_id, initiative_id)
         patch = data.model_dump(exclude_none=True)
         row = self._repo.update(kpi_id, patch)
         
@@ -153,14 +155,16 @@ class KPIService:
             entries=entry_items,
         )
 
-    def delete_kpi(self, kpi_id: str) -> None:
-        self._assert_exists(kpi_id)
+    def delete_kpi(self, initiative_id: str, kpi_id: str) -> None:
+        self._assert_belongs_to_initiative(kpi_id, initiative_id)
         self._repo.delete(kpi_id)
 
     # ── Entries ──────────────────────────────────────────────────────
 
-    def upsert_entries(self, kpi_id: str, entries: list[KPIEntryUpsert]) -> list[KPIEntryItem]:
-        self._assert_exists(kpi_id)
+    def upsert_entries(
+        self, initiative_id: str, kpi_id: str, entries: list[KPIEntryUpsert],
+    ) -> list[KPIEntryItem]:
+        self._assert_belongs_to_initiative(kpi_id, initiative_id)
         
         # Convert to dicts for repo
         entry_dicts = []
@@ -263,6 +267,17 @@ class KPIService:
     def _assert_exists(self, kpi_id: str) -> dict:  # type: ignore[type-arg]
         row = self._repo.get(kpi_id)
         if not row:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="KPI not found",
+            )
+        return row
+
+    def _assert_belongs_to_initiative(
+        self, kpi_id: str, initiative_id: str,
+    ) -> dict:  # type: ignore[type-arg]
+        row = self._assert_exists(kpi_id)
+        if row.get("initiative_id") != initiative_id:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="KPI not found",

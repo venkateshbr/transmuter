@@ -41,6 +41,12 @@ class FinancialEntryRow(BaseModel):
     gm_uplift_pct_base: str = "0"
     gm_uplift_pct_high: str = "0"
     gm_uplift_pct_actual: str | None = None
+    cogs_base: str = "0"
+    cogs_high: str = "0"
+    cogs_actual: str | None = None
+    cogs_pct_base: str = "0"
+    cogs_pct_high: str = "0"
+    cogs_pct_actual: str | None = None
 
 
 class FinancialEntryUpdate(BaseModel):
@@ -66,11 +72,18 @@ class FinancialEntryUpdate(BaseModel):
     gm_uplift_pct_base: Decimal = Decimal("0")
     gm_uplift_pct_high: Decimal = Decimal("0")
     gm_uplift_pct_actual: Decimal | None = None
+    cogs_base: Decimal = Decimal("0")
+    cogs_high: Decimal = Decimal("0")
+    cogs_actual: Decimal | None = None
+    cogs_pct_base: Decimal = Decimal("0")
+    cogs_pct_high: Decimal = Decimal("0")
+    cogs_pct_actual: Decimal | None = None
 
 
 class FinancialGridUpdate(BaseModel):
     """Batch upsert for the entire financial grid."""
     entries: list[FinancialEntryUpdate]
+    cost_lines: list[CostLineCreate] | None = None
 
 
 class FinancialGridResponse(BaseModel):
@@ -100,6 +113,10 @@ class FinancialSummary(BaseModel):
     gm_uplift_plan_base: str = "0"
     gm_uplift_plan_high: str = "0"
     gm_uplift_actual: str | None = None
+    # COGS
+    cogs_plan_base: str = "0"
+    cogs_plan_high: str = "0"
+    cogs_actual: str | None = None
     # Costs (split)
     costs_recurring_plan: str = "0"
     costs_recurring_actual: str | None = None
@@ -125,6 +142,7 @@ class CostLineCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=300)
     year: int = Field(..., ge=2020, le=2040)
     quarter: Quarter | None = None
+    month: int | None = Field(None, ge=1, le=12)
     amount_plan: Decimal = Decimal("0")
     amount_actual: Decimal | None = None
     is_recurring: bool = False
@@ -134,6 +152,7 @@ class CostLineUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=300)
     year: int | None = Field(None, ge=2020, le=2040)
     quarter: Quarter | None = None
+    month: int | None = Field(None, ge=1, le=12)
     amount_plan: Decimal | None = None
     amount_actual: Decimal | None = None
     is_recurring: bool | None = None
@@ -145,6 +164,7 @@ class CostLineItem(BaseModel):
     name: str
     year: int
     quarter: int | None = None
+    month: int | None = None
     amount_plan: str = "0"
     amount_actual: str | None = None
     is_recurring: bool = False

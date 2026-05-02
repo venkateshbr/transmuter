@@ -1,5 +1,6 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { ApiService } from '../../../core/services/api.service';
 import { MilestonesTabComponent } from './milestones/milestones-tab.component';
 import { KpisTabComponent } from './kpis/kpis-tab.component';
 import { RisksTabComponent } from './risks/risks-tab.component';
@@ -7,11 +8,13 @@ import { StatusUpdatesTabComponent } from './status-updates/status-updates-tab.c
 import { GovernanceTabComponent } from './governance/governance-tab.component';
 import { OverviewTabComponent } from './overview/overview-tab.component';
 import { FinancialsTabComponent } from './financials/financials-tab.component';
+import { TeamTabComponent } from './team/team-tab.component';
+import { SummaryTabComponent } from './summary/summary-tab.component';
 
 @Component({
   selector: 'app-initiative-detail',
   standalone: true,
-  imports: [CommonModule, MilestonesTabComponent, KpisTabComponent, RisksTabComponent, StatusUpdatesTabComponent, GovernanceTabComponent, OverviewTabComponent, FinancialsTabComponent],
+  imports: [CommonModule, MilestonesTabComponent, KpisTabComponent, RisksTabComponent, StatusUpdatesTabComponent, GovernanceTabComponent, OverviewTabComponent, FinancialsTabComponent, TeamTabComponent, SummaryTabComponent],
   template: `
     <div class="p-8 max-w-7xl mx-auto space-y-6">
       <div class="flex items-center gap-4 mb-4">
@@ -23,8 +26,9 @@ import { FinancialsTabComponent } from './financials/financials-tab.component';
 
       <div class="flex justify-between items-start">
         <div>
-          <h1 class="text-3xl font-bold tracking-tight text-[var(--t-text-primary)]">Initiative Details</h1>
-          <p class="text-[var(--t-text-secondary)] mt-1">Manage project milestones, KPIs, and risks.</p>
+          <h1 class="text-3xl font-bold tracking-tight text-[var(--t-text-primary)]">
+            {{ initiative()?.name || 'Initiative Details' }}
+          </h1>
         </div>
       </div>
 
@@ -36,7 +40,7 @@ import { FinancialsTabComponent } from './financials/financials-tab.component';
             [class.text-[var(--t-primary)]]="activeTab === tab.id"
             [class.border-transparent]="activeTab !== tab.id"
             [class.text-[var(--t-text-secondary)]]="activeTab !== tab.id"
-            class="whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-colors hover:text-[var(--t-primary)]">
+            class="whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm transition-all hover:text-[var(--t-primary)]">
             {{ tab.label }}
           </button>
         </nav>
@@ -44,34 +48,44 @@ import { FinancialsTabComponent } from './financials/financials-tab.component';
 
       <div class="mt-6">
         <app-overview-tab *ngIf="activeTab === 'overview'" [initiativeId]="id"></app-overview-tab>
+        <app-financials-tab *ngIf="activeTab === 'financials'" [initiativeId]="id"></app-financials-tab>
         <app-milestones-tab *ngIf="activeTab === 'milestones'" [initiativeId]="id"></app-milestones-tab>
         <app-kpis-tab *ngIf="activeTab === 'kpis'" [initiativeId]="id"></app-kpis-tab>
         <app-risks-tab *ngIf="activeTab === 'risks'" [initiativeId]="id"></app-risks-tab>
         <app-status-updates-tab *ngIf="activeTab === 'status-updates'" [initiativeId]="id"></app-status-updates-tab>
         <app-governance-tab *ngIf="activeTab === 'governance'" [initiativeId]="id"></app-governance-tab>
-        <app-financials-tab *ngIf="activeTab === 'financials'" [initiativeId]="id"></app-financials-tab>
-        
-        <!-- Placeholders for remaining tabs -->
-        <div *ngIf="activeTab === 'team'" class="card text-center py-12">
-          <div class="text-[var(--t-text-secondary)]">Content for {{ activeTab }} coming soon.</div>
-        </div>
+        <app-team-tab *ngIf="activeTab === 'team'" [initiativeId]="id"></app-team-tab>
+        <app-summary-tab *ngIf="activeTab === 'summary'" [initiativeId]="id"></app-summary-tab>
       </div>
     </div>
   `,
 })
-export class InitiativeDetailComponent {
+export class InitiativeDetailComponent implements OnInit {
   @Input() id!: string; // Bound from the route via withComponentInputBinding()
   
+  private readonly api = inject(ApiService);
+  initiative = signal<any | null>(null);
+
   activeTab = 'overview';
+  
+  ngOnInit(): void {
+    if (this.id) {
+      this.api.get(`/initiatives/${this.id}`).subscribe({
+        next: (res: any) => this.initiative.set(res),
+        error: () => console.error('Failed to load initiative details')
+      });
+    }
+  }
   
   tabs = [
     { id: 'overview', label: 'Overview' },
-    { id: 'milestones', label: 'Milestones' },
-    { id: 'kpis', label: 'KPIs & Targets' },
     { id: 'financials', label: 'Financials' },
+    { id: 'milestones', label: 'Milestones' },
+    { id: 'kpis', label: 'KPIs' },
     { id: 'risks', label: 'Risks' },
-    { id: 'status-updates', label: 'Status Updates' },
+    { id: 'status-updates', label: 'Status' },
     { id: 'governance', label: 'Governance' },
-    { id: 'team', label: 'Team' }
+    { id: 'team', label: 'Team' },
+    { id: 'summary', label: 'Summary' }
   ];
 }

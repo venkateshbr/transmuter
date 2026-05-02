@@ -11,32 +11,49 @@ import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink],
   template: `
-    <div class="h-screen flex flex-col bg-[var(--t-bg)] overflow-hidden">
+    <div class="h-screen flex flex-col bg-[var(--t-bg)] overflow-hidden font-sans">
       
       @if (session(); as s) {
-        <!-- Top Navigation / Header -->
-        <header class="h-16 border-b border-[var(--t-border)] bg-[var(--t-surface)] flex items-center justify-between px-8 shrink-0">
-          <div class="flex items-center gap-4">
-            <a [routerLink]="['/meetings', s.meeting_id]" class="btn-ghost p-2 rounded-full">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+        <!-- Premium Glass Header -->
+        <header class="h-20 border-b border-[var(--t-border)] bg-[var(--t-surface)]/80 backdrop-blur-md flex items-center justify-between px-10 shrink-0 z-50">
+          <div class="flex items-center gap-6">
+            <a [routerLink]="['/meetings', s.meeting_id]" class="w-10 h-10 flex items-center justify-center rounded-xl bg-[var(--t-surface-raised)] border border-[var(--t-border)] hover:border-[var(--t-accent)] transition-all">
+              <span class="material-icons text-[var(--t-text-secondary)]">arrow_back</span>
             </a>
             <div>
-              <h1 class="text-lg font-bold text-[var(--t-text-primary)] leading-tight">
-                {{ s.meetings?.name }}<span class="text-[var(--t-accent)]">.</span>
-              </h1>
-              <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">
-                Live Session • {{ s.session_date | date:'mediumDate' }}
+              <div class="flex items-center gap-3">
+                <h1 class="text-xl font-black text-[var(--t-text-primary)] tracking-tight">
+                  {{ s.meetings?.name }}
+                </h1>
+                <span class="badge badge-purple animate-pulse">LIVE</span>
+              </div>
+              <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)] mt-1 flex items-center gap-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-[var(--t-accent)]"></span>
+                {{ s.session_date | date:'EEEE, MMM d' }} • TRANSFORMATION STEERING
               </p>
             </div>
           </div>
 
-          <div class="flex items-center gap-8">
-            <div class="flex flex-col items-end">
-              <p class="text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">Duration</p>
-              <p class="text-sm font-mono font-bold text-[var(--t-accent)]">{{ duration() }}</p>
+          <div class="flex items-center gap-10">
+            <!-- Sentiment Gauge -->
+            <div class="hidden lg:flex items-center gap-4 px-6 border-x border-[var(--t-border)] h-full">
+               <div class="flex flex-col items-end">
+                 <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Sentiment</p>
+                 <p class="text-xs font-black text-green-500 uppercase">Constructive</p>
+               </div>
+               <div class="w-16 h-8 bg-[var(--t-border)] rounded-t-full relative overflow-hidden">
+                 <div class="absolute bottom-0 left-0 w-full h-full bg-gradient-to-r from-red-500 via-amber-500 to-green-500 opacity-30"></div>
+                 <div class="absolute bottom-0 left-1/2 -translate-x-1/2 w-0.5 h-full bg-[var(--t-accent)] origin-bottom rotate-[45deg] transition-transform duration-1000"></div>
+               </div>
             </div>
-            <button (click)="endSession()" class="btn-primary px-6 py-2 rounded-full text-xs font-bold shadow-lg shadow-purple-500/20 hover:scale-105 active:scale-95 transition-all">
-              End Session
+
+            <div class="flex flex-col items-end">
+              <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Session Clock</p>
+              <p class="text-2xl font-mono font-black text-[var(--t-accent)] tabular-nums">{{ duration() }}</p>
+            </div>
+            
+            <button (click)="endSession()" class="btn-primary px-8 py-3 rounded-2xl text-xs font-black shadow-xl shadow-purple-500/20 hover:scale-[1.02] active:scale-95 transition-all">
+              Complete Session
             </button>
           </div>
         </header>
@@ -44,89 +61,146 @@ import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
         <!-- Main Content Area -->
         <main class="flex-1 flex overflow-hidden">
           
-          <!-- Left: Agenda Sidecar -->
-          <aside class="w-80 border-r border-[var(--t-border)] flex flex-col shrink-0 bg-[var(--t-surface-raised)]/30">
-            <div class="p-6 border-b border-[var(--t-border)]">
-              <h3 class="text-xs font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Agenda</h3>
-            </div>
-            <div class="flex-1 overflow-y-auto p-4 space-y-2">
-              @for (item of s.agenda; track item.id; let i = $index) {
-                <div [class.bg-[var(--t-surface-raised)]]="activeAgendaIndex() === i"
-                     [class.border-[var(--t-accent)]]="activeAgendaIndex() === i"
-                     class="p-4 rounded-xl border border-[var(--t-border)] transition-all cursor-pointer group"
-                     (click)="activeAgendaIndex.set(i)">
-                  <div class="flex items-start gap-3">
-                    <span class="text-[10px] font-mono text-[var(--t-text-tertiary)] mt-0.5">{{ i + 1 }}</span>
-                    <p class="text-xs font-bold leading-relaxed text-[var(--t-text-primary)]">{{ item.text }}</p>
-                  </div>
+          <!-- Left: Agenda & AI Scribe -->
+          <aside class="w-80 border-r border-[var(--t-border)] flex flex-col shrink-0 bg-[var(--t-surface-raised)]/30 backdrop-blur-sm">
+            <div class="flex-1 overflow-y-auto p-6 space-y-8 custom-scrollbar">
+              
+              <!-- Agenda -->
+              <section class="space-y-4">
+                <h3 class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)] flex items-center gap-2">
+                  <span class="material-icons text-xs">list_alt</span>
+                  Agenda
+                </h3>
+                <div class="space-y-3">
+                  @for (item of s.agenda; track item.id; let i = $index) {
+                    <div [class.bg-[var(--t-accent-soft)]]="activeAgendaIndex() === i"
+                         [class.border-[var(--t-accent)]]="activeAgendaIndex() === i"
+                         class="p-4 rounded-2xl border border-[var(--t-border)] bg-[var(--t-surface)] transition-all cursor-pointer hover:border-[var(--t-accent)]/50 group"
+                         (click)="activeAgendaIndex.set(i)">
+                      <div class="flex items-start gap-3">
+                        <span class="text-[10px] font-black text-[var(--t-accent)] mt-0.5">{{ (i + 1).toString().padStart(2, '0') }}</span>
+                        <p class="text-[11px] font-bold leading-relaxed text-[var(--t-text-primary)]">{{ item.text }}</p>
+                      </div>
+                    </div>
+                  }
                 </div>
-              }
+              </section>
+
+              <section class="space-y-4 pt-8 border-t border-[var(--t-border)]">
+                <h3 class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)] flex items-center gap-2">
+                  <span class="material-icons text-xs">fact_check</span>
+                  Session Controls
+                </h3>
+                <div class="p-4 rounded-2xl border border-[var(--t-border)] bg-[var(--t-surface)]">
+                  <p class="text-xs font-medium leading-relaxed text-[var(--t-text-secondary)]">Decisions, risks, actions</p>
+                </div>
+              </section>
             </div>
           </aside>
 
-          <!-- Center: Live Notes -->
-          <section class="flex-1 flex flex-col min-w-0 bg-[var(--t-bg)]">
-            <div class="p-6 border-b border-[var(--t-border)] flex justify-between items-center bg-[var(--t-surface)]">
-              <div class="flex items-center gap-2">
-                <div class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                <h3 class="text-xs font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Meeting Notes</h3>
-              </div>
-              <span class="text-[10px] text-[var(--t-text-tertiary)] font-bold italic">{{ saveStatus() }}</span>
+          <!-- Center: Dynamic Notes Editor -->
+          <section class="flex-1 flex flex-col min-w-0 bg-[var(--t-bg)] relative">
+            <div class="absolute top-6 right-6 z-10 flex items-center gap-3">
+               <span class="text-[9px] font-bold uppercase text-[var(--t-text-tertiary)] italic">{{ saveStatus() }}</span>
+               <div class="w-2 h-2 rounded-full" [class.bg-green-500]="saveStatus().includes('saved')" [class.bg-amber-500]="saveStatus().includes('Saving')"></div>
             </div>
-            <div class="flex-1 p-8 overflow-y-auto">
-              <textarea 
-                [(ngModel)]="notes" 
-                (ngModelChange)="onNotesChange()"
-                placeholder="Start typing meeting notes here..."
-                class="w-full h-full bg-transparent border-none outline-none resize-none text-base leading-relaxed text-[var(--t-text-primary)] placeholder-[var(--t-text-tertiary)]/50 font-serif"
-              ></textarea>
+
+            <div class="flex-1 p-12 overflow-y-auto custom-scrollbar">
+              <div class="max-w-4xl mx-auto h-full">
+                <textarea 
+                  [(ngModel)]="notes" 
+                  (ngModelChange)="onNotesChange()"
+                  placeholder="Capture meeting minutes, decisions, and key discussion points..."
+                  class="w-full h-full bg-transparent border-none outline-none resize-none text-xl leading-loose text-[var(--t-text-primary)] placeholder-[var(--t-text-tertiary)]/30 font-medium font-serif"
+                ></textarea>
+              </div>
+            </div>
+
+            <!-- Bottom Actions Bar -->
+            <div class="h-16 border-t border-[var(--t-border)] bg-[var(--t-surface)]/50 backdrop-blur-sm flex items-center px-10 gap-6 shrink-0">
+	               <p class="text-[10px] font-bold text-[var(--t-text-tertiary)]">Session notes</p>
             </div>
           </section>
 
-          <!-- Right: Live Action Items -->
-          <aside class="w-96 border-l border-[var(--t-border)] flex flex-col shrink-0 bg-[var(--t-surface-raised)]/30">
-            <div class="p-6 border-b border-[var(--t-border)]">
-              <h3 class="text-xs font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Action Items</h3>
+          <!-- Right: Intelligent Action Center -->
+          <aside class="w-96 border-l border-[var(--t-border)] flex flex-col shrink-0 bg-[var(--t-surface-raised)]/30 backdrop-blur-sm">
+            <div class="p-6 border-b border-[var(--t-border)] flex justify-between items-center">
+              <h3 class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)] flex items-center gap-2">
+                <span class="material-icons text-xs">task_alt</span>
+                Action Center
+              </h3>
+              <span class="text-[10px] font-black px-2 py-0.5 rounded bg-[var(--t-accent-soft)] text-[var(--t-accent)]">
+                {{ actionItems().length }} TOTAL
+              </span>
             </div>
             
-            <!-- Quick Add -->
-            <div class="p-4 border-b border-[var(--t-border)] bg-[var(--t-surface)]">
-              <div class="relative">
-                <input 
-                  type="text" 
-                  [(ngModel)]="newActionItem"
-                  (keyup.enter)="addActionItem()"
-                  placeholder="Capture new action item..."
-                  class="w-full pl-4 pr-10 py-2.5 rounded-xl bg-[var(--t-bg-page)] border border-[var(--t-border)] text-xs focus:border-[var(--t-accent)] outline-none transition-all"
-                >
-                <button (click)="addActionItem()" class="absolute right-2 top-1.5 p-1 text-[var(--t-accent)] hover:bg-[var(--t-accent)]/10 rounded-lg transition-all">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-                </button>
-              </div>
-            </div>
-
             <!-- List -->
-            <div class="flex-1 overflow-y-auto p-4 space-y-3">
+            <div class="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
               @for (ai of actionItems(); track ai.id) {
-                <div class="card p-3 border-l-4 border-l-[var(--t-accent)] animate-slide-in">
-                  <p class="text-xs font-medium text-[var(--t-text-primary)] leading-relaxed">{{ ai.description }}</p>
-                  <div class="flex items-center justify-between mt-2">
-                    <span class="badge badge-purple text-[8px] uppercase tracking-tighter">NEW</span>
-                    <button class="text-[var(--t-text-tertiary)] hover:text-red-500">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
-                    </button>
+                <div class="card p-5 border-l-4 border-l-[var(--t-accent)] bg-[var(--t-surface)] animate-slide-in relative group/card">
+                  <div class="flex justify-between items-start mb-2">
+	                    <button
+                        (click)="toggleActionItem(ai)"
+                        class="text-[8px] font-black uppercase tracking-tighter px-2 py-0.5 rounded bg-[var(--t-surface-raised)] text-[var(--t-text-tertiary)] hover:text-[var(--t-accent)]"
+                        aria-label="Toggle action item status">
+	                      {{ ai.status }}
+	                    </button>
+	                    <button (click)="removeActionItem(ai.id)" class="opacity-0 group-hover/card:opacity-100 text-red-500 transition-opacity" aria-label="Delete action item">
+	                      <span class="material-icons text-xs">close</span>
+	                    </button>
+                  </div>
+                  <p class="text-xs font-bold text-[var(--t-text-primary)] leading-relaxed">{{ ai.description }}</p>
+                  <div class="mt-4 pt-4 border-t border-[var(--t-border)]/50 flex items-center justify-between">
+                     <div class="flex items-center gap-2">
+                        <div class="w-5 h-5 rounded-full bg-gradient-to-br from-[var(--t-accent)] to-[#a855f7] flex items-center justify-center text-[8px] text-white font-black">
+                          {{ (ai.owner_name || 'U').substring(0,1) }}
+                        </div>
+                        <span class="text-[9px] font-bold text-[var(--t-text-tertiary)]">{{ ai.owner_name || 'Unassigned' }}</span>
+                     </div>
+                     <span class="text-[8px] font-mono text-[var(--t-text-tertiary)]">Due ASAP</span>
                   </div>
                 </div>
               }
+
+              @if (actionItems().length === 0) {
+                <div class="py-12 text-center border-2 border-dashed border-[var(--t-border)] rounded-3xl opacity-40">
+                   <span class="material-icons text-3xl mb-2">add_task</span>
+                   <p class="text-[10px] font-bold uppercase tracking-widest">No actions captured</p>
+                </div>
+              }
+            </div>
+
+            <!-- Enhanced Quick Add -->
+            <div class="p-6 border-t border-[var(--t-border)] bg-[var(--t-surface)]">
+              <div class="relative group">
+                <textarea 
+                  [(ngModel)]="newActionItem"
+                  (keyup.enter)="addActionItem()"
+                  placeholder="Capture a new action item..."
+                  class="w-full pl-4 pr-12 py-3 rounded-2xl bg-[var(--t-bg-page)] border border-[var(--t-border)] text-xs focus:border-[var(--t-accent)] outline-none transition-all resize-none h-20"
+                ></textarea>
+                <button (click)="addActionItem()" 
+                        [disabled]="!newActionItem.trim()"
+                        aria-label="Add action item"
+                        class="absolute right-3 bottom-3 w-8 h-8 rounded-xl bg-[var(--t-accent)] text-white flex items-center justify-center shadow-lg shadow-purple-500/20 disabled:opacity-50 disabled:shadow-none hover:scale-105 active:scale-95 transition-all">
+                  <span class="material-icons text-sm">send</span>
+                </button>
+              </div>
             </div>
           </aside>
 
         </main>
       } @else {
-        <div class="flex-1 flex items-center justify-center">
-          <div class="flex flex-col items-center gap-4">
-            <div class="w-12 h-12 border-4 border-[var(--t-accent)] border-t-transparent rounded-full animate-spin"></div>
-            <p class="text-sm font-bold text-[var(--t-text-tertiary)] uppercase tracking-widest">Initializing Session...</p>
+        <div class="flex-1 flex items-center justify-center bg-[var(--t-bg)]">
+          <div class="flex flex-col items-center gap-6">
+            <div class="relative">
+              <div class="w-20 h-20 border-4 border-[var(--t-accent-soft)] rounded-full animate-pulse"></div>
+              <div class="absolute inset-0 w-20 h-20 border-4 border-t-[var(--t-accent)] rounded-full animate-spin"></div>
+            </div>
+            <div class="text-center">
+              <p class="text-xs font-black uppercase tracking-widest text-[var(--t-text-primary)]">Syncing Workspace</p>
+              <p class="text-[10px] font-bold text-[var(--t-text-tertiary)] mt-1">Initializing AI Agent Context...</p>
+            </div>
           </div>
         </div>
       }
@@ -137,12 +211,16 @@ import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
     :host { display: block; height: 100vh; }
     textarea::placeholder { opacity: 0.3; }
     .animate-slide-in {
-      animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      animation: slideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
     @keyframes slideIn {
-      from { transform: translateX(20px); opacity: 0; }
+      from { transform: translateX(30px); opacity: 0; }
       to { transform: translateX(0); opacity: 1; }
     }
+    .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: var(--t-border); border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: var(--t-accent); }
   `]
 })
 export class LiveSessionComponent implements OnInit, OnDestroy {
@@ -232,14 +310,25 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
     });
   }
 
+  removeActionItem(id: string) {
+    this.api.delete(`/action-items/${id}`).subscribe(() => {
+      this.actionItems.set(this.actionItems().filter(ai => ai.id !== id));
+    });
+  }
+
+  toggleActionItem(item: any) {
+    const status = item.status === 'completed' ? 'open' : 'completed';
+    this.api.put<any>(`/action-items/${item.id}`, { status }).subscribe(updated => {
+      this.actionItems.set(this.actionItems().map(ai => ai.id === item.id ? updated : ai));
+    });
+  }
+
   endSession() {
     const id = this.session()?.id;
     if (!id) return;
 
-    if (confirm('Are you sure you want to end this session?')) {
-      this.api.post(`/meetings/sessions/${id}/end`, {}).subscribe(() => {
-        this.router.navigate(['/meetings', this.session().meeting_id]);
-      });
-    }
+    this.api.post(`/meetings/sessions/${id}/end`, {}).subscribe(() => {
+      this.router.navigate(['/meetings', this.session().meeting_id]);
+    });
   }
 }

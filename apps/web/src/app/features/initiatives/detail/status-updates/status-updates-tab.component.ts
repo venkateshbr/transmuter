@@ -8,128 +8,160 @@ import { ApiService } from '../../../../core/services/api.service';
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-    <div class="space-y-8">
+    <div class="space-y-8 animate-fade-in">
       <!-- Header Actions -->
       <div class="flex justify-between items-center">
-        <h2 class="text-xl font-semibold text-[var(--t-text-primary)]">Status Updates</h2>
+        <div>
+          <h2 class="text-xl font-bold text-[var(--t-text-primary)]">Status Heartbeat<span class="text-[var(--t-accent)]">.</span></h2>
+          <p class="text-xs font-semibold uppercase tracking-wider text-[var(--t-text-secondary)]">Executive progress reporting & timeline</p>
+        </div>
         <button 
-          *ngIf="!draft() && !isEditing()" 
+          *ngIf="!isEditing()" 
           (click)="startNewUpdate()" 
-          class="btn-primary">
+          class="btn-primary flex items-center gap-2">
+          <span class="material-icons text-sm">add_task</span>
           Create Update
         </button>
       </div>
 
       <!-- Draft / Edit Form -->
-      <div *ngIf="isEditing()" class="card glass-panel border-l-4 border-[var(--t-primary)] p-6 animate-fade-in">
-        <h3 class="text-lg font-medium mb-4">{{ draft()?.id ? 'Edit Draft' : 'New Status Update' }}</h3>
-        
-        <div class="grid grid-cols-1 gap-6">
-          <!-- RAG Selection -->
-          <div>
-            <label class="block text-sm font-medium text-[var(--t-text-secondary)] mb-2">RAG Status</label>
-            <div class="flex gap-4">
-              <button 
-                (click)="setRag('green')"
-                [class.ring-2]="editForm.rag_status === 'green'"
-                class="flex-1 py-3 rounded-lg bg-green-500/10 border border-green-500/30 text-green-500 font-medium hover:bg-green-500/20 transition-all">
-                Green
-              </button>
-              <button 
-                (click)="setRag('amber')"
-                [class.ring-2]="editForm.rag_status === 'amber'"
-                class="flex-1 py-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-500 font-medium hover:bg-amber-500/20 transition-all">
-                Amber
-              </button>
-              <button 
-                (click)="setRag('red')"
-                [class.ring-2]="editForm.rag_status === 'red'"
-                class="flex-1 py-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-500 font-medium hover:bg-red-500/20 transition-all">
-                Red
-              </button>
-            </div>
+      @if (isEditing()) {
+        <div class="card glass-panel border-l-4 p-8 animate-in slide-in-from-top-4 duration-300"
+             [style.border-color]="editForm.rag_status === 'green' ? 'var(--t-green)' : (editForm.rag_status === 'amber' ? 'var(--t-amber)' : 'var(--t-red)')">
+          <div class="flex justify-between items-center mb-6">
+            <h3 class="text-lg font-bold">{{ draft()?.id ? 'Edit Draft Update' : 'New Status Report' }}</h3>
+            <span class="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded bg-[var(--t-surface-raised)]">Drafting Mode</span>
           </div>
-
-          <!-- Summary -->
-          <div>
-            <label class="block text-sm font-medium text-[var(--t-text-secondary)] mb-2">Executive Summary</label>
-            <textarea 
-              [(ngModel)]="editForm.summary"
-              rows="3" 
-              class="input-field w-full" 
-              placeholder="High-level status of the initiative..."></textarea>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          
+          <div class="grid grid-cols-1 gap-8">
+            <!-- RAG Selection -->
             <div>
-              <label class="block text-sm font-medium text-[var(--t-text-secondary)] mb-2">Key Achievements</label>
-              <textarea [(ngModel)]="editForm.achievements" rows="3" class="input-field w-full" placeholder="What went well?"></textarea>
+              <label class="block text-[10px] font-bold uppercase tracking-wider text-[var(--t-text-secondary)] mb-3">Initiative Health (RAG)</label>
+              <div class="flex gap-4">
+                @for (status of ['green', 'amber', 'red']; track status) {
+                  <button 
+                    (click)="setRag(status)"
+                    [class.ring-2]="editForm.rag_status === status"
+                    [class.ring-offset-2]="editForm.rag_status === status"
+                    [style.background]="status === 'green' ? 'var(--t-green)' : (status === 'amber' ? 'var(--t-amber)' : 'var(--t-red)')"
+                    class="flex-1 py-3 rounded-xl text-white font-bold uppercase text-[10px] tracking-widest shadow-sm hover:scale-[1.02] transition-all opacity-40"
+                    [class.!opacity-100]="editForm.rag_status === status">
+                    {{ status }}
+                  </button>
+                }
+              </div>
             </div>
+
+            <!-- Summary -->
             <div>
-              <label class="block text-sm font-medium text-[var(--t-text-secondary)] mb-2">Blocking Issues</label>
-              <textarea [(ngModel)]="editForm.issues" rows="3" class="input-field w-full" placeholder="Any blockers?"></textarea>
+              <label class="block text-[10px] font-bold uppercase tracking-wider text-[var(--t-text-secondary)] mb-2">Executive Summary</label>
+              <textarea 
+                [(ngModel)]="editForm.summary"
+                rows="3" 
+                class="input-field w-full text-base" 
+                placeholder="High-level status of the initiative..."></textarea>
             </div>
-          </div>
 
-          <div>
-            <label class="block text-sm font-medium text-[var(--t-text-secondary)] mb-2">Next Steps</label>
-            <textarea [(ngModel)]="editForm.next_steps" rows="2" class="input-field w-full" placeholder="Priorities for next week..."></textarea>
-          </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label class="block text-[10px] font-bold uppercase tracking-wider text-[var(--t-text-secondary)] mb-2">Key Achievements</label>
+                <textarea [(ngModel)]="editForm.achievements" rows="3" class="input-field w-full" placeholder="What significant milestones were reached?"></textarea>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold uppercase tracking-wider text-[var(--t-text-secondary)] mb-2">Blocking Issues</label>
+                <textarea [(ngModel)]="editForm.issues" rows="3" class="input-field w-full border-[var(--t-red)]/30" placeholder="Any blockers requiring attention?"></textarea>
+              </div>
+            </div>
 
-          <div class="flex justify-end gap-3 mt-4">
-            <button (click)="isEditing.set(false)" class="btn-ghost">Cancel</button>
-            <button (click)="saveDraft()" class="btn-secondary">Save Draft</button>
-            <button (click)="submitUpdate()" class="btn-primary px-8">Submit Final</button>
+            <div>
+              <label class="block text-[10px] font-bold uppercase tracking-wider text-[var(--t-text-secondary)] mb-2">Next Steps</label>
+              <textarea [(ngModel)]="editForm.next_steps" rows="2" class="input-field w-full" placeholder="Priorities for the upcoming period..."></textarea>
+            </div>
+
+            <div class="flex justify-end gap-3 mt-4 pt-6 border-t border-[var(--t-border)]">
+              <button (click)="isEditing.set(false)" class="btn-ghost">Discard</button>
+              <button (click)="saveDraft()" class="btn-secondary">Save as Draft</button>
+              <button (click)="submitUpdate()" class="btn-primary px-10">Submit Final Report</button>
+            </div>
           </div>
         </div>
-      </div>
+      }
 
       <!-- History Timeline -->
       <div class="space-y-6">
-        <h3 class="text-sm font-semibold text-[var(--t-text-tertiary)] uppercase tracking-wider">History</h3>
-        
-        <div *ngIf="loading()" class="text-center py-8 text-[var(--t-text-secondary)]">Loading history...</div>
-        
-        <div *ngIf="!loading() && history().length === 0" class="text-center py-12 card border-dashed">
-          <p class="text-[var(--t-text-secondary)]">No submitted updates yet.</p>
+        <div class="flex items-center gap-4">
+          <h3 class="text-[10px] font-bold text-[var(--t-text-tertiary)] uppercase tracking-widest shrink-0">Historical Timeline</h3>
+          <div class="h-px w-full bg-[var(--t-border)]"></div>
         </div>
-
-        <div class="relative pl-8 space-y-8 before:absolute before:left-3 before:top-2 before:bottom-2 before:w-px before:bg-[var(--t-border)]">
-          <div *ngFor="let update of history()" class="relative animate-fade-in">
-            <!-- Timeline Marker -->
-            <div class="absolute -left-8 mt-1.5 w-6 h-6 rounded-full border-4 border-[var(--t-bg-page)]"
-                 [class.bg-green-500]="update.rag_status === 'green'"
-                 [class.bg-amber-500]="update.rag_status === 'amber'"
-                 [class.bg-red-500]="update.rag_status === 'red'">
-            </div>
-
-            <div class="card p-5 hover-card">
-              <div class="flex justify-between items-start mb-4">
-                <div>
-                  <div class="flex items-center gap-2 mb-1">
-                    <span class="text-sm font-bold text-[var(--t-text-primary)]">{{ update.submitted_at | date:'mediumDate' }}</span>
-                    <span class="text-xs text-[var(--t-text-tertiary)]">• By {{ update.author_name }}</span>
-                  </div>
-                  <p class="text-[var(--t-text-secondary)] leading-relaxed">{{ update.summary }}</p>
-                </div>
-              </div>
-
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 pt-4 border-t border-[var(--t-border)] text-sm">
-                <div *ngIf="update.achievements">
-                  <span class="block font-semibold text-[var(--t-text-primary)] mb-1">Achievements</span>
-                  <span class="text-[var(--t-text-secondary)]">{{ update.achievements }}</span>
-                </div>
-                <div *ngIf="update.issues">
-                  <span class="block font-semibold text-[var(--t-text-primary)] mb-1">Issues</span>
-                  <span class="text-[var(--t-text-secondary)] text-red-500">{{ update.issues }}</span>
-                </div>
-                <div *ngIf="update.next_steps">
-                  <span class="block font-semibold text-[var(--t-text-primary)] mb-1">Next Steps</span>
-                  <span class="text-[var(--t-text-secondary)]">{{ update.next_steps }}</span>
-                </div>
-              </div>
-            </div>
+        
+        @if (loading()) {
+          <div class="space-y-6">
+            @for (i of [1,2]; track i) {
+              <div class="card animate-pulse h-32 bg-[var(--t-surface-raised)]"></div>
+            }
           </div>
+        }
+        
+        @if (!loading() && history().length === 0) {
+          <div class="text-center py-20 card border-dashed border-2 opacity-50">
+            <span class="material-icons text-4xl mb-2">history</span>
+            <p class="text-sm font-medium">No submitted updates yet.</p>
+          </div>
+        }
+
+        <div class="relative pl-10 space-y-10 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-[2px] before:bg-gradient-to-b before:from-[var(--t-accent)] before:to-transparent">
+          @for (update of history(); track update.id) {
+            <div class="relative animate-in slide-in-from-left-4 duration-500">
+              <!-- Timeline Marker -->
+              <div class="absolute -left-[41px] mt-1.5 w-6 h-6 rounded-full border-4 border-[var(--t-bg)] shadow-md flex items-center justify-center transition-transform hover:scale-125 z-10"
+                   [style.background]="update.rag_status === 'green' ? 'var(--t-green)' : (update.rag_status === 'amber' ? 'var(--t-amber)' : 'var(--t-red)')">
+                <span class="material-icons text-[10px] text-white">check</span>
+              </div>
+
+              <div class="card p-6 group hover:border-[var(--t-accent)] transition-all">
+                <div class="flex justify-between items-start mb-6">
+                  <div>
+                    <div class="flex items-center gap-3 mb-2">
+                      <span class="text-sm font-bold text-[var(--t-text-primary)]">{{ update.submitted_at | date:'MMMM d, y' }}</span>
+                      <span class="badge-purple text-[9px] font-bold uppercase tracking-tighter">Verified</span>
+                      <span class="text-[10px] font-bold text-[var(--t-text-tertiary)] uppercase tracking-widest">• By {{ update.author_name }}</span>
+                    </div>
+                    <p class="text-lg font-medium leading-relaxed text-[var(--t-text-primary)]">{{ update.summary }}</p>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mt-6 pt-6 border-t border-[var(--t-border)]">
+                  @if (update.achievements) {
+                    <div>
+                      <span class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-3">
+                        <span class="material-icons text-sm text-[var(--t-green)]">stars</span>
+                        Achievements
+                      </span>
+                      <p class="text-sm leading-relaxed text-[var(--t-text-secondary)]">{{ update.achievements }}</p>
+                    </div>
+                  }
+                  @if (update.issues) {
+                    <div>
+                      <span class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-3">
+                        <span class="material-icons text-sm text-[var(--t-red)]">error_outline</span>
+                        Blocking Issues
+                      </span>
+                      <p class="text-sm leading-relaxed text-[var(--t-red)] font-medium">{{ update.issues }}</p>
+                    </div>
+                  }
+                  @if (update.next_steps) {
+                    <div>
+                      <span class="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-3">
+                        <span class="material-icons text-sm text-[var(--t-accent)]">next_plan</span>
+                        Next Steps
+                      </span>
+                      <p class="text-sm leading-relaxed text-[var(--t-text-secondary)]">{{ update.next_steps }}</p>
+                    </div>
+                  }
+                </div>
+              </div>
+            </div>
+          }
         </div>
       </div>
     </div>

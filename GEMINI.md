@@ -1,7 +1,14 @@
 # Transmuter — Antigravity Coding Rules
 
+> [!NOTE]
+> For general project information and startup instructions, see [README.md](file:///Users/vramakrishnaiah/dev/transmuter/README.md).
+
+
 ## Domain Pack
 This project uses domain pack: `domain_packs/transmuter/pack.yaml`
+
+## Canonical SDLC
+The single canonical engineering process is `docs/team/SDLC_PROTOCOL.md`. Do not use or recreate duplicate SDLC documents.
 
 ## Stack
 - **Backend**: FastAPI 0.115+ / Python 3.12+ / PydanticAI / Procrastinate
@@ -12,6 +19,22 @@ This project uses domain pack: `domain_packs/transmuter/pack.yaml`
 - **Auth**: Supabase Auth (JWT)
 
 ## Non-Negotiable Rules
+
+### SDLC / Vishwa-First Execution
+- Vishwa is the default role for every unassigned request and must triage before implementation.
+- Before writing code, sync GitHub Issues, confirm or create the relevant issue, and move the active issue to `status:in-progress`.
+- Use existing issues when they match scope; create new issues only for missing work or blockers.
+- Follow the required order for feature work: Netra requirements → Vastu architecture → Chitra design → Karya/Rupa implementation → Vastu post-review → Aksha testing → Sthira deploy readiness → Vishwa final review/close.
+- Only Vishwa closes issues; only Aksha moves tested work to `status:in-review`.
+- Prahari review is mandatory for auth, JWT, RLS, agent tools, integrations, and security-sensitive changes.
+
+### Testing Standard
+- No smoke tests or mock-led acceptance tests count as completion.
+- Acceptance requires real API tests against a running API and deterministic seeded sample data.
+- Acceptance requires browser UI tests against the real Angular app and real API.
+- UI/API tests must cover real seeded users, initiatives, meetings, agenda items, attendees, sessions, action items, financial entries, and cost lines when those areas are touched.
+- Tests must reset or isolate sample data predictably; no test may depend on manually created browser state.
+- Existing unit or TestClient tests may remain as developer checks, but Aksha sign-off must include real sample-data UI/API verification.
 
 ### Money
 - `NUMERIC(15,4)` in PostgreSQL
@@ -62,6 +85,9 @@ This project uses domain pack: `domain_packs/transmuter/pack.yaml`
 - `apps/web/` — Angular 18 frontend
 - `team/DESIGN_SYSTEM.md` — Authoritative purple design system
 - `team/ARCHITECTURE.md` — System architecture
+- `start.sh` / `stop.sh` — Local development control
+- `backend.log` / `frontend.log` — Server logs
+
 
 ## GitHub Repo
 https://github.com/venkateshbr/transmuter

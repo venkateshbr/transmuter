@@ -2,14 +2,34 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from app.core.auth import CurrentUser, get_current_user
 from app.core.database import get_supabase_admin
+from app.domain.meetings import ActionItemListResponse, ActionItemUpdate
+from app.services.meeting import MeetingService
 
 router = APIRouter(prefix="/action-items", tags=["action-items"])
 
 @router.get("")
-async def list_action_items(current_user: Annotated[CurrentUser, Depends(get_current_user)]):
+async def list_action_items(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> ActionItemListResponse:
     """List all action items for the tenant."""
-    client = get_supabase_admin()
-    tid = str(current_user.tenant_id)
-    
-    res = client.table("action_items").select("*, users!action_items_assignee_id_fkey(display_name), initiatives(name, initiative_code)").eq("tenant_id", tid).execute()
-    return {"items": res.data or []}
+    svc = MeetingService(get_supabase_admin(), current_user.tenant_id)
+    return {"items": svc.list_action_items()}
+
+
+@router.put("/{action_item_id}")
+async def update_action_item(
+    action_item_id: str,
+    body: ActionItemUpdate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> dict:
+    svc = MeetingService(get_supabase_admin(), current_user.tenant_id)
+    return svc.update_action_item(action_item_id, body)
+
+
+@router.delete("/{action_item_id}", status_code=204)
+async def delete_action_item(
+    action_item_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> None:
+    svc = MeetingService(get_supabase_admin(), current_user.tenant_id)
+    svc.delete_action_item(action_item_id)

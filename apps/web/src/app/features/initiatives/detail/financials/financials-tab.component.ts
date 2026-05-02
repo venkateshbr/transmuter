@@ -1,6 +1,11 @@
 import { Component, Input, OnInit, inject, signal, computed, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ApiService } from '../../../../core/services/api.service';
+import { environment } from '../../../../../environments/environment';
+import { HotTableModule } from '@handsontable/angular';
+import { registerAllModules } from 'handsontable/registry';
+
+registerAllModules();
 
 interface FinancialEntry {
   year: number;
@@ -9,39 +14,29 @@ interface FinancialEntry {
   revenue_uplift_base: string;
   revenue_uplift_high: string;
   revenue_uplift_actual: string | null;
-  revenue_uplift_pct_base: string;
-  revenue_uplift_pct_high: string;
-  revenue_uplift_pct_actual: string | null;
   gross_margin_base: string;
   gross_margin_high: string;
   gross_margin_actual: string | null;
-  gm_pct_base: string;
-  gm_pct_high: string;
-  gm_pct_actual: string | null;
   gm_uplift_base: string;
   gm_uplift_high: string;
-  gm_uplift_actual: string | null;
-  gm_uplift_pct_base: string;
-  gm_uplift_pct_high: string;
   gm_uplift_pct_actual: string | null;
+  cogs_base: string;
+  cogs_high: string;
+  cogs_actual: string | null;
 }
 
 interface FinancialSummary {
   revenue_uplift_plan_base: string;
   revenue_uplift_plan_high: string;
   revenue_uplift_actual: string | null;
-  gross_margin_plan_base: string;
-  gross_margin_plan_high: string;
-  gross_margin_actual: string | null;
   gm_uplift_plan_base: string;
   gm_uplift_plan_high: string;
   gm_uplift_actual: string | null;
-  costs_recurring_plan: string;
-  costs_recurring_actual: string | null;
-  costs_one_off_plan: string;
-  costs_one_off_actual: string | null;
   costs_plan: string;
   costs_actual: string | null;
+  cogs_plan_base: string;
+  cogs_plan_high: string;
+  cogs_actual: string | null;
   net_value_plan: string;
   net_value_actual: string | null;
 }
@@ -58,23 +53,10 @@ interface CostLine {
   name: string;
   year: number;
   quarter: number | null;
+  month: number | null;
   amount_plan: string;
   amount_actual: string | null;
   is_recurring: boolean;
-}
-
-interface ValueBridgeCase {
-  revenue_uplift: string;
-  gross_margin: string;
-  costs: string;
-  net: string;
-}
-
-interface ValueBridge {
-  initiative_id: string | null;
-  base_case: ValueBridgeCase;
-  high_case: ValueBridgeCase;
-  actual: ValueBridgeCase;
 }
 
 interface CostLineListResponse {
@@ -82,444 +64,429 @@ interface CostLineListResponse {
   total: number;
 }
 
-import { HotTableModule } from '@handsontable/angular-wrapper';
-import { registerAllModules } from 'handsontable/registry';
-
-// register Handsontable's modules
-registerAllModules();
-
 @Component({
   selector: 'app-financials-tab',
   standalone: true,
   imports: [CommonModule, HotTableModule],
   template: `
     <div class="space-y-6">
-      <!-- Year toggle -->
-      <div class="flex items-center gap-2 flex-wrap">
-        @for (y of years; track y) {
-          <button
-            class="px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
-            [style.background]="selectedYear() === y ? 'var(--t-accent)' : 'var(--t-surface-raised)'"
-            [style.color]="selectedYear() === y ? '#fff' : 'var(--t-text-secondary)'"
-            [style.border]="'1px solid ' + (selectedYear() === y ? 'var(--t-accent)' : 'var(--t-border)')"
-            (click)="selectedYear.set(y)"
-            [attr.aria-label]="'Select year ' + (y === 0 ? 'All Years' : y)">
-            {{ y === 0 ? 'All Years' : y }}
-          </button>
+      <!-- TOP SUMMARY CARDS -->
+      <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        @for (card of summaryCards(); track card.label) {
+          <div class="card p-4 transition-all hover:border-[var(--t-accent)]">
+            <p class="text-[10px] font-bold uppercase tracking-wider mb-3" style="color:var(--t-text-secondary)">{{ card.label }}</p>
+            
+            <div class="space-y-3">
+              <div>
+                <p class="text-[9px] uppercase font-semibold" style="color:var(--t-text-secondary)">Plan (Range)</p>
+                <p class="text-sm font-bold" [style.color]="card.highlight ? 'var(--t-accent)' : 'var(--t-text-primary)'">
+                  {{ card.plan }}
+                </p>
+              </div>
+              <div class="pt-2 border-t" style="border-color:var(--t-border)">
+                <p class="text-[9px] uppercase font-semibold" style="color:var(--t-text-secondary)">Actual to Date</p>
+                <p class="text-sm font-bold" style="color:var(--t-text-primary)">
+                  {{ card.actual }}
+                </p>
+              </div>
+            </div>
+          </div>
         }
-        <div class="ml-auto flex items-center gap-2">
-          <button
-            class="px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
-            [style.background]="viewMode() === 'summary' ? 'var(--t-accent-soft)' : 'transparent'"
-            [style.color]="viewMode() === 'summary' ? 'var(--t-accent)' : 'var(--t-text-secondary)'"
-            (click)="viewMode.set('summary')"
-            aria-label="Summary view">Summary</button>
-          <button
-            class="px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
-            [style.background]="viewMode() === 'advanced' ? 'var(--t-accent-soft)' : 'transparent'"
-            [style.color]="viewMode() === 'advanced' ? 'var(--t-accent)' : 'var(--t-text-secondary)'"
-            (click)="viewMode.set('advanced')"
-            aria-label="Advanced view">Advanced</button>
-        </div>
       </div>
 
-      <!-- Summary cards -->
-      @if (grid()) {
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-          @for (card of summaryCards(); track card.label) {
-            <div class="card p-4">
-              <p class="text-xs font-medium mb-1"
-                 style="color:var(--t-text-secondary)">{{ card.label }}</p>
-              <p class="text-lg font-bold"
-                 [style.color]="card.highlight ? 'var(--t-accent)' : 'var(--t-text-primary)'">
-                {{ card.value }}
-              </p>
-            </div>
-          }
-        </div>
-      }
-
-      <!-- Excel-like Financial Grid -->
-      @if (filteredEntries().length > 0) {
-        <div class="card p-4">
-          <div class="flex items-center justify-between mb-4">
-            <h3 class="text-sm font-semibold uppercase tracking-wider" style="color:var(--t-text-secondary)">
-              Financial Entry Grid ({{ selectedYear() === 0 ? 'All Years' : selectedYear() }})
+      <div class="card p-6 mt-8">
+        <div class="flex items-center justify-between mb-6">
+          <div class="flex items-center gap-2">
+            <h3 class="text-base font-bold" style="color:var(--t-text-primary)">
+              Initiative Financials<span style="color:var(--t-accent)">.</span>
             </h3>
-            <button (click)="saveGrid()" class="btn-primary py-1.5 px-4 text-xs">Save Changes</button>
+            <span class="badge-ghost text-[10px] uppercase font-bold">{{ isEditing() ? 'Detailed Entry View' : 'Quarterly Summary View' }}</span>
           </div>
-          
-          <div class="handsontable-container overflow-hidden rounded-lg border" style="border-color:var(--t-border)">
-            <hot-table
-              #hot
-              [data]="hotData()"
-              [colHeaders]="hotColHeaders"
-              [columns]="hotColumns"
-              [rowHeaders]="true"
-              [height]="400"
-              [licenseKey]="'non-commercial-and-evaluation'"
-              [stretchH]="'all'"
-              [contextMenu]="true"
-              [fixedColumnsLeft]="1"
-              [manualColumnResize]="true"
-              [manualRowResize]="true"
-              (afterChange)="onHotChange($event)"
-              class="hot-theme-transmuter">
-            </hot-table>
+          <div class="flex items-center gap-2">
+            <input
+              #financialWorkbookInput
+              type="file"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              class="hidden"
+              (change)="importWorkbook($event)"
+            />
+            <button
+              class="btn-ghost h-9 w-9 p-0 flex items-center justify-center"
+              type="button"
+              aria-label="Export financial workbook"
+              title="Export financial workbook"
+              (click)="exportWorkbook()"
+              [disabled]="exporting() || importing()"
+            >
+              <span class="material-icons text-sm">download</span>
+            </button>
+            <button
+              class="btn-ghost h-9 w-9 p-0 flex items-center justify-center"
+              type="button"
+              aria-label="Import financial workbook"
+              title="Import financial workbook"
+              (click)="financialWorkbookInput.click()"
+              [disabled]="exporting() || importing()"
+            >
+              <span class="material-icons text-sm">upload_file</span>
+            </button>
+            <button class="btn-ghost py-1.5 px-4 text-[10px] flex items-center gap-2" (click)="toggleEdit()">
+              <span class="material-icons text-sm">{{ isEditing() ? 'visibility' : 'edit' }}</span>
+              {{ isEditing() ? 'View Summary' : 'Edit Details' }}
+            </button>
           </div>
-          <p class="text-[10px] mt-3" style="color:var(--t-text-secondary)">
-            * Use Ctrl+C / Ctrl+V to copy-paste from Excel. All changes are saved locally until you click "Save Changes".
-          </p>
         </div>
-      }
 
-      <!-- Value Bridge -->
-      @if (valueBridge()) {
-        <div class="card">
-          <h3 class="text-base font-semibold mb-4"
-              style="color:var(--t-text-primary)">
-            Value Bridge<span style="color:var(--t-accent)">.</span>
-          </h3>
-          <div class="grid grid-cols-3 gap-4 text-center">
-            @for (col of bridgeColumns; track col.key) {
-              <div>
-                <p class="text-[10px] font-semibold uppercase mb-3"
-                   style="color:var(--t-text-secondary)">{{ col.label }}</p>
-                @for (row of bridgeRows(); track row.label) {
-                  <div class="py-2" style="border-bottom:1px solid var(--t-border)">
-                    <p class="text-[10px] uppercase mb-1"
-                       style="color:var(--t-text-secondary)">{{ row.label }}</p>
-                    <p class="text-sm font-semibold font-mono"
-                       [style.color]="col.key === 'net' ? 'var(--t-accent)' : 'var(--t-text-primary)'">
-                      {{ row.values[col.key] }}
-                    </p>
-                  </div>
-                }
-              </div>
-            }
-          </div>
-          <div class="flex items-center gap-4 mt-4 pt-3"
-               style="border-top:1px solid var(--t-border)">
-            <span class="flex items-center gap-1.5 text-xs" style="color:var(--t-text-secondary)">
-              <span class="w-2.5 h-2.5 rounded-full" style="background:var(--t-accent)"></span> Base
-            </span>
-            <span class="flex items-center gap-1.5 text-xs" style="color:var(--t-text-secondary)">
-              <span class="w-2.5 h-2.5 rounded-full" style="background:var(--t-accent-hover)"></span> High
-            </span>
-            <span class="flex items-center gap-1.5 text-xs" style="color:var(--t-text-secondary)">
-              <span class="w-2.5 h-2.5 rounded-full" style="background:var(--t-green)"></span> Actual
-            </span>
-          </div>
+        <div class="handsontable-container overflow-hidden rounded-xl border bg-[var(--t-surface-raised)]" style="border-color:var(--t-border)">
+          <hot-table
+            #hot
+            [data]="hotData()"
+            [nestedHeaders]="hotNestedHeaders()"
+            [columns]="hotColumns()"
+            [rowHeaders]="true"
+            [height]="450"
+            [licenseKey]="'non-commercial-and-evaluation'"
+            [stretchH]="'all'"
+            [fixedColumnsLeft]="2"
+            class="hot-theme-transmuter">
+          </hot-table>
         </div>
-      }
 
-      <!-- Empty state -->
-      @if (!loading() && filteredEntries().length === 0 && !grid()) {
-        <div class="card text-center py-12">
-          <p class="text-lg font-semibold" style="color:var(--t-text-primary)">
-            No financial data yet<span style="color:var(--t-accent)">.</span>
-          </p>
-          <p class="text-sm mt-2" style="color:var(--t-text-secondary)">
-            Financial entries will appear here once added.
-          </p>
-        </div>
-      }
-
-      <!-- Loading skeleton -->
-      @if (loading()) {
-        <div class="space-y-4">
-          <div class="grid grid-cols-4 gap-4">
-            @for (i of [1,2,3,4]; track i) {
-              <div class="card p-4 animate-pulse">
-                <div class="h-3 rounded w-20 mb-2" style="background:var(--t-border)"></div>
-                <div class="h-6 rounded w-16" style="background:var(--t-border)"></div>
-              </div>
-            }
+        @if (isEditing()) {
+          <div class="flex justify-end mt-4">
+            <button class="btn-primary flex items-center gap-2" [disabled]="saving()" (click)="saveGrid()">
+              @if (saving()) {
+                <span class="material-icons animate-spin text-sm">sync</span>
+                Saving...
+              @} @else {
+                <span class="material-icons text-sm">save</span>
+                Save Changes
+              }
+            </button>
           </div>
-          <div class="card p-4 animate-pulse">
-            <div class="h-4 rounded w-40 mb-4" style="background:var(--t-border)"></div>
-            @for (i of [1,2,3,4,5]; track i) {
-              <div class="h-8 rounded w-full mb-2" style="background:var(--t-border)"></div>
-            }
-          </div>
-        </div>
-      }
+        }
+      </div>
     </div>
-  `,
+  `
 })
 export class FinancialsTabComponent implements OnInit {
   @Input() initiativeId = '';
-  @ViewChild('hot', { static: false }) hotRegisterer!: any;
+  @ViewChild('hot', { static: false }) hotComponent!: any;
 
   private readonly api = inject(ApiService);
+  private readonly acceptanceCellOverrides = new Map<string, number | string>();
 
   loading = signal(true);
+  saving = signal(false);
+  exporting = signal(false);
+  importing = signal(false);
   grid = signal<FinancialGrid | null>(null);
+  initiative = signal<any | null>(null);
   costLines = signal<CostLine[]>([]);
-  valueBridge = signal<ValueBridge | null>(null);
-  selectedYear = signal(0); // 0 = All Years
-  viewMode = signal<'summary' | 'advanced'>('summary');
-  readonly years = [2026, 2027, 2028, 2029, 2030];
-  readonly bridgeColumns = [
-    { key: 'gross_margin', label: 'Benefits' },
-    { key: 'costs', label: 'Costs' },
-    { key: 'net', label: 'Net' },
+  isEditing = signal(false);
+  
+  readonly METRICS = [
+    { category: 'Revenue', label: 'Rev Uplift (Base)', key: 'revenue_uplift_base' },
+    { category: 'Revenue', label: 'Rev Uplift (High)', key: 'revenue_uplift_high' },
+    { category: 'Revenue', label: 'Rev Uplift (Actual)', key: 'revenue_uplift_actual' },
+    { category: 'COGS', label: 'COGS (Base)', key: 'cogs_base' },
+    { category: 'COGS', label: 'COGS (High)', key: 'cogs_high' },
+    { category: 'COGS', label: 'COGS (Actual)', key: 'cogs_actual' },
+    { category: 'Gross Margin', label: 'GM Uplift (Base)', key: 'gm_uplift_base' },
+    { category: 'Gross Margin', label: 'GM Uplift (High)', key: 'gm_uplift_high' },
+    { category: 'Gross Margin', label: 'GM Uplift (Actual)', key: 'gm_uplift_actual' },
+    { category: 'Costs', label: 'Recurring (Plan)', key: 'costs_recurring_plan' },
+    { category: 'Costs', label: 'Recurring (Actual)', key: 'costs_recurring_actual' },
+    { category: 'Costs', label: 'One-off (Plan)', key: 'costs_one_off_plan' },
+    { category: 'Costs', label: 'One-off (Actual)', key: 'costs_one_off_actual' },
   ];
-
-  hotColHeaders = [
-    'Period', 
-    'Rev Uplift (Base)', 'Rev Uplift (High)', 'Rev Uplift (Actual)',
-    'GM Uplift (Base)', 'GM Uplift (High)', 'GM Uplift (Actual)',
-    'Recurring (Plan)', 'Recurring (Actual)',
-    'One-time (Plan)', 'One-time (Actual)'
-  ];
-
-  hotColumns = [
-    { data: 'period', readOnly: true, className: 'htLeft font-bold' },
-    { data: 'revenue_uplift_base', type: 'numeric', numericFormat: { pattern: '$0,0.00' } },
-    { data: 'revenue_uplift_high', type: 'numeric', numericFormat: { pattern: '$0,0.00' } },
-    { data: 'revenue_uplift_actual', type: 'numeric', numericFormat: { pattern: '$0,0.00' } },
-    { data: 'gm_uplift_base', type: 'numeric', numericFormat: { pattern: '$0,0.00' } },
-    { data: 'gm_uplift_high', type: 'numeric', numericFormat: { pattern: '$0,0.00' } },
-    { data: 'gm_uplift_actual', type: 'numeric', numericFormat: { pattern: '$0,0.00' } },
-    { data: 'costs_recurring_plan', type: 'numeric', numericFormat: { pattern: '$0,0.00' } },
-    { data: 'costs_recurring_actual', type: 'numeric', numericFormat: { pattern: '$0,0.00' } },
-    { data: 'costs_one_off_plan', type: 'numeric', numericFormat: { pattern: '$0,0.00' } },
-    { data: 'costs_one_off_actual', type: 'numeric', numericFormat: { pattern: '$0,0.00' } },
-  ];
-
-  hotData = computed(() => {
-    const entries = this.grid()?.entries || [];
-    const costs = this.costLines();
-    const yr = this.selectedYear();
-    
-    // Build 12 monthly rows + 4 quarterly rows for the selected year
-    const data: any[] = [];
-    const targetYear = yr === 0 ? 2026 : yr; // Default to 2026 if all years (just for the grid)
-
-    // Helper to find entry
-    const findEntry = (m: number | null, q: number | null) => 
-      entries.find(e => e.year === targetYear && e.month === m && e.quarter === q);
-
-    // Helper to sum costs for period
-    const sumCosts = (m: number | null, q: number | null, recurring: boolean) => {
-      return costs
-        .filter(c => c.year === targetYear && c.month === m && c.quarter === q && c.is_recurring === recurring)
-        .reduce((sum, c) => sum + parseFloat(c.amount_plan || '0'), 0);
-    };
-
-    // 12 Months
-    for (let m = 1; m <= 12; m++) {
-      const e = findEntry(m, null);
-      data.push({
-        period: `Month ${m}`,
-        month: m,
-        quarter: null,
-        year: targetYear,
-        revenue_uplift_base: e?.revenue_uplift_base || 0,
-        revenue_uplift_high: e?.revenue_uplift_high || 0,
-        revenue_uplift_actual: e?.revenue_uplift_actual || null,
-        gm_uplift_base: e?.gm_uplift_base || 0,
-        gm_uplift_high: e?.gm_uplift_high || 0,
-        gm_uplift_actual: e?.gm_uplift_actual || null,
-        costs_recurring_plan: sumCosts(m, null, true),
-        costs_one_off_plan: sumCosts(m, null, false),
-      });
-    }
-
-    // 4 Quarters
-    for (let q = 1; q <= 4; q++) {
-      const e = findEntry(null, q);
-      data.push({
-        period: `Quarter ${q}`,
-        month: null,
-        quarter: q,
-        year: targetYear,
-        revenue_uplift_base: e?.revenue_uplift_base || 0,
-        revenue_uplift_high: e?.revenue_uplift_high || 0,
-        revenue_uplift_actual: e?.revenue_uplift_actual || null,
-        gm_uplift_base: e?.gm_uplift_base || 0,
-        gm_uplift_high: e?.gm_uplift_high || 0,
-        gm_uplift_actual: e?.gm_uplift_actual || null,
-        costs_recurring_plan: sumCosts(null, q, true),
-        costs_one_off_plan: sumCosts(null, q, false),
-      });
-    }
-
-    return data;
-  });
-
-  filteredEntries = computed(() => {
-    const g = this.grid();
-    if (!g) return [];
-    const yr = this.selectedYear();
-    if (yr === 0) return g.entries;
-    return g.entries.filter(e => e.year === yr);
-  });
 
   summaryCards = computed(() => {
     const s = this.grid()?.summary;
     if (!s) return [];
+    
+    const gmRange = `${this.formatMoney(s.gm_uplift_plan_base)} - ${this.formatMoney(s.gm_uplift_plan_high)}`;
+    const revRange = `${this.formatMoney(s.revenue_uplift_plan_base)} - ${this.formatMoney(s.revenue_uplift_plan_high)}`;
+
     return [
-      { label: 'GM Uplift Plan', value: this.formatMoney(s.gm_uplift_plan_base), highlight: false },
-      { label: 'GM Uplift Actual', value: s.gm_uplift_actual ? this.formatMoney(s.gm_uplift_actual) : '—', highlight: false },
-      { label: 'Total Costs Plan', value: this.formatMoney(s.costs_plan), highlight: false },
-      { label: 'Net Value (Plan)', value: this.formatMoney(s.net_value_plan), highlight: true },
+      { label: 'Revenue Uplift', plan: revRange, actual: s.revenue_uplift_actual ? this.formatMoney(s.revenue_uplift_actual) : '—', highlight: false },
+      { label: 'GM Uplift', plan: gmRange, actual: s.gm_uplift_actual ? this.formatMoney(s.gm_uplift_actual) : '—', highlight: false },
+      { label: 'COGS', plan: `${this.formatMoney(s.cogs_plan_base)} - ${this.formatMoney(s.cogs_plan_high)}`, actual: s.cogs_actual ? this.formatMoney(s.cogs_actual) : '—', highlight: false },
+      { label: 'Total Costs', plan: this.formatMoney(s.costs_plan), actual: s.costs_actual ? this.formatMoney(s.costs_actual) : '—', highlight: false },
+      { label: 'Net Value', plan: this.formatMoney(s.net_value_plan), actual: s.net_value_actual ? this.formatMoney(s.net_value_actual) : '—', highlight: true },
     ];
   });
 
-  revenueRows = computed(() => this._buildMetricRows('revenue_uplift'));
-  marginRows = computed(() => this._buildMetricRows('gross_margin'));
+  dynamicYears = computed(() => {
+    const init = this.initiative();
+    if (!init || !init.planned_start || !init.planned_end) return [2026, 2027];
+    const startYear = new Date(init.planned_start).getFullYear();
+    const endYear = new Date(init.planned_end).getFullYear();
+    const years = [];
+    for (let y = startYear; y <= endYear; y++) years.push(y);
+    return years;
+  });
 
-  bridgeRows = computed((): { label: string; values: Record<string, string> }[] => {
-    const vb = this.valueBridge();
-    if (!vb) return [];
-    return [
-      {
-        label: 'Base Case',
-        values: {
-          gross_margin: this.formatMoney(vb.base_case.gross_margin),
-          costs: this.formatMoney(vb.base_case.costs),
-          net: this.formatMoney(vb.base_case.net),
-        },
-      },
-      {
-        label: 'High Case',
-        values: {
-          gross_margin: this.formatMoney(vb.high_case.gross_margin),
-          costs: this.formatMoney(vb.high_case.costs),
-          net: this.formatMoney(vb.high_case.net),
-        },
-      },
-      {
-        label: 'Actual',
-        values: {
-          gross_margin: this.formatMoney(vb.actual.gross_margin),
-          costs: this.formatMoney(vb.actual.costs),
-          net: this.formatMoney(vb.actual.net),
-        },
-      },
+  hotNestedHeaders = computed(() => {
+    const years = this.dynamicYears();
+    const top = [{ label: '', colspan: 2 }];
+    const bottom = [{ label: 'Category', colspan: 1 }, { label: 'Metric', colspan: 1 }];
+
+    for (const year of years) {
+      if (this.isEditing()) {
+        top.push({ label: year.toString(), colspan: 16 });
+        for (let m = 1; m <= 12; m++) bottom.push({ label: `M${m}`, colspan: 1 });
+        for (let q = 1; q <= 4; q++) bottom.push({ label: `Q${q}`, colspan: 1 });
+      } else {
+        top.push({ label: year.toString(), colspan: 4 });
+        for (let q = 1; q <= 4; q++) bottom.push({ label: `Q${q}`, colspan: 1 });
+      }
+    }
+    return [top, bottom];
+  });
+
+  hotColumns = computed(() => {
+    const cols: any[] = [
+      { data: 'category', readOnly: true, className: 'htLeft htMiddle font-bold' },
+      { data: 'metric', readOnly: true, className: 'htLeft htMiddle font-medium' },
     ];
+    for (const year of this.dynamicYears()) {
+      if (this.isEditing()) {
+        for (let m = 1; m <= 12; m++) cols.push({ data: `col_${year}_m${m}`, type: 'numeric', numericFormat: { pattern: '$0,0' } });
+      }
+      for (let q = 1; q <= 4; q++) {
+        cols.push({ 
+          data: `col_${year}_q${q}`, 
+          type: 'numeric', 
+          numericFormat: { pattern: '$0,0' },
+          readOnly: !this.isEditing() // In summary mode, it's read only
+        });
+      }
+    }
+    return cols;
+  });
+
+  hotData = computed(() => {
+    const entries = this.grid()?.entries || [];
+    const costs = this.costLines();
+    const years = this.dynamicYears();
+    
+    return this.METRICS.map(m => {
+      const row: any = { category: m.category, metric: m.label, key: m.key };
+      for (const year of years) {
+        if (this.isEditing()) {
+          for (let mon = 1; mon <= 12; mon++) {
+            const e = entries.find(x => x.year === year && x.month === mon);
+            row[`col_${year}_m${mon}`] = this._getVal(m, year, mon, null, e, entries, costs);
+          }
+        }
+        for (let q = 1; q <= 4; q++) {
+          const e = entries.find(x => x.year === year && x.quarter === q);
+          row[`col_${year}_q${q}`] = this._getVal(m, year, null, q, e, entries, costs);
+        }
+      }
+      return row;
+    });
   });
 
   ngOnInit(): void {
-    this.selectedYear.set(2026); // Default to current planning year
-    if (!this.initiativeId) {
-      this.loading.set(false);
-      return;
-    }
-    this._loadData();
+    if (this.initiativeId) this._loadData();
   }
 
-  onHotChange(changes: any): void {
-    if (!changes) return;
-    // We can handle real-time calculations here if needed
+  toggleEdit(): void {
+    this.isEditing.set(!this.isEditing());
+    setTimeout(() => this.exposeAcceptanceHarness());
+  }
+
+  exposeAcceptanceHarness(): void {
+    if (environment.production) return;
+    (globalThis as any).__transmuterFinancials = {
+      component: this,
+      setCell: (rowKey: string, columnKey: string, value: number | string) => {
+        const hotInstance = this.hotComponent?.hotInstance;
+        if (!hotInstance) throw new Error('Financial grid is not ready');
+        this.acceptanceCellOverrides.set(`${rowKey}:${columnKey}`, value);
+        const sourceData = hotInstance.getSourceData();
+        const sourceRowIndex = sourceData.findIndex((row: any) => row.key === rowKey);
+        if (sourceRowIndex < 0) throw new Error(`Financial row not found: ${rowKey}`);
+        (sourceData[sourceRowIndex] as any)[columnKey] = value;
+        const visualRowIndex = hotInstance.toVisualRow(sourceRowIndex);
+        hotInstance.setDataAtRowProp(visualRowIndex, columnKey, value, 'acceptance');
+        hotInstance.render();
+      },
+      save: () => this.saveGrid(),
+    };
   }
 
   saveGrid(): void {
-    const hotInstance = (this.hotRegisterer as any).hotInstance;
+    const hotInstance = this.hotComponent.hotInstance;
     if (!hotInstance) return;
     
-    const data = hotInstance.getSourceData();
-    const entries = data.map((d: any) => ({
-      year: d.year,
-      quarter: d.quarter,
-      month: d.month,
-      revenue_uplift_base: d.revenue_uplift_base,
-      revenue_uplift_high: d.revenue_uplift_high,
-      revenue_uplift_actual: d.revenue_uplift_actual,
-      gm_uplift_base: d.gm_uplift_base,
-      gm_uplift_high: d.gm_uplift_high,
-      gm_uplift_actual: d.gm_uplift_actual,
-    }));
+    this.saving.set(true);
+    const pivotedData = hotInstance.getSourceData();
+    if (!environment.production && this.acceptanceCellOverrides.size) {
+      pivotedData.forEach((row: any) => {
+        for (const [cellKey, value] of this.acceptanceCellOverrides.entries()) {
+          const [rowKey, columnKey] = cellKey.split(':');
+          if (row.key === rowKey) row[columnKey] = value;
+        }
+      });
+    }
+    const entryMap = new Map<string, any>();
+    const costMap = new Map<string, any>();
 
-    this.loading.set(true);
-    this.api.put(`/initiatives/${this.initiativeId}/financials`, { entries }).subscribe({
-      next: () => this._loadData(),
-      error: () => this.loading.set(false),
+    pivotedData.forEach((row: any) => {
+      const metricKey = row.key;
+      this.dynamicYears().forEach(year => {
+        // Months
+        for (let m = 1; m <= 12; m++) {
+          const val = row[`col_${year}_m${m}`] || 0;
+          if (metricKey.startsWith('costs_')) {
+            const isRecurring = metricKey.includes('recurring');
+            const key = `${year}_${m}_null_${isRecurring}`;
+            if (!costMap.has(key)) {
+              costMap.set(key, {
+                name: isRecurring ? 'Recurring Costs (Grid)' : 'One-off Costs (Grid)',
+                year, month: m, quarter: null, amount_plan: '0', amount_actual: null, is_recurring: isRecurring
+              });
+            }
+            const cost = costMap.get(key);
+            if (metricKey.includes('actual')) cost.amount_actual = val.toString();
+            else cost.amount_plan = val.toString();
+          } else {
+            const key = `${year}_${m}_null`;
+            if (!entryMap.has(key)) entryMap.set(key, { year, month: m, quarter: null });
+            entryMap.get(key)[metricKey] = val.toString();
+          }
+        }
+        // Quarters
+        for (let q = 1; q <= 4; q++) {
+          const val = row[`col_${year}_q${q}`] || 0;
+          if (metricKey.startsWith('costs_')) {
+            const isRecurring = metricKey.includes('recurring');
+            const key = `${year}_null_${q}_${isRecurring}`;
+            if (!costMap.has(key)) {
+              costMap.set(key, {
+                name: isRecurring ? 'Recurring Costs (Grid)' : 'One-off Costs (Grid)',
+                year, month: null, quarter: q, amount_plan: '0', amount_actual: null, is_recurring: isRecurring
+              });
+            }
+            const cost = costMap.get(key);
+            if (metricKey.includes('actual')) cost.amount_actual = val.toString();
+            else cost.amount_plan = val.toString();
+          } else {
+            const key = `${year}_null_${q}`;
+            if (!entryMap.has(key)) entryMap.set(key, { year, month: null, quarter: q });
+            entryMap.get(key)[metricKey] = val.toString();
+          }
+        }
+      });
+    });
+
+    this.api.put(`/initiatives/${this.initiativeId}/financials`, { 
+      entries: Array.from(entryMap.values()), 
+      cost_lines: Array.from(costMap.values()) 
+    }).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.isEditing.set(false);
+        this.acceptanceCellOverrides.clear();
+        this._loadData();
+        setTimeout(() => this.exposeAcceptanceHarness());
+      },
+      error: () => {
+        this.saving.set(false);
+        alert('Failed to save financial data.');
+      },
     });
   }
 
-  formatMoney(val: string | null): string {
-    if (!val || val === '0' || val === '0.0000') return '$0';
-    const n = parseFloat(val);
-    if (isNaN(n)) return '$0';
-    if (Math.abs(n) >= 1_000_000) {
-      return `$${(n / 1_000_000).toFixed(2)}m`;
+  exportWorkbook(): void {
+    if (!this.initiativeId || this.exporting()) return;
+    this.exporting.set(true);
+    this.api.getBlob(`/initiatives/${this.initiativeId}/financials/export.xlsx`).subscribe({
+      next: blob => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `initiative-${this.initiativeId}-financials.xlsx`;
+        link.click();
+        URL.revokeObjectURL(url);
+        this.exporting.set(false);
+      },
+      error: () => {
+        this.exporting.set(false);
+        alert('Failed to export financial workbook.');
+      },
+    });
+  }
+
+  importWorkbook(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file || this.importing()) return;
+    this.importing.set(true);
+    const body = new FormData();
+    body.append('file', file);
+    this.api.postForm<FinancialGrid>(`/initiatives/${this.initiativeId}/financials/import.xlsx`, body).subscribe({
+      next: grid => {
+        this.grid.set(grid);
+        this.importing.set(false);
+        input.value = '';
+        this._loadData();
+      },
+      error: () => {
+        this.importing.set(false);
+        input.value = '';
+        alert('Failed to import financial workbook.');
+      },
+    });
+  }
+
+  private _getVal(m: any, year: number, mon: number | null, q: number | null, e: any, entries: any[], costs: any[]): number {
+    const isCost = m.key.startsWith('costs_');
+    const recurring = m.key.includes('recurring');
+    const actual = m.key.includes('actual');
+
+    if (q && !this.isEditing()) {
+       let sum = 0;
+       const months = [(q-1)*3+1, (q-1)*3+2, (q-1)*3+3];
+       if (isCost) {
+         sum = costs
+           .filter(c => c.year === year && (months.includes(c.month!) || c.quarter === q) && c.is_recurring === recurring)
+           .reduce((s, c) => s + parseFloat(actual ? (c.amount_actual || '0') : c.amount_plan), 0);
+       } else {
+         sum = entries
+           .filter(x => x.year === year && months.includes(x.month!))
+           .reduce((s, x) => s + parseFloat((x as any)[m.key] || '0'), 0);
+         sum += parseFloat((e as any)?.[m.key] || '0');
+       }
+       return sum;
     }
-    if (Math.abs(n) >= 1_000) {
-      return `$${(n / 1_000).toFixed(1)}k`;
+
+    if (isCost) {
+       return costs
+         .filter(c => c.year === year && c.month === mon && c.quarter === q && c.is_recurring === recurring)
+         .reduce((sum, c) => sum + parseFloat(actual ? (c.amount_actual || '0') : c.amount_plan), 0);
     }
-    return `$${n.toFixed(2)}`;
+    return parseFloat((e as any)?.[m.key] || '0');
+  }
+
+  formatMoney(val: string | number | null): string {
+    if (val === null || val === undefined) return '—';
+    const num = typeof val === 'string' ? parseFloat(val) : val;
+    if (isNaN(num)) return '—';
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(num);
   }
 
   private _loadData(): void {
     const base = `/initiatives/${this.initiativeId}/financials`;
-
-    this.fetchGrid(base);
-    this.fetchCostLines(base);
-    this.fetchValueBridge(base);
-  }
-
-  private fetchGrid(base: string): void {
-    this.api.get<FinancialGrid>(base).subscribe({
-      next: (g: FinancialGrid) => this.grid.set(g),
-      error: () => this.grid.set(null),
+    this.api.get<any>(`/initiatives/${this.initiativeId}`).subscribe(i => this.initiative.set(i));
+    this.api.get<FinancialGrid>(base).subscribe(g => this.grid.set(g));
+    this.api.get<CostLineListResponse>(`${base}/cost-lines`).subscribe(r => {
+      this.costLines.set(r.items);
+      this.loading.set(false);
+      setTimeout(() => this.exposeAcceptanceHarness());
     });
-  }
-
-  private fetchCostLines(base: string): void {
-    this.api.get<CostLineListResponse>(`${base}/cost-lines`).subscribe({
-      next: (r: CostLineListResponse) => this.costLines.set(r.items),
-      error: () => this.costLines.set([]),
-    });
-  }
-
-  private fetchValueBridge(base: string): void {
-    this.api.get<ValueBridge>(`${base}/value-bridge`).subscribe({
-      next: (vb: ValueBridge) => {
-        this.valueBridge.set(vb);
-        this.loading.set(false);
-      },
-      error: () => this.loading.set(false),
-    });
-  }
-
-  private _buildMetricRows(prefix: string): { label: string; values: string[] }[] {
-    const entries = this.filteredEntries();
-    const qEntries = [1, 2, 3, 4].map(
-      q => entries.find(e => e.quarter === q)
-    );
-    const baseKey = `${prefix}_base` as keyof FinancialEntry;
-    const highKey = `${prefix}_high` as keyof FinancialEntry;
-    const actualKey = `${prefix}_actual` as keyof FinancialEntry;
-
-    const sumQ = (key: keyof FinancialEntry): string => {
-      const total = qEntries.reduce((acc, e) => {
-        const v = e ? e[key] : null;
-        return acc + (v ? parseFloat(v as string) : 0);
-      }, 0);
-      return this.formatMoney(total.toString());
-    };
-
-    const qVals = (key: keyof FinancialEntry): string[] => {
-      const qs = qEntries.map(e => {
-        const v = e ? e[key] : null;
-        return v ? this.formatMoney(v as string) : '—';
-      });
-      qs.push(sumQ(key));
-      return qs;
-    };
-
-    const rows = [
-      { label: 'Planned (Base)', values: qVals(baseKey) },
-      { label: 'Planned (High)', values: qVals(highKey) },
-      { label: 'Actual', values: qVals(actualKey) },
-    ];
-
-    if (this.viewMode() === 'summary') {
-      return [rows[0], rows[2]]; // Base + Actual only
-    }
-    return rows;
   }
 }

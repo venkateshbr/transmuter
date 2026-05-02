@@ -304,7 +304,15 @@ class MilestoneService:
             DependencyItem(
                 id=d["id"],
                 upstream_milestone_id=d["upstream_milestone_id"],
+                upstream_name=(
+                    d.get("upstream", {}).get("name")
+                    if isinstance(d.get("upstream"), dict) else None
+                ),
                 downstream_milestone_id=d["downstream_milestone_id"],
+                downstream_name=(
+                    d.get("downstream", {}).get("name")
+                    if isinstance(d.get("downstream"), dict) else None
+                ),
             )
             for d in dep_rows
         ]

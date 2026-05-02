@@ -83,11 +83,12 @@ async def create_kpi(
     response_model=KPIItem,
 )
 async def update_kpi(
+    initiative_id: str,
     kpi_id: str,
     body: KPIUpdate,
     svc: Annotated[KPIService, Depends(_svc)],
 ) -> KPIItem:
-    return svc.update_kpi(kpi_id, body)
+    return svc.update_kpi(initiative_id, kpi_id, body)
 
 
 @router.delete(
@@ -95,10 +96,11 @@ async def update_kpi(
     status_code=204,
 )
 async def delete_kpi(
+    initiative_id: str,
     kpi_id: str,
     svc: Annotated[KPIService, Depends(_svc)],
 ) -> None:
-    svc.delete_kpi(kpi_id)
+    svc.delete_kpi(initiative_id, kpi_id)
 
 
 # ── Entries ──────────────────────────────────────────────────────────
@@ -108,8 +110,9 @@ async def delete_kpi(
     response_model=list[KPIEntryItem],
 )
 async def upsert_entries(
+    initiative_id: str,
     kpi_id: str,
     body: list[KPIEntryUpsert],
     svc: Annotated[KPIService, Depends(_svc)],
 ) -> list[KPIEntryItem]:
-    return svc.upsert_entries(kpi_id, body)
+    return svc.upsert_entries(initiative_id, kpi_id, body)

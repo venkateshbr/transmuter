@@ -84,11 +84,12 @@ async def create_risk(
     response_model=RiskItem,
 )
 async def update_risk(
+    initiative_id: str,
     risk_id: str,
     body: RiskUpdate,
     svc: Annotated[RiskService, Depends(_svc)],
 ) -> RiskItem:
-    return svc.update_risk(risk_id, body)
+    return svc.update_risk(initiative_id, risk_id, body)
 
 
 @router.delete(
@@ -96,7 +97,8 @@ async def update_risk(
     status_code=204,
 )
 async def delete_risk(
+    initiative_id: str,
     risk_id: str,
     svc: Annotated[RiskService, Depends(_svc)],
 ) -> None:
-    svc.delete_risk(risk_id)
+    svc.delete_risk(initiative_id, risk_id)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
@@ -12,13 +13,16 @@ from app.domain.initiatives import (
     InitiativeCounts,
     InitiativeCreate,
     InitiativeDetail,
+    InitiativeKPIIndicator,
     InitiativeListItem,
     InitiativeListResponse,
+    InitiativeTeamMember,
     InitiativeUpdate,
     PressureBreakdown,
 )
 from app.repositories.initiative import InitiativeRepository
 from app.services.financial import FinancialService
+from app.services.initiative_workbook import build_initiative_template, parse_initiative_template
 
 
 class InitiativeService:
@@ -59,13 +63,15 @@ class InitiativeService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Initiative not found")
         counts = self._repo.get_counts(initiative_id)
         fin_summary = self._fin.get_financial_summary(initiative_id)
+        team_members = self._get_team_members(initiative_id)
+        kpi_indicators = self._get_kpi_indicators(initiative_id)
         
         # Calculate dynamic pressure
         pressure_score, pressure_breakdown = self._calculate_pressure(row, counts, fin_summary)
         row["pressure_score"] = pressure_score
         row["pressure_sub"] = pressure_breakdown.model_dump() if pressure_breakdown else None
 
-        return self._to_detail(row, counts, fin_summary)
+        return self._to_detail(row, counts, fin_summary, team_members, kpi_indicators)
 
     def create_initiative(self, data: InitiativeCreate, created_by: UUID) -> InitiativeDetail:
         # Generate unique code — retry up to 5 times on conflict
@@ -106,7 +112,7 @@ class InitiativeService:
 
     def update_initiative(self, initiative_id: str, data: InitiativeUpdate) -> InitiativeDetail:
         self._assert_exists(initiative_id)
-        patch = {k: v for k, v in data.model_dump(exclude_none=True).items()}
+        patch = {k: v for k, v in data.model_dump(exclude_unset=True).items()}
         # Serialize date fields
         for date_field in ("planned_start", "actual_start", "planned_end", "actual_end"):
             if date_field in patch and patch[date_field] is not None:
@@ -130,6 +136,16 @@ class InitiativeService:
 
     def export_csv(self) -> str:
         return self._repo.export_csv()
+
+    def export_template(self) -> bytes:
+        return build_initiative_template()
+
+    def preview_import(self, data: bytes) -> InitiativeCreate:
+        return parse_initiative_template(data)
+
+    def import_template(self, data: bytes, created_by: UUID) -> InitiativeDetail:
+        parsed = parse_initiative_template(data)
+        return self.create_initiative(parsed, created_by)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -163,8 +179,15 @@ class InitiativeService:
         )
 
     @staticmethod
-    def _to_detail(row: dict, counts: dict, fin: FinancialSummary | None = None) -> InitiativeDetail:  # type: ignore[type-arg]
+    def _to_detail(
+        row: dict,
+        counts: dict,
+        fin: FinancialSummary | None = None,
+        team_members: list[InitiativeTeamMember] | None = None,
+        kpi_indicators: list[InitiativeKPIIndicator] | None = None,
+    ) -> InitiativeDetail:  # type: ignore[type-arg]
         ws = row.get("workstreams") or {}
+        bu = ws.get("business_units") if isinstance(ws, dict) else None
         sub = row.get("pressure_sub") or {}
         return InitiativeDetail(
             id=row["id"],
@@ -172,6 +195,8 @@ class InitiativeService:
             name=row["name"],
             workstream_id=row.get("workstream_id"),
             workstream_name=ws.get("name") if isinstance(ws, dict) else None,
+            business_unit_id=ws.get("business_unit_id") if isinstance(ws, dict) else None,
+            business_unit_name=bu.get("name") if isinstance(bu, dict) else None,
             owner_id=row.get("owner_id"),
             owner_name=row.get("_owner_name"),
             group_owner_id=row.get("group_owner_id"),
@@ -185,6 +210,7 @@ class InitiativeService:
             rag_status=row["rag_status"],
             stage=row["stage"],
             summary=row.get("summary"),
+            lessons_learned=row.get("lessons_learned"),
             value_logic=row.get("value_logic"),
             dependencies_text=row.get("dependencies_text"),
             planned_start=row.get("planned_start"),
@@ -194,6 +220,8 @@ class InitiativeService:
             pressure_score=str(row["pressure_score"]) if row.get("pressure_score") is not None else None,
             pressure_breakdown=PressureBreakdown(**sub) if sub else None,
             counts=InitiativeCounts(**counts),
+            team_members=team_members or [],
+            kpi_indicators=kpi_indicators or [],
             financial_summary=fin,
             archived_at=row.get("archived_at"),
             created_at=row["created_at"],
@@ -267,3 +295,75 @@ class InitiativeService:
         )
         
         return total_score.quantize(Decimal("0.1")), breakdown
+
+    def _get_team_members(self, initiative_id: str) -> list[InitiativeTeamMember]:
+        rows = self._repo.get_team_members(initiative_id)
+        members = []
+        for row in rows:
+            user = row.get("users") or {}
+            members.append(
+                InitiativeTeamMember(
+                    id=row["id"],
+                    user_id=row["user_id"],
+                    role=row["role"],
+                    display_name=user.get("display_name") if isinstance(user, dict) else None,
+                    email=user.get("email") if isinstance(user, dict) else None,
+                )
+            )
+        return members
+
+    def _get_kpi_indicators(self, initiative_id: str) -> list[InitiativeKPIIndicator]:
+        kpis, entries = self._repo.get_kpi_indicator_rows(initiative_id)
+        entries_by_kpi: dict[str, list[dict]] = {row["id"]: [] for row in kpis}
+        for entry in entries:
+            entries_by_kpi.setdefault(entry["kpi_id"], []).append(entry)
+
+        indicators: list[InitiativeKPIIndicator] = []
+        for kpi in kpis[:6]:
+            kpi_entries = entries_by_kpi.get(kpi["id"], [])
+            actual_entries = [entry for entry in kpi_entries if entry.get("value_actual") is not None]
+            latest = sorted(
+                actual_entries,
+                key=lambda entry: (entry["year"], entry.get("quarter") or 5),
+                reverse=True,
+            )[0] if actual_entries else None
+            latest_year = latest["year"] if latest else None
+
+            def total_for(rows: list[dict], key: str) -> Decimal | None:
+                values = [Decimal(str(row[key])) for row in rows if row.get(key) is not None]
+                return sum(values, Decimal("0")) if values else None
+
+            this_year_rows = [
+                entry for entry in actual_entries
+                if latest_year is not None and entry["year"] == latest_year
+            ]
+            actual_total = total_for(actual_entries, "value_actual")
+            base_total = total_for(kpi_entries, "value_base")
+
+            health = "no_data"
+            if latest and latest.get("value_actual") is not None:
+                actual = Decimal(str(latest["value_actual"]))
+                base = Decimal(str(latest.get("value_base") or "0"))
+                high = Decimal(str(latest.get("value_high") or base))
+                if actual >= high:
+                    health = "on_track"
+                elif actual >= base:
+                    health = "at_risk"
+                else:
+                    health = "critical"
+            elif actual_total is not None and base_total is not None:
+                health = "on_track" if actual_total >= base_total else "critical"
+
+            indicators.append(
+                InitiativeKPIIndicator(
+                    id=kpi["id"],
+                    name=kpi["name"],
+                    unit=kpi.get("unit"),
+                    health_status=health,
+                    this_quarter_actual=str(latest["value_actual"]) if latest else None,
+                    this_year_actual=str(total_for(this_year_rows, "value_actual"))
+                    if this_year_rows else None,
+                    all_time_actual=str(actual_total) if actual_total is not None else None,
+                )
+            )
+        return indicators

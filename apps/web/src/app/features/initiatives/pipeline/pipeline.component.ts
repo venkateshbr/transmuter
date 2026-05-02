@@ -208,7 +208,9 @@ const STAGE_LABELS: Record<string, string> = {
         @if (hasFilters()) {
           <button (click)="clearFilters()" class="btn-secondary text-sm">Clear filters</button>
         } @else {
-          <button class="btn-primary text-sm flex items-center gap-2">
+          <button class="btn-primary text-sm flex items-center gap-2"
+                  (click)="openNewInitiative()"
+                  aria-label="Create new initiative">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
               <path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
             </svg>
@@ -290,44 +292,43 @@ const STAGE_LABELS: Record<string, string> = {
 
                     <!-- Code + Name -->
                     <div class="min-w-0 flex items-center gap-2">
-                      <span class="text-[10px] font-mono flex-shrink-0"
+                      <span class="text-[9px] font-mono flex-shrink-0 px-1.5 py-0.5 rounded bg-[var(--t-surface-raised)] border border-[var(--t-border)]"
                             style="color:var(--t-text-secondary)">
                         {{ item.initiative_code }}
                       </span>
                       <a [routerLink]="['/initiatives', item.id]"
                          (click)="$event.stopPropagation()"
-                         class="text-sm font-medium truncate"
-                         style="color:var(--t-text-primary);transition:color 0.15s ease"
-                         (mouseover)="$any($event.target).style.color = 'var(--t-accent)'"
-                         (mouseout)="$any($event.target).style.color = 'var(--t-text-primary)'">
+                         class="text-sm font-bold truncate group-hover:text-[var(--t-accent)] transition-colors"
+                         style="color:var(--t-text-primary)">
                         {{ item.name }}
                       </a>
                     </div>
 
                     <!-- Priority -->
                     <div class="flex justify-center">
-                      <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                      <span class="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-lg shadow-sm border"
                             [style.background]="priorityBg(item.priority)"
-                            [style.color]="priorityFg(item.priority)">
-                        {{ capitalize(item.priority) }}
+                            [style.color]="priorityFg(item.priority)"
+                            [style.border-color]="priorityFg(item.priority) + '33'">
+                        {{ item.priority }}
                       </span>
                     </div>
 
                     <!-- Workstream -->
                     <div>
                       @if (item.workstream_name) {
-                        <span class="text-[11px] px-2 py-0.5 rounded-md block truncate border text-center"
-                              style="color:var(--t-text-secondary);background:var(--t-surface-raised);border-color:var(--t-border)">
+                        <span class="text-[10px] font-bold uppercase tracking-tighter px-2 py-1 rounded-xl block truncate border text-center shadow-sm"
+                              style="color:var(--t-text-primary);background:var(--t-surface-raised);border-color:var(--t-border)">
                           {{ item.workstream_name }}
                         </span>
                       } @else {
-                        <span class="text-xs block text-center" style="color:var(--t-text-secondary)">—</span>
+                        <span class="text-xs block text-center opacity-30" style="color:var(--t-text-secondary)">—</span>
                       }
                     </div>
 
                     <!-- Value -->
                     <div class="text-right">
-                      <span class="text-xs font-mono" style="color:var(--t-text-secondary)">
+                      <span class="text-sm font-black text-[var(--t-text-primary)]">
                         {{ formatValue(item.planned_value_base) }}
                       </span>
                     </div>
@@ -335,12 +336,12 @@ const STAGE_LABELS: Record<string, string> = {
                     <!-- Pressure -->
                     <div class="flex justify-center">
                       @if (item.pressure_score) {
-                        <span class="text-xs font-mono font-bold"
+                        <span class="text-xs font-black px-2 py-0.5 rounded bg-[var(--t-surface-raised)]"
                               [style.color]="pressureColor(item.pressure_score)">
                           {{ (+item.pressure_score).toFixed(1) }}
                         </span>
                       } @else {
-                        <span class="text-xs" style="color:var(--t-text-secondary)">—</span>
+                        <span class="text-xs opacity-30" style="color:var(--t-text-secondary)">—</span>
                       }
                     </div>
 

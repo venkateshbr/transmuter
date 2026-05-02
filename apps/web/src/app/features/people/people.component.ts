@@ -13,61 +13,191 @@ import { ApiService } from '../../core/services/api.service';
       <div class="flex justify-between items-end">
         <div>
           <h1 class="text-3xl font-bold tracking-tight text-[var(--t-text-primary)]">
-            People<span class="text-[var(--t-accent)]">.</span>
+            People Insight<span class="text-[var(--t-accent)]">.</span>
           </h1>
-          <p class="text-[var(--t-text-secondary)] mt-1">Manage team roles, workload, and performance tracking.</p>
+          <p class="text-[var(--t-text-secondary)] mt-1">Strategic talent mapping, workload balancing, and platform governance.</p>
         </div>
-        <button class="btn-primary text-sm flex items-center gap-2">
-          <span>+</span> Invite User
-        </button>
+        <div class="flex gap-3">
+          <div class="badge-purple px-4 py-2 border border-[var(--t-accent)]/20 shadow-sm flex items-center gap-2">
+            <span class="material-icons text-xs">group</span>
+            <span class="text-[10px] font-black uppercase tracking-widest">{{ people().length }} ACTIVE PLATFORM USERS</span>
+          </div>
+          <button class="btn-primary text-sm flex items-center gap-2 h-10">
+            <span>+</span> Invite Member
+          </button>
+        </div>
       </div>
 
-      <!-- People Cards Grid -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        @for (p of people(); track p.id) {
-          <div class="card p-6 flex flex-col items-center text-center hover:border-[var(--t-accent)] transition-all cursor-pointer group">
-            <div class="w-16 h-16 rounded-full bg-gradient-to-br from-[var(--t-accent)] to-[#a855f7] flex items-center justify-center text-xl text-white font-bold mb-4 shadow-lg group-hover:scale-110 transition-transform">
-              {{ (p.display_name || 'U').substring(0,1) }}
-            </div>
-            
-            <h3 class="text-lg font-bold text-[var(--t-text-primary)] group-hover:text-[var(--t-accent)] transition-colors">
-              {{ p.display_name || 'Anonymous' }}
-            </h3>
-            <p class="text-xs text-[var(--t-text-tertiary)] font-bold uppercase tracking-widest mt-1">
-              {{ p.role.replace('_', ' ') }}
-            </p>
-            <p class="text-xs text-[var(--t-text-secondary)] mt-2">{{ p.title || 'N/A' }}</p>
+      <!-- Tab Navigation -->
+      <div class="border-b border-[var(--t-border)]">
+        <nav class="-mb-px flex space-x-8">
+          <button (click)="activeTab = 'directory'"
+            [class.border-[var(--t-accent)]]="activeTab === 'directory'"
+            [class.text-[var(--t-accent)]]="activeTab === 'directory'"
+            class="whitespace-nowrap pb-4 px-1 border-b-2 font-black text-[10px] uppercase tracking-widest transition-all">
+            Directory
+          </button>
+          <button (click)="activeTab = 'pending'"
+            [class.border-[var(--t-accent)]]="activeTab === 'pending'"
+            [class.text-[var(--t-accent)]]="activeTab === 'pending'"
+            class="whitespace-nowrap pb-4 px-1 border-b-2 font-black text-[10px] uppercase tracking-widest transition-all">
+            Pending Invites
+          </button>
+        </nav>
+      </div>
 
-            <div class="w-full mt-6 pt-6 border-t border-[var(--t-border)] grid grid-cols-2 gap-4">
-              <div>
-                <p class="text-[10px] font-bold text-[var(--t-text-tertiary)] uppercase">Initiatives</p>
-                <p class="text-lg font-black text-[var(--t-text-primary)]">{{ p.initiative_count }}</p>
+      <!-- Directory View -->
+      @if (activeTab === 'directory') {
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+          @for (p of people(); track p.id) {
+            <div (click)="selectedUser = p" class="card p-6 flex flex-col items-center text-center hover:border-[var(--t-accent)] transition-all cursor-pointer group relative overflow-hidden">
+              <!-- Selection Highlight -->
+              <div class="absolute inset-0 bg-[var(--t-accent)] opacity-0 group-hover:opacity-[0.02] transition-opacity"></div>
+              
+              <div class="w-20 h-20 rounded-3xl bg-gradient-to-br from-[var(--t-surface-raised)] to-[var(--t-border)] flex items-center justify-center text-2xl font-black text-[var(--t-text-secondary)] mb-4 border border-[var(--t-border)] group-hover:scale-110 group-hover:rotate-3 transition-all duration-500">
+                {{ (p.display_name || 'U').substring(0,1) }}
               </div>
-              <div>
-                <p class="text-[10px] font-bold text-[var(--t-text-tertiary)] uppercase">Pressure</p>
-                <p class="text-lg font-black" [style.color]="getPressureColor(p.pressure_score)">
-                  {{ p.pressure_score.toFixed(1) }}
-                </p>
+              
+              <h3 class="text-sm font-black text-[var(--t-text-primary)] group-hover:text-[var(--t-accent)] transition-colors">
+                {{ p.display_name || 'Anonymous' }}
+              </h3>
+              <p class="text-[9px] font-black text-[var(--t-accent)] uppercase tracking-widest mt-1">
+                {{ p.role.replace('_', ' ') }}
+              </p>
+              <p class="text-[10px] text-[var(--t-text-secondary)] mt-2 font-medium">{{ p.title || 'N/A' }}</p>
+
+              <div class="w-full mt-6 pt-6 border-t border-[var(--t-border)]/50 grid grid-cols-2 gap-4">
+                <div>
+                  <p class="text-[8px] font-black text-[var(--t-text-tertiary)] uppercase tracking-tighter">Initiatives</p>
+                  <p class="text-lg font-black text-[var(--t-text-primary)]">{{ p.initiative_count }}</p>
+                </div>
+                <div>
+                  <p class="text-[8px] font-black text-[var(--t-text-tertiary)] uppercase tracking-tighter">Pressure</p>
+                  <p class="text-lg font-black" [style.color]="getPressureColor(p.pressure_score)">
+                    {{ p.pressure_score.toFixed(1) }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="w-full mt-6 flex gap-2">
+                <button class="flex-1 py-2 rounded-xl bg-[var(--t-surface-raised)] text-[9px] font-black uppercase tracking-widest hover:bg-[var(--t-accent-soft)] hover:text-[var(--t-accent)] transition-all">Profile</button>
+                <button class="flex-1 py-2 rounded-xl bg-[var(--t-surface-raised)] text-[9px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 transition-all">Archive</button>
               </div>
             </div>
+          }
+        </div>
+      }
 
-            <div class="w-full mt-4 flex gap-2">
-              <button class="flex-1 btn-ghost text-[10px] py-2">Profile</button>
-              <button class="flex-1 btn-ghost text-[10px] py-2 text-red-500 hover:bg-red-500/10">Manage</button>
+      <!-- Pending Invites View -->
+      @if (activeTab === 'pending') {
+        <div class="card p-0 overflow-hidden">
+          <table class="w-full text-left">
+            <thead class="bg-[var(--t-surface-raised)] border-b border-[var(--t-border)]">
+              <tr>
+                <th class="px-8 py-4 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Email Identity</th>
+                <th class="px-8 py-4 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Assigned Role</th>
+                <th class="px-8 py-4 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Workstream</th>
+                <th class="px-8 py-4 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)] text-right">Invitation Status</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-[var(--t-border)]">
+               <tr class="hover:bg-[var(--t-surface-raised)]/50 transition-colors">
+                 <td class="px-8 py-6">
+                   <p class="text-sm font-black text-[var(--t-text-primary)]">vishwa@ishirock.com</p>
+                   <p class="text-[10px] text-[var(--t-text-secondary)] mt-1 font-medium">Invited by Transformation Office</p>
+                 </td>
+                 <td class="px-8 py-6">
+                   <span class="badge-purple font-black text-[9px] uppercase tracking-widest px-2 py-0.5">Workstream Lead</span>
+                 </td>
+                 <td class="px-8 py-6">
+                   <span class="text-[10px] font-bold text-[var(--t-text-secondary)] uppercase">ERP (Finance)</span>
+                 </td>
+                 <td class="px-8 py-6 text-right">
+                   <div class="flex flex-col items-end gap-1">
+                     <span class="text-xs font-black text-[var(--t-accent)]">SENT 2D AGO</span>
+                     <button class="text-[9px] font-black text-[var(--t-text-tertiary)] hover:text-[var(--t-accent)] uppercase underline">Resend Nudge</button>
+                   </div>
+                 </td>
+               </tr>
+            </tbody>
+          </table>
+        </div>
+      }
+
+      <!-- User Detail Modal / Overlay -->
+      @if (selectedUser) {
+        <div class="overlay flex items-center justify-end p-0">
+          <div class="h-full w-full max-w-xl bg-[var(--t-surface)] shadow-2xl animate-slide-in-right flex flex-col">
+            <div class="p-8 border-b border-[var(--t-border)] flex justify-between items-center bg-gradient-to-r from-[var(--t-surface)] to-[var(--t-surface-raised)]">
+               <div class="flex items-center gap-4">
+                  <div class="w-14 h-14 rounded-2xl bg-[var(--t-accent)] text-white flex items-center justify-center text-xl font-black">
+                    {{ selectedUser.display_name.substring(0,1) }}
+                  </div>
+                  <div>
+                    <h2 class="text-xl font-black text-[var(--t-text-primary)]">{{ selectedUser.display_name }}</h2>
+                    <p class="text-[10px] font-black text-[var(--t-accent)] uppercase tracking-widest">{{ selectedUser.role }}</p>
+                  </div>
+               </div>
+               <button (click)="selectedUser = null" class="w-10 h-10 rounded-full hover:bg-[var(--t-surface-raised)] flex items-center justify-center transition-colors">
+                 <span class="material-icons">close</span>
+               </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-8 space-y-8">
+               <section>
+                 <h3 class="text-[10px] font-black text-[var(--t-text-tertiary)] uppercase tracking-widest mb-4">On Their Plate</h3>
+                 <div class="space-y-4">
+                    @for (i of [1,2]; track i) {
+                      <div class="card p-5 border-l-4 border-[var(--t-accent)] flex justify-between items-center">
+                        <div>
+                          <p class="text-xs font-black text-[var(--t-text-primary)]">Digitizing Field Sales Strategy</p>
+                          <p class="text-[10px] text-[var(--t-text-secondary)] mt-1">Initiative Owner · Due in 45 days</p>
+                        </div>
+                        <span class="text-xs font-mono font-black text-[var(--t-accent)]">RAG: GREEN</span>
+                      </div>
+                    }
+                 </div>
+               </section>
+
+               <section class="grid grid-cols-2 gap-6">
+                 <div class="card p-6 bg-[var(--t-surface-raised)] border-none">
+                    <p class="text-[9px] font-black text-[var(--t-text-tertiary)] uppercase tracking-widest mb-1">Last Platform Login</p>
+                    <p class="text-sm font-black text-[var(--t-text-primary)]">May 2, 2026 · 14:22</p>
+                 </div>
+                 <div class="card p-6 bg-[var(--t-surface-raised)] border-none">
+                    <p class="text-[9px] font-black text-[var(--t-text-tertiary)] uppercase tracking-widest mb-1">Market Assignment</p>
+                    <p class="text-sm font-black text-[var(--t-text-primary)]">Southeast Asia (Group)</p>
+                 </div>
+               </section>
+            </div>
+
+            <div class="p-8 border-t border-[var(--t-border)] flex gap-4 bg-[var(--t-surface-raised)]/30">
+               <button class="flex-1 btn-primary py-3 rounded-xl shadow-lg">Edit Profile</button>
+               <button class="flex-1 py-3 rounded-xl border border-[var(--t-border)] text-[10px] font-black uppercase tracking-widest hover:bg-white transition-all">Deactivate User</button>
             </div>
           </div>
-        }
-      </div>
+        </div>
+      }
 
     </div>
   `,
   styles: [`
     :host { display: block; }
+    .animate-slide-in-right {
+      animation: slide-in-right 0.3s ease-out;
+    }
+    @keyframes slide-in-right {
+      from { transform: translateX(100%); }
+      to { transform: translateX(0); }
+    }
   `]
 })
 export class PeopleComponent implements OnInit {
   private readonly api = inject(ApiService);
   people = signal<any[]>([]);
+  
+  activeTab: 'directory' | 'pending' = 'directory';
+  selectedUser: any | null = null;
 
   ngOnInit() {
     this.api.get<any>('/people').subscribe(res => {

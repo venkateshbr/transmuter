@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi.responses import Response, StreamingResponse
 
 from app.core.auth import AnyRole, CurrentUser, RequireAdmin, get_current_user
 from app.core.database import get_supabase_admin
@@ -64,6 +65,33 @@ async def export_csv(svc: Annotated[InitiativeService, Depends(_svc)]) -> Stream
     )
 
 
+@router.get("/template")
+async def export_template(svc: Annotated[InitiativeService, Depends(_svc)]) -> Response:
+    workbook = svc.export_template()
+    return Response(
+        content=workbook,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="transmuter-initiative-template.xlsx"'},
+    )
+
+
+@router.post("/import/preview", response_model=InitiativeCreate)
+async def preview_import(
+    svc: Annotated[InitiativeService, Depends(_svc)],
+    file: UploadFile = File(...),
+) -> InitiativeCreate:
+    return svc.preview_import(await file.read())
+
+
+@router.post("/import", response_model=InitiativeDetail, status_code=201)
+async def import_initiative(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[InitiativeService, Depends(_svc)],
+    file: UploadFile = File(...),
+) -> InitiativeDetail:
+    return svc.import_template(await file.read(), current_user.id)
+
+
 # ── Create ────────────────────────────────────────────────────────────────────
 
 @router.post("", response_model=InitiativeDetail, status_code=201)
@@ -105,6 +133,47 @@ async def archive_initiative(
 ) -> InitiativeDetail:
     return svc.archive_initiative(initiative_id)
 
+
+# ── Summary & Lessons Learned ────────────────────────────────────────────────
+@router.get("/{initiative_id}/summary")
+async def get_initiative_summary(
+    initiative_id: str,
+    svc: Annotated[InitiativeService, Depends(_svc)],
+):
+    """Fetch persistent closure summary and value-realisation fields."""
+    init = svc.get_initiative(initiative_id)
+    fin = init.financial_summary
+    planned_value = Decimal(fin.net_value_plan) if fin else Decimal("0")
+    realized_value = Decimal(fin.net_value_actual) if fin and fin.net_value_actual else Decimal("0")
+    return {
+        "initiative_id": initiative_id,
+        "draft_status": "draft",
+        "planned_value": str(planned_value),
+        "realized_value": str(realized_value),
+        "final_summary": init.summary,
+        "lessons_learned": init.lessons_learned,
+        "stage": init.stage,
+        "completion_date": init.actual_end or init.planned_end,
+    }
+
+@router.patch("/{initiative_id}/summary")
+async def update_initiative_summary(
+    initiative_id: str,
+    body: dict,
+    svc: Annotated[InitiativeService, Depends(_svc)],
+):
+    """Persist closure narrative fields on the initiative record."""
+    update_data = {}
+    if "final_summary" in body:
+        update_data["summary"] = body["final_summary"]
+    elif "executive_summary" in body:
+        update_data["summary"] = body["executive_summary"]
+    if "lessons_learned" in body:
+        update_data["lessons_learned"] = body["lessons_learned"]
+    
+    if update_data:
+        svc.update_initiative(initiative_id, InitiativeUpdate(**update_data))
+    return await get_initiative_summary(initiative_id, svc)
 
 # ── Delete (TO only) ──────────────────────────────────────────────────────────
 

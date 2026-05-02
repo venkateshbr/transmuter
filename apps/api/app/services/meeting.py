@@ -2,6 +2,17 @@ from uuid import UUID
 from supabase import Client
 from app.repositories.meeting import MeetingRepository
 from fastapi import HTTPException, status
+from app.domain.meetings import (
+    ActionItemCreate,
+    ActionItemUpdate,
+    AgendaItemCreate,
+    AgendaItemUpdate,
+    AttendeeCreate,
+    MeetingCreate,
+    MeetingInitiativeCreate,
+    MeetingUpdate,
+    SessionUpdate,
+)
 
 class MeetingService:
     def __init__(self, client: Client, tenant_id: UUID) -> None:
@@ -10,6 +21,10 @@ class MeetingService:
 
     def list_meetings(self) -> list[dict]:
         return self._repo.list()
+
+    def create_meeting(self, data: MeetingCreate) -> dict:
+        payload = data.model_dump(exclude_none=True)
+        return self._repo.create(payload)
 
     def get_meeting_detail(self, meeting_id: str) -> dict:
         meeting = self._repo.get(meeting_id)
@@ -26,6 +41,58 @@ class MeetingService:
             "agenda": agenda,
             "attendees": attendees
         }
+
+    def update_meeting(self, meeting_id: str, data: MeetingUpdate) -> dict:
+        self._assert_meeting(meeting_id)
+        payload = data.model_dump(exclude_none=True)
+        if not payload:
+            return self.get_meeting_detail(meeting_id)
+        self._repo.update(meeting_id, payload)
+        return self.get_meeting_detail(meeting_id)
+
+    def delete_meeting(self, meeting_id: str) -> None:
+        self._assert_meeting(meeting_id)
+        self._repo.delete(meeting_id)
+
+    def create_agenda_item(self, meeting_id: str, data: AgendaItemCreate) -> dict:
+        self._assert_meeting(meeting_id)
+        payload = data.model_dump(exclude_none=True)
+        if "sort_order" not in payload:
+            payload["sort_order"] = len(self._repo.get_agenda(meeting_id)) + 1
+        return self._repo.create_agenda_item(meeting_id, payload)
+
+    def update_agenda_item(
+        self,
+        meeting_id: str,
+        item_id: str,
+        data: AgendaItemUpdate,
+    ) -> dict:
+        self._assert_meeting(meeting_id)
+        return self._repo.update_agenda_item(
+            meeting_id,
+            item_id,
+            data.model_dump(exclude_none=True),
+        )
+
+    def delete_agenda_item(self, meeting_id: str, item_id: str) -> None:
+        self._assert_meeting(meeting_id)
+        self._repo.delete_agenda_item(meeting_id, item_id)
+
+    def add_attendee(self, meeting_id: str, data: AttendeeCreate) -> dict:
+        self._assert_meeting(meeting_id)
+        return self._repo.add_attendee(meeting_id, data.user_id)
+
+    def delete_attendee(self, meeting_id: str, attendee_id: str) -> None:
+        self._assert_meeting(meeting_id)
+        self._repo.delete_attendee(meeting_id, attendee_id)
+
+    def add_initiative(self, meeting_id: str, data: MeetingInitiativeCreate) -> dict:
+        self._assert_meeting(meeting_id)
+        return self._repo.add_initiative(meeting_id, data.initiative_id)
+
+    def delete_initiative(self, meeting_id: str, link_id: str) -> None:
+        self._assert_meeting(meeting_id)
+        self._repo.delete_initiative(meeting_id, link_id)
 
     def start_session(self, meeting_id: str) -> dict:
         from datetime import date
@@ -54,11 +121,30 @@ class MeetingService:
             "action_items": action_items
         }
 
-    def update_session(self, session_id: str, data: dict) -> dict:
-        return self._repo.update_session(session_id, data)
+    def update_session(self, session_id: str, data: SessionUpdate) -> dict:
+        return self._repo.update_session(session_id, data.model_dump(exclude_none=True))
 
     def end_session(self, session_id: str) -> dict:
         return self._repo.update_session(session_id, {"status": "completed"})
 
-    def create_action_item(self, session_id: str, data: dict) -> dict:
-        return self._repo.create_action_item(session_id, data)
+    def create_action_item(self, session_id: str, data: ActionItemCreate) -> dict:
+        self.get_session_detail(session_id)
+        return self._repo.create_action_item(session_id, data.model_dump(exclude_none=True))
+
+    def list_action_items(self) -> list[dict]:
+        return self._repo.list_action_items()
+
+    def update_action_item(self, action_item_id: str, data: ActionItemUpdate) -> dict:
+        return self._repo.update_action_item(
+            action_item_id,
+            data.model_dump(exclude_none=True),
+        )
+
+    def delete_action_item(self, action_item_id: str) -> None:
+        self._repo.delete_action_item(action_item_id)
+
+    def _assert_meeting(self, meeting_id: str) -> dict:
+        meeting = self._repo.get(meeting_id)
+        if not meeting:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meeting not found")
+        return meeting
