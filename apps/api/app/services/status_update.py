@@ -10,6 +10,11 @@ from fastapi import HTTPException, status
 from supabase import Client
 
 from app.domain.status_updates import (
+    NudgeCreate,
+    NudgeResponse,
+    StatusComplianceItem,
+    StatusComplianceResponse,
+    StatusComplianceSummary,
     StatusUpdateCreate,
     StatusUpdateItem,
     StatusUpdateListResponse,
@@ -71,6 +76,12 @@ class StatusUpdateService:
         row = self._repo.update(update_id, patch)
         return self._to_item(row)
 
+    def submit_update(self, update_id: str) -> StatusUpdateItem:
+        existing = self._assert_exists(update_id)
+        if not existing.get("is_draft"):
+            return self._to_item(existing)
+        return self.patch_update(update_id, StatusUpdatePatch(is_draft=False))
+
     def delete_update(self, update_id: str) -> None:
         self._assert_exists(update_id)
         self._repo.delete(update_id)
@@ -90,16 +101,17 @@ class StatusUpdateService:
         rows = self._repo.list_recent_updates()
         return [self._to_item(r) for r in rows]
 
-    def get_compliance_stats(self) -> dict[str, Any]:
+    def get_compliance_stats(self) -> StatusComplianceResponse:
         rows = self._repo.list_compliance()
-        from datetime import datetime, timedelta, UTC
+        from datetime import UTC, datetime
         now = datetime.now(UTC)
+        nudge_counts = self._repo.list_nudge_counts()
         
         on_time = 0
         overdue = 0
         nuclear = 0
         
-        compliance_list = []
+        compliance_list: list[StatusComplianceItem] = []
         
         for row in rows:
             updates = row.get("status_updates", [])
@@ -130,37 +142,42 @@ class StatusUpdateService:
                 status = "nuclear"
                 nuclear += 1
             
-            compliance_list.append({
-                "initiative_id": row["id"],
-                "initiative_name": row["name"],
-                "owner_name": (row.get("users") or {}).get("display_name"),
-                "last_update_at": last_date_str,
-                "days_since": days_since,
-                "status": status,
-                "rag_status": last_update["rag_status"] if last_update else "red"
-            })
+            compliance_list.append(
+                StatusComplianceItem(
+                    initiative_id=row["id"],
+                    initiative_name=row["name"],
+                    owner_name=(row.get("users") or {}).get("display_name"),
+                    last_update_at=last_date_str,
+                    days_since=days_since,
+                    status=status,
+                    rag_status=last_update["rag_status"] if last_update else "red",
+                    nudge_count=nudge_counts.get(row["id"], 0),
+                )
+            )
             
-        return {
-            "summary": {
-                "total": len(rows),
-                "on_time": on_time,
-                "overdue": overdue,
-                "nuclear": nuclear
-            },
-            "initiatives": compliance_list
-        }
+        return StatusComplianceResponse(
+            summary=StatusComplianceSummary(
+                total=len(rows),
+                on_time=on_time,
+                overdue=overdue,
+                nuclear=nuclear,
+            ),
+            initiatives=compliance_list,
+        )
 
-    def nudge_owner(self, initiative_id: str) -> dict[str, Any]:
+    def nudge_owner(
+        self, initiative_id: str, data: NudgeCreate | None = None,
+    ) -> NudgeResponse:
         """Triggers a nudge for the initiative owner."""
-        # In a real app, this would send an email or push notification.
-        # For now, we log it and return success.
-        nudge = self._repo.log_nudge(initiative_id, self._user_id)
-        return {
-            "success": True,
-            "nudge_id": nudge.get("id"),
-            "initiative_id": initiative_id,
-            "sent_at": nudge.get("sent_at")
-        }
+        channel = (data or NudgeCreate()).channel
+        nudge = self._repo.log_nudge(initiative_id, self._user_id, channel)
+        return NudgeResponse(
+            success=True,
+            nudge_id=nudge.get("id"),
+            initiative_id=initiative_id,
+            sent_at=nudge.get("sent_at"),
+            channel=channel,
+        )
 
     def list_nudges(self) -> list[dict[str, Any]]:
         return self._repo.list_nudges()

@@ -447,6 +447,106 @@ def test_real_api_initiative_team_and_summary_persistence() -> None:
             )
 
 
+def test_real_api_status_update_compliance_and_nudge_flow() -> None:
+    with _client() as client:
+        headers = _auth_headers(client)
+
+        tracked = client.post(
+            "/initiatives",
+            headers=headers,
+            json={
+                "name": f"Acceptance Status Update {uuid4()}",
+                "priority": "high",
+                "country": "Singapore",
+            },
+        )
+        tracked.raise_for_status()
+        tracked_id = tracked.json()["id"]
+
+        silent = client.post(
+            "/initiatives",
+            headers=headers,
+            json={
+                "name": f"Acceptance Nuclear Status {uuid4()}",
+                "priority": "medium",
+                "country": "Singapore",
+            },
+        )
+        silent.raise_for_status()
+        silent_id = silent.json()["id"]
+
+        try:
+            draft = client.post(
+                f"/initiatives/{tracked_id}/status-updates",
+                headers=headers,
+                json={
+                    "rag_status": "amber",
+                    "summary": "Draft status update from real acceptance.",
+                    "achievements": "Created deterministic sample data.",
+                    "issues": "None.",
+                    "next_steps": "Submit the update.",
+                    "is_draft": True,
+                },
+            )
+            draft.raise_for_status()
+            draft_id = draft.json()["id"]
+            assert draft.json()["is_draft"] is True
+
+            submitted = client.post(
+                f"/initiatives/{tracked_id}/status-updates/{draft_id}/submit",
+                headers=headers,
+            )
+            submitted.raise_for_status()
+            submitted_data = submitted.json()
+            assert submitted_data["is_draft"] is False
+            assert submitted_data["submitted_at"] is not None
+
+            compliance = client.get(
+                "/portfolio/status-updates/compliance",
+                headers=headers,
+            )
+            compliance.raise_for_status()
+            rows = compliance.json()["initiatives"]
+            tracked_row = next(item for item in rows if item["initiative_id"] == tracked_id)
+            silent_row = next(item for item in rows if item["initiative_id"] == silent_id)
+            assert tracked_row["status"] == "on_time"
+            assert tracked_row["nudge_count"] == 0
+            assert silent_row["status"] == "nuclear"
+
+            nudge = client.post(
+                f"/initiatives/{silent_id}/nudge",
+                headers=headers,
+                json={"channel": "both"},
+            )
+            nudge.raise_for_status()
+            nudge_data = nudge.json()
+            assert nudge_data["success"] is True
+            assert nudge_data["channel"] == "both"
+            assert nudge_data["delivery_status"] == "queued"
+
+            compliance_after = client.get(
+                "/portfolio/status-updates/compliance",
+                headers=headers,
+            )
+            compliance_after.raise_for_status()
+            silent_after = next(
+                item for item in compliance_after.json()["initiatives"]
+                if item["initiative_id"] == silent_id
+            )
+            assert silent_after["nudge_count"] >= 1
+
+            recent = client.get("/status-updates/portfolio", headers=headers)
+            recent.raise_for_status()
+            assert any(item["id"] == draft_id for item in recent.json())
+
+            nudges = client.get("/status-updates/nudges", headers=headers)
+            nudges.raise_for_status()
+            assert any(item["id"] == nudge_data["nudge_id"] for item in nudges.json())
+        finally:
+            client.delete(f"/initiatives/{tracked_id}", headers=headers)
+            client.delete(f"/initiatives/{silent_id}", headers=headers)
+
+
 def test_real_api_initiative_overview_metadata_and_editing() -> None:
     with _client() as client:
         headers = _auth_headers(client)

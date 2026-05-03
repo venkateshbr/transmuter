@@ -9,6 +9,10 @@ from fastapi import APIRouter, Depends
 from app.core.auth import CurrentUser, get_current_user
 from app.core.database import get_supabase_admin
 from app.domain.status_updates import (
+    NudgeCreate,
+    NudgeItem,
+    NudgeResponse,
+    StatusComplianceResponse,
     StatusUpdateCreate,
     StatusUpdateItem,
     StatusUpdateListResponse,
@@ -31,29 +35,43 @@ async def list_portfolio_updates(
 
 @router.get(
     "/status-updates/compliance",
+    response_model=StatusComplianceResponse,
 )
 async def get_compliance_stats(
     svc: Annotated[StatusUpdateService, Depends(_svc)],
-) -> dict[str, Any]:
+) -> StatusComplianceResponse:
+    return svc.get_compliance_stats()
+
+
+@router.get(
+    "/portfolio/status-updates/compliance",
+    response_model=StatusComplianceResponse,
+)
+async def get_portfolio_compliance_stats(
+    svc: Annotated[StatusUpdateService, Depends(_svc)],
+) -> StatusComplianceResponse:
     return svc.get_compliance_stats()
 
 
 @router.post(
     "/initiatives/{initiative_id}/nudge",
+    response_model=NudgeResponse,
 )
 async def nudge_initiative(
     initiative_id: str,
+    body: NudgeCreate,
     svc: Annotated[StatusUpdateService, Depends(_svc)],
-) -> dict[str, Any]:
-    return svc.nudge_owner(initiative_id)
+) -> NudgeResponse:
+    return svc.nudge_owner(initiative_id, body)
 
 
 @router.get(
     "/status-updates/nudges",
+    response_model=list[NudgeItem],
 )
 async def list_nudges(
     svc: Annotated[StatusUpdateService, Depends(_svc)],
-) -> list[dict[str, Any]]:
+) -> list[NudgeItem]:
     return svc.list_nudges()
 
 
@@ -105,11 +123,24 @@ async def create_status_update(
     response_model=StatusUpdateItem,
 )
 async def patch_status_update(
+    initiative_id: str,
     update_id: str,
     body: StatusUpdatePatch,
     svc: Annotated[StatusUpdateService, Depends(_svc)],
 ) -> StatusUpdateItem:
     return svc.patch_update(update_id, body)
+
+
+@router.post(
+    "/initiatives/{initiative_id}/status-updates/{update_id}/submit",
+    response_model=StatusUpdateItem,
+)
+async def submit_status_update(
+    initiative_id: str,
+    update_id: str,
+    svc: Annotated[StatusUpdateService, Depends(_svc)],
+) -> StatusUpdateItem:
+    return svc.submit_update(update_id)
 
 
 @router.delete(

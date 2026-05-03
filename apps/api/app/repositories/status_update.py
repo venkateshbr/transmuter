@@ -120,14 +120,29 @@ class StatusUpdateRepository:
         )
         return result.data or []
 
-    def log_nudge(self, initiative_id: str, sent_by_id: str) -> dict[str, Any]:
+    def list_nudge_counts(self) -> dict[str, int]:
+        result = (
+            self._c.table("nudge_log")
+            .select("initiative_id")
+            .eq("tenant_id", self._tid)
+            .execute()
+        )
+        counts: dict[str, int] = {}
+        for row in result.data or []:
+            initiative_id = row["initiative_id"]
+            counts[initiative_id] = counts.get(initiative_id, 0) + 1
+        return counts
+
+    def log_nudge(
+        self, initiative_id: str, sent_by_id: str, channel: str = "both",
+    ) -> dict[str, Any]:
         """Logs a nudge in the nudge_log table."""
         data = {
             "id": str(uuid4()),
             "tenant_id": self._tid,
             "initiative_id": initiative_id,
             "sent_by_id": sent_by_id,
-            "channel": "email"
+            "channel": channel,
         }
         result = self._c.table("nudge_log").insert(data).execute()
         return result.data[0] if result.data else {}

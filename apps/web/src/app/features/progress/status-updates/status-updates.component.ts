@@ -11,6 +11,7 @@ interface ComplianceInitiative {
   days_since: number;
   status: 'on_time' | 'overdue' | 'nuclear';
   rag_status: 'green' | 'amber' | 'red';
+  nudge_count: number;
 }
 
 interface StatusUpdate {
@@ -45,6 +46,13 @@ interface StatusUpdate {
              <a routerLink="/progress/dependencies" class="px-4 py-1 text-xs font-medium rounded-md text-[var(--t-text-tertiary)] hover:text-[var(--t-text-primary)] transition-colors">Dependencies</a>
         </div>
       </div>
+
+      @if (feedback()) {
+        <div class="rounded-lg border px-4 py-3 text-sm font-medium"
+             style="border-color:var(--t-border);background:var(--t-accent-soft);color:var(--t-accent)">
+          {{ feedback() }}
+        </div>
+      }
 
       <!-- Stats Bar -->
       <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -104,6 +112,7 @@ interface StatusUpdate {
                 <th class="px-6 py-4 text-sm font-semibold text-[var(--t-text-secondary)]">INITIATIVE</th>
                 <th class="px-6 py-4 text-sm font-semibold text-[var(--t-text-secondary)]">OWNER</th>
                 <th class="px-6 py-4 text-sm font-semibold text-[var(--t-text-secondary)] text-center">LAST UPDATE</th>
+                <th class="px-6 py-4 text-sm font-semibold text-[var(--t-text-secondary)] text-center">NUDGES</th>
                 <th class="px-6 py-4 text-sm font-semibold text-[var(--t-text-secondary)] text-right">ACTION</th>
               </tr>
             </thead>
@@ -124,6 +133,12 @@ interface StatusUpdate {
                         <span class="text-xs text-[var(--t-text-secondary)]">{{ item.days_since }} days ago</span>
                       }
                     </div>
+                  </td>
+                  <td class="px-6 py-4 text-center">
+                    <span class="inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-xs font-bold"
+                          style="background:var(--t-surface-raised);color:var(--t-text-secondary);border:1px solid var(--t-border)">
+                      {{ item.nudge_count || 0 }}
+                    </span>
                   </td>
                   <td class="px-6 py-4 text-right">
                     <button 
@@ -217,6 +232,7 @@ export class StatusUpdatesComponent implements OnInit {
   stats = signal<any>(null);
   recentUpdates = signal<StatusUpdate[]>([]);
   nudges = signal<any[]>([]);
+  feedback = signal<string | null>(null);
 
   ngOnInit() {
     this.loadData();
@@ -235,10 +251,10 @@ export class StatusUpdatesComponent implements OnInit {
   }
 
   nudge(initiativeId: string) {
-    this.api.post<any>(`/initiatives/${initiativeId}/nudge`, {}).subscribe(() => {
-      // In a real app, show a toast. For now, just reload data to potentially see nudge log updates
-      // (though we don't have a nudge log UI yet)
-      alert('Nudge sent successfully!');
+    this.api.post<any>(`/initiatives/${initiativeId}/nudge`, { channel: 'both' }).subscribe(() => {
+      this.feedback.set('Nudge queued for the initiative owner.');
+      this.loadData();
+      setTimeout(() => this.feedback.set(null), 3500);
     });
   }
 

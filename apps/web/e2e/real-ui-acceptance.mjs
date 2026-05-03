@@ -222,6 +222,7 @@ async function main() {
     const manualInitiativeName = `UI Acceptance Initiative ${Date.now()}`;
     let manualInitiativeId;
     let uploadedInitiativeId;
+    let statusSilentInitiativeId;
 
     try {
       await page.send('Page.navigate', { url: `${uiBaseUrl}/initiatives/pipeline` });
@@ -474,6 +475,62 @@ async function main() {
         return summary.lessons_learned === lessonsText;
       }, 'lessons persistence');
 
+      const statusSummaryText = `UI acceptance status ${Date.now()}`;
+      await clickTab(page, 'Status');
+      await waitFor(() => evalJs(page, "document.body.innerText.includes('Status Heartbeat')"), 'status updates tab');
+      await clickText(page, 'Create Update');
+      await waitFor(() => evalJs(page, "document.querySelector('textarea[placeholder^=\"High-level status\"]') !== null"), 'status update editor');
+      await setField(page, 'textarea[placeholder^="High-level status"]', statusSummaryText);
+      await setField(page, 'textarea[placeholder^="What significant"]', 'Browser acceptance achievement');
+      await setField(page, 'textarea[placeholder^="Any blockers"]', 'No blockers');
+      await setField(page, 'textarea[placeholder^="Priorities"]', 'Verify compliance');
+      await clickText(page, 'Submit Final Report');
+      await waitFor(async () => {
+        const updates = await api(`/initiatives/${manualInitiativeId}/status-updates`);
+        return updates.items.some(item => item.summary === statusSummaryText && item.is_draft === false);
+      }, 'status update submit persistence');
+
+      const silentStatus = await api('/initiatives', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: `UI Acceptance Silent Status ${Date.now()}`,
+          priority: 'medium',
+          country: 'Singapore',
+        }),
+      });
+      statusSilentInitiativeId = silentStatus.id;
+      await page.send('Page.navigate', { url: `${uiBaseUrl}/progress/status-updates` });
+      await waitFor(
+        () => evalJs(page, "document.body.innerText.includes('Status Updates') && document.body.innerText.includes('Compliance')"),
+        'status update compliance view',
+      );
+      await waitFor(
+        () => evalJs(page, `document.body.innerText.includes(${JSON.stringify(silentStatus.name)})`),
+        'silent status initiative compliance row',
+        20_000,
+      );
+      await evalJs(page, `
+        (() => {
+          const row = [...document.querySelectorAll('tr')]
+            .find(node => node.textContent.includes(${JSON.stringify(silentStatus.name)}));
+          if (!row) throw new Error('Missing silent status row');
+          const button = row.querySelector('button');
+          if (!button) throw new Error('Missing nudge button');
+          button.click();
+          return true;
+        })()
+      `);
+      await waitFor(async () => {
+        const compliance = await api('/portfolio/status-updates/compliance');
+        const row = compliance.initiatives.find(item => item.initiative_id === statusSilentInitiativeId);
+        return row?.status === 'nuclear' && row.nudge_count >= 1;
+      }, 'status compliance nudge persistence');
+      await page.send('Page.navigate', { url: `${uiBaseUrl}/initiatives/${manualInitiativeId}` });
+      await waitFor(
+        () => evalJs(page, `document.body.innerText.includes(${JSON.stringify(manualInitiativeName)})`),
+        'return to initiative detail after status compliance',
+      );
+
       const upstreamMilestoneName = `UI Acceptance Upstream ${Date.now()}`;
       const downstreamMilestoneName = `UI Acceptance Downstream ${Date.now()}`;
       const checklistText = `UI acceptance checklist ${Date.now()}`;
@@ -659,6 +716,7 @@ async function main() {
         && Number(item.revenue_uplift_base) === 100000
       ), 'Uploaded financial entry was not persisted');
     } finally {
+      if (statusSilentInitiativeId) await api(`/initiatives/${statusSilentInitiativeId}`, { method: 'DELETE' }).catch(() => null);
       if (uploadedInitiativeId) await api(`/initiatives/${uploadedInitiativeId}`, { method: 'DELETE' }).catch(() => null);
       if (manualInitiativeId) await api(`/initiatives/${manualInitiativeId}`, { method: 'DELETE' }).catch(() => null);
     }

@@ -44,3 +44,49 @@ class StatusUpdateItem(BaseModel):
 class StatusUpdateListResponse(BaseModel):
     items: list[StatusUpdateItem]
     total: int
+
+
+class StatusComplianceItem(BaseModel):
+    initiative_id: str
+    initiative_name: str
+    owner_name: str | None = None
+    last_update_at: str | None = None
+    days_since: int
+    status: Literal["on_time", "overdue", "nuclear"]
+    rag_status: Literal["red", "amber", "green"]
+    nudge_count: int = 0
+
+
+class StatusComplianceSummary(BaseModel):
+    total: int
+    on_time: int
+    overdue: int
+    nuclear: int
+
+
+class StatusComplianceResponse(BaseModel):
+    summary: StatusComplianceSummary
+    initiatives: list[StatusComplianceItem]
+
+
+class NudgeCreate(BaseModel):
+    channel: Literal["email", "in_app", "both"] = "both"
+
+
+class NudgeItem(BaseModel):
+    id: str
+    initiative_id: str
+    sent_by_id: str | None = None
+    channel: str
+    sent_at: str
+    initiatives: dict | None = None
+    users: dict | None = None
+
+
+class NudgeResponse(BaseModel):
+    success: bool
+    nudge_id: str | None = None
+    initiative_id: str
+    sent_at: str | None = None
+    channel: str
+    delivery_status: Literal["queued"] = "queued"
