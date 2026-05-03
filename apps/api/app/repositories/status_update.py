@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -110,15 +110,29 @@ class StatusUpdateRepository:
 
     def list_compliance(self) -> list[dict[str, Any]]:
         """Returns a list of all initiatives with their latest status update info."""
-        # Note: This is a complex join, we fetch initiatives and then we'll map the latest update in service
-        # or use a RPC if available. For now, fetch all initiatives and their last status update submitted_at.
+        # Fetch initiatives and let the service map the latest submitted update.
         result = (
             self._c.table("initiatives")
-            .select("id, name, owner_id, users!initiatives_owner_id_fkey(display_name), status_updates(submitted_at, rag_status)")
+            .select(
+                "id, name, owner_id, "
+                "users!initiatives_owner_id_fkey(display_name, email), "
+                "status_updates(submitted_at, rag_status)"
+            )
             .eq("tenant_id", self._tid)
             .execute()
         )
         return result.data or []
+
+    def get_initiative_nudge_target(self, initiative_id: str) -> dict[str, Any] | None:
+        result = (
+            self._c.table("initiatives")
+            .select("id, name, owner_id, users!initiatives_owner_id_fkey(email)")
+            .eq("tenant_id", self._tid)
+            .eq("id", initiative_id)
+            .maybe_single()
+            .execute()
+        )
+        return result.data if result else None
 
     def list_nudge_counts(self) -> dict[str, int]:
         result = (
@@ -133,17 +147,28 @@ class StatusUpdateRepository:
             counts[initiative_id] = counts.get(initiative_id, 0) + 1
         return counts
 
+    def list_nudged_ids_since(self, since: datetime) -> set[str]:
+        result = (
+            self._c.table("nudge_log")
+            .select("initiative_id")
+            .eq("tenant_id", self._tid)
+            .gte("sent_at", since.isoformat())
+            .execute()
+        )
+        return {row["initiative_id"] for row in result.data or []}
+
     def log_nudge(
-        self, initiative_id: str, sent_by_id: str, channel: str = "both",
+        self, initiative_id: str, sent_by_id: str | None, channel: str = "both",
     ) -> dict[str, Any]:
         """Logs a nudge in the nudge_log table."""
         data = {
             "id": str(uuid4()),
             "tenant_id": self._tid,
             "initiative_id": initiative_id,
-            "sent_by_id": sent_by_id,
             "channel": channel,
         }
+        if sent_by_id:
+            data["sent_by_id"] = sent_by_id
         result = self._c.table("nudge_log").insert(data).execute()
         return result.data[0] if result.data else {}
 

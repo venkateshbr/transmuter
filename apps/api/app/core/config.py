@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     # Procrastinate (PostgreSQL connection string)
     database_url: str = ""
 
+    # Notifications
+    resend_api_key: str = ""
+    resend_from_email: str = ""
+
     # Feature flags
     ai_enabled: bool = True
 

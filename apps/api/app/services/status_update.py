@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -21,13 +21,15 @@ from app.domain.status_updates import (
     StatusUpdatePatch,
 )
 from app.repositories.status_update import StatusUpdateRepository
+from app.services.nudge_delivery import NudgeDeliveryService
 
 
 class StatusUpdateService:
-    def __init__(self, client: Client, tenant_id: UUID, user_id: UUID) -> None:
+    def __init__(self, client: Client, tenant_id: UUID, user_id: UUID | None) -> None:
         self._repo = StatusUpdateRepository(client, tenant_id)
         self._tenant_id = tenant_id
-        self._user_id = str(user_id)
+        self._user_id = str(user_id) if user_id else None
+        self._delivery = NudgeDeliveryService()
 
     # ── List / Get ───────────────────────────────────────────────────
 
@@ -170,17 +172,61 @@ class StatusUpdateService:
     ) -> NudgeResponse:
         """Triggers a nudge for the initiative owner."""
         channel = (data or NudgeCreate()).channel
+        target = self._repo.get_initiative_nudge_target(initiative_id)
+        if not target:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Initiative not found",
+            )
         nudge = self._repo.log_nudge(initiative_id, self._user_id, channel)
+        owner = target.get("users") if isinstance(target.get("users"), dict) else {}
+        delivery = self._delivery.deliver(
+            channel=channel,
+            owner_email=owner.get("email"),
+            initiative_name=target["name"],
+        )
         return NudgeResponse(
             success=True,
             nudge_id=nudge.get("id"),
             initiative_id=initiative_id,
             sent_at=nudge.get("sent_at"),
             channel=channel,
+            delivery_status=delivery.status,
         )
 
     def list_nudges(self) -> list[dict[str, Any]]:
         return self._repo.list_nudges()
+
+    def nudge_non_compliant_initiatives(self, channel: str = "both") -> list[NudgeResponse]:
+        from datetime import timedelta
+
+        rows = self.get_compliance_stats().initiatives
+        recently_nudged = self._repo.list_nudged_ids_since(datetime.now(UTC) - timedelta(hours=24))
+        responses: list[NudgeResponse] = []
+        for row in rows:
+            if row.status == "on_time" or row.initiative_id in recently_nudged:
+                continue
+            target = self._repo.get_initiative_nudge_target(row.initiative_id)
+            if not target:
+                continue
+            nudge = self._repo.log_nudge(row.initiative_id, None, channel)
+            owner = target.get("users") if isinstance(target.get("users"), dict) else {}
+            delivery = self._delivery.deliver(
+                channel=channel,
+                owner_email=owner.get("email"),
+                initiative_name=target["name"],
+            )
+            responses.append(
+                NudgeResponse(
+                    success=True,
+                    nudge_id=nudge.get("id"),
+                    initiative_id=row.initiative_id,
+                    sent_at=nudge.get("sent_at"),
+                    channel=channel,
+                    delivery_status=delivery.status,
+                )
+            )
+        return responses
 
     def _to_item(self, row: dict[str, Any]) -> StatusUpdateItem:
         author = row.get("users") or {}

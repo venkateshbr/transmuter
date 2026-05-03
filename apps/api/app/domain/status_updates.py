@@ -89,4 +89,4 @@ class NudgeResponse(BaseModel):
     initiative_id: str
     sent_at: str | None = None
     channel: str
-    delivery_status: Literal["queued"] = "queued"
+    delivery_status: Literal["queued", "sent", "failed"] = "queued"

@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from app.core.auth import CurrentUser, get_current_user
+from app.core.auth import CurrentUser, get_current_user, require_role
 from app.core.database import get_supabase_admin
 from app.domain.status_updates import (
     NudgeCreate,
@@ -73,6 +73,19 @@ async def list_nudges(
     svc: Annotated[StatusUpdateService, Depends(_svc)],
 ) -> list[NudgeItem]:
     return svc.list_nudges()
+
+
+@router.post(
+    "/status-updates/nudges/run-daily",
+    response_model=list[NudgeResponse],
+)
+async def run_daily_nudges(
+    _current_user: Annotated[
+        CurrentUser, Depends(require_role("transformation_office"))
+    ],
+    svc: Annotated[StatusUpdateService, Depends(_svc)],
+) -> list[NudgeResponse]:
+    return svc.nudge_non_compliant_initiatives()
 
 
 def _svc(

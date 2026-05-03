@@ -9,13 +9,12 @@ from __future__ import annotations
 import os
 from decimal import Decimal
 from io import BytesIO
+from uuid import uuid4
 from xml.etree import ElementTree as ET
 from zipfile import ZIP_DEFLATED, ZipFile
-from uuid import uuid4
 
 import httpx
 import pytest
-
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("RUN_REAL_ACCEPTANCE") != "1",
@@ -475,6 +474,18 @@ def test_real_api_status_update_compliance_and_nudge_flow() -> None:
         silent.raise_for_status()
         silent_id = silent.json()["id"]
 
+        auto = client.post(
+            "/initiatives",
+            headers=headers,
+            json={
+                "name": f"Acceptance Daily Nudge Status {uuid4()}",
+                "priority": "medium",
+                "country": "Singapore",
+            },
+        )
+        auto.raise_for_status()
+        auto_id = auto.json()["id"]
+
         try:
             draft = client.post(
                 f"/initiatives/{tracked_id}/status-updates",
@@ -542,9 +553,26 @@ def test_real_api_status_update_compliance_and_nudge_flow() -> None:
             nudges = client.get("/status-updates/nudges", headers=headers)
             nudges.raise_for_status()
             assert any(item["id"] == nudge_data["nudge_id"] for item in nudges.json())
+
+            daily = client.post("/status-updates/nudges/run-daily", headers=headers)
+            daily.raise_for_status()
+            daily_data = daily.json()
+            assert any(item["initiative_id"] == auto_id for item in daily_data)
+
+            compliance_after_daily = client.get(
+                "/portfolio/status-updates/compliance",
+                headers=headers,
+            )
+            compliance_after_daily.raise_for_status()
+            auto_after = next(
+                item for item in compliance_after_daily.json()["initiatives"]
+                if item["initiative_id"] == auto_id
+            )
+            assert auto_after["nudge_count"] >= 1
         finally:
             client.delete(f"/initiatives/{tracked_id}", headers=headers)
             client.delete(f"/initiatives/{silent_id}", headers=headers)
+            client.delete(f"/initiatives/{auto_id}", headers=headers)
 
 
 def test_real_api_initiative_overview_metadata_and_editing() -> None:
