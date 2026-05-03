@@ -1,11 +1,12 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ApiService } from '../../core/services/api.service';
+import { FormsModule } from '@angular/forms';
 
 @Component({
   selector: 'app-people',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, FormsModule],
   template: `
     <div class="p-8 space-y-8 animate-fade-in" style="background:var(--t-bg)">
       
@@ -22,7 +23,7 @@ import { ApiService } from '../../core/services/api.service';
             <span class="material-icons text-xs">group</span>
             <span class="text-[10px] font-black uppercase tracking-widest">{{ people().length }} ACTIVE PLATFORM USERS</span>
           </div>
-          <button class="btn-primary text-sm flex items-center gap-2 h-10">
+          <button (click)="showInvite.set(true)" class="btn-primary text-sm flex items-center gap-2 h-10">
             <span>+</span> Invite Member
           </button>
         </div>
@@ -50,7 +51,7 @@ import { ApiService } from '../../core/services/api.service';
       @if (activeTab === 'directory') {
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
           @for (p of people(); track p.id) {
-            <div (click)="selectedUser = p" class="card p-6 flex flex-col items-center text-center hover:border-[var(--t-accent)] transition-all cursor-pointer group relative overflow-hidden">
+            <div (click)="openProfile(p)" class="card p-6 flex flex-col items-center text-center hover:border-[var(--t-accent)] transition-all cursor-pointer group relative overflow-hidden">
               <!-- Selection Highlight -->
               <div class="absolute inset-0 bg-[var(--t-accent)] opacity-0 group-hover:opacity-[0.02] transition-opacity"></div>
               
@@ -62,7 +63,7 @@ import { ApiService } from '../../core/services/api.service';
                 {{ p.display_name || 'Anonymous' }}
               </h3>
               <p class="text-[9px] font-black text-[var(--t-accent)] uppercase tracking-widest mt-1">
-                {{ p.role.replace('_', ' ') }}
+                {{ formatRole(p.role) }}
               </p>
               <p class="text-[10px] text-[var(--t-text-secondary)] mt-2 font-medium">{{ p.title || 'N/A' }}</p>
 
@@ -74,14 +75,14 @@ import { ApiService } from '../../core/services/api.service';
                 <div>
                   <p class="text-[8px] font-black text-[var(--t-text-tertiary)] uppercase tracking-tighter">Pressure</p>
                   <p class="text-lg font-black" [style.color]="getPressureColor(p.pressure_score)">
-                    {{ p.pressure_score.toFixed(1) }}
+                    {{ formatPressure(p.pressure_score) }}
                   </p>
                 </div>
               </div>
 
               <div class="w-full mt-6 flex gap-2">
-                <button class="flex-1 py-2 rounded-xl bg-[var(--t-surface-raised)] text-[9px] font-black uppercase tracking-widest hover:bg-[var(--t-accent-soft)] hover:text-[var(--t-accent)] transition-all">Profile</button>
-                <button class="flex-1 py-2 rounded-xl bg-[var(--t-surface-raised)] text-[9px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 transition-all">Archive</button>
+                <button (click)="openProfile(p); $event.stopPropagation()" class="flex-1 py-2 rounded-xl bg-[var(--t-surface-raised)] text-[9px] font-black uppercase tracking-widest hover:bg-[var(--t-accent-soft)] hover:text-[var(--t-accent)] transition-all">Profile</button>
+                <button (click)="deactivate(p); $event.stopPropagation()" class="flex-1 py-2 rounded-xl bg-[var(--t-surface-raised)] text-[9px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 transition-all">Archive</button>
               </div>
             </div>
           }
@@ -101,44 +102,74 @@ import { ApiService } from '../../core/services/api.service';
               </tr>
             </thead>
             <tbody class="divide-y divide-[var(--t-border)]">
+               @for (invite of invites(); track invite.id) {
                <tr class="hover:bg-[var(--t-surface-raised)]/50 transition-colors">
                  <td class="px-8 py-6">
-                   <p class="text-sm font-black text-[var(--t-text-primary)]">vishwa@ishirock.com</p>
+                   <p class="text-sm font-black text-[var(--t-text-primary)]">{{ invite.email }}</p>
                    <p class="text-[10px] text-[var(--t-text-secondary)] mt-1 font-medium">Invited by Transformation Office</p>
                  </td>
                  <td class="px-8 py-6">
-                   <span class="badge-purple font-black text-[9px] uppercase tracking-widest px-2 py-0.5">Workstream Lead</span>
+                   <span class="badge-purple font-black text-[9px] uppercase tracking-widest px-2 py-0.5">{{ formatRole(invite.role) }}</span>
                  </td>
                  <td class="px-8 py-6">
-                   <span class="text-[10px] font-bold text-[var(--t-text-secondary)] uppercase">ERP (Finance)</span>
+                   <span class="text-[10px] font-bold text-[var(--t-text-secondary)] uppercase">{{ invite.market || 'Unassigned' }}</span>
                  </td>
                  <td class="px-8 py-6 text-right">
                    <div class="flex flex-col items-end gap-1">
-                     <span class="text-xs font-black text-[var(--t-accent)]">SENT 2D AGO</span>
-                     <button class="text-[9px] font-black text-[var(--t-text-tertiary)] hover:text-[var(--t-accent)] uppercase underline">Resend Nudge</button>
+                     <span class="text-xs font-black text-[var(--t-accent)]">{{ invite.status | uppercase }}</span>
+                     <button (click)="deactivate(invite)" class="text-[9px] font-black text-[var(--t-text-tertiary)] hover:text-[var(--t-accent)] uppercase underline">Deactivate</button>
                    </div>
                  </td>
                </tr>
+               } @empty {
+               <tr>
+                 <td colspan="4" class="px-8 py-12 text-center text-[var(--t-text-secondary)]">No pending invites.</td>
+               </tr>
+               }
             </tbody>
           </table>
         </div>
       }
 
+      @if (showInvite()) {
+        <div class="overlay flex items-center justify-center p-6">
+          <div class="card w-full max-w-lg p-8 bg-[var(--t-surface)]">
+            <div class="flex items-center justify-between mb-6">
+              <h2 class="text-xl font-black text-[var(--t-text-primary)]">Invite Platform User</h2>
+              <button (click)="showInvite.set(false)" class="w-9 h-9 rounded-full hover:bg-[var(--t-surface-raised)]">
+                <span class="material-icons text-sm">close</span>
+              </button>
+            </div>
+            <div class="space-y-4">
+              <input [(ngModel)]="inviteForm.email" class="input-field w-full" placeholder="email@company.com" aria-label="Invite email" />
+              <input [(ngModel)]="inviteForm.display_name" class="input-field w-full" placeholder="Display name" aria-label="Invite display name" />
+              <input [(ngModel)]="inviteForm.title" class="input-field w-full" placeholder="Title" aria-label="Invite title" />
+              <select [(ngModel)]="inviteForm.role" class="input-field w-full" aria-label="Invite role">
+                <option value="initiative_owner">Initiative Owner</option>
+                <option value="workstream_lead">Workstream Lead</option>
+                <option value="transformation_office">Transformation Office</option>
+              </select>
+              <button (click)="createInvite()" class="btn-primary w-full h-11 rounded-xl">Send Invite</button>
+            </div>
+          </div>
+        </div>
+      }
+
       <!-- User Detail Modal / Overlay -->
-      @if (selectedUser) {
+      @if (selectedUser(); as selectedUser) {
         <div class="overlay flex items-center justify-end p-0">
           <div class="h-full w-full max-w-xl bg-[var(--t-surface)] shadow-2xl animate-slide-in-right flex flex-col">
             <div class="p-8 border-b border-[var(--t-border)] flex justify-between items-center bg-gradient-to-r from-[var(--t-surface)] to-[var(--t-surface-raised)]">
                <div class="flex items-center gap-4">
                   <div class="w-14 h-14 rounded-2xl bg-[var(--t-accent)] text-white flex items-center justify-center text-xl font-black">
-                    {{ selectedUser.display_name.substring(0,1) }}
+                    {{ (selectedUser.display_name || 'U').substring(0,1) }}
                   </div>
                   <div>
                     <h2 class="text-xl font-black text-[var(--t-text-primary)]">{{ selectedUser.display_name }}</h2>
-                    <p class="text-[10px] font-black text-[var(--t-accent)] uppercase tracking-widest">{{ selectedUser.role }}</p>
+                    <p class="text-[10px] font-black text-[var(--t-accent)] uppercase tracking-widest">{{ formatRole(selectedUser.role) }}</p>
                   </div>
                </div>
-               <button (click)="selectedUser = null" class="w-10 h-10 rounded-full hover:bg-[var(--t-surface-raised)] flex items-center justify-center transition-colors">
+               <button (click)="selectedUser.set(null)" class="w-10 h-10 rounded-full hover:bg-[var(--t-surface-raised)] flex items-center justify-center transition-colors">
                  <span class="material-icons">close</span>
                </button>
             </div>
@@ -147,33 +178,35 @@ import { ApiService } from '../../core/services/api.service';
                <section>
                  <h3 class="text-[10px] font-black text-[var(--t-text-tertiary)] uppercase tracking-widest mb-4">On Their Plate</h3>
                  <div class="space-y-4">
-                    @for (i of [1,2]; track i) {
+                    @for (i of selectedUser.on_their_plate?.initiatives || []; track i.id) {
                       <div class="card p-5 border-l-4 border-[var(--t-accent)] flex justify-between items-center">
                         <div>
-                          <p class="text-xs font-black text-[var(--t-text-primary)]">Digitizing Field Sales Strategy</p>
-                          <p class="text-[10px] text-[var(--t-text-secondary)] mt-1">Initiative Owner · Due in 45 days</p>
+                          <p class="text-xs font-black text-[var(--t-text-primary)]">{{ i.name }}</p>
+                          <p class="text-[10px] text-[var(--t-text-secondary)] mt-1">Initiative Owner · {{ i.planned_end || 'No due date' }}</p>
                         </div>
-                        <span class="text-xs font-mono font-black text-[var(--t-accent)]">RAG: GREEN</span>
+                        <span class="text-xs font-mono font-black text-[var(--t-accent)]">RAG: {{ i.rag_status | uppercase }}</span>
                       </div>
+                    } @empty {
+                      <p class="text-xs text-[var(--t-text-secondary)]">No active owned initiatives.</p>
                     }
                  </div>
                </section>
 
                <section class="grid grid-cols-2 gap-6">
                  <div class="card p-6 bg-[var(--t-surface-raised)] border-none">
-                    <p class="text-[9px] font-black text-[var(--t-text-tertiary)] uppercase tracking-widest mb-1">Last Platform Login</p>
-                    <p class="text-sm font-black text-[var(--t-text-primary)]">May 2, 2026 · 14:22</p>
+                    <p class="text-[9px] font-black text-[var(--t-text-tertiary)] uppercase tracking-widest mb-1">Pressure Score</p>
+                    <p class="text-sm font-black text-[var(--t-text-primary)]">{{ formatPressure(selectedUser.pressure?.pressure_score || selectedUser.pressure_score) }}</p>
                  </div>
                  <div class="card p-6 bg-[var(--t-surface-raised)] border-none">
                     <p class="text-[9px] font-black text-[var(--t-text-tertiary)] uppercase tracking-widest mb-1">Market Assignment</p>
-                    <p class="text-sm font-black text-[var(--t-text-primary)]">Southeast Asia (Group)</p>
+                    <p class="text-sm font-black text-[var(--t-text-primary)]">{{ selectedUser.market || 'Unassigned' }}</p>
                  </div>
                </section>
             </div>
 
             <div class="p-8 border-t border-[var(--t-border)] flex gap-4 bg-[var(--t-surface-raised)]/30">
-               <button class="flex-1 btn-primary py-3 rounded-xl shadow-lg">Edit Profile</button>
-               <button class="flex-1 py-3 rounded-xl border border-[var(--t-border)] text-[10px] font-black uppercase tracking-widest hover:bg-white transition-all">Deactivate User</button>
+               <button (click)="makeGhost(selectedUser)" class="flex-1 btn-primary py-3 rounded-xl shadow-lg">Convert to Ghost</button>
+               <button (click)="deactivate(selectedUser)" class="flex-1 py-3 rounded-xl border border-[var(--t-border)] text-[10px] font-black uppercase tracking-widest hover:bg-white transition-all">Deactivate User</button>
             </div>
           </div>
         </div>
@@ -195,19 +228,79 @@ import { ApiService } from '../../core/services/api.service';
 export class PeopleComponent implements OnInit {
   private readonly api = inject(ApiService);
   people = signal<any[]>([]);
+  invites = signal<any[]>([]);
   
   activeTab: 'directory' | 'pending' = 'directory';
-  selectedUser: any | null = null;
+  selectedUser = signal<any | null>(null);
+  showInvite = signal(false);
+  inviteForm = {
+    email: '',
+    display_name: '',
+    title: '',
+    role: 'initiative_owner',
+  };
 
   ngOnInit() {
-    this.api.get<any>('/people').subscribe(res => {
+    this.loadPeople();
+    this.loadInvites();
+  }
+
+  loadPeople() {
+    this.api.get<any>('/people', { status: 'active' }).subscribe(res => {
       this.people.set(res.items || []);
     });
   }
 
-  getPressureColor(score: number): string {
-    if (score < 3.4) return 'var(--t-green)';
-    if (score < 6.7) return 'var(--t-amber)';
+  loadInvites() {
+    this.api.get<any>('/invites').subscribe(res => {
+      this.invites.set(res.items || []);
+    });
+  }
+
+  openProfile(user: any) {
+    this.api.get<any>(`/users/${user.id}`).subscribe(profile => {
+      this.selectedUser.set(profile);
+    });
+  }
+
+  createInvite() {
+    this.api.post<any>('/invites', this.inviteForm).subscribe(invite => {
+      this.showInvite.set(false);
+      this.inviteForm = { email: '', display_name: '', title: '', role: 'initiative_owner' };
+      this.loadPeople();
+      this.loadInvites();
+      this.openProfile(invite);
+    });
+  }
+
+  makeGhost(user: any) {
+    this.api.post<any>(`/users/${user.id}/ghost`, {}).subscribe(updated => {
+      this.selectedUser.set(updated);
+      this.loadPeople();
+      this.loadInvites();
+    });
+  }
+
+  deactivate(user: any) {
+    this.api.post<any>(`/users/${user.id}/deactivate`, {}).subscribe(() => {
+      this.selectedUser.set(null);
+      this.loadPeople();
+      this.loadInvites();
+    });
+  }
+
+  formatRole(role: string | undefined): string {
+    return (role || 'unassigned').replace(/_/g, ' ');
+  }
+
+  formatPressure(score: string | number | undefined): string {
+    return Number(score || 0).toFixed(1);
+  }
+
+  getPressureColor(score: string | number): string {
+    const value = Number(score || 0);
+    if (value < 3.4) return 'var(--t-green)';
+    if (value < 6.7) return 'var(--t-amber)';
     return 'var(--t-red)';
   }
 }

@@ -214,6 +214,9 @@ export class MeetingsListComponent implements OnInit {
   }
 
   createMeeting() {
+    if (!this.draft.owner_id && this.users().length) {
+      this.draft.owner_id = this.users()[0].id;
+    }
     if (!this.draft.name.trim() || !this.draft.owner_id) {
       this.error.set('Name and owner are required.');
       return;

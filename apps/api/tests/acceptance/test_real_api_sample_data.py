@@ -671,6 +671,93 @@ def test_real_api_governance_gate_submission_and_portfolio_health() -> None:
             client.delete(f"/initiatives/{initiative_id}", headers=headers)
 
 
+def test_real_api_people_directory_profile_invite_and_pressure() -> None:
+    with _client() as client:
+        headers = _auth_headers(client)
+
+        users = client.get("/users", headers=headers)
+        users.raise_for_status()
+        user_rows = users.json()["items"]
+        assert len(user_rows) >= 1
+        user_id = user_rows[0]["id"]
+        original_title = user_rows[0].get("title")
+
+        filtered = client.get("/users", headers=headers, params={"search": user_rows[0]["email"]})
+        filtered.raise_for_status()
+        assert any(item["id"] == user_id for item in filtered.json()["items"])
+
+        profile = client.get(f"/users/{user_id}", headers=headers)
+        profile.raise_for_status()
+        profile_data = profile.json()
+        assert "on_their_plate" in profile_data
+        assert "pressure" in profile_data
+        original_workstream_ids = [
+            item["workstream_id"] for item in profile_data.get("workstreams", [])
+        ]
+
+        pressure = client.get(f"/users/{user_id}/pressure", headers=headers)
+        pressure.raise_for_status()
+        assert Decimal(pressure.json()["pressure_score"]) >= Decimal("0.0")
+
+        updated = client.put(
+            f"/users/{user_id}",
+            headers=headers,
+            json={"title": "Acceptance People Lead"},
+        )
+        updated.raise_for_status()
+        assert updated.json()["title"] == "Acceptance People Lead"
+
+        workstreams = client.get("/workstreams", headers=headers)
+        workstreams.raise_for_status()
+        workstream_rows = workstreams.json()["data"]
+        invite_email = f"transmuter.acceptance+people.{uuid4().hex}@gmail.com"
+        invited_id: str | None = None
+        try:
+            if workstream_rows:
+                assigned = client.put(
+                    f"/users/{user_id}/workstreams",
+                    headers=headers,
+                    json={"workstream_ids": [workstream_rows[0]["id"]]},
+                )
+                assigned.raise_for_status()
+                assert (
+                    assigned.json()["workstreams"][0]["workstream_id"]
+                    == workstream_rows[0]["id"]
+                )
+
+            invited = client.post(
+                "/invites",
+                headers=headers,
+                json={
+                    "email": invite_email,
+                    "display_name": "Acceptance Invite",
+                    "role": "initiative_owner",
+                    "title": "Invited Owner",
+                },
+            )
+            invited.raise_for_status()
+            invited_data = invited.json()
+            invited_id = invited_data["id"]
+            assert invited_data["status"] == "ghost"
+
+            invites = client.get("/invites", headers=headers)
+            invites.raise_for_status()
+            assert any(item["email"] == invite_email for item in invites.json()["items"])
+        finally:
+            if invited_id:
+                client.post(f"/users/{invited_id}/deactivate", headers=headers)
+            client.put(
+                f"/users/{user_id}/workstreams",
+                headers=headers,
+                json={"workstream_ids": original_workstream_ids},
+            )
+            client.put(
+                f"/users/{user_id}",
+                headers=headers,
+                json={"title": original_title},
+            )
+
+
 def test_real_api_initiative_overview_metadata_and_editing() -> None:
     with _client() as client:
         headers = _auth_headers(client)

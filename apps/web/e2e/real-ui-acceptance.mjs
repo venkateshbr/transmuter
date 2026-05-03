@@ -48,6 +48,7 @@ async function connectToPage(wsUrl) {
   const socket = new WebSocket(wsUrl);
   let nextId = 1;
   const pending = new Map();
+  const events = [];
 
   socket.addEventListener('message', event => {
     const message = JSON.parse(event.data);
@@ -56,6 +57,8 @@ async function connectToPage(wsUrl) {
       pending.delete(message.id);
       if (message.error) reject(new Error(message.error.message));
       else resolve(message.result);
+    } else if (message.method === 'Runtime.exceptionThrown' || message.method === 'Log.entryAdded') {
+      events.push(message);
     }
   });
 
@@ -73,6 +76,7 @@ async function connectToPage(wsUrl) {
     close() {
       socket.close();
     },
+    events,
   };
 }
 
@@ -176,6 +180,7 @@ async function main() {
 
     await page.send('Page.enable');
     await page.send('Runtime.enable');
+    await page.send('Log.enable');
     await page.send('Page.addScriptToEvaluateOnNewDocument', {
       source: `globalThis.__TRANSMUTER_API_URL__ = ${JSON.stringify(apiBaseUrl)};`,
     });
@@ -218,6 +223,96 @@ async function main() {
         ...(init.headers ?? {}),
       },
     });
+
+    const peopleRows = await api('/users');
+    assert(peopleRows.items.length > 0, 'Seeded users were not available');
+    const seededPerson = peopleRows.items.find(item => item.status === 'active') ?? peopleRows.items[0];
+    const seededPersonLabel = seededPerson.display_name || seededPerson.email;
+    const inviteEmail = `transmuter.acceptance+ui.people.${Date.now()}@gmail.com`;
+    let invitedPersonId;
+
+    try {
+      await page.send('Page.navigate', { url: `${uiBaseUrl}/people` });
+      await waitFor(
+        () => evalJs(page, "document.body.innerText.includes('People Insight') && document.body.innerText.includes('Invite Member')"),
+        'people directory',
+        20_000,
+      );
+      await waitFor(
+        () => evalJs(page, `document.body.innerText.includes(${JSON.stringify(seededPersonLabel)})`),
+        'seeded person visible in directory',
+      );
+      await evalJs(page, `
+        (() => {
+          const label = ${JSON.stringify(seededPersonLabel)};
+          const card = [...document.querySelectorAll('.card')]
+            .find(node => node.textContent.includes(label));
+          if (!card) throw new Error('Missing seeded person card: ' + label);
+          card.click();
+          return true;
+        })()
+      `);
+      try {
+        await waitFor(
+          () => evalJs(page, `
+            (() => {
+              const text = document.body.innerText.toLowerCase();
+              return text.includes('on their plate') && text.includes('pressure score');
+            })()
+          `),
+          'people profile drawer',
+        );
+      } catch (error) {
+        const peopleState = await evalJs(page, `
+          (() => JSON.stringify({
+            hasOverlay: document.querySelector('.overlay') !== null,
+            hasSelectedUser: document.body.innerText.includes(${JSON.stringify(seededPersonLabel)}),
+            text: document.body.innerText.slice(0, 1600),
+          }))()
+        `);
+        const browserEvents = page.events.slice(-5).map(event => JSON.stringify(event.params));
+        throw new Error(
+          `${error.message}\nPeople UI state: ${peopleState}\nBrowser events: ${browserEvents.join('\n')}`,
+        );
+      }
+      const profile = await api(`/users/${seededPerson.id}`);
+      assert(profile.on_their_plate && profile.pressure, 'People profile payload missed workload or pressure');
+      await evalJs(page, `document.querySelector('.overlay button .material-icons')?.closest('button')?.click()`);
+
+      await clickText(page, 'Invite Member');
+      await waitFor(
+        () => evalJs(page, "document.body.innerText.includes('Invite Platform User')"),
+        'people invite modal',
+      );
+      await setField(page, 'input[aria-label="Invite email"]', inviteEmail);
+      await setField(page, 'input[aria-label="Invite display name"]', 'UI Acceptance Invite');
+      await setField(page, 'input[aria-label="Invite title"]', 'Acceptance Owner');
+      await evalJs(page, `
+        (() => {
+          const select = document.querySelector('select[aria-label="Invite role"]');
+          select.value = 'initiative_owner';
+          select.dispatchEvent(new Event('input', { bubbles: true }));
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+          return true;
+        })()
+      `);
+      await clickText(page, 'Send Invite');
+      await waitFor(async () => {
+        const invites = await api('/invites');
+        const invited = invites.items.find(item => item.email === inviteEmail);
+        if (invited) invitedPersonId = invited.id;
+        return invited?.status === 'ghost';
+      }, 'people invite persistence', 20_000);
+      await clickText(page, 'Pending Invites');
+      await waitFor(
+        () => evalJs(page, `document.body.innerText.includes(${JSON.stringify(inviteEmail)})`),
+        'pending invite visible',
+      );
+    } finally {
+      if (invitedPersonId) {
+        await api(`/users/${invitedPersonId}/deactivate`, { method: 'POST', body: '{}' }).catch(() => null);
+      }
+    }
 
     const manualInitiativeName = `UI Acceptance Initiative ${Date.now()}`;
     let manualInitiativeId;
@@ -1026,7 +1121,7 @@ async function main() {
     }
 
     await page.close();
-    console.log('Real browser acceptance passed: login, dashboard, initiative create/import, overview edit, team owner/member flow, summary results persistence, milestones/checklist/dependencies, KPI entry save, risk create/close, meetings flow, financial grid save/reload, Excel export/import, and value bridge.');
+    console.log('Real browser acceptance passed: login, dashboard, people directory/profile/invite, initiative create/import, overview edit, team owner/member flow, summary results persistence, milestones/checklist/dependencies, KPI entry save, risk create/close, meetings flow, financial grid save/reload, Excel export/import, and value bridge.');
   } finally {
     chrome.kill('SIGTERM');
     await new Promise(resolve => {
