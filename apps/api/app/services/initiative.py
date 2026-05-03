@@ -20,13 +20,29 @@ from app.domain.initiatives import (
     InitiativeUpdate,
     PressureBreakdown,
 )
+from app.domain.financials import FinancialGridUpdate, FinancialSummary
+from app.domain.initiative_intake import (
+    InitiativeIntakeCreate,
+    InitiativeWorkbookPreview,
+)
+from app.domain.kpis import KPICreate
+from app.domain.milestones import MilestoneCreate
+from app.domain.risks import RiskCreate
 from app.repositories.initiative import InitiativeRepository
+from app.services.kpi import KPIService
 from app.services.financial import FinancialService
-from app.services.initiative_workbook import build_initiative_template, parse_initiative_template
+from app.services.initiative_workbook import (
+    build_initiative_template,
+    build_preview,
+    parse_initiative_template,
+)
+from app.services.milestone import MilestoneService
+from app.services.risk import RiskService
 
 
 class InitiativeService:
     def __init__(self, client: Client, tenant_id: UUID) -> None:
+        self._client = client
         self._repo = InitiativeRepository(client, tenant_id)
         self._fin = FinancialService(client, tenant_id)
         self._tenant_id = tenant_id
@@ -140,18 +156,108 @@ class InitiativeService:
     def export_template(self) -> bytes:
         return build_initiative_template()
 
-    def preview_import(self, data: bytes) -> InitiativeCreate:
-        return parse_initiative_template(data)
+    def preview_import(self, data: bytes) -> InitiativeWorkbookPreview:
+        return build_preview(parse_initiative_template(data))
 
     def import_template(self, data: bytes, created_by: UUID) -> InitiativeDetail:
         parsed = parse_initiative_template(data)
-        return self.create_initiative(parsed, created_by)
+        if parsed.validation_errors:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=[error.model_dump() for error in parsed.validation_errors],
+            )
+        created = self.create_initiative(parsed.overview, created_by)
+        initiative_id = str(created.id)
+        if parsed.financial_entries or parsed.cost_lines:
+            self._fin.update_financial_grid(
+                initiative_id,
+                FinancialGridUpdate(
+                    entries=parsed.financial_entries,
+                    cost_lines=parsed.cost_lines,
+                ),
+            )
+        kpi_service = KPIService(self._client, self._tenant_id)
+        for kpi in parsed.kpis:
+            created_kpi = kpi_service.create_kpi(initiative_id, self._as_kpi_create(kpi))
+            if kpi.entries:
+                kpi_service.upsert_entries(
+                    initiative_id,
+                    created_kpi.id,
+                    kpi.entries,
+                )
+        risk_service = RiskService(self._client, self._tenant_id)
+        for risk in parsed.risks:
+            risk_service.create_risk(initiative_id, risk)
+        milestone_service = MilestoneService(self._client, self._tenant_id)
+        for milestone in parsed.milestones:
+            milestone_service.create_milestone(initiative_id, milestone)
+        return self.get_initiative(initiative_id)
+
+    def create_from_intake(
+        self, data: InitiativeIntakeCreate, created_by: UUID,
+    ) -> InitiativeDetail:
+        created = self.create_initiative(data.initiative, created_by)
+        initiative_id = str(created.id)
+        suggestions = data.suggestions
+        if not suggestions:
+            return created
+
+        accepted_entries = [
+            item for item in suggestions.financial_entries if item.accepted
+        ]
+        accepted_costs = [
+            item for item in suggestions.cost_lines if item.accepted
+        ]
+        if accepted_entries or accepted_costs:
+            self._fin.update_financial_grid(
+                initiative_id,
+                FinancialGridUpdate(entries=accepted_entries, cost_lines=accepted_costs),
+            )
+
+        kpi_service = KPIService(self._client, self._tenant_id)
+        for kpi in [item for item in suggestions.kpis if item.accepted]:
+            created_kpi = kpi_service.create_kpi(initiative_id, self._as_kpi_create(kpi))
+            if kpi.entries:
+                kpi_service.upsert_entries(initiative_id, created_kpi.id, kpi.entries)
+
+        risk_service = RiskService(self._client, self._tenant_id)
+        for risk in [item for item in suggestions.risks if item.accepted]:
+            risk_service.create_risk(initiative_id, self._as_risk_create(risk))
+
+        milestone_service = MilestoneService(self._client, self._tenant_id)
+        for milestone in [item for item in suggestions.milestones if item.accepted]:
+            milestone_service.create_milestone(initiative_id, self._as_milestone_create(milestone))
+        return self.get_initiative(initiative_id)
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
     def _assert_exists(self, initiative_id: str) -> None:
         if not self._repo.get(initiative_id):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Initiative not found")
+
+    @staticmethod
+    def _as_kpi_create(data: object) -> KPICreate:
+        fields = {"name", "type", "category", "frequency", "unit"}
+        raw = data.model_dump(include=fields) if hasattr(data, "model_dump") else data
+        return KPICreate.model_validate(raw)
+
+    @staticmethod
+    def _as_risk_create(data: object) -> RiskCreate:
+        fields = {
+            "description", "type", "impact", "likelihood",
+            "status", "owner_id", "mitigation", "escalated",
+        }
+        raw = data.model_dump(include=fields) if hasattr(data, "model_dump") else data
+        return RiskCreate.model_validate(raw)
+
+    @staticmethod
+    def _as_milestone_create(data: object) -> MilestoneCreate:
+        fields = {
+            "name", "description", "owner_id", "priority",
+            "planned_start", "planned_end",
+        }
+        raw = data.model_dump(include=fields) if hasattr(data, "model_dump") else data
+        return MilestoneCreate.model_validate(raw)
 
     @staticmethod
     def _to_list_item(row: dict) -> InitiativeListItem:  # type: ignore[type-arg]

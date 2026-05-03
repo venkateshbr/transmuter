@@ -262,6 +262,30 @@ async function main() {
       await waitFor(() => evalJs(page, "document.querySelector('#init-start') !== null"), 'guided initiative timeline step');
       await setField(page, '#init-start', '2026-06-01');
       await setField(page, '#init-end', '2026-09-30');
+      await clickText(page, 'Generate Suggestions');
+      try {
+        await waitFor(
+          () => evalJs(page, "document.body.innerText.includes('HITL REVIEW') && document.body.innerText.includes('Transmuter suggestions')"),
+          'guided initiative suggestions',
+          20_000,
+        );
+      } catch (error) {
+        const bodyText = await evalJs(page, "document.body.innerText");
+        throw new Error(`${error.message}\nCurrent page text:\n${bodyText}`);
+      }
+      await evalJs(page, `
+        (() => {
+          const kpiInput = [...document.querySelectorAll('input[aria-label="Suggested KPI name"]')][0];
+          if (!kpiInput) throw new Error('Missing suggested KPI input');
+          kpiInput.value = 'UI acceptance modified KPI';
+          kpiInput.dispatchEvent(new Event('input', { bubbles: true }));
+          kpiInput.dispatchEvent(new Event('change', { bubbles: true }));
+          const riskCheckbox = [...document.querySelectorAll('input[aria-label="Accept risk suggestion"]')][0];
+          if (!riskCheckbox) throw new Error('Missing suggested risk checkbox');
+          riskCheckbox.click();
+          return true;
+        })()
+      `);
       await clickText(page, 'Create Initiative');
       await waitFor(
         () => evalJs(page, `
@@ -276,6 +300,13 @@ async function main() {
       const manualInitiative = await api(`/initiatives/${manualInitiativeId}`);
       assert(manualInitiative.name === manualInitiativeName, 'Guided initiative was not persisted');
       assert(manualInitiative.theme === 'Acceptance operations', 'Guided initiative theme was not persisted');
+      assert(manualInitiative.counts.kpis_total >= 3, 'Guided HITL KPIs were not persisted');
+      assert(manualInitiative.counts.risks_open >= 2, 'Guided HITL risk selection was not persisted');
+      assert(manualInitiative.counts.milestones_total >= 3, 'Guided HITL milestones were not persisted');
+      let hitlKpis = await api(`/initiatives/${manualInitiativeId}/kpis`);
+      assert(hitlKpis.items.some(item => item.name === 'UI acceptance modified KPI'), 'Edited HITL KPI was not persisted');
+      const hitlFinancials = await api(`/initiatives/${manualInitiativeId}/financials`);
+      assert(hitlFinancials.entries.some(item => Number(item.gm_uplift_base) > 0), 'HITL financial suggestion was not persisted');
 
       const overviewSummaryText = `UI acceptance overview summary ${Date.now()}`;
       const overviewContextText = `UI acceptance overview context ${Date.now()}`;
@@ -618,6 +649,15 @@ async function main() {
       const uploadedInitiative = await api(`/initiatives/${uploadedInitiativeId}`);
       assert(uploadedInitiative.name === 'Imported Acceptance Initiative', 'Uploaded initiative was not persisted');
       assert(uploadedInitiative.theme === 'Finance automation', 'Uploaded initiative theme was not persisted');
+      assert(uploadedInitiative.counts.kpis_total >= 1, 'Uploaded KPI was not persisted');
+      assert(uploadedInitiative.counts.risks_open >= 1, 'Uploaded risk was not persisted');
+      assert(uploadedInitiative.counts.milestones_total >= 1, 'Uploaded milestone was not persisted');
+      const uploadedFinancials = await api(`/initiatives/${uploadedInitiativeId}/financials`);
+      assert(uploadedFinancials.entries.some(item =>
+        item.year === 2030
+        && item.quarter === 1
+        && Number(item.revenue_uplift_base) === 100000
+      ), 'Uploaded financial entry was not persisted');
     } finally {
       if (uploadedInitiativeId) await api(`/initiatives/${uploadedInitiativeId}`, { method: 'DELETE' }).catch(() => null);
       if (manualInitiativeId) await api(`/initiatives/${manualInitiativeId}`, { method: 'DELETE' }).catch(() => null);

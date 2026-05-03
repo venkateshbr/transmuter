@@ -35,6 +35,11 @@ export const routes: Routes = [
               import('./features/initiatives/create/create-initiative.component').then(m => m.CreateInitiativeComponent),
           },
           {
+            path: ':id/edit',
+            loadComponent: () =>
+              import('./features/initiatives/create/create-initiative.component').then(m => m.CreateInitiativeComponent),
+          },
+          {
             path: ':id',
             loadComponent: () =>
               import('./features/initiatives/detail/detail.component').then(m => m.InitiativeDetailComponent),

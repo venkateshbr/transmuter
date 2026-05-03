@@ -1,7 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 
 interface WorkstreamOption {
@@ -129,7 +129,7 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
          style="color:var(--t-text-secondary)"
          class="hover:underline">Initiatives</a>
       <span style="color:var(--t-border)">/</span>
-      <span style="color:var(--t-text-primary)" class="font-medium">New Initiative</span>
+      <span style="color:var(--t-text-primary)" class="font-medium">{{ editId ? 'Edit Initiative' : 'New Initiative' }}</span>
     </div>
 
     <!-- ═══════════════ PATH CHOOSER ═══════════════ -->
@@ -197,14 +197,14 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
         <div>
           <h1 class="text-3xl font-bold tracking-tight"
               style="color:var(--t-text-primary)">
-            New Initiative<span style="color:var(--t-accent)">.</span>
+            {{ editId ? 'Edit Initiative' : 'New Initiative' }}<span style="color:var(--t-accent)">.</span>
           </h1>
           <p class="text-sm mt-1" style="color:var(--t-text-secondary)">
-            Step {{ formStep }} of 3 — {{ stepLabel() }}
+            Step {{ formStep }} of {{ editId ? 3 : 4 }} — {{ stepLabel() }}
           </p>
         </div>
         <div class="step-indicator">
-          <div *ngFor="let s of [1,2,3]"
+          <div *ngFor="let s of totalSteps()"
                class="step-dot"
                [class.active]="formStep === s"
                [class.complete]="formStep > s"
@@ -218,9 +218,11 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
              style="background:var(--t-accent-soft);border-color:var(--t-border)">
           <span class="material-icons text-base mt-0.5" style="color:var(--t-accent)">auto_awesome</span>
           <div>
-            <p class="text-xs font-bold uppercase tracking-wider mb-1" style="color:var(--t-text-primary)">Transmuter intake</p>
+            <p class="text-xs font-bold uppercase tracking-wider mb-1" style="color:var(--t-text-primary)">{{ editId ? 'Edit mode' : 'Transmuter intake' }}</p>
             <p class="text-sm" style="color:var(--t-text-secondary)">
-              Capture the minimum viable case first. Financials, KPIs, risks, and milestones can be refined from the initiative detail tabs after creation.
+              {{ editId
+                ? 'Update core initiative fields. Financials, KPIs, risks, and milestones stay managed from their dedicated tabs.'
+                : 'Capture the case, then review AI-assisted financial, KPI, risk, and milestone suggestions before creation.' }}
             </p>
           </div>
         </div>
@@ -356,6 +358,80 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
           </div>
         </div>
 
+        <!-- STEP 4: HITL Suggestions -->
+        <div *ngIf="formStep === 4" class="space-y-5 animate-in">
+          <div class="rounded-xl border p-4" style="border-color:var(--t-border);background:var(--t-bg)">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <p class="text-[10px] font-bold uppercase tracking-wider mb-1" style="color:var(--t-text-secondary)">HITL Review</p>
+                <h3 class="text-lg font-bold" style="color:var(--t-text-primary)">Transmuter suggestions</h3>
+                <p class="text-sm mt-1" style="color:var(--t-text-secondary)">
+                  Accept, reject, or edit each suggestion before committing to the database.
+                </p>
+              </div>
+              <span class="text-[10px] font-bold uppercase rounded-full px-2 py-1"
+                    style="background:var(--t-accent-soft);color:var(--t-accent)">
+                {{ suggestions()?.agent_status || 'pending' }}
+              </span>
+            </div>
+          </div>
+
+          <div *ngIf="suggestions() as suggestionSet" class="grid grid-cols-1 gap-4">
+            <section class="card p-4">
+              <h4 class="text-sm font-bold mb-3" style="color:var(--t-text-primary)">Financials</h4>
+              <label *ngFor="let item of suggestionSet.financial_entries; let i = index"
+                     class="grid grid-cols-[auto_1fr_1fr] gap-3 items-center mb-2">
+                <input type="checkbox" [(ngModel)]="item.accepted" aria-label="Accept financial suggestion">
+                <input class="input-field text-xs" [(ngModel)]="item.gm_uplift_base" aria-label="Suggested base value">
+                <input class="input-field text-xs" [(ngModel)]="item.gm_uplift_high" aria-label="Suggested high value">
+              </label>
+              <label *ngFor="let item of suggestionSet.cost_lines; let i = index"
+                     class="grid grid-cols-[auto_1fr_1fr] gap-3 items-center mb-2">
+                <input type="checkbox" [(ngModel)]="item.accepted" aria-label="Accept cost suggestion">
+                <input class="input-field text-xs" [(ngModel)]="item.name" aria-label="Suggested cost name">
+                <input class="input-field text-xs" [(ngModel)]="item.amount_plan" aria-label="Suggested cost amount">
+              </label>
+            </section>
+
+            <section class="card p-4">
+              <h4 class="text-sm font-bold mb-3" style="color:var(--t-text-primary)">KPIs</h4>
+              <label *ngFor="let item of suggestionSet.kpis"
+                     class="grid grid-cols-[auto_1fr_120px] gap-3 items-center mb-2">
+                <input type="checkbox" [(ngModel)]="item.accepted" aria-label="Accept KPI suggestion">
+                <input class="input-field text-xs" [(ngModel)]="item.name" aria-label="Suggested KPI name">
+                <input class="input-field text-xs" [(ngModel)]="item.unit" aria-label="Suggested KPI unit">
+              </label>
+            </section>
+
+            <section class="card p-4">
+              <h4 class="text-sm font-bold mb-3" style="color:var(--t-text-primary)">Risks</h4>
+              <label *ngFor="let item of suggestionSet.risks"
+                     class="grid grid-cols-[auto_1fr_120px_120px] gap-3 items-center mb-2">
+                <input type="checkbox" [(ngModel)]="item.accepted" aria-label="Accept risk suggestion">
+                <input class="input-field text-xs" [(ngModel)]="item.description" aria-label="Suggested risk description">
+                <select class="input-field text-xs" [(ngModel)]="item.impact" aria-label="Suggested risk impact">
+                  <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
+                </select>
+                <select class="input-field text-xs" [(ngModel)]="item.likelihood" aria-label="Suggested risk likelihood">
+                  <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
+                </select>
+              </label>
+            </section>
+
+            <section class="card p-4">
+              <h4 class="text-sm font-bold mb-3" style="color:var(--t-text-primary)">Milestones</h4>
+              <label *ngFor="let item of suggestionSet.milestones"
+                     class="grid grid-cols-[auto_1fr_120px] gap-3 items-center mb-2">
+                <input type="checkbox" [(ngModel)]="item.accepted" aria-label="Accept milestone suggestion">
+                <input class="input-field text-xs" [(ngModel)]="item.name" aria-label="Suggested milestone name">
+                <select class="input-field text-xs" [(ngModel)]="item.priority" aria-label="Suggested milestone priority">
+                  <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option>
+                </select>
+              </label>
+            </section>
+          </div>
+        </div>
+
         <!-- NAVIGATION BUTTONS -->
         <div class="flex items-center justify-between mt-8 pt-5 border-t"
              style="border-color:var(--t-border)">
@@ -377,18 +453,32 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
                     aria-label="Go to next step">
               Next →
             </button>
-            <button *ngIf="formStep === 3" class="btn-primary text-sm"
+            <button *ngIf="formStep === 3 && !editId" class="btn-primary text-sm"
+                    (click)="generateSuggestions()"
+                    [disabled]="submitting() || generating()"
+                    aria-label="Generate initiative suggestions">
+              <span *ngIf="!generating()">Generate Suggestions</span>
+              <span *ngIf="generating()">Generating…</span>
+            </button>
+            <button *ngIf="formStep === 3 && editId" class="btn-primary text-sm"
                     (click)="submitForm()"
                     [disabled]="submitting()"
-                    aria-label="Create initiative">
-              <span *ngIf="!submitting()">Create Initiative</span>
+                    aria-label="Save initiative">
+              <span *ngIf="!submitting()">Save Initiative</span>
               <span *ngIf="submitting()" class="flex items-center gap-2">
                 <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
                   <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity="0.3"/>
                   <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
                 </svg>
-                Creating…
+                Saving…
               </span>
+            </button>
+            <button *ngIf="formStep === 4" class="btn-primary text-sm"
+                    (click)="submitForm()"
+                    [disabled]="submitting()"
+                    aria-label="Create initiative">
+              <span *ngIf="!submitting()">Create Initiative</span>
+              <span *ngIf="submitting()">Creating…</span>
             </button>
           </div>
         </div>
@@ -463,6 +553,22 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
           <p class="text-xs mt-1" style="color:var(--t-text-secondary)">
             {{ uploadPreview()?.country || 'No country' }} · {{ uploadPreview()?.priority || 'medium' }} priority
           </p>
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mt-3">
+            <div *ngFor="let key of workbookCountKeys"
+                 class="rounded-lg border px-3 py-2"
+                 style="border-color:var(--t-border);background:var(--t-surface-raised)">
+              <p class="text-[10px] font-bold uppercase tracking-wider" style="color:var(--t-text-secondary)">{{ key }}</p>
+              <p class="text-sm font-bold" style="color:var(--t-text-primary)">{{ uploadPreview()?.counts?.[key] || 0 }}</p>
+            </div>
+          </div>
+          <div *ngIf="uploadPreview()?.validation_errors?.length"
+               class="mt-3 rounded-lg border p-3 text-xs"
+               style="border-color:rgba(239,68,68,0.25);background:rgba(239,68,68,0.08);color:var(--t-red)">
+            <p class="font-bold mb-1">Validation required</p>
+            <p *ngFor="let item of uploadPreview()?.validation_errors">
+              {{ item.sheet }}<span *ngIf="item.row"> row {{ item.row }}</span><span *ngIf="item.column"> {{ item.column }}</span>: {{ item.message }}
+            </p>
+          </div>
         </div>
 
         <div class="flex items-center justify-between mt-6 pt-5 border-t"
@@ -472,7 +578,7 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
             ← Change method
           </button>
           <button class="btn-primary text-sm"
-                  [disabled]="!uploadedFileName() || submitting()"
+                  [disabled]="!uploadedFileName() || submitting() || !!uploadPreview()?.validation_errors?.length"
                   (click)="submitUpload()"
                   aria-label="Upload and create initiative">
             <span *ngIf="!submitting()">Upload & Create</span>
@@ -494,17 +600,22 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
 export class CreateInitiativeComponent {
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   currentPath: CreationPath = 'chooser';
   formStep = 1;
   isDragOver = false;
+  editId: string | null = null;
 
   readonly submitting = signal(false);
+  readonly generating = signal(false);
   readonly error = signal<string | null>(null);
   readonly workstreams = signal<WorkstreamOption[]>([]);
   readonly users = signal<UserOption[]>([]);
   readonly uploadedFileName = signal<string | null>(null);
   readonly uploadPreview = signal<any | null>(null);
+  readonly suggestions = signal<any | null>(null);
+  readonly workbookCountKeys = ['financials', 'costs', 'kpis', 'risks', 'milestones'];
 
   private uploadedFile: File | null = null;
 
@@ -528,12 +639,22 @@ export class CreateInitiativeComponent {
 
   constructor() {
     this.loadDropdownData();
+    this.editId = this.route.snapshot.paramMap.get('id');
+    if (this.editId) {
+      this.currentPath = 'form';
+      this.loadForEdit(this.editId);
+    }
   }
 
   stepLabel(): string {
     return this.formStep === 1 ? 'Basic Details'
          : this.formStep === 2 ? 'Description & Context'
-         : 'Ownership & Timeline';
+         : this.formStep === 3 ? 'Ownership & Timeline'
+         : 'Review Suggestions';
+  }
+
+  totalSteps(): number[] {
+    return this.editId ? [1, 2, 3] : [1, 2, 3, 4];
   }
 
   /** Load workstreams and users for dropdowns */
@@ -548,17 +669,45 @@ export class CreateInitiativeComponent {
     });
   }
 
-  /** Submit the manual form */
-  submitForm(): void {
+  private loadForEdit(id: string): void {
+    this.api.get<any>(`/initiatives/${id}`).subscribe({
+      next: item => {
+        this.form = {
+          name: item.name ?? '',
+          workstream_id: item.workstream_id ?? '',
+          owner_id: item.owner_id ?? '',
+          group_owner_id: item.group_owner_id ?? '',
+          type: item.type ?? '',
+          impact_type: item.impact_type ?? '',
+          theme: item.theme ?? '',
+          country: item.country ?? '',
+          tag: item.tag ?? '',
+          priority: item.priority ?? 'medium',
+          summary: item.summary ?? '',
+          value_logic: item.value_logic ?? '',
+          dependencies_text: item.dependencies_text ?? '',
+          planned_start: item.planned_start ?? '',
+          planned_end: item.planned_end ?? '',
+        };
+      },
+      error: err => this.error.set(this.errorText(err, 'Failed to load initiative for editing.')),
+    });
+  }
+
+  private validateForm(): boolean {
     if (!this.form.name.trim()) {
       this.error.set('Initiative name is required.');
-      return;
+      return false;
     }
-
-    this.submitting.set(true);
+    if (this.form.planned_start && this.form.planned_end && this.form.planned_start > this.form.planned_end) {
+      this.error.set('Planned completion date must be on or after the planned start date.');
+      return false;
+    }
     this.error.set(null);
+    return true;
+  }
 
-    // Build payload — only send non-empty fields
+  private buildPayload(): Record<string, unknown> {
     const payload: Record<string, unknown> = { name: this.form.name.trim() };
     if (this.form.workstream_id) payload['workstream_id'] = this.form.workstream_id;
     if (this.form.owner_id) payload['owner_id'] = this.form.owner_id;
@@ -574,15 +723,55 @@ export class CreateInitiativeComponent {
     if (this.form.dependencies_text) payload['dependencies_text'] = this.form.dependencies_text;
     if (this.form.planned_start) payload['planned_start'] = this.form.planned_start;
     if (this.form.planned_end) payload['planned_end'] = this.form.planned_end;
+    return payload;
+  }
 
-    this.api.post<{ id: string }>('/initiatives', payload).subscribe({
+  generateSuggestions(): void {
+    if (!this.validateForm()) return;
+
+    this.generating.set(true);
+    this.error.set(null);
+    this.api.post<any>('/initiatives/intake/suggestions', {
+      initiative: this.buildPayload(),
+      conversation: [],
+    }).subscribe({
+      next: result => {
+        this.generating.set(false);
+        this.formStep = 4;
+        this.suggestions.set(result);
+      },
+      error: err => {
+        this.generating.set(false);
+        this.error.set(this.errorText(err, 'Failed to generate initiative suggestions.'));
+      },
+    });
+  }
+
+  /** Submit the guided form or edit form */
+  submitForm(): void {
+    if (!this.validateForm()) return;
+
+    this.submitting.set(true);
+    this.error.set(null);
+
+    const payload = this.buildPayload();
+    const request = this.editId
+      ? this.api.put<{ id: string }>(`/initiatives/${this.editId}`, payload)
+      : this.api.post<{ id: string }>('/initiatives/intake/create', {
+          initiative: payload,
+          suggestions: this.suggestions(),
+        });
+
+    request.subscribe({
       next: result => {
         this.submitting.set(false);
         this.router.navigate(['/initiatives', result.id]);
       },
       error: err => {
         this.submitting.set(false);
-        this.error.set(err?.error?.detail ?? 'Failed to create initiative. Please try again.');
+        this.error.set(this.errorText(err, this.editId
+          ? 'Failed to save initiative. Please try again.'
+          : 'Failed to create initiative. Please try again.'));
       },
     });
   }
@@ -643,11 +832,11 @@ export class CreateInitiativeComponent {
     this.api.postForm<any>('/initiatives/import/preview', body).subscribe({
       next: preview => {
         this.uploadPreview.set(preview);
-        this.error.set(null);
+        this.error.set(preview.validation_errors?.length ? 'Fix workbook validation errors before importing.' : null);
       },
       error: err => {
         this.uploadPreview.set(null);
-        this.error.set(err?.error?.detail ?? 'Failed to preview template. Please check the file format.');
+        this.error.set(this.errorText(err, 'Failed to preview template. Please check the file format.'));
       },
     });
   }
@@ -668,8 +857,18 @@ export class CreateInitiativeComponent {
       },
       error: err => {
         this.submitting.set(false);
-        this.error.set(err?.error?.detail ?? 'Failed to parse template. Please check the file format.');
+        this.error.set(this.errorText(err, 'Failed to parse template. Please check the file format.'));
       },
     });
+  }
+
+  private errorText(err: any, fallback: string): string {
+    const detail = err?.error?.detail;
+    if (Array.isArray(detail)) {
+      return detail
+        .map(item => `${item.sheet ?? 'Workbook'}${item.row ? ` row ${item.row}` : ''}${item.column ? ` ${item.column}` : ''}: ${item.message ?? 'Invalid value'}`)
+        .join('\n');
+    }
+    return detail ?? fallback;
   }
 }

@@ -3,13 +3,25 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from decimal import Decimal, InvalidOperation
+from html import unescape
 from io import BytesIO
 from xml.etree import ElementTree as ET
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from fastapi import HTTPException, status
 
+from app.domain.financials import CostLineCreate, FinancialEntryUpdate
+from app.domain.initiative_intake import (
+    InitiativeWorkbookData,
+    InitiativeWorkbookPreview,
+    KPIWorkbookItem,
+    WorkbookValidationError,
+)
 from app.domain.initiatives import InitiativeCreate
+from app.domain.kpis import KPIEntryUpsert
+from app.domain.milestones import MilestoneCreate
+from app.domain.risks import RiskCreate
 
 
 OVERVIEW_COLUMNS = [
@@ -50,11 +62,36 @@ SAMPLE_OVERVIEW = [
 
 SHEET_DEFS = [
     ("Overview", OVERVIEW_COLUMNS, [SAMPLE_OVERVIEW]),
-    ("Benefits", ["year", "quarter", "month", "revenue_uplift_base", "revenue_uplift_high", "gm_uplift_base", "gm_uplift_high"], []),
-    ("Costs", ["name", "year", "quarter", "month", "amount_plan", "amount_actual", "is_recurring"], []),
-    ("KPIs", ["name", "type", "category", "frequency", "unit"], []),
-    ("Risks", ["description", "type", "impact", "likelihood", "mitigation"], []),
-    ("Milestones", ["name", "description", "priority", "planned_start", "planned_end"], []),
+    (
+        "Benefits",
+        [
+            "year", "quarter", "month",
+            "revenue_uplift_base", "revenue_uplift_high", "revenue_uplift_actual",
+            "gross_margin_base", "gross_margin_high", "gross_margin_actual",
+            "gm_uplift_base", "gm_uplift_high", "gm_uplift_actual",
+        ],
+        [["2030", "1", "", "100000.0000", "150000.0000", "", "45000.0000", "70000.0000", "", "45000.0000", "70000.0000", ""]],
+    ),
+    (
+        "Costs",
+        ["name", "year", "quarter", "month", "amount_plan", "amount_actual", "is_recurring"],
+        [["Implementation support", "2030", "1", "", "12000.0000", "", "false"]],
+    ),
+    (
+        "KPIs",
+        ["name", "type", "category", "frequency", "unit", "year", "quarter", "value_base", "value_high", "value_actual"],
+        [["Cycle time reduction", "operational", "delivery", "quarterly", "%", "2030", "1", "15.0000", "25.0000", ""]],
+    ),
+    (
+        "Risks",
+        ["description", "type", "impact", "likelihood", "mitigation"],
+        [["Adoption may lag without local champions", "people", "medium", "medium", "Assign market champions and weekly adoption review."]],
+    ),
+    (
+        "Milestones",
+        ["name", "description", "priority", "planned_start", "planned_end"],
+        [["Pilot launch complete", "Complete pilot and validate benefits tracking.", "high", "2030-02-01", "2030-03-31"]],
+    ),
 ]
 
 _NS = {"main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
@@ -74,11 +111,16 @@ def build_initiative_template() -> bytes:
     return output.getvalue()
 
 
-def parse_initiative_template(data: bytes) -> InitiativeCreate:
+def parse_initiative_template(data: bytes) -> InitiativeWorkbookData:
     try:
         with ZipFile(BytesIO(data)) as zf:
             sheets = _sheet_paths(zf)
-            rows = _read_sheet(zf, sheets["Overview"])
+            overview_rows = _read_sheet(zf, sheets["Overview"])
+            benefits_rows = _read_sheet(zf, sheets["Benefits"]) if "Benefits" in sheets else []
+            costs_rows = _read_sheet(zf, sheets["Costs"]) if "Costs" in sheets else []
+            kpi_rows = _read_sheet(zf, sheets["KPIs"]) if "KPIs" in sheets else []
+            risk_rows = _read_sheet(zf, sheets["Risks"]) if "Risks" in sheets else []
+            milestone_rows = _read_sheet(zf, sheets["Milestones"]) if "Milestones" in sheets else []
     except KeyError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -90,54 +132,313 @@ def parse_initiative_template(data: bytes) -> InitiativeCreate:
             detail="Invalid initiative workbook",
         ) from exc
 
-    overview = next(_dict_rows(rows, OVERVIEW_COLUMNS), None)
+    errors: list[WorkbookValidationError] = []
+    overview = next(_dict_rows(overview_rows, OVERVIEW_COLUMNS, "Overview", errors), None)
     if not overview:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Overview sheet must include one initiative row",
+        errors.append(
+            WorkbookValidationError(
+                sheet="Overview",
+                row=2,
+                column="name",
+                message="Overview sheet must include one initiative row",
+            )
         )
-    return InitiativeCreate(
-        name=_required(overview, "name"),
-        type=_blank_to_none(overview["type"]),
-        impact_type=_blank_to_none(overview["impact_type"]),
-        theme=_blank_to_none(overview["theme"]),
-        country=_blank_to_none(overview["country"]),
-        tag=_blank_to_none(overview["tag"]),
-        priority=overview["priority"] or "medium",
-        summary=_blank_to_none(overview["summary"]),
-        value_logic=_blank_to_none(overview["value_logic"]),
-        dependencies_text=_blank_to_none(overview["dependencies_text"]),
-        planned_start=_blank_to_none(overview["planned_start"]),
-        planned_end=_blank_to_none(overview["planned_end"]),
+        overview_create = InitiativeCreate(name="Invalid workbook")
+    else:
+        overview_create = _parse_overview(overview, errors)
+
+    return InitiativeWorkbookData(
+        overview=overview_create,
+        financial_entries=_parse_benefits(benefits_rows, errors),
+        cost_lines=_parse_costs(costs_rows, errors),
+        kpis=_parse_kpis(kpi_rows, errors),
+        risks=_parse_risks(risk_rows, errors),
+        milestones=_parse_milestones(milestone_rows, errors),
+        validation_errors=errors,
     )
 
 
-def _dict_rows(rows: list[list[str]], expected_headers: list[str]) -> Iterable[dict[str, str]]:
+def build_preview(parsed: InitiativeWorkbookData) -> InitiativeWorkbookPreview:
+    return InitiativeWorkbookPreview(
+        name=parsed.overview.name,
+        country=parsed.overview.country,
+        priority=parsed.overview.priority,
+        overview=parsed.overview,
+        counts={
+            "financials": len(parsed.financial_entries),
+            "costs": len(parsed.cost_lines),
+            "kpis": len(parsed.kpis),
+            "risks": len(parsed.risks),
+            "milestones": len(parsed.milestones),
+        },
+        validation_errors=parsed.validation_errors,
+    )
+
+
+def _dict_rows(
+    rows: list[list[str]],
+    expected_headers: list[str],
+    sheet: str,
+    errors: list[WorkbookValidationError],
+) -> Iterable[dict[str, str]]:
     if not rows:
         return
     headers = [h.strip() for h in rows[0]]
     missing = [header for header in expected_headers if header not in headers]
     if missing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Overview sheet is missing columns: {', '.join(missing)}",
+        errors.append(
+            WorkbookValidationError(
+                sheet=sheet,
+                row=1,
+                column=None,
+                message=f"Sheet is missing columns: {', '.join(missing)}",
+            )
         )
+        return
     for values in rows[1:]:
         row = {header: values[headers.index(header)].strip() if headers.index(header) < len(values) else "" for header in expected_headers}
         if any(row.values()):
             yield row
 
 
-def _required(row: dict[str, str], key: str) -> str:
+def _parse_overview(
+    row: dict[str, str],
+    errors: list[WorkbookValidationError],
+) -> InitiativeCreate:
+    name = _required(row, "name", "Overview", 2, errors)
+    if not name:
+        name = "Invalid workbook"
+    try:
+        return InitiativeCreate(
+            name=name,
+            type=_blank_to_none(row["type"]),
+            impact_type=_blank_to_none(row["impact_type"]),
+            theme=_blank_to_none(row["theme"]),
+            country=_blank_to_none(row["country"]),
+            tag=_blank_to_none(row["tag"]),
+            priority=row["priority"] or "medium",
+            summary=_blank_to_none(row["summary"]),
+            value_logic=_blank_to_none(row["value_logic"]),
+            dependencies_text=_blank_to_none(row["dependencies_text"]),
+            planned_start=_blank_to_none(row["planned_start"]),
+            planned_end=_blank_to_none(row["planned_end"]),
+        )
+    except ValueError as exc:
+        errors.append(WorkbookValidationError(sheet="Overview", row=2, column=None, message=str(exc)))
+        return InitiativeCreate(name=name)
+
+
+def _parse_benefits(
+    rows: list[list[str]],
+    errors: list[WorkbookValidationError],
+) -> list[FinancialEntryUpdate]:
+    expected = SHEET_DEFS[1][1]
+    items = []
+    for index, row in enumerate(_dict_rows(rows, expected, "Benefits", errors), start=2):
+        try:
+            items.append(
+                FinancialEntryUpdate(
+                    year=_int(row["year"], "Benefits", index, "year", errors) or 2030,
+                    quarter=_optional_int(row["quarter"], "Benefits", index, "quarter", errors),
+                    month=_optional_int(row["month"], "Benefits", index, "month", errors),
+                    revenue_uplift_base=_decimal(row["revenue_uplift_base"]),
+                    revenue_uplift_high=_decimal(row["revenue_uplift_high"]),
+                    revenue_uplift_actual=_optional_decimal(row["revenue_uplift_actual"]),
+                    gross_margin_base=_decimal(row["gross_margin_base"]),
+                    gross_margin_high=_decimal(row["gross_margin_high"]),
+                    gross_margin_actual=_optional_decimal(row["gross_margin_actual"]),
+                    gm_uplift_base=_decimal(row["gm_uplift_base"]),
+                    gm_uplift_high=_decimal(row["gm_uplift_high"]),
+                    gm_uplift_actual=_optional_decimal(row["gm_uplift_actual"]),
+                )
+            )
+        except (InvalidOperation, ValueError) as exc:
+            errors.append(WorkbookValidationError(sheet="Benefits", row=index, column=None, message=str(exc)))
+    return items
+
+
+def _parse_costs(rows: list[list[str]], errors: list[WorkbookValidationError]) -> list[CostLineCreate]:
+    expected = SHEET_DEFS[2][1]
+    items = []
+    for index, row in enumerate(_dict_rows(rows, expected, "Costs", errors), start=2):
+        name = _required(row, "name", "Costs", index, errors)
+        if not name:
+            continue
+        try:
+            items.append(
+                CostLineCreate(
+                    name=name,
+                    year=_int(row["year"], "Costs", index, "year", errors) or 2030,
+                    quarter=_optional_int(row["quarter"], "Costs", index, "quarter", errors),
+                    month=_optional_int(row["month"], "Costs", index, "month", errors),
+                    amount_plan=_decimal(row["amount_plan"]),
+                    amount_actual=_optional_decimal(row["amount_actual"]),
+                    is_recurring=row["is_recurring"].strip().lower() in {"true", "1", "yes", "y"},
+                )
+            )
+        except (InvalidOperation, ValueError) as exc:
+            errors.append(WorkbookValidationError(sheet="Costs", row=index, column=None, message=str(exc)))
+    return items
+
+
+def _parse_kpis(rows: list[list[str]], errors: list[WorkbookValidationError]) -> list[KPIWorkbookItem]:
+    expected = SHEET_DEFS[3][1]
+    items = []
+    for index, row in enumerate(_dict_rows(rows, expected, "KPIs", errors), start=2):
+        name = _required(row, "name", "KPIs", index, errors)
+        if not name:
+            continue
+        entries = []
+        if row.get("year"):
+            entries.append(
+                KPIEntryUpsert(
+                    year=_int(row["year"], "KPIs", index, "year", errors) or 2030,
+                    quarter=_optional_int(row["quarter"], "KPIs", index, "quarter", errors),
+                    value_base=_blank_to_none(row["value_base"]),
+                    value_high=_blank_to_none(row["value_high"]),
+                    value_actual=_blank_to_none(row["value_actual"]),
+                )
+            )
+        try:
+            items.append(
+                KPIWorkbookItem(
+                    name=name,
+                    type=row["type"] or "custom",
+                    category=_blank_to_none(row["category"]),
+                    frequency=row["frequency"] or "quarterly",
+                    unit=_blank_to_none(row["unit"]),
+                    entries=entries,
+                )
+            )
+        except ValueError as exc:
+            errors.append(WorkbookValidationError(sheet="KPIs", row=index, column=None, message=str(exc)))
+    return items
+
+
+def _parse_risks(rows: list[list[str]], errors: list[WorkbookValidationError]) -> list[RiskCreate]:
+    expected = SHEET_DEFS[4][1]
+    items = []
+    for index, row in enumerate(_dict_rows(rows, expected, "Risks", errors), start=2):
+        description = _required(row, "description", "Risks", index, errors)
+        if not description:
+            continue
+        try:
+            items.append(
+                RiskCreate(
+                    description=description,
+                    type=_blank_to_none(row["type"]),
+                    impact=_blank_to_none(row["impact"]),
+                    likelihood=_blank_to_none(row["likelihood"]),
+                    mitigation=_blank_to_none(row["mitigation"]),
+                )
+            )
+        except ValueError as exc:
+            errors.append(WorkbookValidationError(sheet="Risks", row=index, column=None, message=str(exc)))
+    return items
+
+
+def _parse_milestones(
+    rows: list[list[str]],
+    errors: list[WorkbookValidationError],
+) -> list[MilestoneCreate]:
+    expected = SHEET_DEFS[5][1]
+    items = []
+    for index, row in enumerate(_dict_rows(rows, expected, "Milestones", errors), start=2):
+        name = _required(row, "name", "Milestones", index, errors)
+        if not name:
+            continue
+        try:
+            items.append(
+                MilestoneCreate(
+                    name=name,
+                    description=_blank_to_none(row["description"]),
+                    priority=row["priority"] or "medium",
+                    planned_start=_blank_to_none(row["planned_start"]),
+                    planned_end=_blank_to_none(row["planned_end"]),
+                )
+            )
+        except ValueError as exc:
+            errors.append(WorkbookValidationError(sheet="Milestones", row=index, column=None, message=str(exc)))
+    return items
+
+
+def _required(
+    row: dict[str, str],
+    key: str,
+    sheet: str,
+    row_number: int,
+    errors: list[WorkbookValidationError],
+) -> str:
     value = row[key].strip()
     if not value:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Missing {key}")
+        errors.append(
+            WorkbookValidationError(
+                sheet=sheet,
+                row=row_number,
+                column=key,
+                message=f"Missing {key}",
+            )
+        )
     return value
 
 
 def _blank_to_none(value: str) -> str | None:
     value = value.strip()
     return value or None
+
+
+def _decimal(value: str) -> Decimal:
+    return Decimal(value.strip() or "0")
+
+
+def _optional_decimal(value: str) -> Decimal | None:
+    value = value.strip()
+    return Decimal(value) if value else None
+
+
+def _int(
+    value: str,
+    sheet: str,
+    row_number: int,
+    column: str,
+    errors: list[WorkbookValidationError],
+) -> int | None:
+    value = value.strip()
+    if not value:
+        errors.append(
+            WorkbookValidationError(
+                sheet=sheet,
+                row=row_number,
+                column=column,
+                message=f"Missing {column}",
+            )
+        )
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        errors.append(
+            WorkbookValidationError(
+                sheet=sheet,
+                row=row_number,
+                column=column,
+                message=f"Invalid integer: {value}",
+            )
+        )
+        return None
+
+
+def _optional_int(
+    value: str,
+    sheet: str,
+    row_number: int,
+    column: str,
+    errors: list[WorkbookValidationError],
+) -> int | None:
+    value = value.strip()
+    if not value:
+        return None
+    return _int(value, sheet, row_number, column, errors)
 
 
 def _sheet_paths(zf: ZipFile) -> dict[str, str]:
@@ -167,7 +468,7 @@ def _read_sheet(zf: ZipFile, path: str) -> list[list[str]]:
                 values.append("")
                 current_col += 1
             inline = cell.find("main:is", _NS)
-            values.append("" if inline is None else "".join(inline.itertext()))
+            values.append("" if inline is None else unescape("".join(inline.itertext())))
             current_col += 1
         rows.append(values)
     return rows

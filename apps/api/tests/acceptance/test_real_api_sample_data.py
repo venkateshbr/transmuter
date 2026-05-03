@@ -202,7 +202,16 @@ def test_real_api_initiative_template_import_flow() -> None:
             files={"file": ("template.xlsx", template.content, XLSX_MEDIA_TYPE)},
         )
         preview.raise_for_status()
-        assert preview.json()["name"] == "Imported Acceptance Initiative"
+        preview_data = preview.json()
+        assert preview_data["name"] == "Imported Acceptance Initiative"
+        assert preview_data["validation_errors"] == []
+        assert preview_data["counts"] == {
+            "financials": 1,
+            "costs": 1,
+            "kpis": 1,
+            "risks": 1,
+            "milestones": 1,
+        }
 
         imported = client.post(
             "/initiatives/import",
@@ -218,7 +227,135 @@ def test_real_api_initiative_template_import_flow() -> None:
             assert created["theme"] == "Finance automation"
             fetched = client.get(f"/initiatives/{initiative_id}", headers=headers)
             fetched.raise_for_status()
-            assert fetched.json()["name"] == "Imported Acceptance Initiative"
+            fetched_data = fetched.json()
+            assert fetched_data["name"] == "Imported Acceptance Initiative"
+            assert fetched_data["counts"]["kpis_total"] >= 1
+            assert fetched_data["counts"]["risks_open"] >= 1
+            assert fetched_data["counts"]["milestones_total"] >= 1
+
+            financials = client.get(
+                f"/initiatives/{initiative_id}/financials",
+                headers=headers,
+            )
+            financials.raise_for_status()
+            row = next(
+                item for item in financials.json()["entries"]
+                if item["year"] == 2030 and item["quarter"] == 1
+            )
+            assert Decimal(row["revenue_uplift_base"]) == Decimal("100000.0000")
+            assert Decimal(row["gm_uplift_high"]) == Decimal("70000.0000")
+
+            cost_lines = client.get(
+                f"/initiatives/{initiative_id}/financials/cost-lines",
+                headers=headers,
+            )
+            cost_lines.raise_for_status()
+            assert any(
+                item["name"] == "Implementation support"
+                and Decimal(item["amount_plan"]) == Decimal("12000.0000")
+                for item in cost_lines.json()["items"]
+            )
+
+            kpis = client.get(f"/initiatives/{initiative_id}/kpis", headers=headers)
+            kpis.raise_for_status()
+            assert any(
+                item["name"] == "Cycle time reduction"
+                and item["entries"]
+                and Decimal(item["entries"][0]["value_base"]) == Decimal("15.0000")
+                for item in kpis.json()["items"]
+            )
+
+            risks = client.get(f"/initiatives/{initiative_id}/risks", headers=headers)
+            risks.raise_for_status()
+            assert any(
+                "Adoption may lag" in item["description"]
+                for item in risks.json()["items"]
+            )
+
+            milestones = client.get(
+                f"/initiatives/{initiative_id}/milestones",
+                headers=headers,
+            )
+            milestones.raise_for_status()
+            assert any(
+                item["name"] == "Pilot launch complete"
+                for item in milestones.json()["items"]
+            )
+        finally:
+            client.delete(f"/initiatives/{initiative_id}", headers=headers)
+
+
+def test_real_api_initiative_intake_hitl_create_flow() -> None:
+    with _client() as client:
+        headers = _auth_headers(client)
+
+        initiative = {
+            "name": f"Acceptance Intake Initiative {uuid4()}",
+            "type": "cost_reduction",
+            "impact_type": "recurring",
+            "theme": "Acceptance automation",
+            "country": "Singapore",
+            "tag": "automation",
+            "priority": "high",
+            "summary": "Created by real API intake acceptance.",
+            "value_logic": "Validate HITL suggestions through the real API.",
+            "dependencies_text": "Seeded tenant data.",
+            "planned_start": "2026-06-01",
+            "planned_end": "2026-09-30",
+        }
+
+        suggestions_response = client.post(
+            "/initiatives/intake/suggestions",
+            headers=headers,
+            json={"initiative": initiative, "conversation": ["Use deterministic acceptance data."]},
+        )
+        suggestions_response.raise_for_status()
+        suggestions = suggestions_response.json()
+        assert suggestions["trace_id"]
+        assert suggestions["agent_status"] in {"generated", "deterministic_fallback"}
+        assert len(suggestions["financial_entries"]) >= 1
+        assert len(suggestions["cost_lines"]) >= 1
+        assert len(suggestions["kpis"]) >= 3
+        assert len(suggestions["risks"]) >= 3
+        assert len(suggestions["milestones"]) >= 3
+
+        suggestions["risks"][0]["accepted"] = False
+        suggestions["kpis"][0]["name"] = "Acceptance modified KPI"
+        created_response = client.post(
+            "/initiatives/intake/create",
+            headers=headers,
+            json={"initiative": initiative, "suggestions": suggestions},
+        )
+        created_response.raise_for_status()
+        created = created_response.json()
+        initiative_id = created["id"]
+
+        try:
+            assert created["name"] == initiative["name"]
+            assert created["counts"]["kpis_total"] >= 3
+            assert created["counts"]["risks_open"] >= 2
+            assert created["counts"]["milestones_total"] >= 3
+
+            kpis = client.get(f"/initiatives/{initiative_id}/kpis", headers=headers)
+            kpis.raise_for_status()
+            assert any(item["name"] == "Acceptance modified KPI" for item in kpis.json()["items"])
+
+            risks = client.get(f"/initiatives/{initiative_id}/risks", headers=headers)
+            risks.raise_for_status()
+            assert not any(
+                item["description"] == suggestions["risks"][0]["description"]
+                for item in risks.json()["items"]
+            )
+
+            financials = client.get(
+                f"/initiatives/{initiative_id}/financials",
+                headers=headers,
+            )
+            financials.raise_for_status()
+            assert any(
+                Decimal(item["gm_uplift_base"]) > Decimal("0")
+                for item in financials.json()["entries"]
+            )
         finally:
             client.delete(f"/initiatives/{initiative_id}", headers=headers)
 

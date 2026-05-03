@@ -16,6 +16,13 @@ from app.domain.initiatives import (
     InitiativeListResponse,
     InitiativeUpdate,
 )
+from app.domain.initiative_intake import (
+    InitiativeIntakeCreate,
+    InitiativeIntakeRequest,
+    InitiativeIntakeSuggestions,
+    InitiativeWorkbookPreview,
+)
+from app.agents.initiative_intake_agent import generate_intake_suggestions
 from app.services.initiative import InitiativeService
 
 router = APIRouter(prefix="/initiatives", tags=["initiatives"])
@@ -75,11 +82,11 @@ async def export_template(svc: Annotated[InitiativeService, Depends(_svc)]) -> R
     )
 
 
-@router.post("/import/preview", response_model=InitiativeCreate)
+@router.post("/import/preview", response_model=InitiativeWorkbookPreview)
 async def preview_import(
     svc: Annotated[InitiativeService, Depends(_svc)],
     file: UploadFile = File(...),
-) -> InitiativeCreate:
+) -> InitiativeWorkbookPreview:
     return svc.preview_import(await file.read())
 
 
@@ -90,6 +97,23 @@ async def import_initiative(
     file: UploadFile = File(...),
 ) -> InitiativeDetail:
     return svc.import_template(await file.read(), current_user.id)
+
+
+@router.post("/intake/suggestions", response_model=InitiativeIntakeSuggestions)
+async def create_intake_suggestions(
+    body: InitiativeIntakeRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> InitiativeIntakeSuggestions:
+    return await generate_intake_suggestions(body)
+
+
+@router.post("/intake/create", response_model=InitiativeDetail, status_code=201)
+async def create_initiative_from_intake(
+    body: InitiativeIntakeCreate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[InitiativeService, Depends(_svc)],
+) -> InitiativeDetail:
+    return svc.create_from_intake(body, current_user.id)
 
 
 # ── Create ────────────────────────────────────────────────────────────────────
