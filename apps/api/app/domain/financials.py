@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 # ── Enums ─────────────────────────────────────────────────────────────────────
 
 Quarter = Literal[1, 2, 3, 4]
+FinancialScenario = Literal["base", "high", "actual"]
 
 
 # ── Financial entries (revenue uplift, gross margin per quarter) ──────────────
@@ -194,3 +195,62 @@ class ValueBridgeResponse(BaseModel):
     base_case: ValueBridgeCase
     high_case: ValueBridgeCase
     actual: ValueBridgeCase
+
+
+class ScenarioFinancialSummary(BaseModel):
+    scenario: FinancialScenario
+    revenue_uplift: str = "0"
+    gross_margin: str = "0"
+    gm_uplift: str = "0"
+    cogs: str = "0"
+    costs_recurring: str = "0"
+    costs_one_off: str = "0"
+    costs_total: str = "0"
+    net_value: str = "0"
+
+
+class BreakEvenPoint(BaseModel):
+    period: str
+    year: int
+    quarter: int | None = None
+    month: int | None = None
+    cumulative_gm_uplift: str = "0"
+    cumulative_costs: str = "0"
+    cumulative_net: str = "0"
+    run_rate_gm_uplift: str = "0"
+    run_rate_costs: str = "0"
+    is_break_even: bool = False
+
+
+class BreakEvenResponse(BaseModel):
+    initiative_id: str
+    scenario: FinancialScenario
+    break_even_period: str | None = None
+    points: list[BreakEvenPoint]
+
+
+class FinancialCellAssumptionCreate(BaseModel):
+    row_key: str = Field(..., min_length=1, max_length=120)
+    column_key: str = Field(..., min_length=1, max_length=120)
+    comment: str = Field(..., min_length=1, max_length=2000)
+
+
+class FinancialCellAssumptionUpdate(BaseModel):
+    comment: str = Field(..., min_length=1, max_length=2000)
+
+
+class FinancialCellAssumption(BaseModel):
+    id: str
+    initiative_id: str
+    row_key: str
+    column_key: str
+    comment: str
+    created_by: str | None = None
+    updated_by: str | None = None
+    created_at: str
+    updated_at: str
+
+
+class FinancialCellAssumptionListResponse(BaseModel):
+    items: list[FinancialCellAssumption]
+    total: int

@@ -11,14 +11,22 @@ from uuid import UUID
 from supabase import Client
 
 from app.domain.financials import (
+    BreakEvenPoint,
+    BreakEvenResponse,
     CostLineCreate,
     CostLineItem,
     CostLineListResponse,
     CostLineUpdate,
+    FinancialCellAssumption,
+    FinancialCellAssumptionCreate,
+    FinancialCellAssumptionListResponse,
+    FinancialCellAssumptionUpdate,
     FinancialEntryRow,
     FinancialGridResponse,
     FinancialGridUpdate,
     FinancialSummary,
+    FinancialScenario,
+    ScenarioFinancialSummary,
     ValueBridgeCase,
     ValueBridgeResponse,
 )
@@ -186,11 +194,112 @@ class FinancialService:
         cost_lines = self._repo.list_cost_lines(initiative_id)
         return self._compute_value_bridge(entries, cost_lines, initiative_id)
 
+    def get_scenario_summary(
+        self,
+        initiative_id: str,
+        scenario: FinancialScenario,
+    ) -> ScenarioFinancialSummary:
+        entries = self._reporting_rows(self._repo.get_entries(initiative_id))
+        cost_lines = self._repo.list_cost_lines(initiative_id)
+        return self._compute_scenario_summary(entries, cost_lines, scenario)
+
+    def get_break_even(
+        self,
+        initiative_id: str,
+        scenario: FinancialScenario,
+    ) -> BreakEvenResponse:
+        entries = self._reporting_rows(self._repo.get_entries(initiative_id))
+        cost_lines = self._repo.list_cost_lines(initiative_id)
+        periods = sorted(
+            {
+                self._period_key(row)
+                for row in [*entries, *cost_lines]
+                if row.get("year") is not None
+            },
+            key=self._period_sort,
+        )
+        points: list[BreakEvenPoint] = []
+        cumulative_gm = Decimal("0")
+        cumulative_costs = Decimal("0")
+        break_even_period: str | None = None
+        for year, quarter, month in periods:
+            period_entries = [
+                row
+                for row in entries
+                if row["year"] == year and row.get("quarter") == quarter and row.get("month") == month
+            ]
+            period_costs = [
+                row
+                for row in cost_lines
+                if row["year"] == year and row.get("quarter") == quarter and row.get("month") == month
+            ]
+            period_gm = sum((self._scenario_entry_value(row, "gm_uplift", scenario) for row in period_entries), Decimal("0"))
+            period_cost = sum((self._scenario_cost_value(row, scenario) for row in period_costs), Decimal("0"))
+            cumulative_gm += period_gm
+            cumulative_costs += period_cost
+            cumulative_net = cumulative_gm - cumulative_costs
+            label = self._period_label(year, quarter, month)
+            crossed = break_even_period is None and cumulative_net >= Decimal("0") and cumulative_costs > Decimal("0")
+            if crossed:
+                break_even_period = label
+            points.append(
+                BreakEvenPoint(
+                    period=label,
+                    year=year,
+                    quarter=quarter,
+                    month=month,
+                    cumulative_gm_uplift=str(cumulative_gm),
+                    cumulative_costs=str(cumulative_costs),
+                    cumulative_net=str(cumulative_net),
+                    run_rate_gm_uplift=str(period_gm),
+                    run_rate_costs=str(period_cost),
+                    is_break_even=crossed,
+                )
+            )
+        return BreakEvenResponse(
+            initiative_id=initiative_id,
+            scenario=scenario,
+            break_even_period=break_even_period,
+            points=points,
+        )
+
     def get_portfolio_value_bridge(self) -> ValueBridgeResponse:
         """Portfolio-level Value Bridge across all initiatives."""
         entries = self._reporting_rows(self._repo.get_all_entries())
         cost_lines = self._repo.get_all_cost_lines()
         return self._compute_value_bridge(entries, cost_lines, initiative_id=None)
+
+    def list_cell_assumptions(self, initiative_id: str) -> FinancialCellAssumptionListResponse:
+        items = [
+            self._to_cell_assumption(row)
+            for row in self._repo.list_cell_assumptions(initiative_id)
+        ]
+        return FinancialCellAssumptionListResponse(items=items, total=len(items))
+
+    def upsert_cell_assumption(
+        self,
+        initiative_id: str,
+        data: FinancialCellAssumptionCreate,
+        user_id: UUID,
+    ) -> FinancialCellAssumption:
+        row = self._repo.upsert_cell_assumption(
+            initiative_id,
+            data.model_dump(),
+            str(user_id),
+        )
+        return self._to_cell_assumption(row)
+
+    def update_cell_assumption(
+        self,
+        assumption_id: str,
+        data: FinancialCellAssumptionUpdate,
+        user_id: UUID,
+    ) -> FinancialCellAssumption:
+        row = self._repo.update_cell_assumption(assumption_id, data.comment, str(user_id))
+        return self._to_cell_assumption(row)
+
+    def delete_cell_assumption(self, assumption_id: str) -> None:
+        self._repo.delete_cell_assumption(assumption_id)
 
     # ── Private helpers ───────────────────────────────────────────────────────
 
@@ -455,6 +564,80 @@ class FinancialService:
         )
 
     @staticmethod
+    def _compute_scenario_summary(
+        entries: list[dict],  # type: ignore[type-arg]
+        cost_lines: list[dict],  # type: ignore[type-arg]
+        scenario: FinancialScenario,
+    ) -> ScenarioFinancialSummary:
+        revenue = Decimal("0")
+        gross_margin = Decimal("0")
+        gm_uplift = Decimal("0")
+        for row in entries:
+            revenue += FinancialService._scenario_entry_value(row, "revenue_uplift", scenario)
+            gross_margin += FinancialService._scenario_entry_value(row, "gross_margin", scenario)
+            gm_uplift += FinancialService._scenario_entry_value(row, "gm_uplift", scenario)
+
+        recurring = Decimal("0")
+        one_off = Decimal("0")
+        for row in cost_lines:
+            value = FinancialService._scenario_cost_value(row, scenario)
+            if row.get("is_recurring", False):
+                recurring += value
+            else:
+                one_off += value
+        total_costs = recurring + one_off
+        return ScenarioFinancialSummary(
+            scenario=scenario,
+            revenue_uplift=str(revenue),
+            gross_margin=str(gross_margin),
+            gm_uplift=str(gm_uplift),
+            cogs=str(revenue - gross_margin),
+            costs_recurring=str(recurring),
+            costs_one_off=str(one_off),
+            costs_total=str(total_costs),
+            net_value=str(gm_uplift - recurring),
+        )
+
+    @staticmethod
+    def _scenario_entry_value(row: dict, metric: str, scenario: FinancialScenario) -> Decimal:  # type: ignore[type-arg]
+        suffix = "base" if scenario == "base" else scenario
+        return _dec(row.get(f"{metric}_{suffix}"))
+
+    @staticmethod
+    def _scenario_cost_value(row: dict, scenario: FinancialScenario) -> Decimal:  # type: ignore[type-arg]
+        if scenario == "actual":
+            return _dec(row.get("amount_actual"))
+        return _dec(row.get("amount_plan"))
+
+    @staticmethod
+    def _period_key(row: dict) -> tuple[int, int | None, int | None]:  # type: ignore[type-arg]
+        year = int(row["year"])
+        month = row.get("month")
+        if month is not None:
+            return (year, None, int(month))
+        quarter = row.get("quarter")
+        if quarter is not None:
+            return (year, int(quarter), None)
+        return (year, None, None)
+
+    @staticmethod
+    def _period_sort(period: tuple[int, int | None, int | None]) -> tuple[int, int]:
+        year, quarter, month = period
+        if month is not None:
+            return (year, month)
+        if quarter is not None:
+            return (year, quarter * 3)
+        return (year, 12)
+
+    @staticmethod
+    def _period_label(year: int, quarter: int | None, month: int | None) -> str:
+        if month is not None:
+            return f"{year}-M{month:02d}"
+        if quarter is not None:
+            return f"{year}-Q{quarter}"
+        return str(year)
+
+    @staticmethod
     def _to_cost_line(row: dict) -> CostLineItem:  # type: ignore[type-arg]
         return CostLineItem(
             id=row["id"],
@@ -468,4 +651,18 @@ class FinancialService:
                 _dec(row["amount_actual"]) if row.get("amount_actual") is not None else None
             ),
             is_recurring=row.get("is_recurring", False),
+        )
+
+    @staticmethod
+    def _to_cell_assumption(row: dict) -> FinancialCellAssumption:  # type: ignore[type-arg]
+        return FinancialCellAssumption(
+            id=row["id"],
+            initiative_id=row["initiative_id"],
+            row_key=row["row_key"],
+            column_key=row["column_key"],
+            comment=row["comment"],
+            created_by=row.get("created_by"),
+            updated_by=row.get("updated_by"),
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
         )

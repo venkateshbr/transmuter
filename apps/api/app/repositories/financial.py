@@ -151,6 +151,87 @@ class FinancialRepository:
         )
         return result.data or []
 
+    # ── Cell Assumptions ──────────────────────────────────────────────────────
+
+    def list_cell_assumptions(self, initiative_id: str) -> list[dict]:  # type: ignore[type-arg]
+        result = (
+            self._c.table("financial_cell_assumptions")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
+            .order("row_key")
+            .order("column_key")
+            .execute()
+        )
+        return result.data or []
+
+    def upsert_cell_assumption(
+        self,
+        initiative_id: str,
+        data: dict,  # type: ignore[type-arg]
+        user_id: str,
+    ) -> dict:  # type: ignore[type-arg]
+        existing = (
+            self._c.table("financial_cell_assumptions")
+            .select("id")
+            .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
+            .eq("row_key", data["row_key"])
+            .eq("column_key", data["column_key"])
+            .execute()
+        )
+        now = datetime.now(UTC).isoformat()
+        payload = {
+            "tenant_id": self._tid,
+            "initiative_id": initiative_id,
+            "row_key": data["row_key"],
+            "column_key": data["column_key"],
+            "comment": data["comment"],
+            "updated_by": user_id,
+            "updated_at": now,
+        }
+        if existing.data:
+            result = (
+                self._c.table("financial_cell_assumptions")
+                .update(payload)
+                .eq("tenant_id", self._tid)
+                .eq("id", existing.data[0]["id"])
+                .execute()
+            )
+        else:
+            payload["id"] = str(uuid4())
+            payload["created_by"] = user_id
+            result = self._c.table("financial_cell_assumptions").insert(payload).execute()
+        return result.data[0]
+
+    def update_cell_assumption(
+        self,
+        assumption_id: str,
+        comment: str,
+        user_id: str,
+    ) -> dict:  # type: ignore[type-arg]
+        result = (
+            self._c.table("financial_cell_assumptions")
+            .update({
+                "comment": comment,
+                "updated_by": user_id,
+                "updated_at": datetime.now(UTC).isoformat(),
+            })
+            .eq("tenant_id", self._tid)
+            .eq("id", assumption_id)
+            .execute()
+        )
+        return result.data[0] if result.data else {}
+
+    def delete_cell_assumption(self, assumption_id: str) -> None:
+        (
+            self._c.table("financial_cell_assumptions")
+            .delete()
+            .eq("tenant_id", self._tid)
+            .eq("id", assumption_id)
+            .execute()
+        )
+
     def _find_financial_entries(self, initiative_id: str, row: dict) -> list[dict]:  # type: ignore[type-arg]
         query = (
             self._c.table("financial_entries")

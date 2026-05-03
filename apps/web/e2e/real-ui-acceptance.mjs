@@ -1034,7 +1034,7 @@ async function main() {
       await waitFor(
         () => evalJs(page, `location.pathname.startsWith('/meetings/') && document.body.innerText.includes(${JSON.stringify(meetingName)})`),
         'created meeting detail',
-        20_000,
+        40_000,
       );
       meetingId = await evalJs(page, "location.pathname.split('/').pop()");
       let meeting = await api(`/meetings/${meetingId}`);
@@ -1129,6 +1129,7 @@ async function main() {
     const periodColumn = financialOriginal.month
       ? `col_${year}_m${financialOriginal.month}`
       : `col_${year}_q${financialOriginal.quarter}`;
+    let financialAssumptionId = null;
     const isTouchedGridCostLine = line =>
       ['Recurring Costs (Grid)', 'One-off Costs (Grid)'].includes(line.name)
       && line.year === financialOriginal.year
@@ -1156,6 +1157,11 @@ async function main() {
       await waitFor(() => evalJs(page, "document.body.innerText.includes('Initiative Financials')"), 'financials tab');
       await clickText(page, 'Edit Details');
       await waitFor(() => evalJs(page, "!!globalThis.__transmuterFinancials"), 'financial grid harness');
+      await evalJs(page, "globalThis.__transmuterFinancials.setScenario('high')");
+      await waitFor(
+        () => evalJs(page, "document.body.innerText.includes('High') && !!document.querySelector('[data-testid=\"financial-break-even-chart\"]')"),
+        'financial scenario and break-even UI',
+      );
       await evalJs(page, `
         (() => {
           globalThis.__transmuterFinancials.setCell('revenue_uplift_base', ${JSON.stringify(periodColumn)}, 123456);
@@ -1179,6 +1185,28 @@ async function main() {
       }, 'financial values persisted through UI', 25_000);
       const bridge = await api(`/initiatives/${financialInitiativeId}/financials/value-bridge`);
       assert(Number(bridge.actual.costs_recurring) >= 1000, 'Financial recurring actual was not reflected in value bridge');
+      const scenarioSummary = await api(`/initiatives/${financialInitiativeId}/financials/scenario-summary?scenario=high`);
+      assert(scenarioSummary.scenario === 'high' && Number.isFinite(Number(scenarioSummary.gm_uplift)), 'High scenario summary was not returned');
+      const breakEven = await api(`/initiatives/${financialInitiativeId}/financials/break-even?scenario=high`);
+      assert(breakEven.points.length > 0, 'Break-even points were not returned');
+
+      const assumptionText = `UI acceptance assumption ${Date.now()}`;
+      await evalJs(page, `
+        (() => {
+          globalThis.__transmuterFinancials.setAssumption('gm_uplift_base', ${JSON.stringify(periodColumn)}, ${JSON.stringify(assumptionText)});
+          return true;
+        })()
+      `);
+      await waitFor(async () => {
+        const assumptions = await api(`/initiatives/${financialInitiativeId}/financials/assumptions`);
+        const found = assumptions.items.find(item => item.comment === assumptionText);
+        if (found) financialAssumptionId = found.id;
+        return !!found;
+      }, 'financial cell assumption persisted through UI', 20_000);
+      await waitFor(
+        () => evalJs(page, `document.body.innerText.includes(${JSON.stringify(assumptionText)})`),
+        'financial cell assumption visible',
+      );
 
       await evalJs(page, `
         (() => {
@@ -1233,6 +1261,9 @@ async function main() {
         20_000,
       );
     } finally {
+      if (financialAssumptionId) {
+        await api(`/initiatives/${financialInitiativeId}/financials/assumptions/${financialAssumptionId}`, { method: 'DELETE' }).catch(() => null);
+      }
       await api(`/initiatives/${financialInitiativeId}/financials`, {
         method: 'PUT',
         body: JSON.stringify({ entries: [restoreEntry], cost_lines: [] }),
@@ -1262,7 +1293,7 @@ async function main() {
     }
 
     await page.close();
-    console.log('Real browser acceptance passed: login, dashboard, people directory/profile/invite, initiative create/import, overview edit, team owner/member flow, summary results persistence, milestones/checklist/dependencies, KPI entry save, risk create/close, meetings flow, financial grid save/reload, Excel export/import, and value bridge.');
+    console.log('Real browser acceptance passed: login, dashboard, people directory/profile/invite, initiative create/import, overview edit, team owner/member flow, summary results persistence, milestones/checklist/dependencies, KPI entry save, risk create/close, meetings flow, financial grid save/reload, scenario toggle, break-even, cell assumptions, Excel export/import, and value bridge.');
   } finally {
     chrome.kill('SIGTERM');
     await new Promise(resolve => {

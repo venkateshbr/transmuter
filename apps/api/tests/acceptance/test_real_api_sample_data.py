@@ -1167,6 +1167,7 @@ def test_real_api_financial_grid_save_reload_and_value_bridge() -> None:
         original = next((entry for entry in entries if entry["month"] is not None), entries[0])
         cost_name = f"Acceptance Recurring Cost {uuid4()}"
         cost_line_id: str | None = None
+        assumption_id: str | None = None
         update_entry = {
             "year": original["year"],
             "quarter": original["quarter"],
@@ -1236,7 +1237,63 @@ def test_real_api_financial_grid_save_reload_and_value_bridge() -> None:
             bridge_data = bridge.json()
             assert Decimal(bridge_data["base_case"]["gm_uplift"]) >= Decimal("40000.0000")
             assert Decimal(bridge_data["actual"]["costs_recurring"]) >= Decimal("1000.0000")
+
+            scenario = client.get(
+                f"/initiatives/{initiative_id}/financials/scenario-summary?scenario=high",
+                headers=headers,
+            )
+            scenario.raise_for_status()
+            scenario_data = scenario.json()
+            assert scenario_data["scenario"] == "high"
+            assert Decimal(scenario_data["gm_uplift"]) >= Decimal("65000.0000")
+            assert Decimal(scenario_data["net_value"]) > Decimal("0")
+
+            break_even = client.get(
+                f"/initiatives/{initiative_id}/financials/break-even?scenario=base",
+                headers=headers,
+            )
+            break_even.raise_for_status()
+            break_even_data = break_even.json()
+            assert break_even_data["scenario"] == "base"
+            assert break_even_data["points"]
+            assert all("cumulative_gm_uplift" in point for point in break_even_data["points"])
+            Decimal(break_even_data["points"][0]["cumulative_costs"])
+
+            assumption_comment = f"Acceptance assumption {uuid4()}"
+            assumption = client.post(
+                f"/initiatives/{initiative_id}/financials/assumptions",
+                headers=headers,
+                json={
+                    "row_key": "gm_uplift_base",
+                    "column_key": f"col_{original['year']}_q{original['quarter'] or 1}",
+                    "comment": assumption_comment,
+                },
+            )
+            assumption.raise_for_status()
+            assumption_data = assumption.json()
+            assumption_id = assumption_data["id"]
+            assert assumption_data["comment"] == assumption_comment
+
+            assumptions = client.get(
+                f"/initiatives/{initiative_id}/financials/assumptions",
+                headers=headers,
+            )
+            assumptions.raise_for_status()
+            assert any(item["id"] == assumption_id for item in assumptions.json()["items"])
+
+            updated_assumption = client.put(
+                f"/initiatives/{initiative_id}/financials/assumptions/{assumption_id}",
+                headers=headers,
+                json={"comment": "Updated acceptance assumption"},
+            )
+            updated_assumption.raise_for_status()
+            assert updated_assumption.json()["comment"] == "Updated acceptance assumption"
         finally:
+            if assumption_id:
+                client.delete(
+                    f"/initiatives/{initiative_id}/financials/assumptions/{assumption_id}",
+                    headers=headers,
+                )
             restore = {
                 key: original[key]
                 for key in update_entry

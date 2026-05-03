@@ -4,18 +4,25 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import Response
 
 from app.core.auth import CurrentUser, get_current_user
 from app.core.database import get_supabase_admin
 from app.domain.financials import (
+    BreakEvenResponse,
     CostLineCreate,
     CostLineItem,
     CostLineListResponse,
     CostLineUpdate,
+    FinancialCellAssumption,
+    FinancialCellAssumptionCreate,
+    FinancialCellAssumptionListResponse,
+    FinancialCellAssumptionUpdate,
     FinancialGridResponse,
     FinancialGridUpdate,
+    FinancialScenario,
+    ScenarioFinancialSummary,
     ValueBridgeResponse,
 )
 from app.services.financial import FinancialService
@@ -142,6 +149,81 @@ async def get_value_bridge(
 ) -> ValueBridgeResponse:
     """Value Bridge for a single initiative."""
     return svc.get_value_bridge(initiative_id)
+
+
+@router.get(
+    "/initiatives/{initiative_id}/financials/scenario-summary",
+    response_model=ScenarioFinancialSummary,
+)
+async def get_scenario_summary(
+    initiative_id: str,
+    svc: Annotated[FinancialService, Depends(_svc)],
+    scenario: FinancialScenario = Query("base"),
+) -> ScenarioFinancialSummary:
+    return svc.get_scenario_summary(initiative_id, scenario)
+
+
+@router.get(
+    "/initiatives/{initiative_id}/financials/break-even",
+    response_model=BreakEvenResponse,
+)
+async def get_break_even(
+    initiative_id: str,
+    svc: Annotated[FinancialService, Depends(_svc)],
+    scenario: FinancialScenario = Query("base"),
+) -> BreakEvenResponse:
+    return svc.get_break_even(initiative_id, scenario)
+
+
+@router.get(
+    "/initiatives/{initiative_id}/financials/assumptions",
+    response_model=FinancialCellAssumptionListResponse,
+)
+async def list_cell_assumptions(
+    initiative_id: str,
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> FinancialCellAssumptionListResponse:
+    return svc.list_cell_assumptions(initiative_id)
+
+
+@router.post(
+    "/initiatives/{initiative_id}/financials/assumptions",
+    response_model=FinancialCellAssumption,
+    status_code=201,
+)
+async def upsert_cell_assumption(
+    initiative_id: str,
+    body: FinancialCellAssumptionCreate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> FinancialCellAssumption:
+    return svc.upsert_cell_assumption(initiative_id, body, current_user.id)
+
+
+@router.put(
+    "/initiatives/{initiative_id}/financials/assumptions/{assumption_id}",
+    response_model=FinancialCellAssumption,
+)
+async def update_cell_assumption(
+    initiative_id: str,
+    assumption_id: str,
+    body: FinancialCellAssumptionUpdate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> FinancialCellAssumption:
+    return svc.update_cell_assumption(assumption_id, body, current_user.id)
+
+
+@router.delete(
+    "/initiatives/{initiative_id}/financials/assumptions/{assumption_id}",
+    status_code=204,
+)
+async def delete_cell_assumption(
+    initiative_id: str,
+    assumption_id: str,
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> None:
+    svc.delete_cell_assumption(assumption_id)
 
 
 @router.get("/portfolio/value-bridge", response_model=ValueBridgeResponse)

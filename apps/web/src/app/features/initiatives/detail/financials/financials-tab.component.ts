@@ -64,12 +64,77 @@ interface CostLineListResponse {
   total: number;
 }
 
+type FinancialScenario = 'base' | 'high' | 'actual';
+
+interface ValueBridgeCase {
+  revenue_uplift: string;
+  gross_margin: string;
+  gm_uplift: string;
+  costs_recurring: string;
+  costs_one_off: string;
+  costs_total: string;
+  net: string;
+}
+
+interface BreakEvenPoint {
+  period: string;
+  cumulative_gm_uplift: string;
+  cumulative_costs: string;
+  cumulative_net: string;
+  run_rate_gm_uplift: string;
+  run_rate_costs: string;
+  is_break_even: boolean;
+}
+
+interface BreakEvenResponse {
+  scenario: FinancialScenario;
+  break_even_period: string | null;
+  points: BreakEvenPoint[];
+}
+
+interface CellAssumption {
+  id: string;
+  initiative_id: string;
+  row_key: string;
+  column_key: string;
+  comment: string;
+}
+
+interface CellAssumptionListResponse {
+  items: CellAssumption[];
+  total: number;
+}
+
 @Component({
   selector: 'app-financials-tab',
   standalone: true,
   imports: [CommonModule, HotTableModule],
   template: `
     <div class="space-y-6">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="inline-flex rounded-lg border bg-[var(--t-surface-raised)] p-1" style="border-color:var(--t-border)" data-testid="financial-scenario-toggle">
+          @for (option of scenarios; track option.id) {
+            <button
+              type="button"
+              class="h-8 px-3 text-[11px] font-bold uppercase transition-colors rounded-md"
+              [class.bg-white]="scenario() === option.id"
+              [class.text-[var(--t-primary)]]="scenario() === option.id"
+              [class.text-[var(--t-text-secondary)]]="scenario() !== option.id"
+              [attr.aria-pressed]="scenario() === option.id"
+              (click)="setScenario(option.id)"
+            >
+              {{ option.label }}
+            </button>
+          }
+        </div>
+        <div class="text-right">
+          <p class="text-[10px] font-bold uppercase tracking-wider" style="color:var(--t-text-secondary)">Break-even</p>
+          <p class="text-sm font-bold" style="color:var(--t-text-primary)" data-testid="financial-break-even-period">
+            {{ breakEven()?.break_even_period || 'Not reached' }}
+          </p>
+        </div>
+      </div>
+
       <!-- TOP SUMMARY CARDS -->
       <div class="grid grid-cols-2 lg:grid-cols-5 gap-4">
         @for (card of summaryCards(); track card.label) {
@@ -148,6 +213,8 @@ interface CostLineListResponse {
             [licenseKey]="'non-commercial-and-evaluation'"
             [stretchH]="'all'"
             [fixedColumnsLeft]="2"
+            [contextMenu]="hotContextMenu"
+            [cells]="hotCells"
             class="hot-theme-transmuter">
           </hot-table>
         </div>
@@ -166,8 +233,103 @@ interface CostLineListResponse {
           </div>
         }
       </div>
+
+      <div class="card p-6" data-testid="financial-break-even-chart">
+        <div class="flex items-center justify-between mb-5">
+          <div>
+            <h3 class="text-base font-bold" style="color:var(--t-text-primary)">
+              Break-even & Run-rate<span style="color:var(--t-accent)">.</span>
+            </h3>
+          </div>
+          <span class="badge-ghost text-[10px] uppercase font-bold">{{ scenarioLabel() }}</span>
+        </div>
+        @if (breakEvenPoints().length) {
+          <div class="h-56 border-b border-l relative px-2" style="border-color:var(--t-border)">
+            @for (point of breakEvenPoints(); track point.period) {
+              <div
+                class="absolute bottom-0 w-2 rounded-t-sm bg-[var(--t-accent)] opacity-80"
+                [style.left.%]="point.x"
+                [style.height.%]="point.gmHeight"
+                [attr.title]="point.period + ' GM ' + formatMoney(point.gm)"
+              ></div>
+              <div
+                class="absolute bottom-0 w-2 rounded-t-sm bg-[var(--t-red)] opacity-55"
+                [style.left.%]="point.x + 1.1"
+                [style.height.%]="point.costHeight"
+                [attr.title]="point.period + ' Costs ' + formatMoney(point.costs)"
+              ></div>
+              @if (point.isBreakEven) {
+                <div class="absolute top-0 bottom-0 border-l-2 border-[var(--t-green)]" [style.left.%]="point.x + 1.1"></div>
+              }
+            }
+          </div>
+          <div class="mt-4 flex flex-wrap items-center justify-between gap-3 text-[10px] font-semibold uppercase" style="color:var(--t-text-secondary)">
+            <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm bg-[var(--t-accent)]"></span>Cumulative GM uplift</span>
+            <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm bg-[var(--t-red)] opacity-60"></span>Cumulative costs</span>
+            <span>Run-rate GM {{ formatMoney(latestRunRate().gm) }} / Costs {{ formatMoney(latestRunRate().costs) }}</span>
+          </div>
+        } @else {
+          <div class="h-40 flex items-center justify-center text-sm" style="color:var(--t-text-secondary)">No financial periods available.</div>
+        }
+      </div>
+
+      @if (assumptions().length) {
+        <div class="card p-6" data-testid="financial-assumptions-list">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-base font-bold" style="color:var(--t-text-primary)">Cell Assumptions<span style="color:var(--t-accent)">.</span></h3>
+            <span class="badge-ghost text-[10px] uppercase font-bold">{{ assumptions().length }}</span>
+          </div>
+          <div class="grid md:grid-cols-2 gap-3">
+            @for (item of assumptions(); track item.id) {
+              <button
+                type="button"
+                class="text-left rounded-lg border p-3 hover:border-[var(--t-accent)] transition-colors bg-[var(--t-surface-raised)]"
+                style="border-color:var(--t-border)"
+                (click)="editAssumption(item)"
+              >
+                <p class="text-[10px] font-bold uppercase tracking-wider mb-1" style="color:var(--t-text-secondary)">{{ item.row_key }} / {{ item.column_key }}</p>
+                <p class="text-sm" style="color:var(--t-text-primary)">{{ item.comment }}</p>
+              </button>
+            }
+          </div>
+        </div>
+      }
+
+      @if (assumptionEditor()) {
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div class="w-full max-w-md rounded-xl border bg-[var(--t-surface)] p-5 shadow-xl" style="border-color:var(--t-border)">
+            <div class="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <h3 class="text-base font-bold" style="color:var(--t-text-primary)">Cell Assumption</h3>
+                <p class="text-[11px] font-semibold uppercase tracking-wider" style="color:var(--t-text-secondary)">
+                  {{ assumptionEditor()?.row_key }} / {{ assumptionEditor()?.column_key }}
+                </p>
+              </div>
+              <button type="button" class="btn-ghost h-8 w-8 p-0" aria-label="Close assumption editor" (click)="closeAssumptionEditor()">
+                <span class="material-icons text-sm">close</span>
+              </button>
+            </div>
+            <textarea
+              class="w-full min-h-32 rounded-lg border bg-[var(--t-surface-raised)] p-3 text-sm outline-none focus:border-[var(--t-accent)]"
+              style="border-color:var(--t-border); color:var(--t-text-primary)"
+              data-testid="financial-assumption-comment"
+              [value]="assumptionDraft()"
+              (input)="assumptionDraft.set($any($event.target).value)"
+            ></textarea>
+            <div class="flex justify-between items-center mt-4">
+              <button type="button" class="btn-ghost text-[11px]" [disabled]="!assumptionEditor()?.id" (click)="deleteAssumption()">Delete</button>
+              <button type="button" class="btn-primary text-[11px]" data-testid="financial-assumption-save" [disabled]="!assumptionDraft().trim()" (click)="saveAssumption()">Save Assumption</button>
+            </div>
+          </div>
+        </div>
+      }
     </div>
-  `
+  `,
+  styles: [`
+    :host ::ng-deep .hot-assumption-cell {
+      box-shadow: inset 0 0 0 2px var(--t-accent);
+    }
+  `],
 })
 export class FinancialsTabComponent implements OnInit {
   @Input() initiativeId = '';
@@ -181,9 +343,20 @@ export class FinancialsTabComponent implements OnInit {
   exporting = signal(false);
   importing = signal(false);
   grid = signal<FinancialGrid | null>(null);
+  valueBridge = signal<any | null>(null);
+  breakEven = signal<BreakEvenResponse | null>(null);
+  assumptions = signal<CellAssumption[]>([]);
+  assumptionEditor = signal<(Partial<CellAssumption> & { row_key: string; column_key: string }) | null>(null);
+  assumptionDraft = signal('');
   initiative = signal<any | null>(null);
   costLines = signal<CostLine[]>([]);
   isEditing = signal(false);
+  scenario = signal<FinancialScenario>('base');
+  readonly scenarios: { id: FinancialScenario; label: string }[] = [
+    { id: 'base', label: 'Base' },
+    { id: 'high', label: 'High' },
+    { id: 'actual', label: 'Actuals' },
+  ];
   
   readonly METRICS = [
     { category: 'Revenue', label: 'Rev Uplift (Base)', key: 'revenue_uplift_base' },
@@ -202,19 +375,54 @@ export class FinancialsTabComponent implements OnInit {
   ];
 
   summaryCards = computed(() => {
-    const s = this.grid()?.summary;
+    const s = this.selectedScenarioCase();
     if (!s) return [];
-    
-    const gmRange = `${this.formatMoney(s.gm_uplift_plan_base)} - ${this.formatMoney(s.gm_uplift_plan_high)}`;
-    const revRange = `${this.formatMoney(s.revenue_uplift_plan_base)} - ${this.formatMoney(s.revenue_uplift_plan_high)}`;
+    const cogs = this.parseMoney(s.revenue_uplift) - this.parseMoney(s.gross_margin);
 
     return [
-      { label: 'Revenue Uplift', plan: revRange, actual: s.revenue_uplift_actual ? this.formatMoney(s.revenue_uplift_actual) : '—', highlight: false },
-      { label: 'GM Uplift', plan: gmRange, actual: s.gm_uplift_actual ? this.formatMoney(s.gm_uplift_actual) : '—', highlight: false },
-      { label: 'COGS', plan: `${this.formatMoney(s.cogs_plan_base)} - ${this.formatMoney(s.cogs_plan_high)}`, actual: s.cogs_actual ? this.formatMoney(s.cogs_actual) : '—', highlight: false },
-      { label: 'Total Costs', plan: this.formatMoney(s.costs_plan), actual: s.costs_actual ? this.formatMoney(s.costs_actual) : '—', highlight: false },
-      { label: 'Net Value', plan: this.formatMoney(s.net_value_plan), actual: s.net_value_actual ? this.formatMoney(s.net_value_actual) : '—', highlight: true },
+      { label: 'Revenue Uplift', plan: this.formatMoney(s.revenue_uplift), actual: this.scenarioLabel(), highlight: false },
+      { label: 'GM Uplift', plan: this.formatMoney(s.gm_uplift), actual: this.scenarioLabel(), highlight: false },
+      { label: 'COGS', plan: this.formatMoney(cogs), actual: this.scenarioLabel(), highlight: false },
+      { label: 'Total Costs', plan: this.formatMoney(s.costs_total), actual: this.scenarioLabel(), highlight: false },
+      { label: 'Net Value', plan: this.formatMoney(s.net), actual: this.scenarioLabel(), highlight: true },
     ];
+  });
+
+  selectedScenarioCase = computed<ValueBridgeCase | null>(() => {
+    const bridge = this.valueBridge();
+    if (!bridge) return null;
+    if (this.scenario() === 'high') return bridge.high_case;
+    if (this.scenario() === 'actual') return bridge.actual;
+    return bridge.base_case;
+  });
+
+  breakEvenPoints = computed(() => {
+    const points = this.breakEven()?.points || [];
+    const max = Math.max(
+      1,
+      ...points.map(point => Math.max(this.parseMoney(point.cumulative_gm_uplift), this.parseMoney(point.cumulative_costs))),
+    );
+    return points.map((point, index) => {
+      const gm = this.parseMoney(point.cumulative_gm_uplift);
+      const costs = this.parseMoney(point.cumulative_costs);
+      return {
+        period: point.period,
+        x: points.length === 1 ? 48 : (index / Math.max(1, points.length - 1)) * 94,
+        gm,
+        costs,
+        gmHeight: Math.max(3, (gm / max) * 100),
+        costHeight: Math.max(3, (costs / max) * 100),
+        isBreakEven: point.is_break_even,
+      };
+    });
+  });
+
+  latestRunRate = computed(() => {
+    const point = (this.breakEven()?.points || []).at(-1);
+    return {
+      gm: this.parseMoney(point?.run_rate_gm_uplift || '0'),
+      costs: this.parseMoney(point?.run_rate_costs || '0'),
+    };
   });
 
   dynamicYears = computed(() => {
@@ -293,6 +501,32 @@ export class FinancialsTabComponent implements OnInit {
     if (this.initiativeId) this._loadData();
   }
 
+  hotContextMenu: any = {
+    items: {
+      assumption: {
+        name: 'Add/Edit Assumption',
+        callback: (_key: string, selection: any[]) => this.openAssumptionForSelection(selection?.[0]),
+      },
+      copy: {},
+    },
+  };
+
+  hotCells = (row: number, col: number) => {
+    const data = this.hotComponent?.hotInstance?.getSourceDataAtRow(row);
+    const prop = this.hotComponent?.hotInstance?.colToProp(col);
+    if (!data || !prop || !this.hasAssumption(data.key, String(prop))) return {};
+    return { className: 'hot-assumption-cell' };
+  };
+
+  setScenario(next: FinancialScenario): void {
+    this.scenario.set(next);
+    this._loadBreakEven();
+  }
+
+  scenarioLabel(): string {
+    return this.scenarios.find(item => item.id === this.scenario())?.label || 'Base';
+  }
+
   toggleEdit(): void {
     this.isEditing.set(!this.isEditing());
     setTimeout(() => this.exposeAcceptanceHarness());
@@ -315,6 +549,16 @@ export class FinancialsTabComponent implements OnInit {
         hotInstance.render();
       },
       save: () => this.saveGrid(),
+      setScenario: (scenario: FinancialScenario) => this.setScenario(scenario),
+      openAssumption: (rowKey: string, columnKey: string) => {
+        this.openAssumption(rowKey, columnKey);
+        return true;
+      },
+      setAssumption: (rowKey: string, columnKey: string, comment: string) => {
+        this.openAssumption(rowKey, columnKey);
+        this.assumptionDraft.set(comment);
+        this.saveAssumption();
+      },
     };
   }
 
@@ -479,14 +723,96 @@ export class FinancialsTabComponent implements OnInit {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(num);
   }
 
+  parseMoney(val: string | number | null | undefined): number {
+    if (val === null || val === undefined) return 0;
+    const num = typeof val === 'string' ? parseFloat(val) : val;
+    return Number.isFinite(num) ? num : 0;
+  }
+
+  openAssumptionForSelection(selection: any): void {
+    if (!selection) return;
+    const hotInstance = this.hotComponent?.hotInstance;
+    const rowIndex = selection.start?.row ?? selection.from?.row ?? 0;
+    const colIndex = selection.start?.col ?? selection.from?.col ?? 0;
+    const row = hotInstance?.getSourceDataAtRow(rowIndex);
+    const prop = hotInstance?.colToProp(colIndex);
+    if (!row?.key || !prop || ['category', 'metric'].includes(String(prop))) return;
+    this.openAssumption(row.key, String(prop));
+  }
+
+  openAssumption(rowKey: string, columnKey: string): void {
+    const existing = this.assumptions().find(item => item.row_key === rowKey && item.column_key === columnKey);
+    this.assumptionEditor.set(existing || { row_key: rowKey, column_key: columnKey });
+    this.assumptionDraft.set(existing?.comment || '');
+  }
+
+  editAssumption(item: CellAssumption): void {
+    this.assumptionEditor.set(item);
+    this.assumptionDraft.set(item.comment);
+  }
+
+  closeAssumptionEditor(): void {
+    this.assumptionEditor.set(null);
+    this.assumptionDraft.set('');
+  }
+
+  saveAssumption(): void {
+    const current = this.assumptionEditor();
+    const comment = this.assumptionDraft().trim();
+    if (!current || !comment) return;
+    const body = { row_key: current.row_key, column_key: current.column_key, comment };
+    const request = current.id
+      ? this.api.put<CellAssumption>(`/initiatives/${this.initiativeId}/financials/assumptions/${current.id}`, { comment })
+      : this.api.post<CellAssumption>(`/initiatives/${this.initiativeId}/financials/assumptions`, body);
+    request.subscribe({
+      next: () => {
+        this.closeAssumptionEditor();
+        this._loadAssumptions();
+      },
+      error: () => alert('Failed to save cell assumption.'),
+    });
+  }
+
+  deleteAssumption(): void {
+    const current = this.assumptionEditor();
+    if (!current?.id) return;
+    this.api.delete(`/initiatives/${this.initiativeId}/financials/assumptions/${current.id}`).subscribe({
+      next: () => {
+        this.closeAssumptionEditor();
+        this._loadAssumptions();
+      },
+      error: () => alert('Failed to delete cell assumption.'),
+    });
+  }
+
+  hasAssumption(rowKey: string, columnKey: string): boolean {
+    return this.assumptions().some(item => item.row_key === rowKey && item.column_key === columnKey);
+  }
+
   private _loadData(): void {
     const base = `/initiatives/${this.initiativeId}/financials`;
     this.api.get<any>(`/initiatives/${this.initiativeId}`).subscribe(i => this.initiative.set(i));
     this.api.get<FinancialGrid>(base).subscribe(g => this.grid.set(g));
+    this.api.get<any>(`${base}/value-bridge`).subscribe(v => this.valueBridge.set(v));
+    this._loadBreakEven();
+    this._loadAssumptions();
     this.api.get<CostLineListResponse>(`${base}/cost-lines`).subscribe(r => {
       this.costLines.set(r.items);
       this.loading.set(false);
       setTimeout(() => this.exposeAcceptanceHarness());
+    });
+  }
+
+  private _loadBreakEven(): void {
+    const base = `/initiatives/${this.initiativeId}/financials`;
+    this.api.get<BreakEvenResponse>(`${base}/break-even?scenario=${this.scenario()}`).subscribe(data => this.breakEven.set(data));
+  }
+
+  private _loadAssumptions(): void {
+    const base = `/initiatives/${this.initiativeId}/financials`;
+    this.api.get<CellAssumptionListResponse>(`${base}/assumptions`).subscribe(response => {
+      this.assumptions.set(response.items);
+      setTimeout(() => this.hotComponent?.hotInstance?.render());
     });
   }
 }
