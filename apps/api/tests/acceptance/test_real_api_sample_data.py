@@ -164,18 +164,34 @@ def test_real_api_meeting_crud_session_and_action_flow() -> None:
             action_update = client.put(
                 f"/action-items/{action_id}",
                 headers=headers,
-                json={"status": "completed"},
+                json={"status": "in_progress", "due_date": "2030-12-31"},
             )
             action_update.raise_for_status()
-            assert action_update.json()["status"] == "completed"
+            assert action_update.json()["status"] == "in_progress"
+            assert action_update.json()["due_date"] == "2030-12-31"
 
             action_list = client.get("/action-items", headers=headers)
             action_list.raise_for_status()
-            assert any(item["id"] == action_id for item in action_list.json()["items"])
+            action_list_data = action_list.json()
+            assert any(item["id"] == action_id for item in action_list_data["items"])
+            assert action_list_data["stats"]["total"] >= 1
+            assert action_list_data["stats"]["in_progress"] >= 1
 
             portfolio_actions = client.get("/portfolio/action-items", headers=headers)
             portfolio_actions.raise_for_status()
-            assert any(item["id"] == action_id for item in portfolio_actions.json()["items"])
+            portfolio_data = portfolio_actions.json()
+            portfolio_item = next(item for item in portfolio_data["items"] if item["id"] == action_id)
+            assert portfolio_item["meeting_sessions"]["meeting_id"] == meeting_id
+            assert portfolio_item["users"]["display_name"]
+            assert portfolio_data["stats"]["in_progress"] >= 1
+
+            completed_action = client.put(
+                f"/action-items/{action_id}",
+                headers=headers,
+                json={"status": "completed"},
+            )
+            completed_action.raise_for_status()
+            assert completed_action.json()["status"] == "completed"
 
             ended = client.post(f"/meetings/sessions/{session_id}/end", headers=headers)
             ended.raise_for_status()

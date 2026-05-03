@@ -1,9 +1,12 @@
+from datetime import date
 from uuid import UUID
 from supabase import Client
 from app.repositories.meeting import MeetingRepository
 from fastapi import HTTPException, status
 from app.domain.meetings import (
     ActionItemCreate,
+    ActionItemListResponse,
+    ActionItemStats,
     ActionItemUpdate,
     AgendaItemCreate,
     AgendaItemUpdate,
@@ -131,17 +134,47 @@ class MeetingService:
         self.get_session_detail(session_id)
         return self._repo.create_action_item(session_id, data.model_dump(exclude_none=True))
 
-    def list_action_items(self) -> list[dict]:
-        return self._repo.list_action_items()
+    def list_action_items(self) -> ActionItemListResponse:
+        items = self._repo.list_action_items()
+        return ActionItemListResponse(items=items, stats=self._action_item_stats(items))
 
     def update_action_item(self, action_item_id: str, data: ActionItemUpdate) -> dict:
-        return self._repo.update_action_item(
-            action_item_id,
-            data.model_dump(exclude_none=True),
-        )
+        patch = data.model_dump(exclude_none=True)
+        if not patch:
+            existing = self._repo.get_action_item(action_item_id)
+            if not existing:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Action item not found")
+            return existing
+        updated = self._repo.update_action_item(action_item_id, patch)
+        if not updated:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Action item not found")
+        return updated
 
     def delete_action_item(self, action_item_id: str) -> None:
         self._repo.delete_action_item(action_item_id)
+
+    @staticmethod
+    def _action_item_stats(items: list[dict]) -> ActionItemStats:  # type: ignore[type-arg]
+        today = date.today()
+        stats = ActionItemStats(total=len(items))
+        for item in items:
+            status_value = item.get("status") or "open"
+            if status_value == "open":
+                stats.open += 1
+            elif status_value == "in_progress":
+                stats.in_progress += 1
+            elif status_value == "completed":
+                stats.completed += 1
+            elif status_value == "cancelled":
+                stats.cancelled += 1
+            due_date = item.get("due_date")
+            if status_value not in {"completed", "cancelled"} and due_date:
+                try:
+                    if date.fromisoformat(str(due_date)) < today:
+                        stats.overdue += 1
+                except ValueError:
+                    pass
+        return stats
 
     def _assert_meeting(self, meeting_id: str) -> dict:
         meeting = self._repo.get(meeting_id)

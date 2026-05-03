@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 from supabase import Client
 
@@ -258,11 +259,28 @@ class MeetingRepository:
                 "meeting_sessions(session_date, meeting_id, meetings(name))"
             )
             .eq("tenant_id", self._tid)
+            .order("due_date")
+            .order("created_at", desc=True)
             .execute()
         )
         return result.data or []
 
+    def get_action_item(self, action_item_id: str) -> dict:
+        result = (
+            self._c.table("action_items")
+            .select(
+                "*, users!action_items_assignee_id_fkey(display_name), "
+                "initiatives(name, initiative_code), "
+                "meeting_sessions(session_date, meeting_id, meetings(name))"
+            )
+            .eq("tenant_id", self._tid)
+            .eq("id", action_item_id)
+            .execute()
+        )
+        return result.data[0] if result.data else {}
+
     def update_action_item(self, action_item_id: str, data: dict) -> dict:
+        data["updated_at"] = datetime.now(UTC).isoformat()
         result = (
             self._c.table("action_items")
             .update(data)

@@ -1111,6 +1111,10 @@ async function main() {
 
       await page.send('Page.navigate', { url: `${uiBaseUrl}/progress/action-items` });
       await waitFor(() => evalJs(page, `document.body.innerText.includes(${JSON.stringify(actionText)})`), 'action item progress view');
+      await waitFor(
+        () => evalJs(page, "!!document.querySelector('[data-testid=\"action-item-stats\"]') && document.body.innerText.includes('Completed')"),
+        'action item stats bar',
+      );
     } finally {
       if (actionId) await api(`/action-items/${actionId}`, { method: 'DELETE' }).catch(() => null);
       if (linkId && meetingId) await api(`/meetings/${meetingId}/initiatives/${linkId}`, { method: 'DELETE' }).catch(() => null);

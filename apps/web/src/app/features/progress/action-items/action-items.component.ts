@@ -31,8 +31,23 @@ import { RouterLink } from '@angular/router';
             <option value="open">Open</option>
             <option value="in_progress">In Progress</option>
             <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+            <option value="overdue">Overdue</option>
           </select>
         </div>
+      </div>
+
+      <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4" data-testid="action-item-stats">
+        @for (card of statsCards(); track card.label) {
+          <button
+            type="button"
+            class="card p-4 text-left hover:border-[var(--t-accent)] transition-colors"
+            (click)="setStatusFilter(card.filter)"
+          >
+            <p class="text-[10px] font-bold uppercase tracking-wider mb-2" style="color:var(--t-text-secondary)">{{ card.label }}</p>
+            <p class="text-2xl font-black" [style.color]="card.color">{{ card.value }}</p>
+          </button>
+        }
       </div>
 
       <!-- Action Grid -->
@@ -49,9 +64,17 @@ import { RouterLink } from '@angular/router';
                  <span class="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-[var(--t-surface-raised)] text-[var(--t-text-tertiary)]">
                    {{ item.priority }}
                  </span>
+                 <span class="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded"
+                       [ngClass]="statusClass(item.status)">
+                   {{ item.status.replace('_', ' ') }}
+                 </span>
               </div>
               <span class="text-[10px] font-mono font-bold" [class.text-red-500]="isOverdue(item)">
-                Due {{ item.due_date | date:'MMM d' }}
+                @if (item.due_date) {
+                  Due {{ item.due_date | date:'MMM d' }}
+                } @else {
+                  No due date
+                }
               </span>
             </div>
 
@@ -64,6 +87,38 @@ import { RouterLink } from '@angular/router';
                <span class="text-[10px] font-bold text-[var(--t-text-secondary)] truncate">
                  {{ item.initiatives?.name || 'General Platform' }}
                </span>
+            </div>
+
+            @if (item.meeting_sessions?.meeting_id) {
+              <a
+                [routerLink]="['/meetings', item.meeting_sessions.meeting_id]"
+                class="mt-3 flex items-center gap-2 text-[10px] font-bold text-[var(--t-text-secondary)] hover:text-[var(--t-accent)] transition-colors"
+              >
+                <span class="material-icons text-sm">forum</span>
+                <span class="truncate">{{ item.meeting_sessions?.meetings?.name || 'Meeting session' }}</span>
+                <span>{{ item.meeting_sessions?.session_date | date:'MMM d' }}</span>
+              </a>
+            }
+
+            <div class="mt-4 grid grid-cols-2 gap-2">
+              <select
+                class="input-field text-[11px] h-9"
+                [ngModel]="item.status"
+                (ngModelChange)="updateItem(item.id, { status: $event })"
+                aria-label="Action item status"
+              >
+                <option value="open">Open</option>
+                <option value="in_progress">In Progress</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+              <input
+                type="date"
+                class="input-field text-[11px] h-9"
+                [ngModel]="item.due_date"
+                (change)="updateItem(item.id, { due_date: $any($event.target).value })"
+                aria-label="Action item due date"
+              />
             </div>
 
             <div class="mt-6 pt-6 border-t border-[var(--t-border)] flex items-center justify-between">
@@ -108,6 +163,7 @@ export class ActionItemsComponent implements OnInit {
   
   items = signal<any[]>([]);
   filteredItems = signal<any[]>([]);
+  stats = signal<any>({ total: 0, open: 0, in_progress: 0, completed: 0, cancelled: 0, overdue: 0 });
   statusFilter = '';
 
   ngOnInit() {
@@ -117,16 +173,24 @@ export class ActionItemsComponent implements OnInit {
   fetchItems() {
     this.api.get<any>('/portfolio/action-items').subscribe(res => {
       this.items.set(res.items || []);
+      this.stats.set(res.stats || { total: 0, open: 0, in_progress: 0, completed: 0, cancelled: 0, overdue: 0 });
       this.applyFilters();
     });
   }
 
   applyFilters() {
     let filtered = [...this.items()];
-    if (this.statusFilter) {
+    if (this.statusFilter === 'overdue') {
+      filtered = filtered.filter(i => this.isOverdue(i));
+    } else if (this.statusFilter) {
       filtered = filtered.filter(i => i.status === this.statusFilter);
     }
     this.filteredItems.set(filtered);
+  }
+
+  setStatusFilter(filter: string) {
+    this.statusFilter = filter;
+    this.applyFilters();
   }
 
   toggleComplete(item: any) {
@@ -139,7 +203,9 @@ export class ActionItemsComponent implements OnInit {
       ? 'in_progress'
       : item.status === 'in_progress'
         ? 'completed'
-        : 'open';
+        : item.status === 'completed'
+          ? 'cancelled'
+          : 'open';
     this.updateItem(item.id, { status: next });
   }
 
@@ -150,11 +216,32 @@ export class ActionItemsComponent implements OnInit {
     });
   }
 
-  private updateItem(id: string, body: Record<string, string>) {
+  updateItem(id: string, body: Record<string, string>) {
     this.api.put<any>(`/action-items/${id}`, body).subscribe(updated => {
       this.items.set(this.items().map(item => item.id === id ? updated : item));
-      this.applyFilters();
+      this.fetchItems();
     });
+  }
+
+  statsCards() {
+    const s = this.stats();
+    return [
+      { label: 'Total', value: s.total || 0, filter: '', color: 'var(--t-text-primary)' },
+      { label: 'Open', value: s.open || 0, filter: 'open', color: 'var(--t-text-primary)' },
+      { label: 'In Progress', value: s.in_progress || 0, filter: 'in_progress', color: 'var(--t-amber)' },
+      { label: 'Completed', value: s.completed || 0, filter: 'completed', color: 'var(--t-green)' },
+      { label: 'Cancelled', value: s.cancelled || 0, filter: 'cancelled', color: 'var(--t-red)' },
+      { label: 'Overdue', value: s.overdue || 0, filter: 'overdue', color: 'var(--t-red)' },
+    ];
+  }
+
+  statusClass(status: string): string {
+    switch (status) {
+      case 'completed': return 'bg-green-500 text-white';
+      case 'in_progress': return 'bg-amber-500 text-white';
+      case 'cancelled': return 'bg-red-500 text-white';
+      default: return 'bg-[var(--t-surface-raised)] text-[var(--t-text-tertiary)]';
+    }
   }
 
   getPriorityClass(p: string): string {
@@ -167,7 +254,7 @@ export class ActionItemsComponent implements OnInit {
   }
 
   isOverdue(item: any): boolean {
-    if (item.status === 'completed') return false;
+    if (item.status === 'completed' || item.status === 'cancelled' || !item.due_date) return false;
     return new Date(item.due_date) < new Date();
   }
 }

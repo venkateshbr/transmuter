@@ -82,5 +82,15 @@ class MeetingListResponse(BaseModel):
     items: list[dict[str, Any]]
 
 
+class ActionItemStats(BaseModel):
+    total: int = 0
+    open: int = 0
+    in_progress: int = 0
+    completed: int = 0
+    cancelled: int = 0
+    overdue: int = 0
+
+
 class ActionItemListResponse(BaseModel):
     items: list[dict[str, Any]]
+    stats: ActionItemStats = Field(default_factory=ActionItemStats)

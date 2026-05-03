@@ -15,7 +15,7 @@ async def list_action_items(
 ) -> ActionItemListResponse:
     """List all action items for the tenant."""
     svc = MeetingService(get_supabase_admin(), current_user.tenant_id)
-    return {"items": svc.list_action_items()}
+    return svc.list_action_items()
 
 
 @router.get("/portfolio/action-items")
@@ -24,7 +24,7 @@ async def list_portfolio_action_items(
 ) -> ActionItemListResponse:
     """List portfolio action items for the tenant."""
     svc = MeetingService(get_supabase_admin(), current_user.tenant_id)
-    return {"items": svc.list_action_items()}
+    return svc.list_action_items()
 
 
 @router.put("/action-items/{action_item_id}")
