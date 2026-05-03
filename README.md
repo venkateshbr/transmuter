@@ -30,6 +30,7 @@ tail -f frontend.log backend.log
 ## 📜 Development Guidelines
 
 For detailed coding rules and standards, refer to:
+- [docs/team/SDLC_PROTOCOL.md](file:///Users/vramakrishnaiah/dev/transmuter/docs/team/SDLC_PROTOCOL.md) — Canonical Vishwa-first SDLC and real sample-data acceptance protocol.
 - [GEMINI.md](file:///Users/vramakrishnaiah/dev/transmuter/GEMINI.md) — Antigravity/Gemini specific coding rules.
 - [CLAUDE.md](file:///Users/vramakrishnaiah/dev/transmuter/CLAUDE.md) — Core project rules and agent workflows.
 
