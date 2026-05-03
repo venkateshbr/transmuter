@@ -782,9 +782,35 @@ async function main() {
         'status update compliance view',
       );
       await waitFor(
+        () => evalJs(page, "document.querySelector('[data-testid=\"status-compliance-summary\"]') !== null && document.querySelector('[data-testid=\"status-compliance-filters\"]') !== null && document.querySelector('[data-testid=\"status-compliance-list\"]') !== null && document.body.innerText.includes('DAYS SINCE')"),
+        'status compliance summary filters and days-since column',
+      );
+      await evalJs(page, `
+        (() => {
+          const filters = [...document.querySelectorAll('[data-testid="status-compliance-filters"] button')].map(button => button.textContent.trim());
+          for (const label of ['All', 'Nuclear', 'Overdue', 'On Time']) {
+            if (!filters.some(text => text.includes(label))) throw new Error('Missing compliance filter ' + label);
+          }
+          return true;
+        })()
+      `);
+      await waitFor(
         () => evalJs(page, `document.body.innerText.includes(${JSON.stringify(silentStatus.name)})`),
         'silent status initiative compliance row',
         20_000,
+      );
+      await evalJs(page, `
+        (() => {
+          const button = [...document.querySelectorAll('[data-testid="status-compliance-filters"] button')]
+            .find(node => node.textContent.includes('Nuclear'));
+          if (!button) throw new Error('Missing Nuclear filter button');
+          button.click();
+          return true;
+        })()
+      `);
+      await waitFor(
+        () => evalJs(page, `document.querySelector('[data-testid="status-compliance-list"]')?.textContent.includes(${JSON.stringify(silentStatus.name)})`),
+        'nuclear compliance filter preserves silent initiative',
       );
       await evalJs(page, `
         (() => {
@@ -802,6 +828,11 @@ async function main() {
         const row = compliance.initiatives.find(item => item.initiative_id === statusSilentInitiativeId);
         return row?.status === 'nuclear' && row.nudge_count >= 1;
       }, 'status compliance nudge persistence');
+      await clickText(page, 'Nudge Log');
+      await waitFor(
+        () => evalJs(page, `document.querySelector('[data-testid="status-nudge-log"]')?.textContent.includes(${JSON.stringify(silentStatus.name)})`),
+        'status nudge log row',
+      );
       await page.send('Page.navigate', { url: `${uiBaseUrl}/initiatives/${manualInitiativeId}` });
       await waitFor(
         () => evalJs(page, `document.body.innerText.includes(${JSON.stringify(manualInitiativeName)})`),
@@ -1032,6 +1063,10 @@ async function main() {
     try {
       await clickText(page, 'New Series');
       await waitFor(() => evalJs(page, "document.body.innerText.includes('New meeting series')"), 'new meeting dialog');
+      await waitFor(
+        () => evalJs(page, "document.querySelector('select[name=owner_id] option[value]') !== null"),
+        'meeting owner options loaded',
+      );
       await setField(page, 'input[name=name]', meetingName);
       await setField(page, 'textarea[name=description]', 'Created from real browser acceptance');
       await clickText(page, 'Create series');

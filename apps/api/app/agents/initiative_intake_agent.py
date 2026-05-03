@@ -6,6 +6,7 @@ suggestions without blocking core creation when OpenRouter/Langfuse are absent.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date
 from decimal import Decimal
 from uuid import uuid4
@@ -32,6 +33,7 @@ from app.domain.kpis import KPIEntryUpsert
 
 initiative_intake_agent: Agent[None, InitiativeIntakeSuggestions] | None = None
 langfuse_client: Langfuse | None = None
+INTAKE_AGENT_TIMEOUT_SECONDS = 8
 
 
 def _get_agent() -> Agent[None, InitiativeIntakeSuggestions]:
@@ -91,7 +93,10 @@ async def generate_intake_suggestions(
                     metadata={"source": "new_initiative"},
                     model=settings.default_model,
                 ):
-                    result = await _get_agent().run(prompt)
+                    result = await asyncio.wait_for(
+                        _get_agent().run(prompt),
+                        timeout=INTAKE_AGENT_TIMEOUT_SECONDS,
+                    )
                     suggestions = _with_trace(result.output, trace_id, langfuse)
                     suggestions.agent_status = "generated"
                     langfuse.update_current_span(
@@ -99,7 +104,10 @@ async def generate_intake_suggestions(
                     )
                     langfuse.flush()
                     return suggestions
-            result = await _get_agent().run(prompt)
+            result = await asyncio.wait_for(
+                _get_agent().run(prompt),
+                timeout=INTAKE_AGENT_TIMEOUT_SECONDS,
+            )
             suggestions = _with_trace(result.output, trace_id, None)
             suggestions.agent_status = "generated"
             return suggestions

@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
@@ -22,6 +22,8 @@ interface StatusUpdate {
   summary: string;
   submitted_at: string;
 }
+
+type ComplianceFilter = 'all' | 'nuclear' | 'overdue' | 'on_time';
 
 @Component({
   selector: 'app-status-updates',
@@ -55,23 +57,23 @@ interface StatusUpdate {
       }
 
       <!-- Stats Bar -->
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div class="card p-6 bg-white dark:bg-[#1e1b2e] border border-[var(--t-border)] rounded-xl shadow-sm">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8" data-testid="status-compliance-summary">
+        <div class="card p-6 bg-white dark:bg-[#1e1b2e] border border-[var(--t-border)] rounded-lg shadow-sm">
           <p class="text-sm font-medium text-[var(--t-text-secondary)]">Total Initiatives</p>
           <p class="text-3xl font-bold mt-1">{{ stats()?.summary?.total || 0 }}</p>
         </div>
-        <div class="card p-6 bg-white dark:bg-[#1e1b2e] border border-[var(--t-border)] rounded-xl shadow-sm">
+        <div class="card p-6 bg-white dark:bg-[#1e1b2e] border border-[var(--t-border)] rounded-lg shadow-sm">
           <p class="text-sm font-medium text-[var(--t-text-secondary)]">On Time</p>
           <div class="flex items-center gap-2 mt-1">
             <p class="text-3xl font-bold text-emerald-500">{{ stats()?.summary?.on_time || 0 }}</p>
             <span class="badge-emerald px-2 py-0.5 rounded text-xs font-semibold">WEEKLY</span>
           </div>
         </div>
-        <div class="card p-6 bg-white dark:bg-[#1e1b2e] border border-[var(--t-border)] rounded-xl shadow-sm">
+        <div class="card p-6 bg-white dark:bg-[#1e1b2e] border border-[var(--t-border)] rounded-lg shadow-sm">
           <p class="text-sm font-medium text-[var(--t-text-secondary)]">Overdue</p>
           <p class="text-3xl font-bold mt-1 text-amber-500">{{ stats()?.summary?.overdue || 0 }}</p>
         </div>
-        <div class="card p-6 bg-white dark:bg-[#1e1b2e] border border-[var(--t-border)] rounded-xl shadow-sm">
+        <div class="card p-6 bg-white dark:bg-[#1e1b2e] border border-[var(--t-border)] rounded-lg shadow-sm">
           <p class="text-sm font-medium text-[var(--t-text-secondary)]">Nuclear</p>
           <p class="text-3xl font-bold mt-1 text-red-500">{{ stats()?.summary?.nuclear || 0 }}</p>
         </div>
@@ -104,7 +106,23 @@ interface StatusUpdate {
 
       <!-- Compliance Tab -->
       @if (activeTab() === 'compliance') {
-        <div class="card overflow-hidden bg-white dark:bg-[#1e1b2e] border border-[var(--t-border)] rounded-xl shadow-sm">
+        <div class="flex flex-wrap items-center gap-2" data-testid="status-compliance-filters">
+          @for (filter of complianceFilters; track filter.value) {
+            <button
+              type="button"
+              (click)="complianceFilter.set(filter.value)"
+              [attr.aria-pressed]="complianceFilter() === filter.value"
+              class="h-9 rounded-lg border px-4 text-xs font-bold uppercase tracking-wide transition-all"
+              [style.border-color]="complianceFilter() === filter.value ? 'var(--t-accent)' : 'var(--t-border)'"
+              [style.background]="complianceFilter() === filter.value ? 'var(--t-accent-soft)' : 'var(--t-surface)'"
+              [style.color]="complianceFilter() === filter.value ? 'var(--t-accent)' : 'var(--t-text-secondary)'">
+              {{ filter.label }}
+              <span class="ml-2 font-black">{{ filter.count() }}</span>
+            </button>
+          }
+        </div>
+
+        <div class="card overflow-hidden bg-white dark:bg-[#1e1b2e] border border-[var(--t-border)] rounded-lg shadow-sm" data-testid="status-compliance-list">
           <table class="w-full text-left border-collapse">
             <thead>
               <tr class="bg-[var(--t-surface)] border-b border-[var(--t-border)]">
@@ -112,12 +130,13 @@ interface StatusUpdate {
                 <th class="px-6 py-4 text-sm font-semibold text-[var(--t-text-secondary)]">INITIATIVE</th>
                 <th class="px-6 py-4 text-sm font-semibold text-[var(--t-text-secondary)]">OWNER</th>
                 <th class="px-6 py-4 text-sm font-semibold text-[var(--t-text-secondary)] text-center">LAST UPDATE</th>
+                <th class="px-6 py-4 text-sm font-semibold text-[var(--t-text-secondary)] text-center">DAYS SINCE</th>
                 <th class="px-6 py-4 text-sm font-semibold text-[var(--t-text-secondary)] text-center">NUDGES</th>
                 <th class="px-6 py-4 text-sm font-semibold text-[var(--t-text-secondary)] text-right">ACTION</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-[var(--t-border)]">
-              @for (item of stats()?.initiatives; track item.initiative_id) {
+              @for (item of filteredCompliance(); track item.initiative_id) {
                 <tr class="hover:bg-[var(--t-surface)] transition-colors group">
                   <td class="px-6 py-4">
                     <span [class]="getStatusClass(item.status)" class="px-2 py-1 rounded text-xs font-bold uppercase tracking-wider">
@@ -135,6 +154,9 @@ interface StatusUpdate {
                     </div>
                   </td>
                   <td class="px-6 py-4 text-center">
+                    <span class="text-sm font-bold">{{ item.days_since >= 999 ? 'Never' : item.days_since }}</span>
+                  </td>
+                  <td class="px-6 py-4 text-center">
                     <span class="inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-xs font-bold"
                           style="background:var(--t-surface-raised);color:var(--t-text-secondary);border:1px solid var(--t-border)">
                       {{ item.nudge_count || 0 }}
@@ -142,16 +164,21 @@ interface StatusUpdate {
                   </td>
                   <td class="px-6 py-4 text-right">
                     <button 
+                      type="button"
                       (click)="nudge(item.initiative_id)"
                       [disabled]="item.status === 'on_time'"
                       [class.opacity-50]="item.status === 'on_time'"
                       [class.cursor-not-allowed]="item.status === 'on_time'"
-                      class="p-2 text-[var(--t-accent)] hover:bg-[var(--t-accent)] hover:text-white rounded-full transition-all opacity-0 group-hover:opacity-100 disabled:group-hover:opacity-50">
-                      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                      </svg>
+                      aria-label="Send status update nudge"
+                      title="Send status update nudge"
+                      class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-[var(--t-accent)] transition-all hover:bg-[var(--t-accent-soft)] disabled:opacity-50">
+                      <span class="material-icons text-lg">notifications_active</span>
                     </button>
                   </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="7" class="px-6 py-12 text-center text-[var(--t-text-secondary)]">No initiatives match this compliance filter.</td>
                 </tr>
               }
             </tbody>
@@ -163,7 +190,7 @@ interface StatusUpdate {
       @if (activeTab() === 'recent') {
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           @for (update of recentUpdates(); track update.id) {
-            <div class="card p-6 bg-white dark:bg-[#1e1b2e] border border-[var(--t-border)] rounded-xl shadow-sm hover:shadow-md transition-all">
+            <div class="card p-6 bg-white dark:bg-[#1e1b2e] border border-[var(--t-border)] rounded-lg shadow-sm hover:shadow-md transition-all">
               <div class="flex justify-between items-start mb-4">
                 <div>
                   <h3 class="font-bold text-lg">{{ update.initiative_name }}</h3>
@@ -184,7 +211,7 @@ interface StatusUpdate {
               </button>
             </div>
           } @empty {
-            <div class="col-span-2 text-center py-20 bg-[var(--t-surface)] rounded-xl border border-dashed border-[var(--t-border)]">
+            <div class="col-span-2 text-center py-20 bg-[var(--t-surface)] rounded-lg border border-dashed border-[var(--t-border)]">
               <p class="text-[var(--t-text-secondary)]">No status updates have been submitted yet.</p>
             </div>
           }
@@ -193,7 +220,7 @@ interface StatusUpdate {
 
       <!-- Nudge Log Tab -->
       @if (activeTab() === 'nudges') {
-        <div class="card overflow-hidden bg-white dark:bg-[#1e1b2e] border border-[var(--t-border)] rounded-xl shadow-sm">
+        <div class="card overflow-hidden bg-white dark:bg-[#1e1b2e] border border-[var(--t-border)] rounded-lg shadow-sm" data-testid="status-nudge-log">
           <table class="w-full text-left border-collapse">
             <thead>
               <tr class="bg-[var(--t-surface)] border-b border-[var(--t-border)]">
@@ -208,7 +235,7 @@ interface StatusUpdate {
                 <tr class="hover:bg-[var(--t-surface)] transition-colors">
                   <td class="px-6 py-4 text-sm">{{ nudge.sent_at | date:'medium' }}</td>
                   <td class="px-6 py-4 font-medium">{{ nudge.initiatives?.name }}</td>
-                  <td class="px-6 py-4 text-[var(--t-text-secondary)]">{{ nudge.users?.display_name }}</td>
+                  <td class="px-6 py-4 text-[var(--t-text-secondary)]">{{ nudge.users?.display_name || 'System' }}</td>
                   <td class="px-6 py-4 text-right">
                     <span class="badge-purple px-2 py-1 rounded text-[10px] font-bold uppercase">{{ nudge.channel }}</span>
                   </td>
@@ -229,10 +256,22 @@ export class StatusUpdatesComponent implements OnInit {
   private api = inject(ApiService);
   
   activeTab = signal<'compliance' | 'recent' | 'nudges'>('compliance');
+  complianceFilter = signal<ComplianceFilter>('all');
   stats = signal<any>(null);
   recentUpdates = signal<StatusUpdate[]>([]);
   nudges = signal<any[]>([]);
   feedback = signal<string | null>(null);
+  filteredCompliance = computed(() => {
+    const rows = (this.stats()?.initiatives || []) as ComplianceInitiative[];
+    const filter = this.complianceFilter();
+    return filter === 'all' ? rows : rows.filter(row => row.status === filter);
+  });
+  complianceFilters = [
+    { label: 'All', value: 'all' as ComplianceFilter, count: () => this.stats()?.summary?.total || 0 },
+    { label: 'Nuclear', value: 'nuclear' as ComplianceFilter, count: () => this.stats()?.summary?.nuclear || 0 },
+    { label: 'Overdue', value: 'overdue' as ComplianceFilter, count: () => this.stats()?.summary?.overdue || 0 },
+    { label: 'On Time', value: 'on_time' as ComplianceFilter, count: () => this.stats()?.summary?.on_time || 0 },
+  ];
 
   ngOnInit() {
     this.loadData();

@@ -539,6 +539,9 @@ def test_real_api_initiative_team_and_summary_persistence() -> None:
 def test_real_api_status_update_compliance_and_nudge_flow() -> None:
     with _client() as client:
         headers = _auth_headers(client)
+        users = client.get("/users", headers=headers)
+        users.raise_for_status()
+        owner_id = users.json()["data"][0]["id"]
 
         tracked = client.post(
             "/initiatives",
@@ -547,6 +550,7 @@ def test_real_api_status_update_compliance_and_nudge_flow() -> None:
                 "name": f"Acceptance Status Update {uuid4()}",
                 "priority": "high",
                 "country": "Singapore",
+                "owner_id": owner_id,
             },
         )
         tracked.raise_for_status()
@@ -559,6 +563,7 @@ def test_real_api_status_update_compliance_and_nudge_flow() -> None:
                 "name": f"Acceptance Nuclear Status {uuid4()}",
                 "priority": "medium",
                 "country": "Singapore",
+                "owner_id": owner_id,
             },
         )
         silent.raise_for_status()
@@ -571,6 +576,7 @@ def test_real_api_status_update_compliance_and_nudge_flow() -> None:
                 "name": f"Acceptance Daily Nudge Status {uuid4()}",
                 "priority": "medium",
                 "country": "Singapore",
+                "owner_id": owner_id,
             },
         )
         auto.raise_for_status()
@@ -607,12 +613,20 @@ def test_real_api_status_update_compliance_and_nudge_flow() -> None:
                 headers=headers,
             )
             compliance.raise_for_status()
-            rows = compliance.json()["initiatives"]
+            compliance_data = compliance.json()
+            assert compliance_data["summary"]["total"] >= 3
+            assert compliance_data["summary"]["on_time"] >= 1
+            assert compliance_data["summary"]["nuclear"] >= 1
+            rows = compliance_data["initiatives"]
             tracked_row = next(item for item in rows if item["initiative_id"] == tracked_id)
             silent_row = next(item for item in rows if item["initiative_id"] == silent_id)
             assert tracked_row["status"] == "on_time"
+            assert tracked_row["owner_name"] is not None
+            assert tracked_row["days_since"] >= 0
             assert tracked_row["nudge_count"] == 0
             assert silent_row["status"] == "nuclear"
+            assert silent_row["last_update_at"] is None
+            assert silent_row["days_since"] == 999
 
             nudge = client.post(
                 f"/initiatives/{silent_id}/nudge",
@@ -638,11 +652,16 @@ def test_real_api_status_update_compliance_and_nudge_flow() -> None:
 
             recent = client.get("/status-updates/portfolio", headers=headers)
             recent.raise_for_status()
-            assert any(item["id"] == draft_id for item in recent.json())
+            recent_update = next(item for item in recent.json() if item["id"] == draft_id)
+            assert recent_update["initiative_name"] == tracked.json()["name"]
 
             nudges = client.get("/status-updates/nudges", headers=headers)
             nudges.raise_for_status()
-            assert any(item["id"] == nudge_data["nudge_id"] for item in nudges.json())
+            nudge_log = next(
+                item for item in nudges.json() if item["id"] == nudge_data["nudge_id"]
+            )
+            assert nudge_log["channel"] == "both"
+            assert nudge_log["initiatives"]["name"] == silent.json()["name"]
 
             daily = client.post("/status-updates/nudges/run-daily", headers=headers)
             daily.raise_for_status()

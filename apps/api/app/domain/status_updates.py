@@ -28,6 +28,7 @@ class StatusUpdatePatch(BaseModel):
 class StatusUpdateItem(BaseModel):
     id: str
     initiative_id: str
+    initiative_name: str | None = None
     author_id: str
     author_name: str | None = None
     rag_status: str
