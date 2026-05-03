@@ -30,7 +30,30 @@ import { ApiService } from '../../../../core/services/api.service';
              [style.border-color]="editForm.rag_status === 'green' ? 'var(--t-green)' : (editForm.rag_status === 'amber' ? 'var(--t-amber)' : 'var(--t-red)')">
           <div class="flex justify-between items-center mb-6">
             <h3 class="text-lg font-bold">{{ draft()?.id ? 'Edit Draft Update' : 'New Status Report' }}</h3>
-            <span class="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded bg-[var(--t-surface-raised)]">Drafting Mode</span>
+            <div class="flex items-center gap-2">
+              @if (generatedDraft()) {
+                <span class="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded bg-[var(--t-accent-soft)] text-[var(--t-accent)]">AI Draft</span>
+              }
+              <span class="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded bg-[var(--t-surface-raised)]">Drafting Mode</span>
+            </div>
+          </div>
+
+          <div class="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--t-border)] bg-[var(--t-surface)] p-4">
+            <div>
+              <p class="text-sm font-bold text-[var(--t-text-primary)]">AI-assisted draft</p>
+              <p class="text-xs text-[var(--t-text-secondary)]">Generate a reviewable status update from initiative milestones, risks, and KPIs.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <button type="button" (click)="generateDraft()" [disabled]="drafting()" class="btn-secondary text-sm" data-testid="generate-status-draft">
+                <span class="material-icons text-sm align-middle">auto_awesome</span>
+                {{ drafting() ? 'Generating...' : 'Generate Draft' }}
+              </button>
+              @if (generatedDraft()) {
+                <button type="button" (click)="acceptGeneratedDraft()" class="btn-primary text-sm" data-testid="accept-status-draft">Accept</button>
+                <button type="button" (click)="editGeneratedDraft()" class="btn-ghost text-sm" data-testid="edit-status-draft">Edit</button>
+                <button type="button" (click)="discardGeneratedDraft()" class="btn-ghost text-sm" data-testid="discard-status-draft">Discard</button>
+              }
+            </div>
           </div>
           
           <div class="grid grid-cols-1 gap-8">
@@ -57,6 +80,7 @@ import { ApiService } from '../../../../core/services/api.service';
               <label class="block text-[10px] font-bold uppercase tracking-wider text-[var(--t-text-secondary)] mb-2">Executive Summary</label>
               <textarea 
                 [(ngModel)]="editForm.summary"
+                name="status_summary"
                 rows="3" 
                 class="input-field w-full text-base" 
                 placeholder="High-level status of the initiative..."></textarea>
@@ -65,17 +89,17 @@ import { ApiService } from '../../../../core/services/api.service';
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label class="block text-[10px] font-bold uppercase tracking-wider text-[var(--t-text-secondary)] mb-2">Key Achievements</label>
-                <textarea [(ngModel)]="editForm.achievements" rows="3" class="input-field w-full" placeholder="What significant milestones were reached?"></textarea>
+                <textarea [(ngModel)]="editForm.achievements" name="status_achievements" rows="3" class="input-field w-full" placeholder="What significant milestones were reached?"></textarea>
               </div>
               <div>
                 <label class="block text-[10px] font-bold uppercase tracking-wider text-[var(--t-text-secondary)] mb-2">Blocking Issues</label>
-                <textarea [(ngModel)]="editForm.issues" rows="3" class="input-field w-full border-[var(--t-red)]/30" placeholder="Any blockers requiring attention?"></textarea>
+                <textarea [(ngModel)]="editForm.issues" name="status_issues" rows="3" class="input-field w-full border-[var(--t-red)]/30" placeholder="Any blockers requiring attention?"></textarea>
               </div>
             </div>
 
             <div>
               <label class="block text-[10px] font-bold uppercase tracking-wider text-[var(--t-text-secondary)] mb-2">Next Steps</label>
-              <textarea [(ngModel)]="editForm.next_steps" rows="2" class="input-field w-full" placeholder="Priorities for the upcoming period..."></textarea>
+              <textarea [(ngModel)]="editForm.next_steps" name="status_next_steps" rows="2" class="input-field w-full" placeholder="Priorities for the upcoming period..."></textarea>
             </div>
 
             <div class="flex justify-end gap-3 mt-4 pt-6 border-t border-[var(--t-border)]">
@@ -174,6 +198,8 @@ export class StatusUpdatesTabComponent implements OnInit {
   
   history = signal<any[]>([]);
   draft = signal<any>(null);
+  generatedDraft = signal<any>(null);
+  drafting = signal(false);
   loading = signal(true);
   isEditing = signal(false);
 
@@ -198,11 +224,50 @@ export class StatusUpdatesTabComponent implements OnInit {
       issues: '',
       next_steps: ''
     };
+    this.generatedDraft.set(null);
     this.isEditing.set(true);
   }
 
   setRag(status: string) {
     this.editForm.rag_status = status;
+  }
+
+  generateDraft() {
+    this.drafting.set(true);
+    this.api.post<any>(`/initiatives/${this.initiativeId}/status-updates/generate-draft`, {}).subscribe({
+      next: (data) => {
+        this.generatedDraft.set(data);
+        this.editForm = {
+          rag_status: data.rag_status || 'green',
+          summary: data.summary || '',
+          achievements: data.achievements || '',
+          issues: data.issues || '',
+          next_steps: data.next_steps || ''
+        };
+        this.drafting.set(false);
+      },
+      error: () => this.drafting.set(false)
+    });
+  }
+
+  acceptGeneratedDraft() {
+    this.saveDraft();
+    this.generatedDraft.set(null);
+  }
+
+  editGeneratedDraft() {
+    this.generatedDraft.set({ ...this.generatedDraft(), editing: true });
+  }
+
+  discardGeneratedDraft() {
+    this.generatedDraft.set(null);
+    this.editForm = {
+      rag_status: 'green',
+      summary: '',
+      achievements: '',
+      issues: '',
+      next_steps: ''
+    };
   }
 
   fetchHistory() {
@@ -245,6 +310,7 @@ export class StatusUpdatesTabComponent implements OnInit {
 
     request.subscribe(() => {
       this.isEditing.set(false);
+      this.generatedDraft.set(null);
       this.fetchDraft();
       this.fetchHistory();
     });

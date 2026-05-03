@@ -13,6 +13,7 @@ from app.domain.status_updates import (
     NudgeItem,
     NudgeResponse,
     StatusComplianceResponse,
+    StatusUpdateDraftSuggestion,
     StatusUpdateCreate,
     StatusUpdateItem,
     StatusUpdateListResponse,
@@ -116,6 +117,17 @@ async def get_status_update_draft(
     svc: Annotated[StatusUpdateService, Depends(_svc)],
 ) -> StatusUpdateItem | None:
     return svc.get_draft(initiative_id)
+
+
+@router.post(
+    "/initiatives/{initiative_id}/status-updates/generate-draft",
+    response_model=StatusUpdateDraftSuggestion,
+)
+async def generate_status_update_draft(
+    initiative_id: str,
+    svc: Annotated[StatusUpdateService, Depends(_svc)],
+) -> StatusUpdateDraftSuggestion:
+    return svc.generate_draft(initiative_id)
 
 
 @router.post(

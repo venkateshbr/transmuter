@@ -340,6 +340,34 @@ async function main() {
       },
     });
 
+    await evalJs(page, `
+      (() => {
+        const button = [...document.querySelectorAll('button')]
+          .find(node => node.textContent.includes('Transmuter'));
+        if (!button) throw new Error('Missing Transmuter assistant button');
+        button.click();
+        return true;
+      })()
+    `);
+    await waitFor(
+      () => evalJs(page, "document.body.innerText.includes('Ask Transmuter') && document.body.innerText.includes('Show me at-risk initiatives')"),
+      'transmuter assistant panel',
+    );
+    await clickText(page, 'Show me at-risk initiatives');
+    await waitFor(
+      () => evalJs(page, "document.body.innerText.toLowerCase().includes('portfolio initiatives') && document.body.innerText.toLowerCase().includes('milestones and risks')"),
+      'assistant response citations',
+      20_000,
+    );
+    await evalJs(page, `
+      (() => {
+        const close = [...document.querySelectorAll('button')].find(button => button.getAttribute('aria-label') === 'Close');
+        if (!close) throw new Error('Missing assistant close button');
+        close.click();
+        return true;
+      })()
+    `);
+
     const peopleRows = await api('/users');
     assert(peopleRows.items.length > 0, 'Seeded users were not available');
     const seededPerson = peopleRows.items.find(item => item.status === 'active') ?? peopleRows.items[0];
@@ -757,6 +785,29 @@ async function main() {
       await waitFor(() => evalJs(page, "document.body.innerText.includes('Status Heartbeat')"), 'status updates tab');
       await clickText(page, 'Create Update');
       await waitFor(() => evalJs(page, "document.querySelector('textarea[placeholder^=\"High-level status\"]') !== null"), 'status update editor');
+      await clickText(page, 'Generate Draft');
+      await waitFor(
+        () => evalJs(page, "document.body.innerText.toLowerCase().includes('ai draft') && document.querySelector('textarea[placeholder^=\"High-level status\"]')?.value.length > 0"),
+        'generated status update draft',
+        20_000,
+      );
+      await clickText(page, 'Edit');
+      await clickText(page, 'Discard');
+      await waitFor(
+        () => evalJs(page, "document.querySelector('textarea[placeholder^=\"High-level status\"]')?.value === ''"),
+        'discard generated status draft',
+      );
+      await clickText(page, 'Generate Draft');
+      await waitFor(
+        () => evalJs(page, "document.body.innerText.toLowerCase().includes('ai draft') && document.querySelector('textarea[placeholder^=\"High-level status\"]')?.value.length > 0"),
+        'regenerated status update draft',
+        20_000,
+      );
+      await clickText(page, 'Accept');
+      await waitFor(
+        () => evalJs(page, "document.querySelector('textarea[placeholder^=\"High-level status\"]') !== null"),
+        'accepted generated status draft',
+      );
       await setField(page, 'textarea[placeholder^="High-level status"]', statusSummaryText);
       await setField(page, 'textarea[placeholder^="What significant"]', 'Browser acceptance achievement');
       await setField(page, 'textarea[placeholder^="Any blockers"]', 'No blockers');

@@ -108,6 +108,22 @@ class StatusUpdateRepository:
         )
         return result.data or []
 
+    def get_initiative_context(self, initiative_id: str) -> dict[str, Any] | None:
+        result = (
+            self._c.table("initiatives")
+            .select(
+                "id, name, stage, rag_status, priority, summary, "
+                "milestones(name, status, planned_end), "
+                "risks(description, status, impact, likelihood), "
+                "kpis(name, unit)"
+            )
+            .eq("tenant_id", self._tid)
+            .eq("id", initiative_id)
+            .maybe_single()
+            .execute()
+        )
+        return result.data if result else None
+
     def list_compliance(self) -> list[dict[str, Any]]:
         """Returns a list of all initiatives with their latest status update info."""
         # Fetch initiatives and let the service map the latest submitted update.

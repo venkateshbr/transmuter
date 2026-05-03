@@ -25,6 +25,16 @@ class StatusUpdatePatch(BaseModel):
     is_draft: bool | None = None
 
 
+class StatusUpdateDraftSuggestion(BaseModel):
+    rag_status: Literal["red", "amber", "green"]
+    summary: str
+    achievements: str | None = None
+    issues: str | None = None
+    next_steps: str | None = None
+    agent_status: Literal["generated", "deterministic_fallback"] = "deterministic_fallback"
+    sources: list[str] = Field(default_factory=list)
+
+
 class StatusUpdateItem(BaseModel):
     id: str
     initiative_id: str

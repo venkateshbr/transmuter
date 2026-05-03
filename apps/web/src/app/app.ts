@@ -16,6 +16,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  sources?: { label: string; source_type: string }[];
 }
 
 @Component({
@@ -54,8 +55,9 @@ interface Message {
 
           <!-- + Transmuter AI button -->
           <button (click)="aiPanelOpen.set(!aiPanelOpen())"
-                  class="btn-primary text-sm flex items-center gap-2">
-            <span>+</span> Transmuter
+                  class="btn-primary text-sm flex items-center gap-2"
+                  aria-label="Open Transmuter assistant">
+            <span class="material-icons text-sm">auto_awesome</span> Transmuter
           </button>
 
           <!-- User avatar -->
@@ -80,7 +82,7 @@ interface Message {
                       bg-[var(--t-surface)] z-40 flex flex-col shadow-2xl animate-slide-in-right">
           <div class="flex items-center justify-between px-5 py-4 border-b border-[var(--t-border)]">
             <div>
-              <p class="font-semibold text-[var(--t-text-primary)]">Transmuter AI</p>
+              <p class="font-semibold text-[var(--t-text-primary)]">Ask Transmuter</p>
               <p class="text-xs text-[var(--t-text-secondary)]">Portfolio assistant</p>
             </div>
             <button (click)="aiPanelOpen.set(false)" class="btn-ghost text-lg" aria-label="Close">×</button>
@@ -115,6 +117,15 @@ interface Message {
                      [class.bg-[var(--t-surface-raised)]]="msg.role === 'assistant'"
                      [class.text-[var(--t-text-primary)]]="msg.role === 'assistant'">
                   {{ msg.content }}
+                  @if (msg.role === 'assistant' && msg.sources?.length) {
+                    <div class="mt-3 flex flex-wrap gap-1 border-t border-[var(--t-border)] pt-2">
+                      @for (source of msg.sources; track source.label) {
+                        <span class="rounded bg-[var(--t-surface)] px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-[var(--t-text-secondary)]">
+                          {{ source.label }}
+                        </span>
+                      }
+                    </div>
+                  }
                 </div>
                 <span class="text-[9px] text-[var(--t-text-tertiary)] mt-1 px-2">
                   {{ msg.timestamp | date:'shortTime' }}
@@ -214,7 +225,8 @@ export class App {
         const aiMsg: Message = {
           role: 'assistant',
           content: res.response,
-          timestamp: new Date()
+          timestamp: new Date(),
+          sources: res.sources || []
         };
         this.messages.update(msgs => [...msgs, aiMsg]);
         this.aiLoading.set(false);

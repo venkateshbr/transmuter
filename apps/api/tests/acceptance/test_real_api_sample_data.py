@@ -60,6 +60,16 @@ def test_real_api_seeded_dashboard_and_meetings() -> None:
         dashboard_data = dashboard.json()
         assert dashboard_data["summary"]["total_initiatives"] >= 5
 
+        chat = client.post(
+            "/ai/chat",
+            headers=headers,
+            json={"query": "Summarize the portfolio with sources."},
+        )
+        chat.raise_for_status()
+        chat_data = chat.json()
+        assert chat_data["response"]
+        assert any(item["source_type"] == "initiatives" for item in chat_data["sources"])
+
         meetings = client.get("/meetings", headers=headers)
         meetings.raise_for_status()
         meeting_names = {item["name"] for item in meetings.json()["items"]}
@@ -583,6 +593,16 @@ def test_real_api_status_update_compliance_and_nudge_flow() -> None:
         auto_id = auto.json()["id"]
 
         try:
+            generated = client.post(
+                f"/initiatives/{tracked_id}/status-updates/generate-draft",
+                headers=headers,
+            )
+            generated.raise_for_status()
+            generated_data = generated.json()
+            assert generated_data["summary"]
+            assert generated_data["rag_status"] in {"green", "amber", "red"}
+            assert "initiative" in generated_data["sources"]
+
             draft = client.post(
                 f"/initiatives/{tracked_id}/status-updates",
                 headers=headers,

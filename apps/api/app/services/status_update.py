@@ -15,6 +15,7 @@ from app.domain.status_updates import (
     StatusComplianceItem,
     StatusComplianceResponse,
     StatusComplianceSummary,
+    StatusUpdateDraftSuggestion,
     StatusUpdateCreate,
     StatusUpdateItem,
     StatusUpdateListResponse,
@@ -102,6 +103,59 @@ class StatusUpdateService:
     def list_recent_updates(self) -> list[StatusUpdateItem]:
         rows = self._repo.list_recent_updates()
         return [self._to_item(r) for r in rows]
+
+    def generate_draft(self, initiative_id: str) -> StatusUpdateDraftSuggestion:
+        row = self._repo.get_initiative_context(initiative_id)
+        if not row:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Initiative not found",
+            )
+
+        milestones = row.get("milestones") or []
+        risks = row.get("risks") or []
+        kpis = row.get("kpis") or []
+        open_risks = [item for item in risks if item.get("status") != "closed"]
+        delayed_milestones = [
+            item for item in milestones if item.get("status") == "overdue"
+        ]
+
+        rag_status = row.get("rag_status") or "green"
+        if delayed_milestones or any(item.get("impact") == "high" for item in open_risks):
+            rag_status = "red"
+        elif open_risks or any(item.get("status") == "in_progress" for item in milestones):
+            rag_status = "amber"
+
+        name = row.get("name") or "This initiative"
+        stage = (row.get("stage") or "active").replace("_", " ")
+        summary = (
+            f"{name} is currently {stage} with {len(milestones)} tracked milestones, "
+            f"{len(open_risks)} open risks, and {len(kpis)} KPIs under review."
+        )
+        achievements = (
+            "Progress is being tracked through the seeded portfolio operating cadence."
+            if not milestones
+            else "Latest milestone progress is reflected in the initiative tracker."
+        )
+        issues = (
+            "; ".join(item.get("description", "Open risk") for item in open_risks[:2])
+            if open_risks
+            else "No material blockers are currently logged."
+        )
+        next_steps = (
+            "Review milestone owners, refresh KPI evidence, and close any overdue risks before the next portfolio checkpoint."
+            if open_risks or delayed_milestones
+            else "Continue execution cadence and refresh KPI evidence before the next status cycle."
+        )
+
+        return StatusUpdateDraftSuggestion(
+            rag_status=rag_status,
+            summary=summary,
+            achievements=achievements,
+            issues=issues,
+            next_steps=next_steps,
+            sources=["initiative", "milestones", "risks", "kpis"],
+        )
 
     def get_compliance_stats(self) -> StatusComplianceResponse:
         rows = self._repo.list_compliance()
