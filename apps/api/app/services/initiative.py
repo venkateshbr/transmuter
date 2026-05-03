@@ -37,6 +37,8 @@ from app.services.initiative_workbook import (
     build_initiative_template,
     build_preview,
     parse_initiative_template,
+    parse_workbook_overview_metadata,
+    parse_workbook_reference,
 )
 from app.services.milestone import MilestoneService
 from app.services.risk import RiskService
@@ -310,6 +312,40 @@ class InitiativeService:
             milestone_service.create_milestone(initiative_id, milestone)
         return self.get_initiative(initiative_id)
 
+    def import_into_existing_initiative(self, initiative_id: str, data: bytes) -> InitiativeDetail:
+        self._assert_exists(initiative_id)
+        reference = parse_workbook_reference(data)
+        referenced_id = reference.get("initiative_id")
+        if referenced_id and referenced_id != initiative_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Workbook reference does not match initiative_id",
+            )
+
+        parsed = parse_initiative_template(data)
+        if parsed.validation_errors:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=[error.model_dump() for error in parsed.validation_errors],
+            )
+
+        overview_patch = parsed.overview.model_dump(exclude_none=True)
+        metadata = parse_workbook_overview_metadata(data)
+        for field in ("stage", "rag_status"):
+            if metadata.get(field):
+                overview_patch[field] = metadata[field]
+        self.update_initiative(initiative_id, InitiativeUpdate(**overview_patch))
+
+        if parsed.financial_entries or parsed.cost_lines:
+            self._fin.update_financial_grid(
+                initiative_id,
+                FinancialGridUpdate(
+                    entries=parsed.financial_entries,
+                    cost_lines=parsed.cost_lines,
+                ),
+            )
+        return self.get_initiative(initiative_id)
+
     def _list_meeting_notes(self, initiative_id: str) -> list[dict]:  # type: ignore[type-arg]
         links = (
             self._client.table("meeting_initiatives")
@@ -335,6 +371,8 @@ class InitiativeService:
     def _overview_export_row(initiative: InitiativeDetail) -> list[str]:
         return [
             initiative.name,
+            initiative.stage,
+            initiative.rag_status,
             initiative.workstream_name or "",
             "",
             "",

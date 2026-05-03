@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from base64 import b64decode
 from decimal import Decimal, InvalidOperation
 from html import unescape
 from io import BytesIO
@@ -26,6 +27,8 @@ from app.domain.risks import RiskCreate
 
 OVERVIEW_COLUMNS = [
     "name",
+    "stage",
+    "rag_status",
     "workstream_name",
     "owner_email",
     "group_owner_email",
@@ -44,6 +47,8 @@ OVERVIEW_COLUMNS = [
 
 SAMPLE_OVERVIEW = [
     "Imported Acceptance Initiative",
+    "scoping",
+    "green",
     "",
     "",
     "",
@@ -96,6 +101,10 @@ SHEET_DEFS = [
 
 _NS = {"main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 _REL_NS = {"rel": "http://schemas.openxmlformats.org/package/2006/relationships"}
+_PNG_1X1 = b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADElEQVR42mP8z8BQDwAFgwJ/lYt9"
+    "mAAAAABJRU5ErkJggg=="
+)
 
 
 def build_initiative_template() -> bytes:
@@ -140,8 +149,21 @@ def _build_workbook(sheet_defs: list[tuple[str, list[str], list[list[str]]]]) ->
         zf.writestr("xl/workbook.xml", _workbook(sheet_defs))
         zf.writestr("xl/_rels/workbook.xml.rels", _workbook_rels(len(sheet_defs)))
         zf.writestr("xl/styles.xml", _styles())
-        for index, (_, headers, rows) in enumerate(sheet_defs, start=1):
-            zf.writestr(f"xl/worksheets/sheet{index}.xml", _sheet([headers, *rows]))
+        zf.writestr("xl/media/transmuter-logo.png", _PNG_1X1)
+        zf.writestr("xl/drawings/drawing1.xml", _drawing())
+        zf.writestr("xl/drawings/_rels/drawing1.xml.rels", _drawing_rels())
+        for index, (name, headers, rows) in enumerate(sheet_defs, start=1):
+            prepared_headers, prepared_rows = _prepared_sheet_rows(name, headers, rows)
+            zf.writestr(
+                f"xl/worksheets/sheet{index}.xml",
+                _sheet(
+                    [prepared_headers, *prepared_rows],
+                    data_validations=_data_validations(name, prepared_headers, len(prepared_rows)),
+                    drawing=index == 1,
+                ),
+            )
+            if index == 1:
+                zf.writestr("xl/worksheets/_rels/sheet1.xml.rels", _sheet_drawing_rels())
     return output.getvalue()
 
 
@@ -190,6 +212,43 @@ def parse_initiative_template(data: bytes) -> InitiativeWorkbookData:
         milestones=_parse_milestones(milestone_rows, errors),
         validation_errors=errors,
     )
+
+
+def parse_workbook_reference(data: bytes) -> dict[str, str]:
+    try:
+        with ZipFile(BytesIO(data)) as zf:
+            sheets = _sheet_paths(zf)
+            if "_Reference" not in sheets:
+                return {}
+            rows = _read_sheet(zf, sheets["_Reference"])
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid initiative workbook reference",
+        ) from exc
+    reference: dict[str, str] = {}
+    for row in _dict_rows(rows, ["key", "value"], "_Reference", []):
+        if row["key"]:
+            reference[row["key"]] = row["value"]
+    return reference
+
+
+def parse_workbook_overview_metadata(data: bytes) -> dict[str, str]:
+    try:
+        with ZipFile(BytesIO(data)) as zf:
+            rows = _read_sheet(zf, _sheet_paths(zf)["Overview"])
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid initiative workbook overview",
+        ) from exc
+    overview = next(_dict_rows(rows, OVERVIEW_COLUMNS, "Overview", []), None)
+    if not overview:
+        return {}
+    return {
+        "stage": overview.get("stage", ""),
+        "rag_status": overview.get("rag_status", ""),
+    }
 
 
 def build_preview(parsed: InitiativeWorkbookData) -> InitiativeWorkbookPreview:
@@ -508,20 +567,93 @@ def _read_sheet(zf: ZipFile, path: str) -> list[list[str]]:
     return rows
 
 
-def _sheet(rows: list[list[str]]) -> str:
+def _prepared_sheet_rows(
+    name: str,
+    headers: list[str],
+    rows: list[list[str]],
+) -> tuple[list[str], list[list[str]]]:
+    if name == "Benefits":
+        formulas = ["fy_revenue_base_formula", "fy_gm_base_formula", "fy_gm_actual_formula"]
+        return [*headers, *formulas], [row + ["", "", ""] for row in rows]
+    if name == "Costs":
+        return [*headers, "fy_cost_plan_formula"], [row + [""] for row in rows]
+    return headers, rows
+
+
+def _sheet(
+    rows: list[list[str]],
+    *,
+    data_validations: str = "",
+    drawing: bool = False,
+) -> str:
     row_xml = []
+    headers = rows[0] if rows else []
     for row_index, row in enumerate(rows, start=1):
         cells = []
         for col_index, value in enumerate(row, start=1):
             ref = f"{_column_name(col_index)}{row_index}"
             style = ' s="1"' if row_index == 1 else ""
-            cells.append(f'<c r="{ref}"{style} t="inlineStr"><is><t>{_xml(value)}</t></is></c>')
+            formula = _formula(headers, col_index, row_index)
+            if formula:
+                cells.append(f'<c r="{ref}"><f>{_xml(formula)}</f></c>')
+            else:
+                cells.append(f'<c r="{ref}"{style} t="inlineStr"><is><t>{_xml(value)}</t></is></c>')
         row_xml.append(f'<row r="{row_index}">{"".join(cells)}</row>')
+    drawing_xml = '<drawing r:id="rId1"/>' if drawing else ""
     return (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
-        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-        f'<sheetData>{"".join(row_xml)}</sheetData></worksheet>'
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+        f'<sheetData>{"".join(row_xml)}</sheetData>{data_validations}{drawing_xml}</worksheet>'
     )
+
+
+def _formula(headers: list[str], col_index: int, row_index: int) -> str:
+    if row_index == 1 or col_index > len(headers):
+        return ""
+    header = headers[col_index - 1]
+    cell = lambda name: f"{_column_name(headers.index(name) + 1)}{row_index}"
+    if header == "fy_revenue_base_formula":
+        return f"SUM({cell('revenue_uplift_base')}:{cell('revenue_uplift_base')})"
+    if header == "fy_gm_base_formula":
+        return f"SUM({cell('gm_uplift_base')}:{cell('gm_uplift_base')})"
+    if header == "fy_gm_actual_formula":
+        return f"SUM({cell('gm_uplift_actual')}:{cell('gm_uplift_actual')})"
+    if header == "fy_cost_plan_formula":
+        return f"SUM({cell('amount_plan')}:{cell('amount_plan')})"
+    return ""
+
+
+def _data_validations(name: str, headers: list[str], row_count: int) -> str:
+    max_row = max(row_count + 1, 100)
+    ranges: list[tuple[str, str]] = []
+    if name == "Overview":
+        ranges.extend(
+            [
+                ("stage", '"scoping,in_progress,complete"'),
+                ("rag_status", '"green,amber,red"'),
+                ("type", '"revenue_growth,cost_reduction,cost_avoidance,compliance,capability_building"'),
+                ("impact_type", '"recurring,one_off"'),
+                ("tag", '"automation,offshoring,commercial,other"'),
+                ("priority", '"high,medium,low"'),
+            ]
+        )
+    elif name == "KPIs":
+        ranges.append(("frequency", '"weekly,monthly,quarterly,annual"'))
+    elif name in {"Risks", "Milestones"}:
+        ranges.append(("priority" if name == "Milestones" else "impact", '"high,medium,low"'))
+    validations = []
+    for header, allowed in ranges:
+        if header not in headers:
+            continue
+        col = _column_name(headers.index(header) + 1)
+        validations.append(
+            f'<dataValidation type="list" allowBlank="1" sqref="{col}2:{col}{max_row}">'
+            f"<formula1>{_xml(allowed)}</formula1></dataValidation>"
+        )
+    if not validations:
+        return ""
+    return f'<dataValidations count="{len(validations)}">{"".join(validations)}</dataValidations>'
 
 
 def _column_number(ref: str) -> int:
@@ -552,9 +684,11 @@ def _content_types(sheet_count: int) -> str:
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
+  <Default Extension="png" ContentType="image/png"/>
   <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
 {sheets}
   <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+  <Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>
 </Types>"""
 
 
@@ -588,6 +722,36 @@ def _workbook_rels(sheet_count: int) -> str:
 {sheet_rels}
   <Relationship Id="rId{sheet_count + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
 </Relationships>"""
+
+
+def _sheet_drawing_rels() -> str:
+    return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/>
+</Relationships>"""
+
+
+def _drawing_rels() -> str:
+    return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/transmuter-logo.png"/>
+</Relationships>"""
+
+
+def _drawing() -> str:
+    return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <xdr:twoCellAnchor editAs="oneCell">
+    <xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>
+    <xdr:to><xdr:col>1</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>1</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to>
+    <xdr:pic>
+      <xdr:nvPicPr><xdr:cNvPr id="1" name="Transmuter logo"/><xdr:cNvPicPr/></xdr:nvPicPr>
+      <xdr:blipFill><a:blip xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill>
+      <xdr:spPr><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr>
+    </xdr:pic>
+    <xdr:clientData/>
+  </xdr:twoCellAnchor>
+</xdr:wsDr>"""
 
 
 def _styles() -> str:

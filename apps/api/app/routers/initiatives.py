@@ -152,6 +152,15 @@ async def export_initiative_workbook(
     )
 
 
+@router.post("/{initiative_id}/import", response_model=InitiativeDetail)
+async def import_into_existing_initiative(
+    initiative_id: str,
+    svc: Annotated[InitiativeService, Depends(_svc)],
+    file: UploadFile = File(...),
+) -> InitiativeDetail:
+    return svc.import_into_existing_initiative(initiative_id, await file.read())
+
+
 # ── Update ────────────────────────────────────────────────────────────────────
 
 @router.put("/{initiative_id}", response_model=InitiativeDetail)
