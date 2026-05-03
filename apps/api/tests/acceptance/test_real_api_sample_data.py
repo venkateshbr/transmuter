@@ -827,11 +827,22 @@ def test_real_api_people_directory_profile_invite_and_pressure() -> None:
         filtered.raise_for_status()
         assert any(item["id"] == user_id for item in filtered.json()["items"])
 
+        role_filtered = client.get(
+            "/users",
+            headers=headers,
+            params={"role": user_rows[0]["role"], "status": user_rows[0]["status"]},
+        )
+        role_filtered.raise_for_status()
+        assert any(item["id"] == user_id for item in role_filtered.json()["items"])
+
         profile = client.get(f"/users/{user_id}", headers=headers)
         profile.raise_for_status()
         profile_data = profile.json()
         assert "on_their_plate" in profile_data
         assert "pressure" in profile_data
+        assert "last_login_at" in profile_data
+        assert profile_data["status"] in {"active", "ghost", "deactivated"}
+        assert isinstance(profile_data.get("workstreams", []), list)
         original_workstream_ids = [
             item["workstream_id"] for item in profile_data.get("workstreams", [])
         ]
@@ -884,6 +895,14 @@ def test_real_api_people_directory_profile_invite_and_pressure() -> None:
             invites = client.get("/invites", headers=headers)
             invites.raise_for_status()
             assert any(item["email"] == invite_email for item in invites.json()["items"])
+
+            deactivated = client.post(
+                f"/users/{invited_id}/deactivate",
+                headers=headers,
+            )
+            deactivated.raise_for_status()
+            assert deactivated.json()["status"] == "deactivated"
+            invited_id = None
         finally:
             if invited_id:
                 client.post(f"/users/{invited_id}/deactivate", headers=headers)

@@ -49,6 +49,31 @@ import { FormsModule } from '@angular/forms';
 
       <!-- Directory View -->
       @if (activeTab === 'directory') {
+        <div class="flex flex-wrap items-center gap-3 rounded-lg border border-[var(--t-border)] bg-[var(--t-surface)] p-4" data-testid="people-filters">
+          <div class="relative">
+            <span class="material-icons absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--t-text-tertiary)]">search</span>
+            <input
+              [(ngModel)]="search"
+              (ngModelChange)="loadPeople()"
+              class="input-field h-10 w-64 pl-9 text-sm"
+              placeholder="Search people"
+              aria-label="Search people"
+            />
+          </div>
+          <select [(ngModel)]="roleFilter" (ngModelChange)="loadPeople()" class="input-field h-10 w-48 text-sm" aria-label="Filter people by role">
+            <option value="">All roles</option>
+            <option value="transformation_office">Transformation Office</option>
+            <option value="initiative_owner">Initiative Owner</option>
+            <option value="workstream_lead">Workstream Lead</option>
+          </select>
+          <select [(ngModel)]="statusFilter" (ngModelChange)="loadPeople()" class="input-field h-10 w-40 text-sm" aria-label="Filter people by status">
+            <option value="active">Active</option>
+            <option value="ghost">Ghost</option>
+            <option value="deactivated">Deactivated</option>
+            <option value="">All status</option>
+          </select>
+        </div>
+
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
           @for (p of people(); track p.id) {
             <div (click)="openProfile(p)" class="card p-6 flex flex-col items-center text-center hover:border-[var(--t-accent)] transition-all cursor-pointer group relative overflow-hidden">
@@ -66,6 +91,9 @@ import { FormsModule } from '@angular/forms';
                 {{ formatRole(p.role) }}
               </p>
               <p class="text-[10px] text-[var(--t-text-secondary)] mt-2 font-medium">{{ p.title || 'N/A' }}</p>
+              <span class="mt-3 rounded bg-[var(--t-surface-raised)] px-2 py-1 text-[9px] font-black uppercase tracking-widest text-[var(--t-text-secondary)]">
+                {{ p.status }}
+              </span>
 
               <div class="w-full mt-6 pt-6 border-t border-[var(--t-border)]/50 grid grid-cols-2 gap-4">
                 <div>
@@ -82,7 +110,7 @@ import { FormsModule } from '@angular/forms';
 
               <div class="w-full mt-6 flex gap-2">
                 <button (click)="openProfile(p); $event.stopPropagation()" class="flex-1 py-2 rounded-xl bg-[var(--t-surface-raised)] text-[9px] font-black uppercase tracking-widest hover:bg-[var(--t-accent-soft)] hover:text-[var(--t-accent)] transition-all">Profile</button>
-                <button (click)="deactivate(p); $event.stopPropagation()" class="flex-1 py-2 rounded-xl bg-[var(--t-surface-raised)] text-[9px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 transition-all">Archive</button>
+                <button (click)="deactivate(p); $event.stopPropagation()" class="flex-1 py-2 rounded-xl bg-[var(--t-surface-raised)] text-[9px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 transition-all" aria-label="Deactivate user">Deactivate</button>
               </div>
             </div>
           }
@@ -175,6 +203,51 @@ import { FormsModule } from '@angular/forms';
             </div>
 
             <div class="flex-1 overflow-y-auto p-8 space-y-8">
+               <section class="grid grid-cols-2 gap-4" data-testid="people-profile-details">
+                 <div>
+                   <p class="text-[9px] font-black text-[var(--t-text-tertiary)] uppercase tracking-widest">Status</p>
+                   <p class="mt-1 text-sm font-black text-[var(--t-text-primary)]">{{ selectedUser.status | uppercase }}</p>
+                 </div>
+                 <div>
+                   <p class="text-[9px] font-black text-[var(--t-text-tertiary)] uppercase tracking-widest">Last Login</p>
+                   <p class="mt-1 text-sm font-black text-[var(--t-text-primary)]">{{ selectedUser.last_login_at ? (selectedUser.last_login_at | date:'medium') : 'Never' }}</p>
+                 </div>
+                 <div>
+                   <p class="text-[9px] font-black text-[var(--t-text-tertiary)] uppercase tracking-widest">Email</p>
+                   <p class="mt-1 break-all text-sm font-bold text-[var(--t-text-secondary)]">{{ selectedUser.email }}</p>
+                 </div>
+                 <div>
+                   <p class="text-[9px] font-black text-[var(--t-text-tertiary)] uppercase tracking-widest">Timezone</p>
+                   <p class="mt-1 text-sm font-bold text-[var(--t-text-secondary)]">{{ selectedUser.timezone || 'UTC' }}</p>
+                 </div>
+               </section>
+
+               <section class="card p-5" data-testid="people-edit-profile">
+                 <div class="mb-4 flex items-center justify-between gap-3">
+                   <h3 class="text-[10px] font-black text-[var(--t-text-tertiary)] uppercase tracking-widest">Profile</h3>
+                   <button type="button" (click)="saveSelectedUser()" class="btn-secondary text-xs" aria-label="Save user profile">Save Profile</button>
+                 </div>
+                 <div class="grid grid-cols-1 gap-3">
+                   <input [(ngModel)]="selectedUser.display_name" class="input-field text-sm" aria-label="User display name" placeholder="Display name" />
+                   <input [(ngModel)]="selectedUser.title" class="input-field text-sm" aria-label="User title" placeholder="Title" />
+                   <input [(ngModel)]="selectedUser.department" class="input-field text-sm" aria-label="User department" placeholder="Department" />
+                   <input [(ngModel)]="selectedUser.market" class="input-field text-sm" aria-label="User market" placeholder="Market" />
+                 </div>
+               </section>
+
+               <section data-testid="people-workstreams">
+                 <h3 class="text-[10px] font-black text-[var(--t-text-tertiary)] uppercase tracking-widest mb-4">Workstreams</h3>
+                 <div class="flex flex-wrap gap-2">
+                   @for (ws of selectedUser.workstreams || []; track ws.id) {
+                     <span class="rounded bg-[var(--t-accent-soft)] px-3 py-1 text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">
+                       {{ ws.workstreams?.name || ws.workstream_id }}
+                     </span>
+                   } @empty {
+                     <span class="text-xs text-[var(--t-text-secondary)]">No workstreams assigned.</span>
+                   }
+                 </div>
+               </section>
+
                <section>
                  <h3 class="text-[10px] font-black text-[var(--t-text-tertiary)] uppercase tracking-widest mb-4">On Their Plate</h3>
                  <div class="space-y-4">
@@ -189,6 +262,20 @@ import { FormsModule } from '@angular/forms';
                     } @empty {
                       <p class="text-xs text-[var(--t-text-secondary)]">No active owned initiatives.</p>
                     }
+                 </div>
+               </section>
+
+               <section>
+                 <h3 class="text-[10px] font-black text-[var(--t-text-tertiary)] uppercase tracking-widest mb-4">Milestones & Actions</h3>
+                 <div class="grid grid-cols-2 gap-4">
+                   <div class="card p-4 bg-[var(--t-surface-raised)] border-none">
+                     <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Milestones</p>
+                     <p class="mt-1 text-lg font-black">{{ selectedUser.on_their_plate?.milestones?.length || 0 }}</p>
+                   </div>
+                   <div class="card p-4 bg-[var(--t-surface-raised)] border-none">
+                     <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Action Items</p>
+                     <p class="mt-1 text-lg font-black">{{ selectedUser.on_their_plate?.action_items?.length || 0 }}</p>
+                   </div>
                  </div>
                </section>
 
@@ -233,6 +320,9 @@ export class PeopleComponent implements OnInit {
   activeTab: 'directory' | 'pending' = 'directory';
   selectedUser = signal<any | null>(null);
   showInvite = signal(false);
+  search = '';
+  roleFilter = '';
+  statusFilter = 'active';
   inviteForm = {
     email: '',
     display_name: '',
@@ -246,7 +336,11 @@ export class PeopleComponent implements OnInit {
   }
 
   loadPeople() {
-    this.api.get<any>('/people', { status: 'active' }).subscribe(res => {
+    this.api.get<any>('/people', {
+      status: this.statusFilter,
+      role: this.roleFilter,
+      search: this.search.trim(),
+    }).subscribe(res => {
       this.people.set(res.items || []);
     });
   }
@@ -278,6 +372,20 @@ export class PeopleComponent implements OnInit {
       this.selectedUser.set(updated);
       this.loadPeople();
       this.loadInvites();
+    });
+  }
+
+  saveSelectedUser() {
+    const user = this.selectedUser();
+    if (!user) return;
+    this.api.put<any>(`/users/${user.id}`, {
+      display_name: user.display_name,
+      title: user.title,
+      department: user.department,
+      market: user.market,
+    }).subscribe(updated => {
+      this.selectedUser.set(updated);
+      this.loadPeople();
     });
   }
 

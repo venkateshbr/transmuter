@@ -383,8 +383,26 @@ async function main() {
         20_000,
       );
       await waitFor(
+        () => evalJs(page, "document.querySelector('[data-testid=\"people-filters\"]') !== null && document.querySelector('input[aria-label=\"Search people\"]') !== null && document.querySelector('select[aria-label=\"Filter people by role\"]') !== null && document.querySelector('select[aria-label=\"Filter people by status\"]') !== null"),
+        'people filters',
+      );
+      await setField(page, 'input[aria-label="Search people"]', seededPerson.email);
+      await waitFor(
         () => evalJs(page, `document.body.innerText.includes(${JSON.stringify(seededPersonLabel)})`),
-        'seeded person visible in directory',
+        'seeded person visible in searched directory',
+      );
+      await evalJs(page, `
+        (() => {
+          const role = document.querySelector('select[aria-label="Filter people by role"]');
+          role.value = ${JSON.stringify(seededPerson.role)};
+          role.dispatchEvent(new Event('input', { bubbles: true }));
+          role.dispatchEvent(new Event('change', { bubbles: true }));
+          return true;
+        })()
+      `);
+      await waitFor(
+        () => evalJs(page, `document.body.innerText.includes(${JSON.stringify(seededPersonLabel)})`),
+        'seeded person visible after role filter',
       );
       await evalJs(page, `
         (() => {
@@ -406,6 +424,19 @@ async function main() {
           `),
           'people profile drawer',
         );
+        await waitFor(
+          () => evalJs(page, `
+            (() => {
+              const text = document.body.innerText.toLowerCase();
+              return text.includes('status')
+                && text.includes('last login')
+                && text.includes('workstreams')
+                && text.includes('save profile')
+                && text.includes('milestones & actions');
+            })()
+          `),
+          'people profile management details',
+        );
       } catch (error) {
         const peopleState = await evalJs(page, `
           (() => JSON.stringify({
@@ -421,6 +452,19 @@ async function main() {
       }
       const profile = await api(`/users/${seededPerson.id}`);
       assert(profile.on_their_plate && profile.pressure, 'People profile payload missed workload or pressure');
+      assert(Array.isArray(profile.workstreams), 'People profile payload missed workstreams');
+      const originalTitle = profile.title;
+      const editedTitle = `UI People Lead ${Date.now()}`;
+      await setField(page, 'input[aria-label="User title"]', editedTitle);
+      await clickText(page, 'Save Profile');
+      await waitFor(async () => {
+        const updated = await api(`/users/${seededPerson.id}`);
+        return updated.title === editedTitle;
+      }, 'people profile edit persistence');
+      await api(`/users/${seededPerson.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ title: originalTitle }),
+      });
       await evalJs(page, `document.querySelector('.overlay button .material-icons')?.closest('button')?.click()`);
 
       await clickText(page, 'Invite Member');
