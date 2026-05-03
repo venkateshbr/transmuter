@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -50,6 +52,21 @@ class MilestoneItem(BaseModel):
 
 
 class MilestoneListResponse(BaseModel):
+    items: list[MilestoneItem]
+    total: int
+
+
+class PortfolioMilestoneStats(BaseModel):
+    total: int
+    not_started: int
+    on_track: int
+    at_risk: int
+    complete: int
+    overdue: int
+
+
+class PortfolioMilestoneResponse(BaseModel):
+    stats: PortfolioMilestoneStats
     items: list[MilestoneItem]
     total: int
 
@@ -106,6 +123,11 @@ class DependencyResponse(BaseModel):
     id: str
     upstream: MilestoneSummary
     downstream: MilestoneSummary
+    status: Literal["blocking", "at_risk", "resolved", "on_track"] = "on_track"
+    upstream_status: str | None = None
+    upstream_planned_end: str | None = None
+    upstream_pressure_score: str | None = None
+    downstream_status: str | None = None
 
 
 class DependencyListResponse(BaseModel):

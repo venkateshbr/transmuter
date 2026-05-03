@@ -164,6 +164,10 @@ def test_real_api_meeting_crud_session_and_action_flow() -> None:
             action_list.raise_for_status()
             assert any(item["id"] == action_id for item in action_list.json()["items"])
 
+            portfolio_actions = client.get("/portfolio/action-items", headers=headers)
+            portfolio_actions.raise_for_status()
+            assert any(item["id"] == action_id for item in portfolio_actions.json()["items"])
+
             ended = client.post(f"/meetings/sessions/{session_id}/end", headers=headers)
             ended.raise_for_status()
             assert ended.json()["status"] == "completed"
@@ -799,6 +803,37 @@ def test_real_api_milestone_crud_pressure_dependencies_and_checklist() -> None:
                 json={"upstream_milestone_id": milestone_a_id},
             )
             dependency.raise_for_status()
+            dependency_id = dependency.json()["id"]
+
+            portfolio_milestones = client.get("/portfolio/milestones", headers=headers)
+            portfolio_milestones.raise_for_status()
+            milestone_rows = portfolio_milestones.json()["items"]
+            assert any(item["id"] == milestone_a_id for item in milestone_rows)
+            assert portfolio_milestones.json()["stats"]["total"] >= len(milestone_rows)
+
+            portfolio_dependencies = client.get("/portfolio/dependencies", headers=headers)
+            portfolio_dependencies.raise_for_status()
+            dependency_row = next(
+                item for item in portfolio_dependencies.json()["items"]
+                if item["id"] == dependency_id
+            )
+            assert dependency_row["status"] == "on_track"
+
+            overdue = client.put(
+                f"/milestones/{milestone_a_id}",
+                headers=headers,
+                json={"status": "overdue", "planned_end": "2026-01-01"},
+            )
+            overdue.raise_for_status()
+
+            blocking_dependencies = client.get("/portfolio/dependencies", headers=headers)
+            blocking_dependencies.raise_for_status()
+            blocking_row = next(
+                item for item in blocking_dependencies.json()["items"]
+                if item["id"] == dependency_id
+            )
+            assert blocking_row["status"] == "blocking"
+            assert blocking_row["upstream_status"] == "overdue"
 
             cycle = client.post(
                 f"/milestones/{milestone_a_id}/dependencies",

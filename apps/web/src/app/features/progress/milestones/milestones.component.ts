@@ -28,9 +28,9 @@ import { RouterLink } from '@angular/router';
           </div>
           <select [(ngModel)]="statusFilter" (change)="applyFilters()" class="input-field text-xs h-9 w-32">
             <option value="">All Status</option>
-            <option value="pending">Pending</option>
+            <option value="not_started">Not Started</option>
             <option value="in_progress">In Progress</option>
-            <option value="delayed">Delayed</option>
+            <option value="overdue">Overdue</option>
             <option value="complete">Complete</option>
           </select>
           <input [(ngModel)]="searchQuery" (input)="applyFilters()" placeholder="Search..." class="input-field text-xs h-9 w-48" />
@@ -45,7 +45,7 @@ import { RouterLink } from '@angular/router';
           </div>
           <div>
             <p class="text-[10px] font-bold text-[var(--t-text-tertiary)] uppercase tracking-wider">Total</p>
-            <p class="text-xl font-black text-[var(--t-text-primary)]">{{ milestones().length }}</p>
+            <p class="text-xl font-black text-[var(--t-text-primary)]">{{ stats()?.total || 0 }}</p>
           </div>
         </div>
         <div class="card p-4 flex items-center gap-4">
@@ -53,8 +53,8 @@ import { RouterLink } from '@angular/router';
             <span class="material-icons text-xl">warning</span>
           </div>
           <div>
-            <p class="text-[10px] font-bold text-[var(--t-text-tertiary)] uppercase tracking-wider">Delayed</p>
-            <p class="text-xl font-black text-red-500">{{ getDelayedCount() }}</p>
+            <p class="text-[10px] font-bold text-[var(--t-text-tertiary)] uppercase tracking-wider">Overdue</p>
+            <p class="text-xl font-black text-red-500">{{ stats()?.overdue || 0 }}</p>
           </div>
         </div>
         <div class="card p-4 flex items-center gap-4">
@@ -62,8 +62,8 @@ import { RouterLink } from '@angular/router';
             <span class="material-icons text-xl">schedule</span>
           </div>
           <div>
-            <p class="text-[10px] font-bold text-[var(--t-text-tertiary)] uppercase tracking-wider">Due Soon</p>
-            <p class="text-xl font-black text-[var(--t-accent)]">{{ getDueSoonCount() }}</p>
+            <p class="text-[10px] font-bold text-[var(--t-text-tertiary)] uppercase tracking-wider">At Risk</p>
+            <p class="text-xl font-black text-[var(--t-accent)]">{{ stats()?.at_risk || 0 }}</p>
           </div>
         </div>
         <div class="card p-4 flex items-center gap-4">
@@ -72,7 +72,7 @@ import { RouterLink } from '@angular/router';
           </div>
           <div>
             <p class="text-[10px] font-bold text-[var(--t-text-tertiary)] uppercase tracking-wider">Complete</p>
-            <p class="text-xl font-black text-green-500">{{ getCompleteCount() }}</p>
+            <p class="text-xl font-black text-green-500">{{ stats()?.complete || 0 }}</p>
           </div>
         </div>
       </div>
@@ -151,13 +151,15 @@ export class MilestonesComponent implements OnInit {
   
   milestones = signal<any[]>([]);
   filteredMilestones = signal<any[]>([]);
+  stats = signal<any>(null);
   
   searchQuery = '';
   statusFilter = '';
 
   ngOnInit() {
-    this.api.get<any>('/milestones').subscribe(res => {
+    this.api.get<any>('/portfolio/milestones').subscribe(res => {
       this.milestones.set(res.items || []);
+      this.stats.set(res.stats || null);
       this.applyFilters();
     });
   }
@@ -183,7 +185,7 @@ export class MilestonesComponent implements OnInit {
   getStatusClass(status: string): string {
     switch (status) {
       case 'complete': return 'badge-green';
-      case 'delayed': return 'badge-red';
+      case 'overdue': return 'badge-red';
       case 'in_progress': return 'badge-purple';
       default: return '';
     }
@@ -196,26 +198,8 @@ export class MilestonesComponent implements OnInit {
     return 'var(--t-red)';
   }
 
-  getDelayedCount(): number {
-    return this.milestones().filter(m => m.status === 'delayed').length;
-  }
-
-  getDueSoonCount(): number {
-    const now = new Date();
-    const soon = new Date();
-    soon.setDate(now.getDate() + 14);
-    return this.milestones().filter(m => {
-      const d = new Date(m.planned_end);
-      return m.status !== 'complete' && d >= now && d <= soon;
-    }).length;
-  }
-
-  getCompleteCount(): number {
-    return this.milestones().filter(m => m.status === 'complete').length;
-  }
-
   isDelayed(m: any): boolean {
     if (m.status === 'complete') return false;
-    return new Date(m.planned_end) < new Date();
+    return m.status === 'overdue' || new Date(m.planned_end) < new Date();
   }
 }

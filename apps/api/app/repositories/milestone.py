@@ -285,8 +285,12 @@ class MilestoneRepository:
             self._c.table("milestone_dependencies")
             .select(
                 "id, "
-                "upstream:milestones!upstream_milestone_id(id, name, initiatives(initiative_code)), "
-                "downstream:milestones!downstream_milestone_id(id, name, initiatives(initiative_code))"
+                "upstream:milestones!upstream_milestone_id("
+                "id, name, status, planned_end, pressure_score, initiatives(initiative_code)"
+                "), "
+                "downstream:milestones!downstream_milestone_id("
+                "id, name, status, initiatives(initiative_code)"
+                ")"
             )
             .eq("tenant_id", self._tid)
             .execute()

@@ -54,7 +54,9 @@ import { RouterLink } from '@angular/router';
                 </div>
                 <div class="mt-4 pt-4 border-t border-[var(--t-border)]/50">
                    <span class="text-[9px] font-black text-[var(--t-text-tertiary)] uppercase tracking-tighter">Status: </span>
-                   <span class="text-[9px] font-black text-emerald-500 uppercase">On Track</span>
+                   <span class="text-[9px] font-black uppercase" [class]="getStatusClass(d.status)">
+                     {{ d.status.replace('_', ' ') }}
+                   </span>
                 </div>
               </div>
 
@@ -84,7 +86,9 @@ import { RouterLink } from '@angular/router';
                 </div>
                 <div class="mt-4 pt-4 border-t border-[var(--t-border)]/50 text-right">
                    <span class="text-[9px] font-black text-[var(--t-text-tertiary)] uppercase tracking-tighter">Impact: </span>
-                   <span class="text-[9px] font-black text-red-500 uppercase">Critical Block</span>
+                   <span class="text-[9px] font-black uppercase" [class]="getStatusClass(d.status)">
+                     {{ getImpactLabel(d.status) }}
+                   </span>
                 </div>
               </div>
             </div>
@@ -118,8 +122,26 @@ export class DependenciesComponent implements OnInit {
   dependencies = signal<any[]>([]);
 
   ngOnInit() {
-    this.api.get<any>('/dependencies').subscribe(res => {
+    this.api.get<any>('/portfolio/dependencies').subscribe(res => {
       this.dependencies.set(res.items || []);
     });
+  }
+
+  getStatusClass(status: string): string {
+    switch (status) {
+      case 'blocking': return 'text-red-500';
+      case 'at_risk': return 'text-amber-500';
+      case 'resolved': return 'text-emerald-500';
+      default: return 'text-[var(--t-accent)]';
+    }
+  }
+
+  getImpactLabel(status: string): string {
+    switch (status) {
+      case 'blocking': return 'Critical block';
+      case 'at_risk': return 'Pressure risk';
+      case 'resolved': return 'Resolved';
+      default: return 'Tracked';
+    }
   }
 }

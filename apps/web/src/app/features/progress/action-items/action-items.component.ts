@@ -115,7 +115,7 @@ export class ActionItemsComponent implements OnInit {
   }
 
   fetchItems() {
-    this.api.get<any>('/action-items').subscribe(res => {
+    this.api.get<any>('/portfolio/action-items').subscribe(res => {
       this.items.set(res.items || []);
       this.applyFilters();
     });

@@ -31,3 +31,13 @@ async def list_all_dependencies(
 ) -> DependencyListResponse:
     """List all milestone dependencies across the portfolio."""
     return svc.list_all_dependencies()
+
+
+@router.get(
+    "/portfolio/dependencies",
+    response_model=DependencyListResponse,
+)
+async def list_portfolio_dependencies(
+    svc: Annotated[MilestoneService, Depends(_svc)],
+) -> DependencyListResponse:
+    return svc.list_all_dependencies()

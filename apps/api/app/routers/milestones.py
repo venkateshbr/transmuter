@@ -18,6 +18,7 @@ from app.domain.milestones import (
     MilestoneDetail,
     MilestoneListResponse,
     MilestoneUpdate,
+    PortfolioMilestoneResponse,
 )
 from app.domain.pressure import MilestonePressureResult
 from app.services.milestone import MilestoneService
@@ -44,6 +45,16 @@ async def list_all_milestones(
 ) -> MilestoneListResponse:
     """List all milestones across the portfolio."""
     return svc.list_all_milestones()
+
+
+@router.get(
+    "/portfolio/milestones",
+    response_model=PortfolioMilestoneResponse,
+)
+async def list_portfolio_milestones(
+    svc: Annotated[MilestoneService, Depends(_svc)],
+) -> PortfolioMilestoneResponse:
+    return svc.list_portfolio_milestones()
 
 
 @router.get(

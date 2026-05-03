@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -20,6 +22,8 @@ from app.domain.milestones import (
     MilestoneListResponse,
     MilestoneSummary,
     MilestoneUpdate,
+    PortfolioMilestoneResponse,
+    PortfolioMilestoneStats,
 )
 from app.domain.pressure import (
     MilestonePressureEngine,
@@ -52,6 +56,19 @@ class MilestoneService:
         return MilestoneListResponse(
             items=items, total=len(items),
         )
+
+    def list_portfolio_milestones(self) -> PortfolioMilestoneResponse:
+        rows = self._repo.list_all()
+        items = [self._to_item(r) for r in rows]
+        stats = PortfolioMilestoneStats(
+            total=len(items),
+            not_started=sum(1 for item in items if item.status == "not_started"),
+            on_track=sum(1 for item in items if self._is_on_track(item)),
+            at_risk=sum(1 for item in items if self._is_at_risk(item)),
+            complete=sum(1 for item in items if item.status == "complete"),
+            overdue=sum(1 for item in items if self._is_overdue(item)),
+        )
+        return PortfolioMilestoneResponse(stats=stats, items=items, total=len(items))
 
     def get_milestone(self, milestone_id: str) -> MilestoneDetail:
         row = self._repo.get(milestone_id)
@@ -175,7 +192,7 @@ class MilestoneService:
     def list_all_dependencies(self) -> DependencyListResponse:
         """List all dependencies across the portfolio."""
         rows = self._repo.list_all_dependencies()
-        items = []
+        items: list[DependencyResponse] = []
         for r in rows:
             u = r.get("upstream") or {}
             d = r.get("downstream") or {}
@@ -187,13 +204,24 @@ class MilestoneService:
                 upstream=MilestoneSummary(
                     id=u.get("id", ""),
                     name=u.get("name", ""),
-                    initiative_code=u_init.get("initiative_code") if isinstance(u_init, dict) else None
+                    initiative_code=(
+                        u_init.get("initiative_code") if isinstance(u_init, dict) else None
+                    ),
                 ),
                 downstream=MilestoneSummary(
                     id=d.get("id", ""),
                     name=d.get("name", ""),
-                    initiative_code=d_init.get("initiative_code") if isinstance(d_init, dict) else None
-                )
+                    initiative_code=(
+                        d_init.get("initiative_code") if isinstance(d_init, dict) else None
+                    ),
+                ),
+                status=self._dependency_status(u, d),
+                upstream_status=u.get("status"),
+                upstream_planned_end=u.get("planned_end"),
+                upstream_pressure_score=(
+                    str(u["pressure_score"]) if u.get("pressure_score") is not None else None
+                ),
+                downstream_status=d.get("status"),
             ))
         return DependencyListResponse(items=items, total=len(items))
 
@@ -246,6 +274,64 @@ class MilestoneService:
             "pressure_checklist": result.checklist,
             "pressure_self_status": result.self_status,
         })
+
+    @staticmethod
+    def _score(value: object) -> Decimal:
+        try:
+            return Decimal(str(value or "0"))
+        except (InvalidOperation, ValueError):
+            return Decimal("0")
+
+    @staticmethod
+    def _planned_end_date(value: str | None) -> date | None:
+        if not value:
+            return None
+        return datetime.fromisoformat(value).date()
+
+    def _is_overdue(self, item: MilestoneItem) -> bool:
+        if item.status == "complete":
+            return False
+        planned_end = self._planned_end_date(item.planned_end)
+        return item.status == "overdue" or bool(planned_end and planned_end < date.today())
+
+    def _is_at_risk(self, item: MilestoneItem) -> bool:
+        return item.status != "complete" and self._score(item.pressure_score) > Decimal("6.0")
+
+    def _is_on_track(self, item: MilestoneItem) -> bool:
+        return (
+            item.status in {"not_started", "in_progress"}
+            and not self._is_overdue(item)
+            and not self._is_at_risk(item)
+        )
+
+    def _dependency_status(
+        self,
+        upstream: dict,  # type: ignore[type-arg]
+        downstream: dict,  # type: ignore[type-arg]
+    ) -> str:
+        upstream_status = upstream.get("status")
+        downstream_status = downstream.get("status")
+        if upstream_status == "complete":
+            return "resolved"
+
+        upstream_item = MilestoneItem(
+            id=upstream.get("id", ""),
+            initiative_id="",
+            name=upstream.get("name", ""),
+            priority="medium",
+            status=upstream_status or "not_started",
+            sort_order=0,
+            planned_end=upstream.get("planned_end"),
+            pressure_score=(
+                str(upstream["pressure_score"])
+                if upstream.get("pressure_score") is not None else None
+            ),
+        )
+        if self._is_overdue(upstream_item) and downstream_status != "complete":
+            return "blocking"
+        if self._score(upstream.get("pressure_score")) > Decimal("6.0"):
+            return "at_risk"
+        return "on_track"
 
     def _to_item(self, row: dict) -> MilestoneItem:  # type: ignore[type-arg]
         owner = row.get("users") or {}

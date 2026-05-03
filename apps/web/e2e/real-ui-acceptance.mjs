@@ -624,6 +624,16 @@ async function main() {
         const detail = await api(`/milestones/${downstreamMilestone.id}`);
         return detail.dependencies.some(dep => dep.upstream_milestone_id === upstreamMilestone.id);
       }, 'milestone dependency persistence');
+      await page.send('Page.navigate', { url: `${uiBaseUrl}/progress/dependencies` });
+      await waitFor(
+        () => evalJs(page, `document.body.innerText.includes(${JSON.stringify(upstreamMilestoneName)}) && document.body.innerText.includes(${JSON.stringify(downstreamMilestoneName)})`),
+        'portfolio dependencies view',
+      );
+      await page.send('Page.navigate', { url: `${uiBaseUrl}/initiatives/${manualInitiativeId}` });
+      await waitFor(
+        () => evalJs(page, `document.body.innerText.includes(${JSON.stringify(manualInitiativeName)})`),
+        'return to initiative detail after dependencies',
+      );
 
       const kpiName = `UI Acceptance KPI ${Date.now()}`;
       await clickTab(page, 'KPIs');
