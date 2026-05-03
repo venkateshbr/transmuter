@@ -1,8 +1,9 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 
 @Component({
   selector: 'app-governance',
@@ -170,12 +171,24 @@ import { FormsModule } from '@angular/forms';
 })
 export class GovernanceComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly route = inject(ActivatedRoute);
   protected readonly auth = inject(AuthService);
   
-  submissions = signal<any[]>([]);
+  allSubmissions = signal<any[]>([]);
   healthScore = signal('0/0');
+  statusFilter = signal('');
+
+  submissions = computed(() => {
+    const status = this.statusFilter();
+    return status
+      ? this.allSubmissions().filter(submission => submission.decision === status)
+      : this.allSubmissions();
+  });
 
   ngOnInit() {
+    this.route.queryParamMap.subscribe(params => {
+      this.statusFilter.set(params.get('status') ?? '');
+    });
     this.fetchSubmissions();
   }
 
@@ -183,14 +196,14 @@ export class GovernanceComponent implements OnInit {
     this.api.get<any>('/portfolio/governance').subscribe({
       next: (data) => {
         this.healthScore.set(data.health_score || '0/0');
-        this.submissions.set(data.submissions || []);
+        this.allSubmissions.set(data.submissions || []);
       },
       error: (err) => console.error('Failed to fetch submissions', err)
     });
   }
 
   getCount(status: string): number {
-    return this.submissions().filter(s => s.decision === status).length;
+    return this.allSubmissions().filter(s => s.decision === status).length;
   }
 
   countTickedCriteria(submission: any): number {

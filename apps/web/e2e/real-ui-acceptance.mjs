@@ -214,6 +214,89 @@ async function main() {
       () => evalJs(page, "document.body.innerText.includes('Transmuter')"),
       'dashboard content',
     );
+
+    const clickDashboardTarget = async testId => {
+      await evalJs(page, `
+        (() => {
+          const el = document.querySelector(${JSON.stringify(`[data-testid="${testId}"]`)});
+          if (!el) throw new Error('Missing dashboard target: ' + ${JSON.stringify(testId)});
+          el.click();
+          return true;
+        })()
+      `);
+    };
+
+    const navigateToDashboard = async label => {
+      await page.send('Page.navigate', { url: `${uiBaseUrl}/` });
+      await waitFor(
+        () => evalJs(page, "location.pathname === '/' && !!document.querySelector('[data-testid=\"dashboard-total-initiatives\"]')"),
+        label,
+        30_000,
+      );
+    };
+
+    await clickDashboardTarget('dashboard-total-initiatives');
+    await waitFor(
+      () => evalJs(page, "location.pathname === '/initiatives/pipeline'"),
+      'dashboard total initiatives drill-down',
+    );
+    await navigateToDashboard('dashboard reload');
+
+    await clickDashboardTarget('dashboard-at-risk');
+    await waitFor(
+      () => evalJs(page, "location.pathname === '/initiatives/pipeline' && new URLSearchParams(location.search).get('rag_status') === 'red'"),
+      'dashboard at-risk drill-down',
+    );
+    await waitFor(
+      () => evalJs(page, "document.querySelector('select.input-field:nth-of-type(1)')?.value === 'red' || document.body.innerText.includes('All RAG')"),
+      'pipeline red query handled',
+    );
+    await navigateToDashboard('dashboard reload after risk');
+
+    await clickDashboardTarget('dashboard-pending-approvals');
+    await waitFor(
+      () => evalJs(page, "location.pathname === '/pmo/governance' && new URLSearchParams(location.search).get('status') === 'pending'"),
+      'dashboard pending approvals drill-down',
+    );
+    await navigateToDashboard('dashboard reload after governance');
+
+    await clickDashboardTarget('dashboard-rag-green');
+    await waitFor(
+      () => evalJs(page, "location.pathname === '/initiatives/pipeline' && new URLSearchParams(location.search).get('rag_status') === 'green'"),
+      'dashboard rag segment drill-down',
+    );
+    await navigateToDashboard('dashboard reload after rag');
+
+    await clickDashboardTarget('dashboard-stage-scoping');
+    await waitFor(
+      () => evalJs(page, "location.pathname === '/initiatives/pipeline' && new URLSearchParams(location.search).get('stage') === 'scoping'"),
+      'dashboard stage bar drill-down',
+    );
+    await navigateToDashboard('dashboard reload after stage');
+
+    await clickDashboardTarget('dashboard-pressure');
+    await waitFor(
+      () => evalJs(page, "location.pathname === '/progress'"),
+      'dashboard pressure drill-down',
+    );
+    await navigateToDashboard('dashboard reload after pressure');
+
+    const clickedMilestone = await evalJs(page, `
+      (() => {
+        const el = document.querySelector('[data-testid^="dashboard-milestone-"]');
+        if (!el) return false;
+        el.click();
+        return true;
+      })()
+    `);
+    if (clickedMilestone) {
+      await waitFor(
+        () => evalJs(page, "location.pathname.startsWith('/initiatives/')"),
+        'dashboard milestone drill-down',
+      );
+      await navigateToDashboard('dashboard reload after milestone');
+    }
+
     const token = await evalJs(page, "localStorage.getItem('access_token')");
     const api = (path, init = {}) => requestJson(`${apiBaseUrl}${path}`, {
       ...init,

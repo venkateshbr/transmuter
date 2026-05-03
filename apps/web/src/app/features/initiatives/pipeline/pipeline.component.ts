@@ -1,5 +1,5 @@
 import { Component, computed, inject, signal } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 
@@ -418,6 +418,7 @@ const STAGE_LABELS: Record<string, string> = {
 })
 export class PipelineComponent {
   private readonly api = inject(ApiService);
+  private readonly route = inject(ActivatedRoute);
 
   readonly loading = signal(true);
   readonly total = signal(0);
@@ -449,7 +450,13 @@ export class PipelineComponent {
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
-    this.reload();
+    this.route.queryParamMap.subscribe(params => {
+      this.searchValue = params.get('search') ?? '';
+      this.ragFilter = params.get('rag_status') ?? '';
+      this.stageFilter = params.get('stage') ?? '';
+      this.priorityFilter = params.get('priority') ?? '';
+      this.reload();
+    });
   }
 
   openNewInitiative(): void {

@@ -49,25 +49,42 @@ import { RouterLink } from '@angular/router';
 
       <!-- Summary Cards -->
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div class="card p-6 border-l-4 border-[var(--t-accent)]">
+        <a
+          routerLink="/initiatives/pipeline"
+          data-testid="dashboard-total-initiatives"
+          class="card block p-6 border-l-4 border-[var(--t-accent)] cursor-pointer hover:-translate-y-0.5 hover:border-[var(--t-accent)] hover:shadow-xl transition-all"
+          aria-label="Open all initiatives"
+        >
           <p class="text-xs font-bold uppercase tracking-widest text-[var(--t-text-tertiary)] mb-1">Total Initiatives</p>
           <p class="text-3xl font-bold text-[var(--t-text-primary)]">{{ data()?.summary?.total_initiatives || 0 }}</p>
           <p class="text-xs text-[var(--t-text-secondary)] mt-2 flex items-center gap-1">
             <span class="text-green-500">↑ 2</span> from last week
           </p>
-        </div>
-        <div class="card p-6 border-l-4 border-red-500">
+        </a>
+        <a
+          routerLink="/initiatives/pipeline"
+          [queryParams]="{ rag_status: 'red' }"
+          data-testid="dashboard-at-risk"
+          class="card block p-6 border-l-4 border-red-500 cursor-pointer hover:-translate-y-0.5 hover:border-red-500 hover:shadow-xl transition-all"
+          aria-label="Open red at-risk initiatives"
+        >
           <p class="text-xs font-bold uppercase tracking-widest text-[var(--t-text-tertiary)] mb-1">At Risk</p>
           <p class="text-3xl font-bold text-red-500">{{ data()?.summary?.at_risk || 0 }}</p>
           <p class="text-xs text-[var(--t-text-secondary)] mt-2 flex items-center gap-1">
             Requires immediate attention
           </p>
-        </div>
-        <div class="card p-6 border-l-4 border-amber-500">
+        </a>
+        <a
+          routerLink="/pmo/governance"
+          [queryParams]="{ status: 'pending' }"
+          data-testid="dashboard-pending-approvals"
+          class="card block p-6 border-l-4 border-amber-500 cursor-pointer hover:-translate-y-0.5 hover:border-amber-500 hover:shadow-xl transition-all"
+          aria-label="Open pending governance approvals"
+        >
           <p class="text-xs font-bold uppercase tracking-widest text-[var(--t-text-tertiary)] mb-1">Pending Approvals</p>
           <p class="text-3xl font-bold text-amber-500">{{ data()?.summary?.pending_approvals || 0 }}</p>
           <p class="text-xs text-[var(--t-text-secondary)] mt-2">Gate submissions awaiting review</p>
-        </div>
+        </a>
       </div>
 
       <!-- Main Grid -->
@@ -81,7 +98,13 @@ import { RouterLink } from '@angular/router';
             <h3 class="text-lg font-bold text-[var(--t-text-primary)] mb-6">Pipeline by Stage</h3>
             <div class="flex items-end gap-2 h-40">
               @for (stage of stages; track stage.id) {
-                <div class="flex-1 flex flex-col items-center group">
+                <a
+                  routerLink="/initiatives/pipeline"
+                  [queryParams]="{ stage: stage.id }"
+                  [attr.data-testid]="'dashboard-stage-' + stage.id"
+                  class="flex-1 flex flex-col items-center group cursor-pointer rounded-lg hover:bg-[var(--t-surface-raised)]/60 transition-colors"
+                  [attr.aria-label]="'Open initiatives in ' + stage.label + ' stage'"
+                >
                   <div class="w-full bg-[var(--t-accent-soft)] rounded-t-lg transition-all duration-500 group-hover:bg-[var(--t-accent)]"
                        [style.height.%]="getStagePercentage(stage.id)">
                     <div class="opacity-0 group-hover:opacity-100 transition-opacity bg-[var(--t-surface)] text-[var(--t-text-primary)] text-[10px] font-bold px-2 py-1 rounded shadow-lg -mt-8 mx-auto w-fit">
@@ -92,7 +115,7 @@ import { RouterLink } from '@angular/router';
                   <p class="text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)] mt-3">
                     {{ stage.label }}
                   </p>
-                </div>
+                </a>
               }
             </div>
           </div>
@@ -103,7 +126,13 @@ import { RouterLink } from '@angular/router';
             <div class="flex items-center gap-8">
               <div class="flex-1 space-y-4">
                 @for (rag of ['green', 'amber', 'red']; track rag) {
-                  <div class="space-y-1">
+                  <a
+                    routerLink="/initiatives/pipeline"
+                    [queryParams]="{ rag_status: rag }"
+                    [attr.data-testid]="'dashboard-rag-' + rag"
+                    class="block space-y-1 rounded-lg p-2 -mx-2 cursor-pointer hover:bg-[var(--t-surface-raised)] transition-colors"
+                    [attr.aria-label]="'Open ' + rag + ' initiatives'"
+                  >
                     <div class="flex justify-between text-xs">
                       <span class="capitalize font-medium">{{ rag }}</span>
                       <span class="text-[var(--t-text-tertiary)]">{{ data()?.rag_breakdown?.[rag] || 0 }} initiatives</span>
@@ -113,7 +142,7 @@ import { RouterLink } from '@angular/router';
                            [style.width.%]="getRagPercentage(rag)"
                            [style.background]="getRagColor(rag)"></div>
                     </div>
-                  </div>
+                  </a>
                 }
               </div>
               <div class="w-32 h-32 rounded-full border-8 border-[var(--t-surface-raised)] flex items-center justify-center relative">
@@ -132,7 +161,12 @@ import { RouterLink } from '@angular/router';
         <div class="space-y-8">
           
           <!-- Pressure Gauge -->
-          <div class="card p-6 bg-gradient-to-br from-[var(--t-surface)] to-[var(--t-accent-soft)]/10">
+          <a
+            routerLink="/progress"
+            data-testid="dashboard-pressure"
+            class="card block p-6 bg-gradient-to-br from-[var(--t-surface)] to-[var(--t-accent-soft)]/10 cursor-pointer hover:-translate-y-0.5 hover:border-[var(--t-accent)] hover:shadow-xl transition-all"
+            aria-label="Open milestone tracker"
+          >
             <h3 class="text-lg font-bold text-[var(--t-text-primary)] mb-6">Portfolio Pressure</h3>
             <div class="relative pt-10 flex flex-col items-center">
                <div class="w-48 h-24 overflow-hidden relative">
@@ -151,7 +185,7 @@ import { RouterLink } from '@angular/router';
                  </p>
                </div>
             </div>
-          </div>
+          </a>
 
           <!-- My Milestones -->
           <div class="card p-6">
@@ -161,7 +195,12 @@ import { RouterLink } from '@angular/router';
             </div>
             <div class="space-y-4">
               @for (m of data()?.my_milestones; track m.id) {
-                <div class="p-3 rounded-lg border border-[var(--t-border)] hover:bg-[var(--t-surface-raised)] transition-colors cursor-pointer">
+                <a
+                  [routerLink]="['/initiatives', m.initiative_id]"
+                  [attr.data-testid]="'dashboard-milestone-' + m.id"
+                  class="block p-3 rounded-lg border border-[var(--t-border)] hover:bg-[var(--t-surface-raised)] hover:border-[var(--t-accent)] transition-colors cursor-pointer"
+                  [attr.aria-label]="'Open initiative for milestone ' + m.name"
+                >
                   <p class="text-xs font-bold text-[var(--t-text-primary)] truncate">{{ m.name }}</p>
                   <p class="text-[10px] text-[var(--t-text-secondary)] mt-1 truncate">{{ m.initiative?.name }}</p>
                   <div class="flex justify-between items-center mt-3">
@@ -172,7 +211,7 @@ import { RouterLink } from '@angular/router';
                       {{ m.status | uppercase }}
                     </span>
                   </div>
-                </div>
+                </a>
               }
               @if (!data()?.my_milestones?.length) {
                 <p class="text-center py-8 text-xs text-[var(--t-text-tertiary)]">No upcoming milestones.</p>
