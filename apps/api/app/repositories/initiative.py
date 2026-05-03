@@ -199,6 +199,19 @@ class InitiativeRepository:
         )
         return result.data[0]
 
+    def has_approved_gate_submission(self, initiative_id: str, gate_number: int) -> bool:
+        result = (
+            self._c.table("gate_submissions")
+            .select("id")
+            .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
+            .eq("gate_number", gate_number)
+            .eq("decision", "approved")
+            .limit(1)
+            .execute()
+        )
+        return bool(result.data)
+
     def archive(self, initiative_id: str) -> dict:  # type: ignore[type-arg]
         from datetime import datetime, timezone
         return self.update(initiative_id, {"archived_at": datetime.now(timezone.utc).isoformat()})

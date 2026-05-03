@@ -33,6 +33,10 @@ async function waitFor(fn, label, timeoutMs = 15_000) {
 
 async function requestJson(url, init) {
   const response = await fetch(url, init);
+  if (init?.allowError) {
+    const body = response.status === 204 ? null : await response.json();
+    return { status: response.status, body };
+  }
   assert(response.ok, `${url} returned ${response.status}`);
   if (response.status === 204) return null;
   return response.json();
@@ -531,10 +535,7 @@ async function main() {
       await waitFor(() => evalJs(page, "document.body.innerText.includes('Edit Initiative Details')"), 'overview edit modal');
       await evalJs(page, `
         (() => {
-          const stage = [...document.querySelectorAll('select')].find(select => [...select.options].some(option => option.value === 'in_progress'));
           const rag = [...document.querySelectorAll('select')].find(select => [...select.options].some(option => option.value === 'amber'));
-          stage.value = 'in_progress';
-          stage.dispatchEvent(new Event('change', { bubbles: true }));
           rag.value = 'amber';
           rag.dispatchEvent(new Event('change', { bubbles: true }));
           return true;
@@ -562,11 +563,19 @@ async function main() {
         const updated = await api(`/initiatives/${manualInitiativeId}`);
         return updated.summary === overviewSummaryText
           && updated.dependencies_text === overviewContextText
-          && updated.stage === 'in_progress'
+          && updated.stage === 'scoping'
           && updated.rag_status === 'amber'
           && updated.actual_start === '2026-06-15'
           && updated.actual_end === '2026-10-31';
       }, 'overview edit persistence');
+
+      const blockedStage = await api(`/initiatives/${manualInitiativeId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ stage: 'in_progress' }),
+        allowError: true,
+      });
+      assert(blockedStage.status === 400, 'Stage advancement should require an approved gate');
+      assert(blockedStage.body.detail.includes('Gate 1 must be approved'), 'Stage gate guard should explain the missing approval');
 
       await clickTab(page, 'Governance');
       await waitFor(() => evalJs(page, "document.body.innerText.includes('Readiness Review')"), 'governance tab');

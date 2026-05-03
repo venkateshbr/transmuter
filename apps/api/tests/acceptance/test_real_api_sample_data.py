@@ -602,6 +602,14 @@ def test_real_api_governance_gate_submission_and_portfolio_health() -> None:
             assert [gate["gate_number"] for gate in gates_data["gates"]] == [1, 2]
             assert gates_data["active_submission"] is None
 
+            blocked_stage = client.put(
+                f"/initiatives/{initiative_id}",
+                headers=headers,
+                json={"stage": "in_progress"},
+            )
+            assert blocked_stage.status_code == 400
+            assert "Gate 1 must be approved" in blocked_stage.json()["detail"]
+
             criteria = client.get(
                 f"/initiatives/{initiative_id}/gates/1/criteria",
                 headers=headers,
@@ -661,6 +669,14 @@ def test_real_api_governance_gate_submission_and_portfolio_health() -> None:
             detail = client.get(f"/initiatives/{initiative_id}", headers=headers)
             detail.raise_for_status()
             assert detail.json()["stage"] == "in_progress"
+
+            blocked_complete = client.put(
+                f"/initiatives/{initiative_id}",
+                headers=headers,
+                json={"stage": "complete"},
+            )
+            assert blocked_complete.status_code == 400
+            assert "Gate 2 must be approved" in blocked_complete.json()["detail"]
 
             portfolio_after = client.get("/portfolio/governance", headers=headers)
             portfolio_after.raise_for_status()
@@ -786,7 +802,6 @@ def test_real_api_initiative_overview_metadata_and_editing() -> None:
                 json={
                     "summary": overview_summary,
                     "dependencies_text": overview_context,
-                    "stage": "in_progress",
                     "rag_status": "amber",
                     "actual_start": "2026-06-15",
                     "actual_end": "2026-10-31",
@@ -796,7 +811,7 @@ def test_real_api_initiative_overview_metadata_and_editing() -> None:
             updated_data = updated.json()
             assert updated_data["summary"] == overview_summary
             assert updated_data["dependencies_text"] == overview_context
-            assert updated_data["stage"] == "in_progress"
+            assert updated_data["stage"] == original_data["stage"]
             assert updated_data["rag_status"] == "amber"
             assert updated_data["actual_start"] == "2026-06-15"
             assert updated_data["actual_end"] == "2026-10-31"
@@ -807,7 +822,6 @@ def test_real_api_initiative_overview_metadata_and_editing() -> None:
                 json={
                     "summary": original_data["summary"],
                     "dependencies_text": original_data["dependencies_text"],
-                    "stage": original_data["stage"],
                     "rag_status": original_data["rag_status"],
                     "actual_start": original_data["actual_start"],
                     "actual_end": original_data["actual_end"],

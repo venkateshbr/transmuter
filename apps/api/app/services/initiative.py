@@ -127,8 +127,16 @@ class InitiativeService:
         return self.get_initiative(row["id"])
 
     def update_initiative(self, initiative_id: str, data: InitiativeUpdate) -> InitiativeDetail:
-        self._assert_exists(initiative_id)
+        existing = self._repo.get(initiative_id)
+        if not existing:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Initiative not found")
         patch = {k: v for k, v in data.model_dump(exclude_unset=True).items()}
+        if "stage" in patch and patch["stage"] is not None:
+            self._assert_stage_transition_allowed(
+                initiative_id,
+                str(existing["stage"]),
+                str(patch["stage"]),
+            )
         # Serialize date fields
         for date_field in ("planned_start", "actual_start", "planned_end", "actual_end"):
             if date_field in patch and patch[date_field] is not None:
@@ -234,6 +242,34 @@ class InitiativeService:
     def _assert_exists(self, initiative_id: str) -> None:
         if not self._repo.get(initiative_id):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Initiative not found")
+
+    def _assert_stage_transition_allowed(
+        self,
+        initiative_id: str,
+        current_stage: str,
+        requested_stage: str,
+    ) -> None:
+        stage_order = ["scoping", "in_progress", "complete"]
+        if requested_stage == current_stage:
+            return
+        if requested_stage not in stage_order or current_stage not in stage_order:
+            return
+
+        current_index = stage_order.index(current_stage)
+        requested_index = stage_order.index(requested_stage)
+        if requested_index <= current_index:
+            return
+
+        for stage_index in range(current_index + 1, requested_index + 1):
+            gate_number = stage_index
+            if not self._repo.has_approved_gate_submission(initiative_id, gate_number):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"Gate {gate_number} must be approved before advancing "
+                        f"to {stage_order[stage_index]}."
+                    ),
+                )
 
     @staticmethod
     def _as_kpi_create(data: object) -> KPICreate:
