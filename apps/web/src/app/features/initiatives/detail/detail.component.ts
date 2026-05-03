@@ -24,12 +24,23 @@ import { SummaryTabComponent } from './summary/summary-tab.component';
         </a>
       </div>
 
-      <div class="flex justify-between items-start">
+      <div class="flex justify-between items-start gap-4">
         <div>
           <h1 class="text-3xl font-bold tracking-tight text-[var(--t-text-primary)]">
             {{ initiative()?.name || 'Initiative Details' }}
           </h1>
         </div>
+        <button
+          type="button"
+          class="btn-secondary inline-flex items-center gap-2"
+          data-testid="initiative-export-workbook"
+          aria-label="Export initiative workbook"
+          (click)="exportWorkbook()"
+          [disabled]="exporting()"
+        >
+          <span class="material-icons text-base">download</span>
+          {{ exporting() ? 'Exporting...' : 'Export Excel' }}
+        </button>
       </div>
 
       <div class="border-b border-[var(--t-border)]">
@@ -65,6 +76,7 @@ export class InitiativeDetailComponent implements OnInit {
   
   private readonly api = inject(ApiService);
   initiative = signal<any | null>(null);
+  exporting = signal(false);
 
   activeTab = 'overview';
   
@@ -88,4 +100,24 @@ export class InitiativeDetailComponent implements OnInit {
     { id: 'team', label: 'Team' },
     { id: 'summary', label: 'Summary' }
   ];
+
+  exportWorkbook(): void {
+    if (!this.id || this.exporting()) return;
+    this.exporting.set(true);
+    this.api.getBlob(`/initiatives/${this.id}/export`).subscribe({
+      next: blob => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `initiative-${this.id}-transmuter.xlsx`;
+        link.click();
+        URL.revokeObjectURL(url);
+        this.exporting.set(false);
+      },
+      error: () => {
+        this.exporting.set(false);
+        alert('Failed to export initiative workbook.');
+      },
+    });
+  }
 }

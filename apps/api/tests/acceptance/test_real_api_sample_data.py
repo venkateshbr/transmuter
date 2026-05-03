@@ -39,6 +39,15 @@ def _auth_headers(client: httpx.Client) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def _workbook_sheet_names(content: bytes) -> list[str]:
+    with ZipFile(BytesIO(content)) as zf:
+        workbook = ET.fromstring(zf.read("xl/workbook.xml"))
+    return [
+        sheet.attrib["name"]
+        for sheet in workbook.findall("main:sheets/main:sheet", SHEET_NS)
+    ]
+
+
 def test_real_api_seeded_dashboard_and_meetings() -> None:
     with _client() as client:
         health = client.get("/health")
@@ -284,6 +293,24 @@ def test_real_api_initiative_template_import_flow() -> None:
                 item["name"] == "Pilot launch complete"
                 for item in milestones.json()["items"]
             )
+
+            exported = client.get(f"/initiatives/{initiative_id}/export", headers=headers)
+            exported.raise_for_status()
+            assert exported.headers["content-type"] == XLSX_MEDIA_TYPE
+            assert _workbook_sheet_names(exported.content) == [
+                "Overview",
+                "Benefits",
+                "Costs",
+                "KPIs",
+                "Risks",
+                "Milestones",
+                "Status Updates",
+                "Meeting Notes",
+                "_Reference",
+            ]
+            with ZipFile(BytesIO(exported.content)) as zf:
+                assert b"FF7C3AED" in zf.read("xl/styles.xml")
+                assert initiative_id in zf.read("xl/worksheets/sheet9.xml").decode()
         finally:
             client.delete(f"/initiatives/{initiative_id}", headers=headers)
 

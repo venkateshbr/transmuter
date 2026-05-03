@@ -515,6 +515,26 @@ async function main() {
       assert(manualInitiative.counts.kpis_total >= 3, 'Guided HITL KPIs were not persisted');
       assert(manualInitiative.counts.risks_open >= 2, 'Guided HITL risk selection was not persisted');
       assert(manualInitiative.counts.milestones_total >= 3, 'Guided HITL milestones were not persisted');
+      await waitFor(
+        () => evalJs(page, "!!document.querySelector('[data-testid=\"initiative-export-workbook\"]')"),
+        'initiative workbook export button',
+      );
+      const initiativeWorkbookExport = await evalJs(page, `
+        (async () => {
+          const response = await fetch(${JSON.stringify(apiBaseUrl)} + '/initiatives/' + ${JSON.stringify(manualInitiativeId)} + '/export', {
+            headers: { Authorization: 'Bearer ' + localStorage.getItem('access_token') },
+          });
+          const bytes = await response.arrayBuffer();
+          return {
+            ok: response.ok,
+            contentType: response.headers.get('content-type'),
+            size: bytes.byteLength,
+          };
+        })()
+      `);
+      assert(initiativeWorkbookExport.ok, 'Initiative workbook export should succeed');
+      assert(initiativeWorkbookExport.contentType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Initiative workbook export should be an XLSX');
+      assert(initiativeWorkbookExport.size > 1000, 'Initiative workbook export should include workbook bytes');
       let hitlKpis = await api(`/initiatives/${manualInitiativeId}/kpis`);
       assert(hitlKpis.items.some(item => item.name === 'UI acceptance modified KPI'), 'Edited HITL KPI was not persisted');
       const hitlFinancials = await api(`/initiatives/${manualInitiativeId}/financials`);

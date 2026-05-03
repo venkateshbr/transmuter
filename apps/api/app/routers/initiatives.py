@@ -137,6 +137,21 @@ async def get_initiative(
     return svc.get_initiative(initiative_id)
 
 
+@router.get("/{initiative_id}/export")
+async def export_initiative_workbook(
+    initiative_id: str,
+    svc: Annotated[InitiativeService, Depends(_svc)],
+) -> Response:
+    workbook = svc.export_initiative_workbook(initiative_id)
+    return Response(
+        content=workbook,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="initiative-{initiative_id}-transmuter.xlsx"'
+        },
+    )
+
+
 # ── Update ────────────────────────────────────────────────────────────────────
 
 @router.put("/{initiative_id}", response_model=InitiativeDetail)

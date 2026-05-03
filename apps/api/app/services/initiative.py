@@ -29,9 +29,11 @@ from app.domain.kpis import KPICreate
 from app.domain.milestones import MilestoneCreate
 from app.domain.risks import RiskCreate
 from app.repositories.initiative import InitiativeRepository
+from app.repositories.status_update import StatusUpdateRepository
 from app.services.kpi import KPIService
 from app.services.financial import FinancialService
 from app.services.initiative_workbook import (
+    build_initiative_export,
     build_initiative_template,
     build_preview,
     parse_initiative_template,
@@ -164,6 +166,113 @@ class InitiativeService:
     def export_template(self) -> bytes:
         return build_initiative_template()
 
+    def export_initiative_workbook(self, initiative_id: str) -> bytes:
+        initiative = self.get_initiative(initiative_id)
+        financials = self._fin.get_financial_grid(initiative_id)
+        costs = self._fin.list_cost_lines(initiative_id)
+        kpis = KPIService(self._client, self._tenant_id).list_kpis(initiative_id)
+        risks = RiskService(self._client, self._tenant_id).list_risks(initiative_id)
+        milestones = MilestoneService(self._client, self._tenant_id).list_milestones(initiative_id)
+        status_updates = StatusUpdateRepository(self._client, self._tenant_id).list_history(initiative_id)
+        meeting_notes = self._list_meeting_notes(initiative_id)
+
+        return build_initiative_export(
+            overview_rows=[self._overview_export_row(initiative)],
+            benefit_rows=[
+                [
+                    str(row.year),
+                    str(row.quarter or ""),
+                    str(row.month or ""),
+                    row.revenue_uplift_base,
+                    row.revenue_uplift_high,
+                    row.revenue_uplift_actual or "",
+                    row.gross_margin_base,
+                    row.gross_margin_high,
+                    row.gross_margin_actual or "",
+                    row.gm_uplift_base,
+                    row.gm_uplift_high,
+                    row.gm_uplift_actual or "",
+                ]
+                for row in financials.entries
+            ],
+            cost_rows=[
+                [
+                    row.name,
+                    str(row.year),
+                    str(row.quarter or ""),
+                    str(row.month or ""),
+                    row.amount_plan,
+                    row.amount_actual or "",
+                    "true" if row.is_recurring else "false",
+                ]
+                for row in costs.items
+            ],
+            kpi_rows=[
+                [
+                    kpi.name,
+                    kpi.type,
+                    kpi.category or "",
+                    kpi.frequency,
+                    kpi.unit or "",
+                    str(entry.year),
+                    str(entry.quarter or ""),
+                    entry.value_base or "",
+                    entry.value_high or "",
+                    entry.value_actual or "",
+                ]
+                for kpi in kpis.items
+                for entry in (kpi.entries or [None])
+                if entry is not None
+            ],
+            risk_rows=[
+                [
+                    risk.description,
+                    risk.type or "",
+                    risk.impact or "",
+                    risk.likelihood or "",
+                    risk.mitigation or "",
+                ]
+                for risk in risks.items
+            ],
+            milestone_rows=[
+                [
+                    milestone.name,
+                    milestone.description or "",
+                    milestone.priority,
+                    milestone.planned_start or "",
+                    milestone.planned_end or "",
+                ]
+                for milestone in milestones.items
+            ],
+            status_update_rows=[
+                [
+                    row.get("submitted_at") or "",
+                    row.get("rag_status") or "",
+                    row.get("summary") or "",
+                    row.get("achievements") or "",
+                    row.get("issues") or "",
+                    row.get("next_steps") or "",
+                    (row.get("users") or {}).get("display_name") or "",
+                ]
+                for row in status_updates
+            ],
+            meeting_note_rows=[
+                [
+                    row.get("session_date") or "",
+                    (row.get("meetings") or {}).get("name") or "",
+                    row.get("notes") or "",
+                    row.get("status") or "",
+                ]
+                for row in meeting_notes
+            ],
+            reference_rows=[
+                ["initiative_id", str(initiative.id)],
+                ["initiative_code", initiative.initiative_code],
+                ["export_version", "1"],
+                ["exported_by", "Transmuter"],
+            ],
+        )
+
     def preview_import(self, data: bytes) -> InitiativeWorkbookPreview:
         return build_preview(parse_initiative_template(data))
 
@@ -200,6 +309,47 @@ class InitiativeService:
         for milestone in parsed.milestones:
             milestone_service.create_milestone(initiative_id, milestone)
         return self.get_initiative(initiative_id)
+
+    def _list_meeting_notes(self, initiative_id: str) -> list[dict]:  # type: ignore[type-arg]
+        links = (
+            self._client.table("meeting_initiatives")
+            .select("meeting_id")
+            .eq("tenant_id", str(self._tenant_id))
+            .eq("initiative_id", initiative_id)
+            .execute()
+        )
+        meeting_ids = [row["meeting_id"] for row in links.data or [] if row.get("meeting_id")]
+        if not meeting_ids:
+            return []
+        sessions = (
+            self._client.table("meeting_sessions")
+            .select("session_date, notes, status, meetings(name)")
+            .eq("tenant_id", str(self._tenant_id))
+            .in_("meeting_id", meeting_ids)
+            .order("session_date", desc=True)
+            .execute()
+        )
+        return sessions.data or []
+
+    @staticmethod
+    def _overview_export_row(initiative: InitiativeDetail) -> list[str]:
+        return [
+            initiative.name,
+            initiative.workstream_name or "",
+            "",
+            "",
+            initiative.type or "",
+            initiative.impact_type or "",
+            initiative.theme or "",
+            initiative.country or "",
+            initiative.tag or "",
+            initiative.priority,
+            initiative.summary or "",
+            initiative.value_logic or "",
+            initiative.dependencies_text or "",
+            str(initiative.planned_start or ""),
+            str(initiative.planned_end or ""),
+        ]
 
     def create_from_intake(
         self, data: InitiativeIntakeCreate, created_by: UUID,

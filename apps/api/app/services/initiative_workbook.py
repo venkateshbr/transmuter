@@ -99,14 +99,48 @@ _REL_NS = {"rel": "http://schemas.openxmlformats.org/package/2006/relationships"
 
 
 def build_initiative_template() -> bytes:
+    return _build_workbook(SHEET_DEFS)
+
+
+def build_initiative_export(
+    *,
+    overview_rows: list[list[str]],
+    benefit_rows: list[list[str]],
+    cost_rows: list[list[str]],
+    kpi_rows: list[list[str]],
+    risk_rows: list[list[str]],
+    milestone_rows: list[list[str]],
+    status_update_rows: list[list[str]],
+    meeting_note_rows: list[list[str]],
+    reference_rows: list[list[str]],
+) -> bytes:
+    sheet_defs = [
+        ("Overview", OVERVIEW_COLUMNS, overview_rows),
+        (SHEET_DEFS[1][0], SHEET_DEFS[1][1], benefit_rows),
+        (SHEET_DEFS[2][0], SHEET_DEFS[2][1], cost_rows),
+        (SHEET_DEFS[3][0], SHEET_DEFS[3][1], kpi_rows),
+        (SHEET_DEFS[4][0], SHEET_DEFS[4][1], risk_rows),
+        (SHEET_DEFS[5][0], SHEET_DEFS[5][1], milestone_rows),
+        (
+            "Status Updates",
+            ["submitted_at", "rag_status", "summary", "achievements", "issues", "next_steps", "submitted_by"],
+            status_update_rows,
+        ),
+        ("Meeting Notes", ["session_date", "meeting_name", "notes", "status"], meeting_note_rows),
+        ("_Reference", ["key", "value"], reference_rows),
+    ]
+    return _build_workbook(sheet_defs)
+
+
+def _build_workbook(sheet_defs: list[tuple[str, list[str], list[list[str]]]]) -> bytes:
     output = BytesIO()
     with ZipFile(output, "w", compression=ZIP_DEFLATED) as zf:
-        zf.writestr("[Content_Types].xml", _content_types(len(SHEET_DEFS)))
+        zf.writestr("[Content_Types].xml", _content_types(len(sheet_defs)))
         zf.writestr("_rels/.rels", _root_rels())
-        zf.writestr("xl/workbook.xml", _workbook())
-        zf.writestr("xl/_rels/workbook.xml.rels", _workbook_rels(len(SHEET_DEFS)))
+        zf.writestr("xl/workbook.xml", _workbook(sheet_defs))
+        zf.writestr("xl/_rels/workbook.xml.rels", _workbook_rels(len(sheet_defs)))
         zf.writestr("xl/styles.xml", _styles())
-        for index, (_, headers, rows) in enumerate(SHEET_DEFS, start=1):
+        for index, (_, headers, rows) in enumerate(sheet_defs, start=1):
             zf.writestr(f"xl/worksheets/sheet{index}.xml", _sheet([headers, *rows]))
     return output.getvalue()
 
@@ -480,7 +514,8 @@ def _sheet(rows: list[list[str]]) -> str:
         cells = []
         for col_index, value in enumerate(row, start=1):
             ref = f"{_column_name(col_index)}{row_index}"
-            cells.append(f'<c r="{ref}" t="inlineStr"><is><t>{_xml(value)}</t></is></c>')
+            style = ' s="1"' if row_index == 1 else ""
+            cells.append(f'<c r="{ref}"{style} t="inlineStr"><is><t>{_xml(value)}</t></is></c>')
         row_xml.append(f'<row r="{row_index}">{"".join(cells)}</row>')
     return (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -530,10 +565,10 @@ def _root_rels() -> str:
 </Relationships>"""
 
 
-def _workbook() -> str:
+def _workbook(sheet_defs: list[tuple[str, list[str], list[list[str]]]]) -> str:
     sheets = "\n".join(
         f'    <sheet name="{name}" sheetId="{index}" r:id="rId{index}"/>'
-        for index, (name, _, _) in enumerate(SHEET_DEFS, start=1)
+        for index, (name, _, _) in enumerate(sheet_defs, start=1)
     )
     return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
@@ -558,9 +593,18 @@ def _workbook_rels(sheet_count: int) -> str:
 def _styles() -> str:
     return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <fonts count="1"><font><sz val="11"/><name val="Aptos"/></font></fonts>
-  <fills count="1"><fill><patternFill patternType="none"/></fill></fills>
+  <fonts count="2">
+    <font><sz val="11"/><name val="Aptos"/></font>
+    <font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Aptos"/></font>
+  </fonts>
+  <fills count="2">
+    <fill><patternFill patternType="none"/></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF7C3AED"/><bgColor indexed="64"/></patternFill></fill>
+  </fills>
   <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
   <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-  <cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>
+  <cellXfs count="2">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+    <xf numFmtId="0" fontId="1" fillId="1" borderId="0" xfId="0" applyFont="1" applyFill="1"/>
+  </cellXfs>
 </styleSheet>"""
