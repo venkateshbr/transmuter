@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Literal, Any
+from typing import Any, Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -16,8 +17,19 @@ class GateCriteriaItem(BaseModel):
     is_active: bool = True
 
 
-class GateItem(BaseModel):
+class GateCriteriaState(BaseModel):
     id: str
+    criterion_id: str
+    label: str
+    guidance: str | None = None
+    sort_order: int = 0
+    ticked: bool = False
+    ticked_by: str | None = None
+    ticked_at: str | None = None
+
+
+class GateItem(BaseModel):
+    id: str | None = None
     initiative_id: str
     gate_number: int
     label: str
@@ -54,3 +66,13 @@ class GovernanceStatusResponse(BaseModel):
     gates: list[GateItem]
     active_submission: GateSubmissionItem | None = None
     history: list[GateSubmissionItem]
+
+
+class PortfolioGovernanceResponse(BaseModel):
+    health_score: str
+    approved: int
+    pending: int
+    rejected: int
+    conditional: int
+    total_submissions: int
+    submissions: list[GateSubmissionItem]

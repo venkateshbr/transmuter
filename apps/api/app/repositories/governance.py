@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 from uuid import UUID, uuid4
+
 from supabase import Client
 
 
@@ -56,7 +57,11 @@ class GovernanceRepository:
     def list_submissions(self, initiative_id: str) -> list[dict[str, Any]]:
         result = (
             self._c.table("gate_submissions")
-            .select("*, submitter:users!gate_submissions_submitted_by_id_fkey(display_name), decider:users!gate_submissions_decided_by_id_fkey(display_name)")
+            .select(
+                "*, "
+                "submitter:users!gate_submissions_submitted_by_id_fkey(display_name), "
+                "decider:users!gate_submissions_decided_by_id_fkey(display_name)"
+            )
             .eq("tenant_id", self._tid)
             .eq("initiative_id", initiative_id)
             .order("submitted_at", desc=True)
@@ -67,7 +72,11 @@ class GovernanceRepository:
     def list_all_submissions(self) -> list[dict[str, Any]]:
         result = (
             self._c.table("gate_submissions")
-            .select("*, submitter:users!gate_submissions_submitted_by_id_fkey(display_name), decider:users!gate_submissions_decided_by_id_fkey(display_name)")
+            .select(
+                "*, initiatives(name, initiative_code), "
+                "submitter:users!gate_submissions_submitted_by_id_fkey(display_name), "
+                "decider:users!gate_submissions_decided_by_id_fkey(display_name)"
+            )
             .eq("tenant_id", self._tid)
             .order("submitted_at", desc=True)
             .execute()
@@ -77,7 +86,11 @@ class GovernanceRepository:
     def get_submission(self, submission_id: str) -> dict[str, Any] | None:
         result = (
             self._c.table("gate_submissions")
-            .select("*, submitter:users!gate_submissions_submitted_by_id_fkey(display_name), decider:users!gate_submissions_decided_by_id_fkey(display_name)")
+            .select(
+                "*, "
+                "submitter:users!gate_submissions_submitted_by_id_fkey(display_name), "
+                "decider:users!gate_submissions_decided_by_id_fkey(display_name)"
+            )
             .eq("tenant_id", self._tid)
             .eq("id", submission_id)
             .maybe_single()

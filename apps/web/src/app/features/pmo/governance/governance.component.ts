@@ -37,8 +37,8 @@ import { FormsModule } from '@angular/forms';
             <span class="material-icons text-2xl">file_present</span>
           </div>
           <div>
-            <p class="text-[10px] font-black text-[var(--t-text-tertiary)] uppercase tracking-wider">Total Queue</p>
-            <p class="text-2xl font-black text-[var(--t-text-primary)]">{{ submissions().length }}</p>
+            <p class="text-[10px] font-black text-[var(--t-text-tertiary)] uppercase tracking-wider">Health Score</p>
+            <p class="text-2xl font-black text-[var(--t-text-primary)]">{{ healthScore() }}</p>
           </div>
         </div>
         <div class="card p-6 flex items-center gap-4 border-l-4 border-[var(--t-accent)]">
@@ -90,8 +90,11 @@ import { FormsModule } from '@angular/forms';
                  <span class="text-xs font-bold text-[var(--t-text-secondary)] uppercase tracking-tighter italic">Pending Transformation Review</span>
                </div>
                <h3 class="text-lg font-black text-[var(--t-text-primary)] truncate">
-                 Review Submission for Phase {{ s.gate_number }} Transition
+                 {{ s.initiatives?.name || 'Gate submission' }}
                </h3>
+               <p class="text-xs font-bold text-[var(--t-text-secondary)] uppercase tracking-tight">
+                 {{ countTickedCriteria(s) }} of {{ s.criteria_snapshot?.length || 0 }} criteria ready
+               </p>
                <div class="mt-2 flex items-center gap-6">
                  <div class="flex items-center gap-2">
                     <div class="w-5 h-5 rounded-full bg-[var(--t-surface-raised)] flex items-center justify-center">
@@ -107,14 +110,13 @@ import { FormsModule } from '@angular/forms';
                </div>
             </div>
 
-            <!-- AI Insight Placeholder -->
             <div class="hidden xl:flex flex-none w-64 p-4 rounded-2xl bg-[var(--t-surface-raised)] border border-[var(--t-border)] flex-col gap-2">
                <div class="flex items-center gap-2">
-                  <span class="material-icons text-xs text-[var(--t-accent)]">psychology</span>
-                  <span class="text-[8px] font-black uppercase tracking-widest text-[var(--t-accent)]">AI Recommendation</span>
+                  <span class="material-icons text-xs text-[var(--t-accent)]">rule</span>
+                  <span class="text-[8px] font-black uppercase tracking-widest text-[var(--t-accent)]">Review Notes</span>
                </div>
                <p class="text-[10px] font-medium leading-relaxed text-[var(--t-text-secondary)] italic">
-                 "Critical milestones are 100% complete. Financial variance is within 5% tolerance. Approval suggested."
+                 "{{ s.commentary || 'No submission commentary recorded.' }}"
                </p>
             </div>
 
@@ -171,20 +173,28 @@ export class GovernanceComponent implements OnInit {
   protected readonly auth = inject(AuthService);
   
   submissions = signal<any[]>([]);
+  healthScore = signal('0/0');
 
   ngOnInit() {
     this.fetchSubmissions();
   }
 
   fetchSubmissions() {
-    this.api.get<any[]>('/governance/submissions').subscribe({
-      next: (data) => this.submissions.set(data),
+    this.api.get<any>('/portfolio/governance').subscribe({
+      next: (data) => {
+        this.healthScore.set(data.health_score || '0/0');
+        this.submissions.set(data.submissions || []);
+      },
       error: (err) => console.error('Failed to fetch submissions', err)
     });
   }
 
   getCount(status: string): number {
     return this.submissions().filter(s => s.decision === status).length;
+  }
+
+  countTickedCriteria(submission: any): number {
+    return (submission.criteria_snapshot || []).filter((criterion: any) => criterion?.ticked).length;
   }
 
   getDecisionClass(decision: string): string {

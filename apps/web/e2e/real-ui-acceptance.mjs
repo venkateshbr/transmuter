@@ -361,6 +361,47 @@ async function main() {
           && updated.actual_end === '2026-10-31';
       }, 'overview edit persistence');
 
+      await clickTab(page, 'Governance');
+      await waitFor(() => evalJs(page, "document.body.innerText.includes('Readiness Review')"), 'governance tab');
+      await waitFor(
+        () => evalJs(page, "document.querySelectorAll('input[type=\"checkbox\"]').length > 0"),
+        'governance criteria checkboxes',
+      );
+      await evalJs(page, `
+        (() => {
+          const checkbox = document.querySelector('input[type="checkbox"]');
+          checkbox.click();
+          return true;
+        })()
+      `);
+      await clickText(page, 'Submit for Approval');
+      await waitFor(async () => {
+        const status = await api(`/initiatives/${manualInitiativeId}/gates`);
+        return status.active_submission?.decision === 'pending';
+      }, 'governance submission persistence');
+      const gateSubmissionId = await waitFor(async () => {
+        const status = await api(`/initiatives/${manualInitiativeId}/gates`);
+        return status.active_submission?.id;
+      }, 'governance submission id');
+      await evalJs(page, `
+        (() => {
+          const textarea = document.querySelector('textarea[placeholder^="Review comments"]');
+          if (!textarea) throw new Error('Missing gate decision commentary');
+          textarea.value = 'Approved by UI acceptance';
+          textarea.dispatchEvent(new Event('input', { bubbles: true }));
+          return true;
+        })()
+      `);
+      await clickText(page, 'Approve');
+      await waitFor(async () => {
+        const detail = await api(`/initiatives/${manualInitiativeId}`);
+        return detail.stage === 'in_progress';
+      }, 'governance stage transition');
+      await waitFor(async () => {
+        const portfolio = await api('/portfolio/governance');
+        return portfolio.submissions.some(item => item.id === gateSubmissionId && item.decision === 'approved');
+      }, 'portfolio governance approval persistence');
+
       let teamUserId;
       const summaryText = `UI acceptance final summary ${Date.now()}`;
       const lessonsText = `UI acceptance lessons ${Date.now()}`;

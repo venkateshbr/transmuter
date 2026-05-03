@@ -60,7 +60,9 @@ import { AuthService } from '../../../../core/services/auth.service';
                   <h3 class="text-xl font-bold text-[var(--t-text-primary)]">
                     {{ activeGate().label }} Readiness Review<span class="text-[var(--t-accent)]">.</span>
                   </h3>
-                  <p class="text-xs font-medium text-[var(--t-text-secondary)] mt-1">Verify all criteria before submitting for transformation office approval.</p>
+                  <p class="text-xs font-medium text-[var(--t-text-secondary)] mt-1">
+                    {{ tickedCount() }} of {{ criteria().length }} criteria marked ready.
+                  </p>
                 </div>
                 <span class="badge-purple font-bold text-[10px] uppercase tracking-widest px-3 py-1">
                   {{ activeSubmission() ? 'UNDER REVIEW' : 'DRAFTING' }}
@@ -94,7 +96,7 @@ import { AuthService } from '../../../../core/services/auth.service';
               @if (!activeSubmission()) {
                 <div class="p-8 bg-[var(--t-surface-raised)] flex justify-end">
                   <button (click)="submitGate()" 
-                          [disabled]="!allCriteriaTicked()"
+                          [disabled]="!hasTickedCriteria()"
                           class="btn-primary px-12 py-3 rounded-xl disabled:opacity-50 disabled:grayscale">
                     Submit for Approval
                   </button>
@@ -209,7 +211,7 @@ export class GovernanceTabComponent implements OnInit {
 
   fetchCriteria(gateNum: number) {
     if (!gateNum) return;
-    this.api.get<any[]>(`/governance/criteria/${gateNum}`).subscribe(list => {
+    this.api.get<any[]>(`/initiatives/${this.initiativeId}/gates/${gateNum}/criteria`).subscribe(list => {
       if (this.activeSubmission()) {
         this.criteria.set(this.activeSubmission().criteria_snapshot);
       } else {
@@ -224,9 +226,13 @@ export class GovernanceTabComponent implements OnInit {
     return Math.max(...passed) + 1;
   }
 
-  allCriteriaTicked() {
+  tickedCount() {
+    return this.criteria().filter(c => c.ticked).length;
+  }
+
+  hasTickedCriteria() {
     const list = this.criteria();
-    return list.length > 0 && list.every(c => c.ticked);
+    return list.length > 0 && list.some(c => c.ticked);
   }
 
   getGateCircleClass(gate: any) {

@@ -575,6 +575,98 @@ def test_real_api_status_update_compliance_and_nudge_flow() -> None:
             client.delete(f"/initiatives/{auto_id}", headers=headers)
 
 
+def test_real_api_governance_gate_submission_and_portfolio_health() -> None:
+    with _client() as client:
+        headers = _auth_headers(client)
+
+        created = client.post(
+            "/initiatives",
+            headers=headers,
+            json={
+                "name": f"Acceptance Governance {uuid4()}",
+                "priority": "high",
+                "country": "Singapore",
+            },
+        )
+        created.raise_for_status()
+        initiative_id = created.json()["id"]
+
+        try:
+            gates = client.get(f"/initiatives/{initiative_id}/gates", headers=headers)
+            gates.raise_for_status()
+            gates_data = gates.json()
+            assert [gate["gate_number"] for gate in gates_data["gates"]] == [1, 2]
+            assert gates_data["active_submission"] is None
+
+            criteria = client.get(
+                f"/initiatives/{initiative_id}/gates/1/criteria",
+                headers=headers,
+            )
+            criteria.raise_for_status()
+            criteria_data = criteria.json()
+            assert len(criteria_data) >= 1
+            assert {"ticked", "ticked_by", "ticked_at"}.issubset(criteria_data[0])
+
+            rejected_submit = client.post(
+                f"/initiatives/{initiative_id}/gates/1/submit",
+                headers=headers,
+                json={
+                    "criteria_snapshot": [
+                        {**criteria_data[0], "ticked": False},
+                    ],
+                    "commentary": "Should not submit without any ticked criteria.",
+                },
+            )
+            assert rejected_submit.status_code == 400
+
+            portfolio_before = client.get("/portfolio/governance", headers=headers)
+            portfolio_before.raise_for_status()
+            before = portfolio_before.json()
+
+            submitted = client.post(
+                f"/initiatives/{initiative_id}/gates/1/submit",
+                headers=headers,
+                json={
+                    "criteria_snapshot": [
+                        {**criteria_data[0], "ticked": True},
+                    ],
+                    "commentary": "Ready for acceptance governance review.",
+                },
+            )
+            submitted.raise_for_status()
+            submission_data = submitted.json()
+            submission_id = submission_data["id"]
+            assert submission_data["decision"] == "pending"
+            assert submission_data["criteria_snapshot"][0]["ticked_by"] is not None
+            assert submission_data["criteria_snapshot"][0]["ticked_at"] is not None
+
+            portfolio_pending = client.get("/portfolio/governance", headers=headers)
+            portfolio_pending.raise_for_status()
+            pending = portfolio_pending.json()
+            assert pending["pending"] == before["pending"] + 1
+            assert pending["health_score"].endswith(f"/{before['total_submissions'] + 1}")
+
+            decided = client.post(
+                f"/gates/submissions/{submission_id}/decide",
+                headers=headers,
+                json={"decision": "approved", "commentary": "Approved by acceptance."},
+            )
+            decided.raise_for_status()
+            assert decided.json()["decision"] == "approved"
+
+            detail = client.get(f"/initiatives/{initiative_id}", headers=headers)
+            detail.raise_for_status()
+            assert detail.json()["stage"] == "in_progress"
+
+            portfolio_after = client.get("/portfolio/governance", headers=headers)
+            portfolio_after.raise_for_status()
+            after = portfolio_after.json()
+            assert after["approved"] == before["approved"] + 1
+            assert after["health_score"].startswith(str(before["approved"] + 1))
+        finally:
+            client.delete(f"/initiatives/{initiative_id}", headers=headers)
+
+
 def test_real_api_initiative_overview_metadata_and_editing() -> None:
     with _client() as client:
         headers = _auth_headers(client)
