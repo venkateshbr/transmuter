@@ -17,3 +17,8 @@ class DashboardResponse(BaseModel):
     my_milestones: list[dict[str, Any]]
     portfolio_pressure: PressureInfo
     risk_heatmap: dict[str, int]
+    my_actions: list[dict[str, Any]] = []
+    kpi_pulse: dict[str, Any] = {}
+    value_bridge: dict[str, str] = {}
+    recent_activity: list[dict[str, Any]] = []
+    available_filters: dict[str, list[dict[str, Any]]] = {}

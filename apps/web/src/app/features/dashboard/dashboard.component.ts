@@ -35,8 +35,13 @@ import { RouterLink } from '@angular/router';
           
           <div class="flex-none flex flex-col items-end gap-4">
               <div class="flex gap-2">
-                <button (click)="generateReport()" class="px-6 py-3 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/10 text-xs font-black uppercase tracking-widest transition-all">
-                  {{ reporting() ? 'Generating...' : 'Generate Report' }}
+                <button
+                  (click)="generateReport()"
+                  data-testid="dashboard-executive-summary"
+                  aria-label="Generate executive summary"
+                  class="px-6 py-3 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/10 text-xs font-black uppercase tracking-widest transition-all"
+                >
+                  {{ reporting() ? 'Generating...' : 'Executive Summary' }}
                 </button>
                 <button routerLink="/initiatives/new" class="px-6 py-3 rounded-2xl bg-white text-[var(--t-accent)] hover:scale-105 active:scale-95 text-xs font-black uppercase tracking-widest shadow-lg transition-all">
                   + Executive Action
@@ -45,6 +50,73 @@ import { RouterLink } from '@angular/router';
              <p class="text-[9px] font-bold opacity-60 uppercase tracking-widest mt-2">Last System Sync: Just Now</p>
           </div>
         </div>
+      </section>
+
+      <!-- Portfolio Filters -->
+      <section class="card p-4">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <label class="text-xs font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">
+            Business Unit
+            <select
+              class="input-field mt-2"
+              data-testid="dashboard-filter-business-unit"
+              aria-label="Filter dashboard by business unit"
+              [value]="filters().business_unit_id"
+              (change)="onFilterChange('business_unit_id', $event)"
+            >
+              <option value="">All Business Units</option>
+              @for (bu of data()?.available_filters?.business_units || []; track bu.id) {
+                <option [value]="bu.id">{{ bu.name }}</option>
+              }
+            </select>
+          </label>
+          <label class="text-xs font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">
+            Workstream
+            <select
+              class="input-field mt-2"
+              data-testid="dashboard-filter-workstream"
+              aria-label="Filter dashboard by workstream"
+              [value]="filters().workstream_id"
+              (change)="onFilterChange('workstream_id', $event)"
+            >
+              <option value="">All Workstreams</option>
+              @for (ws of data()?.available_filters?.workstreams || []; track ws.id) {
+                <option [value]="ws.id">{{ ws.name }}</option>
+              }
+            </select>
+          </label>
+          <label class="text-xs font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">
+            RAG
+            <select
+              class="input-field mt-2"
+              data-testid="dashboard-filter-rag"
+              aria-label="Filter dashboard by RAG status"
+              [value]="filters().rag_status"
+              (change)="onFilterChange('rag_status', $event)"
+            >
+              <option value="">All RAG</option>
+              @for (rag of data()?.available_filters?.rag_statuses || []; track rag.id) {
+                <option [value]="rag.id">{{ rag.name }}</option>
+              }
+            </select>
+          </label>
+          <div class="flex items-end">
+            <button
+              type="button"
+              class="btn-secondary w-full"
+              data-testid="dashboard-clear-filters"
+              aria-label="Clear dashboard filters"
+              (click)="clearFilters()"
+            >
+              Clear Filters
+            </button>
+          </div>
+        </div>
+        @if (reportReady()) {
+          <p class="mt-3 text-xs font-semibold text-[var(--t-accent)]" data-testid="dashboard-executive-summary-ready">
+            Executive summary generated from the current portfolio view.
+          </p>
+        }
       </section>
 
       <!-- Summary Cards -->
@@ -223,6 +295,113 @@ import { RouterLink } from '@angular/router';
 
       </div>
 
+      <!-- Extended Widgets -->
+      <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
+        <section class="card p-6" data-testid="dashboard-my-actions">
+          <div class="flex items-start justify-between gap-3 mb-5">
+            <h3 class="text-lg font-bold text-[var(--t-text-primary)]">My Actions</h3>
+            <span class="material-icons text-[var(--t-text-tertiary)]" title="Assigned open meeting action items">help_outline</span>
+          </div>
+          <div class="space-y-3">
+            @for (action of data()?.my_actions || []; track action.id) {
+              <a routerLink="/progress/action-items" class="block rounded-lg border border-[var(--t-border)] p-3 hover:border-[var(--t-accent)] hover:bg-[var(--t-surface-raised)] transition-colors">
+                <p class="text-sm font-bold text-[var(--t-text-primary)] truncate">{{ action.description }}</p>
+                <p class="text-[11px] text-[var(--t-text-secondary)] mt-1 truncate">{{ action.initiatives?.name || 'Portfolio action' }}</p>
+              </a>
+            }
+            @if (!(data()?.my_actions || []).length) {
+              <p class="py-8 text-center text-xs text-[var(--t-text-tertiary)]">No assigned open actions.</p>
+            }
+          </div>
+        </section>
+
+        <section class="card p-6" data-testid="dashboard-kpi-pulse">
+          <div class="flex items-start justify-between gap-3 mb-5">
+            <h3 class="text-lg font-bold text-[var(--t-text-primary)]">KPI Pulse</h3>
+            <span class="material-icons text-[var(--t-text-tertiary)]" title="Latest actuals compared with base targets">help_outline</span>
+          </div>
+          <div class="flex items-end justify-between mb-4">
+            <p class="text-4xl font-black text-[var(--t-accent)]">{{ data()?.kpi_pulse?.health_score || '0.0' }}%</p>
+            <p class="text-xs font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">{{ data()?.kpi_pulse?.hitting_base || 0 }} on target</p>
+          </div>
+          <div class="space-y-2">
+            @for (kpi of data()?.kpi_pulse?.items || []; track kpi.id) {
+              <a routerLink="/pmo/kpis" class="flex items-center justify-between gap-3 rounded-lg p-2 hover:bg-[var(--t-surface-raised)] transition-colors">
+                <span class="text-xs font-semibold text-[var(--t-text-primary)] truncate">{{ kpi.name }}</span>
+                <span class="text-[10px] font-bold uppercase" [class.text-green-500]="kpi.status === 'on_track'" [class.text-amber-500]="kpi.status !== 'on_track'">{{ kpi.status }}</span>
+              </a>
+            }
+          </div>
+        </section>
+
+        <section class="card p-6" data-testid="dashboard-value-bridge">
+          <div class="flex items-start justify-between gap-3 mb-5">
+            <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Value Bridge</h3>
+            <span class="material-icons text-[var(--t-text-tertiary)]" title="Portfolio benefits, costs, and net value">help_outline</span>
+          </div>
+          <div class="grid grid-cols-3 gap-3 text-center">
+            <div class="rounded-lg bg-[var(--t-surface-raised)] p-3">
+              <p class="text-[10px] font-bold uppercase text-[var(--t-text-tertiary)]">Base</p>
+              <p class="text-sm font-black text-[var(--t-text-primary)]">{{ formatMoney(data()?.value_bridge?.net_base) }}</p>
+            </div>
+            <div class="rounded-lg bg-[var(--t-surface-raised)] p-3">
+              <p class="text-[10px] font-bold uppercase text-[var(--t-text-tertiary)]">High</p>
+              <p class="text-sm font-black text-[var(--t-text-primary)]">{{ formatMoney(data()?.value_bridge?.net_high) }}</p>
+            </div>
+            <div class="rounded-lg bg-[var(--t-surface-raised)] p-3">
+              <p class="text-[10px] font-bold uppercase text-[var(--t-text-tertiary)]">Actual</p>
+              <p class="text-sm font-black text-[var(--t-accent)]">{{ formatMoney(data()?.value_bridge?.net_actual) }}</p>
+            </div>
+          </div>
+          <a routerLink="/initiatives/pipeline" class="mt-4 inline-flex text-xs font-bold text-[var(--t-accent)]">Open financial initiatives</a>
+        </section>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <section class="card p-6" data-testid="dashboard-risk-heatmap">
+          <div class="flex items-start justify-between gap-3 mb-5">
+            <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Risk Heatmap</h3>
+            <span class="material-icons text-[var(--t-text-tertiary)]" title="Open risks by impact and likelihood">help_outline</span>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            @for (impact of heatmapLevels; track impact) {
+              @for (likelihood of heatmapLevels; track likelihood) {
+                <a
+                  routerLink="/pmo/risks"
+                  [queryParams]="{ impact, likelihood }"
+                  class="aspect-square rounded-lg border border-[var(--t-border)] flex flex-col items-center justify-center hover:border-[var(--t-accent)] hover:bg-[var(--t-surface-raised)] transition-colors"
+                  [attr.data-testid]="'dashboard-risk-' + impact + '-' + likelihood"
+                >
+                  <span class="text-xl font-black text-[var(--t-text-primary)]">{{ getHeatmapCount(impact, likelihood) }}</span>
+                  <span class="text-[9px] font-bold uppercase text-[var(--t-text-tertiary)]">{{ impact }}/{{ likelihood }}</span>
+                </a>
+              }
+            }
+          </div>
+        </section>
+
+        <section class="card p-6" data-testid="dashboard-recent-activity">
+          <div class="flex items-start justify-between gap-3 mb-5">
+            <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Recent Activity</h3>
+            <span class="material-icons text-[var(--t-text-tertiary)]" title="Latest submitted status updates">help_outline</span>
+          </div>
+          <div class="space-y-3">
+            @for (activity of data()?.recent_activity || []; track activity.id) {
+              <a [routerLink]="['/initiatives', activity.initiative_id]" class="block rounded-lg border border-[var(--t-border)] p-3 hover:border-[var(--t-accent)] hover:bg-[var(--t-surface-raised)] transition-colors">
+                <div class="flex items-center justify-between gap-3">
+                  <p class="text-sm font-bold text-[var(--t-text-primary)] truncate">{{ activity.initiatives?.name || 'Initiative update' }}</p>
+                  <span class="text-[10px] font-black uppercase" [style.color]="getRagColor(activity.rag_status)">{{ activity.rag_status }}</span>
+                </div>
+                <p class="text-xs text-[var(--t-text-secondary)] mt-1 line-clamp-2">{{ activity.summary || 'Status update submitted.' }}</p>
+              </a>
+            }
+            @if (!(data()?.recent_activity || []).length) {
+              <p class="py-8 text-center text-xs text-[var(--t-text-tertiary)]">No recent submitted updates.</p>
+            }
+          </div>
+        </section>
+      </div>
+
     </div>
 
     <!-- Onboarding / Welcome Modal -->
@@ -285,7 +464,10 @@ export class DashboardComponent implements OnInit {
   
   data = signal<any>(null);
   reporting = signal(false);
+  reportReady = signal(false);
   showWelcome = signal(true);
+  filters = signal({ business_unit_id: '', workstream_id: '', rag_status: '' });
+  heatmapLevels = ['high', 'medium', 'low'];
   stages = [
     { id: 'scoping', label: 'Scoping' },
     { id: 'in_progress', label: 'In-Progress' },
@@ -293,7 +475,25 @@ export class DashboardComponent implements OnInit {
   ];
 
   ngOnInit() {
-    this.api.get<any>('/dashboard').subscribe(d => this.data.set(d));
+    this.loadDashboard();
+  }
+
+  loadDashboard() {
+    const params = Object.fromEntries(
+      Object.entries(this.filters()).filter(([, value]) => !!value)
+    );
+    this.api.get<any>('/dashboard', params).subscribe(d => this.data.set(d));
+  }
+
+  onFilterChange(key: 'business_unit_id' | 'workstream_id' | 'rag_status', event: Event) {
+    const value = (event.target as HTMLSelectElement).value;
+    this.filters.update(current => ({ ...current, [key]: value }));
+    this.loadDashboard();
+  }
+
+  clearFilters() {
+    this.filters.set({ business_unit_id: '', workstream_id: '', rag_status: '' });
+    this.loadDashboard();
   }
 
   getStagePercentage(stage: string): number {
@@ -333,14 +533,26 @@ export class DashboardComponent implements OnInit {
     return 'var(--t-red)';
   }
 
+  getHeatmapCount(impact: string, likelihood: string): number {
+    return this.data()?.risk_heatmap?.[`${impact}_${likelihood}`] || 0;
+  }
+
+  formatMoney(value: string | null | undefined): string {
+    const amount = Number(value || 0);
+    return new Intl.NumberFormat('en-US', {
+      notation: 'compact',
+      maximumFractionDigits: 1,
+    }).format(amount);
+  }
+
   generateReport() {
     if (this.reporting()) return;
     this.reporting.set(true);
+    this.reportReady.set(false);
     
-    // Simulate high-fidelity report generation
     setTimeout(() => {
       this.reporting.set(false);
-      alert('Portfolio Executive Briefing (Q2 2026) has been generated and is ready for review.');
-    }, 2500);
+      this.reportReady.set(true);
+    }, 500);
   }
 }

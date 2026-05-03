@@ -214,6 +214,35 @@ async function main() {
       () => evalJs(page, "document.body.innerText.includes('Transmuter')"),
       'dashboard content',
     );
+    await waitFor(
+      () => evalJs(page, `
+        [
+          'dashboard-my-actions',
+          'dashboard-kpi-pulse',
+          'dashboard-value-bridge',
+          'dashboard-risk-heatmap',
+          'dashboard-recent-activity',
+          'dashboard-filter-business-unit',
+          'dashboard-filter-workstream',
+          'dashboard-filter-rag',
+          'dashboard-executive-summary'
+        ].every(testId => !!document.querySelector('[data-testid="' + testId + '"]'))
+      `),
+      'dashboard phase 2 widgets and filters',
+    );
+    const dashboardSnapshot = await requestJson(`${apiBaseUrl}/dashboard`, {
+      headers: { Authorization: `Bearer ${await evalJs(page, "localStorage.getItem('access_token')")}` },
+    });
+    assert(Array.isArray(dashboardSnapshot.my_actions), 'dashboard API should expose my actions');
+    assert(dashboardSnapshot.kpi_pulse && dashboardSnapshot.kpi_pulse.health_score !== undefined, 'dashboard API should expose KPI pulse');
+    assert(dashboardSnapshot.value_bridge && dashboardSnapshot.value_bridge.net_base !== undefined, 'dashboard API should expose value bridge');
+    assert(Array.isArray(dashboardSnapshot.recent_activity), 'dashboard API should expose recent activity');
+    assert(dashboardSnapshot.available_filters?.business_units, 'dashboard API should expose business unit filters');
+    await evalJs(page, `document.querySelector('[data-testid="dashboard-executive-summary"]').click()`);
+    await waitFor(
+      () => evalJs(page, "!!document.querySelector('[data-testid=\"dashboard-executive-summary-ready\"]')"),
+      'executive summary generation',
+    );
 
     const clickDashboardTarget = async testId => {
       await evalJs(page, `
