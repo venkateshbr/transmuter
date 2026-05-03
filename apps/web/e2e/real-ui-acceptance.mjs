@@ -865,6 +865,10 @@ async function main() {
         () => evalJs(page, `document.body.innerText.includes(${JSON.stringify(upstreamMilestoneName)}) && document.body.innerText.includes(${JSON.stringify(downstreamMilestoneName)})`),
         'portfolio dependencies view',
       );
+      await waitFor(
+        () => evalJs(page, "!!document.querySelector('[data-testid=\"dependency-stats\"]') && !!document.querySelector('[data-testid=\"dependency-graph\"]') && !!document.querySelector('[data-testid=\"dependency-table\"]')"),
+        'dependency stats graph and table',
+      );
       await page.send('Page.navigate', { url: `${uiBaseUrl}/initiatives/${manualInitiativeId}` });
       await waitFor(
         () => evalJs(page, `document.body.innerText.includes(${JSON.stringify(manualInitiativeName)})`),

@@ -32,6 +32,37 @@ import { RouterLink } from '@angular/router';
         </div>
       </div>
 
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4" data-testid="dependency-stats">
+        @for (card of statsCards(); track card.label) {
+          <div class="card p-4">
+            <p class="text-[10px] font-bold uppercase tracking-wider mb-2" style="color:var(--t-text-secondary)">{{ card.label }}</p>
+            <p class="text-2xl font-black" [style.color]="card.color">{{ card.value }}</p>
+          </div>
+        }
+      </div>
+
+      <div class="card p-6" data-testid="dependency-graph">
+        <div class="flex items-center justify-between mb-5">
+          <h3 class="text-base font-bold text-[var(--t-text-primary)]">Dependency Graph<span class="text-[var(--t-accent)]">.</span></h3>
+          <span class="badge-ghost text-[10px] uppercase font-bold">{{ nodes().length }} nodes / {{ dependencies().length }} edges</span>
+        </div>
+        @if (nodes().length) {
+          <div class="grid md:grid-cols-2 xl:grid-cols-3 gap-3">
+            @for (node of nodes(); track node.id) {
+              <div class="rounded-lg border bg-[var(--t-surface-raised)] p-3" style="border-color:var(--t-border)">
+                <div class="flex items-center justify-between gap-3">
+                  <p class="text-sm font-bold truncate text-[var(--t-text-primary)]">{{ node.name }}</p>
+                  <span class="text-[9px] font-black uppercase text-[var(--t-accent)]">{{ node.initiative_code || 'GEN' }}</span>
+                </div>
+                <p class="text-[10px] font-semibold uppercase mt-1" style="color:var(--t-text-secondary)">{{ downstreamCount(node.id) }} downstream / {{ upstreamCount(node.id) }} upstream</p>
+              </div>
+            }
+          </div>
+        } @else {
+          <div class="h-28 flex items-center justify-center text-sm" style="color:var(--t-text-secondary)">No dependency nodes available.</div>
+        }
+      </div>
+
       <!-- Dependency Matrix / Grid -->
       <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
         @for (d of dependencies(); track d.id) {
@@ -111,6 +142,36 @@ import { RouterLink } from '@angular/router';
         }
       </div>
 
+      <div class="card overflow-hidden" data-testid="dependency-table">
+        <div class="px-6 py-4 border-b border-[var(--t-border)]">
+          <h3 class="text-base font-bold text-[var(--t-text-primary)]">Cross-Milestone Dependency Table<span class="text-[var(--t-accent)]">.</span></h3>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead class="bg-[var(--t-surface-raised)] text-[10px] uppercase tracking-wider" style="color:var(--t-text-secondary)">
+              <tr>
+                <th class="text-left px-6 py-3">Upstream</th>
+                <th class="text-left px-6 py-3">Downstream</th>
+                <th class="text-left px-6 py-3">Status</th>
+                <th class="text-left px-6 py-3">Upstream Due</th>
+                <th class="text-left px-6 py-3">Pressure</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (d of dependencies(); track d.id) {
+                <tr class="border-t border-[var(--t-border)] hover:bg-[var(--t-surface-raised)] transition-colors">
+                  <td class="px-6 py-4 font-bold text-[var(--t-text-primary)]">{{ d.upstream?.name }} <span class="text-[10px] text-[var(--t-accent)]">{{ d.upstream?.initiative_code }}</span></td>
+                  <td class="px-6 py-4 text-[var(--t-text-primary)]">{{ d.downstream?.name }} <span class="text-[10px] text-[var(--t-accent)]">{{ d.downstream?.initiative_code }}</span></td>
+                  <td class="px-6 py-4"><span class="text-[10px] font-black uppercase" [class]="getStatusClass(d.status)">{{ d.status.replace('_', ' ') }}</span></td>
+                  <td class="px-6 py-4 text-[var(--t-text-secondary)]">{{ d.upstream_planned_end | date:'MMM d, y' }}</td>
+                  <td class="px-6 py-4 text-[var(--t-text-secondary)]">{{ d.upstream_pressure_score || '0' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+
     </div>
   `,
   styles: [`
@@ -120,11 +181,35 @@ import { RouterLink } from '@angular/router';
 export class DependenciesComponent implements OnInit {
   private readonly api = inject(ApiService);
   dependencies = signal<any[]>([]);
+  stats = signal<any>({ total: 0, blocking: 0, at_risk: 0, resolved: 0, on_track: 0 });
+  nodes = signal<any[]>([]);
+  edges = signal<any[]>([]);
 
   ngOnInit() {
     this.api.get<any>('/portfolio/dependencies').subscribe(res => {
       this.dependencies.set(res.items || []);
+      this.stats.set(res.stats || { total: 0, blocking: 0, at_risk: 0, resolved: 0, on_track: 0 });
+      this.nodes.set(res.nodes || []);
+      this.edges.set(res.edges || []);
     });
+  }
+
+  statsCards() {
+    const s = this.stats();
+    return [
+      { label: 'Total', value: s.total || 0, color: 'var(--t-text-primary)' },
+      { label: 'Blocking', value: s.blocking || 0, color: 'var(--t-red)' },
+      { label: 'At Risk', value: s.at_risk || 0, color: 'var(--t-amber)' },
+      { label: 'Resolved', value: s.resolved || 0, color: 'var(--t-green)' },
+    ];
+  }
+
+  downstreamCount(nodeId: string): number {
+    return this.edges().filter(edge => edge.source === nodeId).length;
+  }
+
+  upstreamCount(nodeId: string): number {
+    return this.edges().filter(edge => edge.target === nodeId).length;
   }
 
   getStatusClass(status: string): string {

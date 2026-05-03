@@ -1000,11 +1000,15 @@ def test_real_api_milestone_crud_pressure_dependencies_and_checklist() -> None:
 
             portfolio_dependencies = client.get("/portfolio/dependencies", headers=headers)
             portfolio_dependencies.raise_for_status()
+            portfolio_dep_data = portfolio_dependencies.json()
             dependency_row = next(
-                item for item in portfolio_dependencies.json()["items"]
+                item for item in portfolio_dep_data["items"]
                 if item["id"] == dependency_id
             )
             assert dependency_row["status"] == "on_track"
+            assert portfolio_dep_data["stats"]["total"] >= 1
+            assert any(node["id"] == milestone_a_id for node in portfolio_dep_data["nodes"])
+            assert any(edge["id"] == dependency_id for edge in portfolio_dep_data["edges"])
 
             overdue = client.put(
                 f"/milestones/{milestone_a_id}",
@@ -1015,12 +1019,14 @@ def test_real_api_milestone_crud_pressure_dependencies_and_checklist() -> None:
 
             blocking_dependencies = client.get("/portfolio/dependencies", headers=headers)
             blocking_dependencies.raise_for_status()
+            blocking_dep_data = blocking_dependencies.json()
             blocking_row = next(
-                item for item in blocking_dependencies.json()["items"]
+                item for item in blocking_dep_data["items"]
                 if item["id"] == dependency_id
             )
             assert blocking_row["status"] == "blocking"
             assert blocking_row["upstream_status"] == "overdue"
+            assert blocking_dep_data["stats"]["blocking"] >= 1
 
             cycle = client.post(
                 f"/milestones/{milestone_a_id}/dependencies",

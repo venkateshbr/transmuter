@@ -13,9 +13,12 @@ from app.domain.milestones import (
     ChecklistItem,
     ChecklistItemCreate,
     DependencyCreate,
+    DependencyGraphEdge,
+    DependencyGraphNode,
     DependencyItem,
     DependencyListResponse,
     DependencyResponse,
+    DependencyStats,
     MilestoneCreate,
     MilestoneDetail,
     MilestoneItem,
@@ -193,13 +196,16 @@ class MilestoneService:
         """List all dependencies across the portfolio."""
         rows = self._repo.list_all_dependencies()
         items: list[DependencyResponse] = []
+        nodes_by_id: dict[str, DependencyGraphNode] = {}
+        edges: list[DependencyGraphEdge] = []
+        stats = DependencyStats()
         for r in rows:
             u = r.get("upstream") or {}
             d = r.get("downstream") or {}
             u_init = u.get("initiatives") or {}
             d_init = d.get("initiatives") or {}
-            
-            items.append(DependencyResponse(
+            status_value = self._dependency_status(u, d)
+            item = DependencyResponse(
                 id=r["id"],
                 upstream=MilestoneSummary(
                     id=u.get("id", ""),
@@ -215,15 +221,53 @@ class MilestoneService:
                         d_init.get("initiative_code") if isinstance(d_init, dict) else None
                     ),
                 ),
-                status=self._dependency_status(u, d),
+                status=status_value,
                 upstream_status=u.get("status"),
                 upstream_planned_end=u.get("planned_end"),
                 upstream_pressure_score=(
                     str(u["pressure_score"]) if u.get("pressure_score") is not None else None
                 ),
                 downstream_status=d.get("status"),
-            ))
-        return DependencyListResponse(items=items, total=len(items))
+            )
+            items.append(item)
+            stats.total += 1
+            if status_value == "blocking":
+                stats.blocking += 1
+            elif status_value == "at_risk":
+                stats.at_risk += 1
+            elif status_value == "resolved":
+                stats.resolved += 1
+            else:
+                stats.on_track += 1
+            if item.upstream.id and item.upstream.id not in nodes_by_id:
+                nodes_by_id[item.upstream.id] = DependencyGraphNode(
+                    id=item.upstream.id,
+                    name=item.upstream.name,
+                    initiative_code=item.upstream.initiative_code,
+                    status=item.upstream_status,
+                )
+            if item.downstream.id and item.downstream.id not in nodes_by_id:
+                nodes_by_id[item.downstream.id] = DependencyGraphNode(
+                    id=item.downstream.id,
+                    name=item.downstream.name,
+                    initiative_code=item.downstream.initiative_code,
+                    status=item.downstream_status,
+                )
+            edges.append(
+                DependencyGraphEdge(
+                    id=item.id,
+                    source=item.upstream.id,
+                    target=item.downstream.id,
+                    status=status_value,
+                )
+            )
+        return DependencyListResponse(
+            items=items,
+            total=len(items),
+            stats=stats,
+            nodes=list(nodes_by_id.values()),
+            edges=edges,
+        )
 
     # ── Pressure ─────────────────────────────────────────────────────
 

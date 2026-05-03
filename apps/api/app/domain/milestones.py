@@ -130,6 +130,31 @@ class DependencyResponse(BaseModel):
     downstream_status: str | None = None
 
 
+class DependencyStats(BaseModel):
+    total: int = 0
+    blocking: int = 0
+    at_risk: int = 0
+    resolved: int = 0
+    on_track: int = 0
+
+
+class DependencyGraphNode(BaseModel):
+    id: str
+    name: str
+    initiative_code: str | None = None
+    status: str | None = None
+
+
+class DependencyGraphEdge(BaseModel):
+    id: str
+    source: str
+    target: str
+    status: Literal["blocking", "at_risk", "resolved", "on_track"] = "on_track"
+
+
 class DependencyListResponse(BaseModel):
     items: list[DependencyResponse]
     total: int
+    stats: DependencyStats = Field(default_factory=DependencyStats)
+    nodes: list[DependencyGraphNode] = []
+    edges: list[DependencyGraphEdge] = []
