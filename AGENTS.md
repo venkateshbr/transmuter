@@ -9,6 +9,11 @@ This project uses domain pack: `domain_packs/transmuter/pack.yaml`
 ## Canonical SDLC
 The single canonical engineering process is `docs/team/SDLC_PROTOCOL.md`. Do not use or recreate duplicate SDLC documents.
 
+## Durable Project Context
+Before continuing launch, billing, deployment, RBAC, dashboard, or design work, read
+`docs/team/CODEX_CONTEXT.md` for current hostnames, Docker paths, release state,
+product assumptions, and known follow-up issues.
+
 ## Stack
 - **Backend**: FastAPI 0.115+ / Python 3.12+ / PydanticAI / Procrastinate
 - **Frontend**: Angular 18 standalone / Tailwind CSS / CSS variables

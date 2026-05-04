@@ -10,6 +10,8 @@ Use this skill for every Transmuter frontend change.
 ## Required Reference
 
 Read `team/DESIGN_SYSTEM.md` before designing or editing UI. It is the source of truth.
+Read `docs/team/CODEX_CONTEXT.md` for current product context, dashboard direction,
+hostnames, and launch-state assumptions.
 
 Core files:
 
@@ -26,6 +28,10 @@ Default every new component to the A&M-inspired Transmuter system:
 - Square structural geometry, thin dividers, left rules, and restrained shadows.
 - Dense, executive, fact-driven layouts.
 - Uppercase micro-labels and direct CTA language.
+
+For dashboard analytics, prefer compact executive tables, clear totals, drilldown
+drawers, and year/metric selectors over decorative cards. Financial dashboard views
+must make reconciliation and source initiatives obvious.
 
 ## Must Do
 
