@@ -1,0 +1,56 @@
+name: agent-harness
+version: 0.1.0
+description: "Reusable AI operating system for issue-first, role-based, security-gated software delivery."
+
+source_inspiration:
+  - "Transmuter AGENTS.md"
+  - "Transmuter SDLC protocol"
+  - "Transmuter architecture ADRs"
+  - "Transmuter security review gates"
+  - "Transmuter acceptance testing standard"
+  - "Transmuter frontend design skill"
+
+core_protocols:
+  - path: core/operating-principles.md
+    purpose: "Default agent behavior and safety posture."
+  - path: core/sdlc-protocol.md
+    purpose: "Issue-first role lifecycle."
+  - path: core/roles.yaml
+    purpose: "Reusable team/role definitions."
+  - path: core/quality-gates.md
+    purpose: "Confidence, package, money, tenancy, and AI gates."
+  - path: core/architecture-patterns.md
+    purpose: "Reusable architecture and code organization patterns."
+  - path: core/security-review.md
+    purpose: "Prahari security trigger and checklist."
+  - path: core/testing-standard.md
+    purpose: "Real acceptance testing standard."
+
+model_adapters:
+  codex: adapters/codex/AGENTS.md
+  claude_code: adapters/claude/CLAUDE.md
+  gemini: adapters/gemini/GEMINI.md
+  opencode: adapters/opencode/AGENTS.md
+
+templates:
+  project_context: templates/PROJECT_CONTEXT.md
+  domain_pack: templates/DOMAIN_PACK.yaml
+  issue_templates: templates/ISSUE_TEMPLATES.md
+  pr_template: templates/PR_TEMPLATE.md
+  environment_configuration: templates/ENVIRONMENT_CONFIGURATION.md
+
+customization_points:
+  - "Repository URL and canonical issue tracker"
+  - "Stack-specific build/test commands"
+  - "Domain pack entities and workflows"
+  - "Security-sensitive files and trust boundaries"
+  - "Design-system rules"
+  - "Acceptance test data and commands"
+
+forbidden_content:
+  - "Secrets"
+  - "Production credentials"
+  - "Temporary passwords"
+  - "Raw PII"
+  - "Project-specific hostnames unless kept in project context"
+
