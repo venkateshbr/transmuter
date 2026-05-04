@@ -50,8 +50,18 @@ import { ApiService } from '../../../core/services/api.service';
               <input class="input-field w-full" name="organizationName" [(ngModel)]="form.organization_name" (ngModelChange)="syncSlug()" required>
             </label>
             <label class="block md:col-span-2">
-              <span class="field-label">Organization slug</span>
-              <input class="input-field w-full" name="organizationSlug" [(ngModel)]="form.organization_slug" required pattern="[a-z0-9-]+">
+              <span class="field-label">Organization short name</span>
+              <input
+                class="input-field w-full"
+                name="organizationSlug"
+                [(ngModel)]="form.organization_slug"
+                required
+                pattern="[a-z0-9-]+"
+                aria-describedby="organization-short-name-help"
+              >
+              <p id="organization-short-name-help" class="mt-2 text-xs font-medium text-[var(--t-text-tertiary)]">
+                Used as the unique workspace identifier. Lowercase letters, numbers, and hyphens only.
+              </p>
             </label>
             <label class="block">
               <span class="field-label">Initial admin name</span>
