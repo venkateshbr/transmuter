@@ -16,6 +16,7 @@ class DashboardService:
         business_unit_id: str | None = None,
         workstream_id: str | None = None,
         rag_status: str | None = None,
+        target_year: int | None = None,
     ) -> dict[str, Any]:
         # 1. Initiatives & Filters
         owner_user_id = str(user_id) if role == "initiative_owner" else None
@@ -67,6 +68,7 @@ class DashboardService:
         # 6. Financials
         fin_entries, costs = self.repo.get_financial_summary_data()
         value_bridge = self._calculate_value_bridge(fin_entries, costs, initiative_ids)
+        value_matrix = self._calculate_value_matrix(filtered_inits, fin_entries, target_year)
         
         # 7. Other data
         my_milestones = self.repo.get_my_milestones(user_id)
@@ -116,6 +118,7 @@ class DashboardService:
             "my_actions": my_actions,
             "kpi_pulse": kpi_pulse,
             "value_bridge": value_bridge,
+            "value_matrix": value_matrix,
             "recent_activity": recent_activity,
             "available_filters": {
                 "business_units": bus,
@@ -245,3 +248,156 @@ class DashboardService:
             "net_high": _money(benefits_high - costs_plan),
             "net_actual": _money(benefits_actual - costs_actual),
         }
+
+    def _calculate_value_matrix(
+        self,
+        initiatives: list[dict[str, Any]],
+        entries: list[dict[str, Any]],
+        target_year: int | None,
+    ) -> dict[str, Any]:
+        def _dec(value: object) -> Decimal:
+            return Decimal(str(value)) if value is not None else Decimal("0")
+
+        def _money(value: Decimal) -> str:
+            return str(value.quantize(Decimal("0.0001")))
+
+        def _label(value: str | None, fallback: str) -> str:
+            return (value or fallback).replace("_", " ").title()
+
+        scoped_ids = {i["id"] for i in initiatives}
+        scoped_entries = [e for e in entries if e.get("initiative_id") in scoped_ids]
+        available_years = sorted(
+            {int(e["year"]) for e in scoped_entries if e.get("year") is not None}
+        )
+        selected_year = target_year if target_year in available_years else (
+            max(available_years) if available_years else target_year
+        )
+
+        tags = ["automation", "offshoring", "commercial", "other"]
+        for initiative in initiatives:
+            tag = initiative.get("tag") or "other"
+            if tag not in tags:
+                tags.append(tag)
+
+        row_lookup: dict[str, dict[str, Any]] = {}
+        for initiative in initiatives:
+            ws = initiative.get("workstreams") or {}
+            workstream_id = initiative.get("workstream_id") or "unassigned"
+            if workstream_id not in row_lookup:
+                row_lookup[workstream_id] = {
+                    "workstream_id": None if workstream_id == "unassigned" else workstream_id,
+                    "workstream_name": ws.get("name") or "Unassigned",
+                    "business_unit_name": (ws.get("business_units") or {}).get("name"),
+                    "cells": {tag: self._empty_matrix_cell(tag) for tag in tags},
+                    "total": self._empty_matrix_cell("total"),
+                }
+
+        if not row_lookup:
+            row_lookup["empty"] = {
+                "workstream_id": None,
+                "workstream_name": "No active initiatives",
+                "business_unit_name": None,
+                "cells": {tag: self._empty_matrix_cell(tag) for tag in tags},
+                "total": self._empty_matrix_cell("total"),
+            }
+
+        entries_by_initiative: dict[str, list[dict[str, Any]]] = {}
+        for entry in scoped_entries:
+            if selected_year is not None and entry.get("year") != selected_year:
+                continue
+            entries_by_initiative.setdefault(entry["initiative_id"], []).append(entry)
+
+        initiative_values: dict[str, dict[str, Decimal]] = {}
+        for initiative_id, initiative_entries in entries_by_initiative.items():
+            annual_rows = [e for e in initiative_entries if e.get("quarter") is None]
+            rows_to_sum = annual_rows or initiative_entries
+            initiative_values[initiative_id] = {
+                "base": sum((_dec(e.get("gm_uplift_base")) for e in rows_to_sum), Decimal("0")),
+                "high": sum((_dec(e.get("gm_uplift_high")) for e in rows_to_sum), Decimal("0")),
+                "actual": sum((_dec(e.get("gm_uplift_actual")) for e in rows_to_sum), Decimal("0")),
+            }
+
+        for initiative in initiatives:
+            values = initiative_values.get(
+                initiative["id"],
+                {"base": Decimal("0"), "high": Decimal("0"), "actual": Decimal("0")},
+            )
+            tag = initiative.get("tag") or "other"
+            workstream_id = initiative.get("workstream_id") or "unassigned"
+            row = row_lookup[workstream_id]
+            cell = row["cells"].setdefault(tag, self._empty_matrix_cell(tag))
+            if not any(values.values()):
+                continue
+            self._add_initiative_to_cell(cell, initiative, values)
+            self._add_initiative_to_cell(row["total"], initiative, values)
+
+        total_cells = {tag: self._empty_matrix_cell(tag) for tag in tags}
+        grand_total = self._empty_matrix_cell("total")
+        for row in row_lookup.values():
+            for tag in tags:
+                cell = row["cells"].setdefault(tag, self._empty_matrix_cell(tag))
+                self._finalize_matrix_cell(cell, _money)
+                self._merge_matrix_cell(total_cells[tag], cell)
+            self._finalize_matrix_cell(row["total"], _money)
+            self._merge_matrix_cell(grand_total, row["total"])
+
+        for cell in total_cells.values():
+            self._finalize_matrix_cell(cell, _money)
+        self._finalize_matrix_cell(grand_total, _money)
+
+        return {
+            "selected_year": selected_year,
+            "available_years": available_years,
+            "tags": [{"id": tag, "label": _label(tag, tag)} for tag in tags],
+            "rows": sorted(row_lookup.values(), key=lambda r: r["workstream_name"]),
+            "totals": {"cells": total_cells, "total": grand_total},
+        }
+
+    def _empty_matrix_cell(self, tag: str) -> dict[str, Any]:
+        return {
+            "tag": tag,
+            "base": Decimal("0"),
+            "high": Decimal("0"),
+            "actual": Decimal("0"),
+            "initiative_count": 0,
+            "initiatives": [],
+        }
+
+    def _add_initiative_to_cell(
+        self,
+        cell: dict[str, Any],
+        initiative: dict[str, Any],
+        values: dict[str, Decimal],
+    ) -> None:
+        cell["base"] += values["base"]
+        cell["high"] += values["high"]
+        cell["actual"] += values["actual"]
+        cell["initiative_count"] += 1
+        cell["initiatives"].append(
+            {
+                "id": initiative["id"],
+                "name": initiative["name"],
+                "initiative_code": initiative.get("initiative_code"),
+                "stage": initiative.get("stage"),
+                "rag_status": initiative.get("rag_status"),
+                "base": values["base"],
+                "high": values["high"],
+                "actual": values["actual"],
+            }
+        )
+
+    def _merge_matrix_cell(self, target: dict[str, Any], source: dict[str, Any]) -> None:
+        target["base"] += Decimal(str(source["base"]))
+        target["high"] += Decimal(str(source["high"]))
+        target["actual"] += Decimal(str(source["actual"]))
+        target["initiative_count"] += int(source["initiative_count"])
+        target["initiatives"].extend(source["initiatives"])
+
+    def _finalize_matrix_cell(self, cell: dict[str, Any], money_formatter: Any) -> None:
+        cell["base"] = money_formatter(Decimal(str(cell["base"])))
+        cell["high"] = money_formatter(Decimal(str(cell["high"])))
+        cell["actual"] = money_formatter(Decimal(str(cell["actual"])))
+        for initiative in cell["initiatives"]:
+            initiative["base"] = money_formatter(Decimal(str(initiative["base"])))
+            initiative["high"] = money_formatter(Decimal(str(initiative["high"])))
+            initiative["actual"] = money_formatter(Decimal(str(initiative["actual"])))

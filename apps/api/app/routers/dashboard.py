@@ -19,6 +19,7 @@ async def get_dashboard(
     business_unit_id: str | None = None,
     workstream_id: str | None = None,
     rag_status: str | None = None,
+    target_year: int | None = None,
 ):
     """Get aggregated dashboard data for the current user."""
     return svc.get_dashboard_data(
@@ -26,5 +27,6 @@ async def get_dashboard(
         role=current_user.role,
         business_unit_id=business_unit_id,
         workstream_id=workstream_id,
-        rag_status=rag_status
+        rag_status=rag_status,
+        target_year=target_year,
     )

@@ -9,7 +9,7 @@ class DashboardRepository:
 
     def get_initiatives_for_dashboard(self, owner_user_id: str | None = None) -> list[dict[str, Any]]:
         select = (
-            "id, name, initiative_code, stage, rag_status, pressure_score, workstream_id, "
+            "id, name, initiative_code, stage, rag_status, pressure_score, workstream_id, tag, "
             "workstreams(name, business_unit_id, business_units(name))"
         )
         res = (
@@ -95,7 +95,7 @@ class DashboardRepository:
 
     def get_financial_summary_data(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         entry_select = (
-            "initiative_id, revenue_uplift_base, revenue_uplift_high, revenue_uplift_actual, "
+            "initiative_id, year, quarter, revenue_uplift_base, revenue_uplift_high, revenue_uplift_actual, "
             "gm_uplift_base, gm_uplift_high, gm_uplift_actual"
         )
         entries = (

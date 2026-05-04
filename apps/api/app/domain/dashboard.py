@@ -20,5 +20,6 @@ class DashboardResponse(BaseModel):
     my_actions: list[dict[str, Any]] = []
     kpi_pulse: dict[str, Any] = {}
     value_bridge: dict[str, str] = {}
+    value_matrix: dict[str, Any] = {}
     recent_activity: list[dict[str, Any]] = []
     available_filters: dict[str, list[dict[str, Any]]] = {}

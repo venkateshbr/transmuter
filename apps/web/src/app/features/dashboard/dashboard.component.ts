@@ -160,6 +160,128 @@ import { RouterLink } from '@angular/router';
         </a>
       </div>
 
+      <!-- Value Matrix -->
+      <section class="card overflow-hidden" data-testid="dashboard-value-matrix">
+        <div class="flex flex-col gap-4 border-b border-[var(--t-border)] bg-[var(--t-primary)] p-6 text-white lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div class="mb-3 flex items-center gap-2">
+              <span class="h-2 w-8 bg-[var(--t-blue-light)]"></span>
+              <span class="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Gross Margin Uplift</span>
+            </div>
+            <h2 class="text-2xl font-black tracking-tight">Workstreams x Value Tags</h2>
+            <p class="mt-2 max-w-2xl text-xs font-medium leading-relaxed text-white/70">
+              Planned gross margin uplift ranges by operating workstream and initiative tag. Select a year and open any cell to inspect the initiatives behind the number.
+            </p>
+          </div>
+          <label class="min-w-40 text-[10px] font-black uppercase tracking-widest text-white/70">
+            Target Year
+            <select
+              class="mt-2 w-full border border-white/20 bg-white px-3 py-2 text-sm font-black text-[var(--t-primary)]"
+              data-testid="dashboard-value-matrix-year"
+              aria-label="Select value matrix target year"
+              [value]="data()?.value_matrix?.selected_year || ''"
+              (change)="onTargetYearChange($event)"
+            >
+              @for (year of data()?.value_matrix?.available_years || []; track year) {
+                <option [value]="year">FY{{ year.toString().slice(-2) }}</option>
+              }
+            </select>
+          </label>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[920px] border-collapse text-left">
+            <thead>
+              <tr class="bg-[var(--t-primary)] text-white">
+                <th class="w-56 border-r border-white/20 px-4 py-4 text-xs font-black uppercase tracking-widest">Workstream</th>
+                @for (tag of data()?.value_matrix?.tags || []; track tag.id) {
+                  <th class="border-r border-white/20 px-4 py-4 text-center text-xs font-black uppercase tracking-widest">{{ tag.label }}</th>
+                }
+                <th class="px-4 py-4 text-center text-xs font-black uppercase tracking-widest">
+                  FY{{ ((data()?.value_matrix?.selected_year || '') + '').slice(-2) }} Total
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of data()?.value_matrix?.rows || []; track row.workstream_id || row.workstream_name) {
+                <tr class="odd:bg-[var(--t-surface)] even:bg-[var(--t-surface-raised)]">
+                  <th class="border-r border-[var(--t-border)] px-4 py-3 align-middle">
+                    <span class="block text-sm font-black text-[var(--t-text-primary)]">{{ row.workstream_name }}</span>
+                    <span class="text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">{{ row.business_unit_name || 'Portfolio' }}</span>
+                  </th>
+                  @for (tag of data()?.value_matrix?.tags || []; track tag.id) {
+                    <td class="border-r border-[var(--t-border)] px-2 py-2 text-center">
+                      <button
+                        type="button"
+                        class="matrix-cell"
+                        [class.matrix-cell-empty]="!row.cells?.[tag.id]?.initiative_count"
+                        [attr.data-testid]="'dashboard-value-matrix-cell-' + (row.workstream_id || 'unassigned') + '-' + tag.id"
+                        [attr.aria-label]="'Open initiatives for ' + row.workstream_name + ' ' + tag.label"
+                        (click)="openMatrixCell(row.workstream_name, tag.label, row.cells?.[tag.id])"
+                      >
+                        <span class="block text-sm font-black">{{ formatRange(row.cells?.[tag.id]) }}</span>
+                        <span class="text-[10px] font-bold text-[var(--t-text-tertiary)]">{{ row.cells?.[tag.id]?.initiative_count || 0 }} initiatives</span>
+                      </button>
+                    </td>
+                  }
+                  <td class="px-2 py-2 text-center">
+                    <button
+                      type="button"
+                      class="matrix-cell matrix-cell-total"
+                      [attr.data-testid]="'dashboard-value-matrix-row-total-' + (row.workstream_id || 'unassigned')"
+                      [attr.aria-label]="'Open all value initiatives for ' + row.workstream_name"
+                      (click)="openMatrixCell(row.workstream_name, 'FY total', row.total)"
+                    >
+                      <span class="block text-sm font-black">{{ formatRange(row.total) }}</span>
+                      <span class="text-[10px] font-bold text-white/70">{{ row.total?.initiative_count || 0 }} initiatives</span>
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+            <tfoot>
+              <tr class="bg-[var(--t-primary)] text-white">
+                <th class="border-r border-white/20 px-4 py-4 text-sm font-black uppercase tracking-widest">Total</th>
+                @for (tag of data()?.value_matrix?.tags || []; track tag.id) {
+                  <td class="border-r border-white/20 px-2 py-2 text-center">
+                    <button
+                      type="button"
+                      class="matrix-cell matrix-cell-total"
+                      [attr.aria-label]="'Open total initiatives for ' + tag.label"
+                      (click)="openMatrixCell('All workstreams', tag.label, data()?.value_matrix?.totals?.cells?.[tag.id])"
+                    >
+                      <span class="block text-sm font-black">{{ formatRange(data()?.value_matrix?.totals?.cells?.[tag.id]) }}</span>
+                      <span class="text-[10px] font-bold text-white/70">{{ data()?.value_matrix?.totals?.cells?.[tag.id]?.initiative_count || 0 }} initiatives</span>
+                    </button>
+                  </td>
+                }
+                <td class="px-2 py-2 text-center">
+                  <button
+                    type="button"
+                    class="matrix-cell matrix-cell-total"
+                    aria-label="Open all value matrix initiatives"
+                    (click)="openMatrixCell('All workstreams', 'FY total', data()?.value_matrix?.totals?.total)"
+                  >
+                    <span class="block text-sm font-black">{{ formatRange(data()?.value_matrix?.totals?.total) }}</span>
+                    <span class="text-[10px] font-bold text-white/70">{{ data()?.value_matrix?.totals?.total?.initiative_count || 0 }} initiatives</span>
+                  </button>
+                </td>
+              </tr>
+              <tr class="bg-[var(--t-surface)]">
+                <th class="border-r border-[var(--t-border)] px-4 py-3 text-xs font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Value Bridge</th>
+                <td class="px-4 py-3 text-center text-xs font-bold text-[var(--t-text-secondary)]" [attr.colspan]="(data()?.value_matrix?.tags?.length || 0) + 1">
+                  Benefits {{ formatMoney(data()?.value_bridge?.benefits_base) }} - {{ formatMoney(data()?.value_bridge?.benefits_high) }}
+                  <span class="mx-3 text-[var(--t-text-tertiary)]">|</span>
+                  Costs {{ formatMoney(data()?.value_bridge?.costs_plan) }}
+                  <span class="mx-3 text-[var(--t-text-tertiary)]">|</span>
+                  Net {{ formatMoney(data()?.value_bridge?.net_base) }} - {{ formatMoney(data()?.value_bridge?.net_high) }}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </section>
+
       <!-- Main Grid -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
@@ -449,9 +571,88 @@ import { RouterLink } from '@angular/router';
         </div>
       </div>
     }
+
+    @if (selectedMatrixCell()) {
+      <div class="overlay flex items-end justify-end bg-black/35 backdrop-blur-sm" (click)="closeMatrixCell()">
+        <aside
+          class="h-full w-full max-w-xl overflow-y-auto bg-[var(--t-surface)] shadow-2xl"
+          data-testid="dashboard-value-matrix-drilldown"
+          (click)="$event.stopPropagation()"
+        >
+          <div class="sticky top-0 z-10 border-b border-[var(--t-border)] bg-[var(--t-primary)] p-6 text-white">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <p class="text-[10px] font-black uppercase tracking-[0.2em] text-white/60">{{ selectedMatrixCell()?.tagLabel }}</p>
+                <h3 class="mt-2 text-2xl font-black">{{ selectedMatrixCell()?.rowLabel }}</h3>
+                <p class="mt-2 text-sm font-bold text-[var(--t-blue-light)]">{{ formatRange(selectedMatrixCell()?.cell) }}</p>
+              </div>
+              <button type="button" class="border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest hover:bg-white/10" aria-label="Close value matrix drilldown" (click)="closeMatrixCell()">Close</button>
+            </div>
+          </div>
+          <div class="space-y-3 p-6">
+            @for (initiative of selectedMatrixCell()?.cell?.initiatives || []; track initiative.id) {
+              <a
+                [routerLink]="['/initiatives', initiative.id]"
+                class="block border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4 transition-colors hover:border-[var(--t-accent)]"
+              >
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <p class="text-sm font-black text-[var(--t-text-primary)]">{{ initiative.name }}</p>
+                    <p class="mt-1 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">{{ initiative.initiative_code }} | {{ initiative.stage }}</p>
+                  </div>
+                  <span class="text-[10px] font-black uppercase" [style.color]="getRagColor(initiative.rag_status)">{{ initiative.rag_status }}</span>
+                </div>
+                <div class="mt-4 grid grid-cols-3 gap-2 text-center">
+                  <div class="bg-[var(--t-surface)] p-2">
+                    <p class="text-[9px] font-black uppercase text-[var(--t-text-tertiary)]">Base</p>
+                    <p class="text-xs font-black text-[var(--t-text-primary)]">{{ formatMoney(initiative.base) }}</p>
+                  </div>
+                  <div class="bg-[var(--t-surface)] p-2">
+                    <p class="text-[9px] font-black uppercase text-[var(--t-text-tertiary)]">High</p>
+                    <p class="text-xs font-black text-[var(--t-text-primary)]">{{ formatMoney(initiative.high) }}</p>
+                  </div>
+                  <div class="bg-[var(--t-surface)] p-2">
+                    <p class="text-[9px] font-black uppercase text-[var(--t-text-tertiary)]">Actual</p>
+                    <p class="text-xs font-black text-[var(--t-accent)]">{{ formatMoney(initiative.actual) }}</p>
+                  </div>
+                </div>
+              </a>
+            }
+            @if (!(selectedMatrixCell()?.cell?.initiatives || []).length) {
+              <p class="py-16 text-center text-sm font-semibold text-[var(--t-text-tertiary)]">No initiatives contribute value in this cell yet.</p>
+            }
+          </div>
+        </aside>
+      </div>
+    }
   `,
   styles: [`
     :host { display: block; }
+    .matrix-cell {
+      min-height: 4.25rem;
+      width: 100%;
+      border: 1px solid transparent;
+      padding: 0.75rem 0.5rem;
+      color: var(--t-text-primary);
+      transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+    }
+    .matrix-cell:hover {
+      border-color: var(--t-accent);
+      background: var(--t-accent-soft);
+      transform: translateY(-1px);
+    }
+    .matrix-cell-empty {
+      color: var(--t-text-tertiary);
+      opacity: 0.62;
+    }
+    .matrix-cell-total {
+      color: white;
+      background: rgba(255,255,255,0.08);
+    }
+    .matrix-cell-total:hover {
+      background: rgba(255,255,255,0.16);
+      border-color: rgba(255,255,255,0.28);
+    }
     .animate-pulse-subtle {
       animation: pulse-subtle 3s infinite ease-in-out;
     }
@@ -469,7 +670,8 @@ export class DashboardComponent implements OnInit {
   reporting = signal(false);
   reportReady = signal(false);
   showWelcome = signal(false);
-  filters = signal({ business_unit_id: '', workstream_id: '', rag_status: '' });
+  selectedMatrixCell = signal<any>(null);
+  filters = signal({ business_unit_id: '', workstream_id: '', rag_status: '', target_year: '' });
   heatmapLevels = ['high', 'medium', 'low'];
   stages = [
     { id: 'scoping', label: 'Scoping' },
@@ -510,8 +712,14 @@ export class DashboardComponent implements OnInit {
     this.loadDashboard();
   }
 
+  onTargetYearChange(event: Event) {
+    const value = (event.target as HTMLSelectElement).value;
+    this.filters.update(current => ({ ...current, target_year: value }));
+    this.loadDashboard();
+  }
+
   clearFilters() {
-    this.filters.set({ business_unit_id: '', workstream_id: '', rag_status: '' });
+    this.filters.set({ business_unit_id: '', workstream_id: '', rag_status: '', target_year: '' });
     this.loadDashboard();
   }
 
@@ -562,6 +770,28 @@ export class DashboardComponent implements OnInit {
       notation: 'compact',
       maximumFractionDigits: 1,
     }).format(amount);
+  }
+
+  formatRange(cell: any): string {
+    if (!cell) return '-';
+    const base = Number(cell.base || 0);
+    const high = Number(cell.high || 0);
+    if (base === 0 && high === 0) return '-';
+    return `${this.formatSignedMoney(cell.base)} - ${this.formatSignedMoney(cell.high)}`;
+  }
+
+  formatSignedMoney(value: string | null | undefined): string {
+    const amount = Number(value || 0);
+    const formatted = this.formatMoney(String(Math.abs(amount)));
+    return amount < 0 ? `(${formatted})` : `+${formatted}`;
+  }
+
+  openMatrixCell(rowLabel: string, tagLabel: string, cell: any) {
+    this.selectedMatrixCell.set({ rowLabel, tagLabel, cell });
+  }
+
+  closeMatrixCell() {
+    this.selectedMatrixCell.set(null);
   }
 
   generateReport() {
