@@ -4,6 +4,37 @@ Transmuter is a high-performance platform for managing digital transformation po
 
 ## 🚀 Quick Start
 
+### Prerequisites
+
+Install these tools before building from a fresh checkout:
+
+- Python 3.12+
+- [uv](https://docs.astral.sh/uv/) for the FastAPI backend
+- Node.js 22+ and npm 11+
+- Docker 28+ with Docker Compose v2 for production images
+- Access to a configured Supabase project and the required environment variables
+
+On this deployment host, Docker is available at `/usr/local/bin/docker`. On most
+developer machines, `docker` on `PATH` is enough.
+
+### Checkout
+
+```bash
+git clone https://github.com/venkateshbr/transmuter.git
+cd transmuter
+```
+
+### Environment File
+
+Create `.env` in the repository root from the example file:
+
+```bash
+cp .env.example .env
+```
+
+Fill in the Supabase, JWT, OpenRouter/Langfuse, Stripe, and payment settings for
+your environment. Do not commit `.env`; it contains secrets.
+
 ### Startup & Stop Scripts
 The project provides convenience scripts in the root folder for local development:
 
@@ -16,6 +47,128 @@ The project provides convenience scripts in the root folder for local developmen
 To monitor logs:
 ```bash
 tail -f frontend.log backend.log
+```
+
+The local development URLs are:
+
+- Frontend: `http://127.0.0.1:4300`
+- API: `http://127.0.0.1:8000`
+- API health: `http://127.0.0.1:8000/health`
+
+### Manual Local Backend Commands
+
+Use these commands when you want to run or verify the backend directly:
+
+```bash
+cd apps/api
+uv sync --extra dev
+uv run uvicorn app.main:app --reload --port 8000
+```
+
+In another terminal:
+
+```bash
+cd apps/api
+uv run python -m compileall app
+uv run --extra dev pytest tests/ -v
+uv run ruff check app/
+```
+
+### Manual Local Frontend Commands
+
+Use these commands when you want to run or verify the Angular app directly:
+
+```bash
+cd apps/web
+npm ci --legacy-peer-deps
+npm start -- --port 4300
+```
+
+In another terminal:
+
+```bash
+cd apps/web
+./node_modules/.bin/tsc -p tsconfig.app.json --noEmit
+npm run build
+npm run e2e:real
+```
+
+The real UI acceptance test expects the API and frontend to be running against
+deterministic sample data.
+
+## Production Docker Build
+
+Production uses two images:
+
+- `transmuter-api:prod`, exposed on host port `8001`
+- `transmuter-web:prod`, exposed on host port `4301`
+
+The production compose file is `infra/docker-compose.prod.yml`.
+
+### Build Images
+
+```bash
+docker compose -f infra/docker-compose.prod.yml build
+```
+
+If Docker is installed at `/usr/local/bin/docker`, use:
+
+```bash
+/usr/local/bin/docker compose -f infra/docker-compose.prod.yml build
+```
+
+### Start Or Recreate The Production Stack
+
+```bash
+TRANSMUTER_API_URL=https://transmuter-api.ishirock.com \
+docker compose -f infra/docker-compose.prod.yml --env-file .env up -d
+```
+
+Equivalent convenience script:
+
+```bash
+TRANSMUTER_API_URL=https://transmuter-api.ishirock.com ./start-prod.sh
+```
+
+### Rebuild Only The Frontend
+
+```bash
+docker compose -f infra/docker-compose.prod.yml build web
+docker compose -f infra/docker-compose.prod.yml up -d web
+```
+
+### Rebuild Only The API
+
+```bash
+docker compose -f infra/docker-compose.prod.yml build api
+docker compose -f infra/docker-compose.prod.yml up -d api
+```
+
+### Check Production Container Status
+
+```bash
+docker compose -f infra/docker-compose.prod.yml ps
+curl -fsS http://127.0.0.1:8001/health
+curl -fsS http://127.0.0.1:4301/health
+```
+
+If the Cloudflare tunnel is configured, public health checks should also pass:
+
+```bash
+curl -fsS https://transmuter-api.ishirock.com/health
+curl -fsS https://transmuter.ishirock.com/health
+```
+
+### Stop Production Stack
+
+```bash
+docker compose -f infra/docker-compose.prod.yml --env-file .env down
+```
+
+Equivalent convenience script:
+
+```bash
+./stop-prod.sh
 ```
 
 ## 🛠 Technology Stack
