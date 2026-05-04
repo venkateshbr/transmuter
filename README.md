@@ -35,6 +35,9 @@ cp .env.example .env
 Fill in the Supabase, JWT, OpenRouter/Langfuse, Stripe, and payment settings for
 your environment. Do not commit `.env`; it contains secrets.
 
+For the complete environment variable reference, requiredness, and pre-run
+checklist, see [docs/team/ENVIRONMENT_CONFIGURATION.md](docs/team/ENVIRONMENT_CONFIGURATION.md).
+
 ### Startup & Stop Scripts
 The project provides convenience scripts in the root folder for local development:
 
