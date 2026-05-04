@@ -46,3 +46,27 @@ For SaaS or tenant-scoped systems:
 - No raw PII is sent to external LLMs.
 - Agent write actions require HITL approval unless explicitly classified as safe.
 
+## Customer Onboarding / Payments Gate
+
+For signup, subscription, payment, webhook, tenant provisioning, or billing portal
+work:
+
+- Prahari review is required.
+- Use sandbox credentials and provider test fixtures during development.
+- Verify webhook signatures; never trust unsigned provider callbacks.
+- Store provider customer/subscription IDs idempotently.
+- Make provisioning idempotent for duplicate webhook delivery.
+- Test the public frontend flow first, then validate backend records.
+- Verify the initial admin can log in and configure the tenant.
+- Verify billing status is visible to both tenant admins and platform admins.
+- Document cleanup for demo tenants and provider-side test customers.
+
+## RBAC Regression Gate
+
+For role or permission work:
+
+- Test through the frontend as each role.
+- Validate forbidden UI actions are hidden or disabled.
+- Validate forbidden API calls return 403 or equivalent.
+- Test direct URL access, not only navigation menus.
+- Confirm dashboards and detail pages only show permitted data.

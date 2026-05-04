@@ -16,6 +16,8 @@ it can be reused across projects.
 | Money, multi-tenancy, AI guardrails | `core/quality-gates.md` |
 | Frontend design skill | `skills/frontend-design-skill.md` |
 | Package/API verification habit | `skills/package-verification-skill.md` |
+| Stripe onboarding and webhook regression lessons | `core/saas-onboarding-payments.md`, `templates/E2E_ONBOARDING_REGRESSION.md` |
+| "Always validate through frontend" acceptance habit | `core/testing-standard.md` |
 | Persistent project context docs | `templates/PROJECT_CONTEXT.md` |
 | Domain packs | `templates/DOMAIN_PACK.yaml` |
 | Codex/Claude/Gemini instructions | `adapters/*` |
@@ -45,4 +47,3 @@ Poor additions:
 - A single project's staging URL.
 - A one-off customer workflow.
 - Any secret or copied production config.
-

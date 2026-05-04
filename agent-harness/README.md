@@ -16,6 +16,8 @@ tool naturally reads.
   security, testing, deployment, and final review.
 - Security and integration review gates.
 - Real acceptance testing standards, not smoke-test theater.
+- SaaS onboarding, payments, webhook, RBAC, and tenant-cleanup regression
+  playbooks.
 - Architecture and code quality patterns.
 - Reusable skill templates.
 - Model-specific adapter prompts for Codex, Claude Code, Gemini, and OpenCode.
@@ -34,6 +36,7 @@ agent-harness/
     architecture-patterns.md
     security-review.md
     testing-standard.md
+    saas-onboarding-payments.md
   skills/
     SKILL_TEMPLATE.md
     frontend-design-skill.md
@@ -126,8 +129,11 @@ Every request should start the same way:
 6. Verify with real acceptance evidence.
 7. Document residual risk and close through the issue lifecycle.
 
+For customer onboarding, billing, role access, and other revenue-critical flows,
+acceptance must include the full user journey through the frontend, then backend
+validation that the records, totals, subscriptions, and permissions are correct.
+
 ## Naming
 
 You can call this an **Agent Harness**, **AI Operating System**, or **Agentic SDLC
 Harness**. In code and docs, `agent-harness` is short, portable, and tool-neutral.
-

@@ -25,6 +25,8 @@ core_protocols:
     purpose: "Prahari security trigger and checklist."
   - path: core/testing-standard.md
     purpose: "Real acceptance testing standard."
+  - path: core/saas-onboarding-payments.md
+    purpose: "Customer onboarding, subscription, webhook, RBAC, and cleanup playbook."
 
 model_adapters:
   codex: adapters/codex/AGENTS.md
@@ -38,6 +40,7 @@ templates:
   issue_templates: templates/ISSUE_TEMPLATES.md
   pr_template: templates/PR_TEMPLATE.md
   environment_configuration: templates/ENVIRONMENT_CONFIGURATION.md
+  onboarding_regression: templates/E2E_ONBOARDING_REGRESSION.md
 
 customization_points:
   - "Repository URL and canonical issue tracker"
@@ -53,4 +56,3 @@ forbidden_content:
   - "Temporary passwords"
   - "Raw PII"
   - "Project-specific hostnames unless kept in project context"
-
