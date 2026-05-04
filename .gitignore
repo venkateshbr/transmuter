@@ -37,3 +37,6 @@ supabase/.branches/
 
 # Docker
 *.log
+
+# Local operational scratch scripts and one-off diagnostics
+scratch/
