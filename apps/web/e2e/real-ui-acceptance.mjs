@@ -103,9 +103,9 @@ async function evalJs(page, expression) {
 async function clickText(page, text) {
   await evalJs(page, `
     (() => {
-      const text = ${JSON.stringify(text)};
+      const text = ${JSON.stringify(text)}.toLowerCase();
       const el = [...document.querySelectorAll('button,a')]
-        .find(node => node.textContent.trim().includes(text));
+        .find(node => node.textContent.trim().toLowerCase().includes(text));
       if (!el) throw new Error('Missing clickable text: ' + text);
       el.click();
       return true;
@@ -116,9 +116,9 @@ async function clickText(page, text) {
 async function clickVisibleText(page, text) {
   await evalJs(page, `
     (() => {
-      const text = ${JSON.stringify(text)};
+      const text = ${JSON.stringify(text)}.toLowerCase();
       const el = [...document.querySelectorAll('button,a,[role="button"]')]
-        .find(node => node.textContent.trim().includes(text));
+        .find(node => node.textContent.trim().toLowerCase().includes(text));
       if (!el) throw new Error('Missing visible clickable text: ' + text);
       el.click();
       return true;
@@ -215,9 +215,17 @@ async function main() {
     );
 
     await waitFor(
-      () => evalJs(page, "document.body.innerText.includes('Transmuter')"),
+      () => evalJs(page, "document.body.innerText.toLowerCase().includes('transmuter')"),
       'dashboard content',
     );
+    await evalJs(page, `
+      (() => {
+        const onboarding = [...document.querySelectorAll('button')]
+          .find(node => node.textContent.trim().includes('Enter Command Center'));
+        if (onboarding) onboarding.click();
+        return true;
+      })()
+    `);
     await waitFor(
       () => evalJs(page, `
         [
@@ -342,15 +350,14 @@ async function main() {
 
     await evalJs(page, `
       (() => {
-        const button = [...document.querySelectorAll('button')]
-          .find(node => node.textContent.includes('Transmuter'));
+        const button = document.querySelector('button[aria-label="Open Transmuter assistant"]');
         if (!button) throw new Error('Missing Transmuter assistant button');
         button.click();
         return true;
       })()
     `);
     await waitFor(
-      () => evalJs(page, "document.body.innerText.includes('Ask Transmuter') && document.body.innerText.includes('Show me at-risk initiatives')"),
+      () => evalJs(page, "document.body.innerText.toLowerCase().includes('ask transmuter') && document.body.innerText.includes('Show me at-risk initiatives')"),
       'transmuter assistant panel',
     );
     await clickText(page, 'Show me at-risk initiatives');
@@ -378,7 +385,7 @@ async function main() {
     try {
       await page.send('Page.navigate', { url: `${uiBaseUrl}/people` });
       await waitFor(
-        () => evalJs(page, "document.body.innerText.includes('People Insight') && document.body.innerText.includes('Invite Member')"),
+        () => evalJs(page, "document.body.innerText.toLowerCase().includes('people insight') && document.body.innerText.toLowerCase().includes('invite member')"),
         'people directory',
         20_000,
       );
@@ -510,13 +517,13 @@ async function main() {
     try {
       await page.send('Page.navigate', { url: `${uiBaseUrl}/initiatives/pipeline` });
       await waitFor(
-        () => evalJs(page, "document.body.innerText.includes('New Initiative')"),
+        () => evalJs(page, "document.body.innerText.toLowerCase().includes('new initiative')"),
         'pipeline create action',
         20_000,
       );
       await clickText(page, 'New Initiative');
       await waitFor(
-        () => evalJs(page, "location.pathname === '/initiatives/new' && document.body.innerText.includes('Create Initiative')"),
+        () => evalJs(page, "location.pathname === '/initiatives/new' && document.body.innerText.toLowerCase().includes('create initiative')"),
         'initiative creation chooser',
         20_000,
       );
@@ -711,6 +718,7 @@ async function main() {
       }, 'portfolio governance approval persistence');
 
       let teamUserId;
+      let teamUserLabel;
       const summaryText = `UI acceptance final summary ${Date.now()}`;
       const lessonsText = `UI acceptance lessons ${Date.now()}`;
 
@@ -729,9 +737,14 @@ async function main() {
         () => evalJs(page, "document.querySelector('select[aria-label=\"Select owner\"]')?.options.length > 1"),
         'owner options loaded',
       );
-      teamUserId = await evalJs(page, `
-        (() => document.querySelector('select[aria-label="Select owner"]').options[1].value)()
-      `);
+      const teamUser = JSON.parse(await evalJs(page, `
+        (() => {
+          const option = document.querySelector('select[aria-label="Select owner"]').options[1];
+          return JSON.stringify({ id: option.value, label: option.textContent.trim() });
+        })()
+      `));
+      teamUserId = teamUser.id;
+      teamUserLabel = teamUser.label.replace(/\s+\(.+\)$/, '');
       await evalJs(page, `
         (() => {
           const select = document.querySelector('select[aria-label="Select owner"]');
@@ -775,11 +788,19 @@ async function main() {
         return team.data.some(member => member.user_id === teamUserId && member.role === 'reviewer');
       }, 'team member add persistence');
       await evalJs(page, `
-        (() => {
-          window.confirm = () => true;
-          const remove = document.querySelector('button[aria-label="Remove team member"]');
+        (async () => {
+          const label = ${JSON.stringify(teamUserLabel)};
+          const card = [...document.querySelectorAll('.card')]
+            .find(node => node.textContent.includes(label) && node.textContent.toLowerCase().includes('reviewer'));
+          if (!card) throw new Error('Missing added team member card: ' + label);
+          const remove = card.querySelector('button[aria-label="Remove team member"]');
           if (!remove) throw new Error('Missing remove team member button');
           remove.click();
+          await new Promise(resolve => setTimeout(resolve, 0));
+          const confirm = [...card.querySelectorAll('button')]
+            .find(button => button.textContent.trim().toLowerCase() === 'remove');
+          if (!confirm) throw new Error('Missing confirm remove button');
+          confirm.click();
           return true;
         })()
       `);

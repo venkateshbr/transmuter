@@ -30,7 +30,7 @@ import { ApiService } from '../../../../core/services/api.service';
           <p class="text-xs font-medium text-[var(--t-text-secondary)] mt-2">Cumulative multi-year business case yield.</p>
         </div>
 
-        <div class="card p-8 bg-gradient-to-br from-[var(--t-accent)] to-[#a855f7] text-white border-none shadow-xl shadow-purple-500/20">
+        <div class="card p-8 bg-gradient-to-br from-[var(--t-accent)] to-[var(--t-blue-light)] text-white border-none shadow-xl shadow-blue-900/10">
           <p class="text-[10px] font-black opacity-70 uppercase tracking-widest mb-2">Total Realized Value</p>
           <h2 class="text-4xl font-black">
             {{ formatCurrency(summary()?.realized_value) }}

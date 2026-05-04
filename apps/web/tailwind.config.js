@@ -7,19 +7,19 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'sans-serif'],
+        sans: ['Libre Franklin', 'Franklin Gothic Medium', 'Arial Narrow', 'Arial', 'sans-serif'],
       },
       colors: {
         brand: {
-          primary:  '#7c3aed',
-          hover:    '#6d28d9',
-          light:    '#a78bfa',
-          muted:    '#ede9fe',
-          subtle:   '#f5f3ff',
-          accent:   '#a855f7',
-          success:  '#10b981',
-          warning:  '#f59e0b',
-          danger:   '#ef4444',
+          primary:  '#071f3c',
+          hover:    '#063962',
+          light:    '#63a9d8',
+          muted:    '#d7e8f3',
+          subtle:   '#f4f6f8',
+          accent:   '#0c4f86',
+          success:  '#166534',
+          warning:  '#b7791f',
+          danger:   '#b42318',
         },
       },
     },

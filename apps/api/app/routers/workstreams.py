@@ -1,48 +1,53 @@
 from typing import Annotated
+
 from fastapi import APIRouter, Depends
-from app.core.auth import CurrentUser, get_current_user
+
+from app.core.auth import CurrentUser, get_current_user, require_role
 from app.core.database import get_supabase_admin
+from app.services.workstream import WorkstreamService
 
 router = APIRouter(prefix="/workstreams", tags=["workstreams"])
 
+
+def _svc(current_user: Annotated[CurrentUser, Depends(get_current_user)]) -> WorkstreamService:
+    return WorkstreamService(get_supabase_admin(), current_user.tenant_id)
+
+
 @router.get("")
-async def list_workstreams(current_user: Annotated[CurrentUser, Depends(get_current_user)]):
+async def list_workstreams(
+    svc: Annotated[WorkstreamService, Depends(_svc)],
+) -> dict[str, object]:
     """List all workstreams for the tenant."""
-    client = get_supabase_admin()
-    tid = str(current_user.tenant_id)
-    res = client.table("workstreams").select("*").eq("tenant_id", tid).order("name").execute()
-    return {"data": res.data}
+    return svc.list_workstreams()
+
 
 @router.post("", status_code=201)
 async def create_workstream(
-    body: dict,
-    current_user: Annotated[CurrentUser, Depends(get_current_user)]
-):
+    body: dict[str, object],
+    svc: Annotated[WorkstreamService, Depends(_svc)],
+    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+) -> dict[str, object]:
     """Create a new workstream."""
-    client = get_supabase_admin()
-    payload = {**body, "tenant_id": str(current_user.tenant_id)}
-    res = client.table("workstreams").insert(payload).execute()
-    return res.data[0]
+    return svc.create_workstream(body)
+
 
 @router.put("/{workstream_id}")
 async def update_workstream(
     workstream_id: str,
-    body: dict,
-    current_user: Annotated[CurrentUser, Depends(get_current_user)]
-):
+    body: dict[str, object],
+    svc: Annotated[WorkstreamService, Depends(_svc)],
+    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+) -> dict[str, object]:
     """Update an existing workstream."""
-    client = get_supabase_admin()
-    tid = str(current_user.tenant_id)
-    res = client.table("workstreams").update(body).eq("id", workstream_id).eq("tenant_id", tid).execute()
-    return res.data[0]
+    return svc.update_workstream(workstream_id, body)
+
 
 @router.delete("/{workstream_id}", status_code=204)
 async def delete_workstream(
     workstream_id: str,
-    current_user: Annotated[CurrentUser, Depends(get_current_user)]
-):
+    svc: Annotated[WorkstreamService, Depends(_svc)],
+    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+) -> None:
     """Delete a workstream."""
-    client = get_supabase_admin()
-    tid = str(current_user.tenant_id)
-    client.table("workstreams").delete().eq("id", workstream_id).eq("tenant_id", tid).execute()
+    svc.delete_workstream(workstream_id)
     return None

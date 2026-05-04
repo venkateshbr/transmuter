@@ -4,10 +4,15 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 
 from app.core.auth import CurrentUser, get_current_user
 from app.core.database import get_supabase_admin
+from app.core.rbac import (
+    assert_can_manage_initiatives,
+    assert_can_view_initiative,
+    assert_can_view_portfolio,
+)
 from app.domain.governance import (
     GateCriteriaState,
     GateDecisionPatch,
@@ -35,8 +40,10 @@ def _svc(
 )
 async def get_governance_status(
     id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[GovernanceService, Depends(_svc)],
 ) -> GovernanceStatusResponse:
+    assert_can_view_initiative(get_supabase_admin(), current_user, id)
     return svc.get_status(id)
 
 
@@ -46,8 +53,10 @@ async def get_governance_status(
 )
 async def get_initiative_gates(
     id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[GovernanceService, Depends(_svc)],
 ) -> GovernanceStatusResponse:
+    assert_can_view_initiative(get_supabase_admin(), current_user, id)
     return svc.get_status(id)
 
 
@@ -57,8 +66,10 @@ async def get_initiative_gates(
 )
 async def list_gate_criteria(
     gate_number: int,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[GovernanceService, Depends(_svc)],
 ) -> list[GateCriteriaState]:
+    assert_can_view_portfolio(current_user)
     return svc.list_criteria(gate_number)
 
 
@@ -69,8 +80,10 @@ async def list_gate_criteria(
 async def list_initiative_gate_criteria(
     id: str,
     gate_number: int,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[GovernanceService, Depends(_svc)],
 ) -> list[GateCriteriaState]:
+    assert_can_view_initiative(get_supabase_admin(), current_user, id)
     return svc.list_criteria(gate_number, id)
 
 
@@ -83,8 +96,10 @@ async def submit_gate(
     id: str,
     gate_number: int,
     body: GateSubmissionCreate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[GovernanceService, Depends(_svc)],
 ) -> GateSubmissionItem:
+    assert_can_manage_initiatives(current_user)
     return svc.submit_gate(id, gate_number, body)
 
 
@@ -93,8 +108,10 @@ async def submit_gate(
     response_model=list[GateSubmissionItem],
 )
 async def list_submissions(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[GovernanceService, Depends(_svc)],
 ) -> list[GateSubmissionItem]:
+    assert_can_view_portfolio(current_user)
     return svc.list_submissions()
 
 
@@ -103,8 +120,10 @@ async def list_submissions(
     response_model=PortfolioGovernanceResponse,
 )
 async def get_portfolio_governance(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[GovernanceService, Depends(_svc)],
 ) -> PortfolioGovernanceResponse:
+    assert_can_view_portfolio(current_user)
     return svc.get_portfolio_governance()
 
 
@@ -118,15 +137,7 @@ async def record_gate_decision(
     svc: Annotated[GovernanceService, Depends(_svc)],
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> GateSubmissionItem:
-    # RBAC: Only Transformation Office can decide on gates
-    # We check user metadata or role assigned in Supabase.
-    # In this app, we assume 'transformation_office' role is needed.
-    if current_user.role != "transformation_office":
-         raise HTTPException(
-             status_code=status.HTTP_403_FORBIDDEN,
-             detail="Only Transformation Office members can record gate decisions."
-         )
-    
+    assert_can_manage_initiatives(current_user)
     return svc.record_decision(submission_id, body)
 
 
@@ -140,10 +151,5 @@ async def post_gate_decision(
     svc: Annotated[GovernanceService, Depends(_svc)],
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> GateSubmissionItem:
-    if current_user.role != "transformation_office":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only Transformation Office members can record gate decisions.",
-        )
-
+    assert_can_manage_initiatives(current_user)
     return svc.record_decision(submission_id, body)

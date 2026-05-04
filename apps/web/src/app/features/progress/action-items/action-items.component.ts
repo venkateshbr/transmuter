@@ -123,7 +123,7 @@ import { RouterLink } from '@angular/router';
 
             <div class="mt-6 pt-6 border-t border-[var(--t-border)] flex items-center justify-between">
               <div class="flex items-center gap-2">
-                <div class="w-7 h-7 rounded-full bg-gradient-to-br from-[var(--t-accent)] to-[#a855f7] flex items-center justify-center text-[10px] text-white font-black shadow-sm">
+                <div class="w-7 h-7 rounded-full bg-gradient-to-br from-[var(--t-accent)] to-[var(--t-blue-light)] flex items-center justify-center text-[10px] text-white font-black shadow-sm">
                   {{ (item.users?.display_name || 'U').substring(0,1) }}
                 </div>
                 <div class="flex flex-col">

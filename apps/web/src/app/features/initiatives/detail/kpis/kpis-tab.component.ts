@@ -56,9 +56,18 @@ import { ApiService } from '../../../../core/services/api.service';
                    <button class="btn-ghost p-1.5" title="Edit KPI" aria-label="Edit KPI" (click)="onOpenEditModal(kpi)">
                      <span class="material-icons text-sm">edit</span>
                    </button>
-                   <button class="btn-ghost p-1.5 text-red-500 hover:bg-red-50" title="Delete KPI" aria-label="Delete KPI" (click)="onDeleteKpi(kpi.id)">
-                     <span class="material-icons text-sm">delete</span>
-                   </button>
+                   @if (confirmDeleteId() === kpi.id) {
+                     <button class="btn-ghost p-1.5 text-red-600 bg-red-50 font-black text-[9px] uppercase tracking-widest px-3 rounded-lg" (click)="onDeleteKpi(kpi.id)">
+                       Confirm
+                     </button>
+                     <button class="btn-ghost p-1.5 text-[var(--t-text-tertiary)]" (click)="confirmDeleteId.set(null)">
+                       <span class="material-icons text-sm">close</span>
+                     </button>
+                   } @else {
+                     <button class="btn-ghost p-1.5 text-red-500 hover:bg-red-50" title="Delete KPI" aria-label="Delete KPI" (click)="confirmDeleteId.set(kpi.id)">
+                       <span class="material-icons text-sm">delete</span>
+                     </button>
+                   }
                 </div>
               </div>
             </div>
@@ -205,6 +214,7 @@ export class KpisTabComponent implements OnInit {
     value_high: string;
     value_actual: string;
   }> = {};
+  confirmDeleteId = signal<string | null>(null);
 
   // Modal state
   showAddModal = signal(false);
@@ -279,10 +289,15 @@ export class KpisTabComponent implements OnInit {
   }
 
   onDeleteKpi(kpiId: string) {
-    if (!confirm('Delete this KPI and its entries?')) return;
     this.api.delete(`/initiatives/${this.initiativeId}/kpis/${kpiId}`).subscribe({
-      next: () => this.fetchKpis(),
-      error: () => alert('Failed to delete KPI.')
+      next: () => {
+        this.confirmDeleteId.set(null);
+        this.fetchKpis();
+      },
+      error: () => {
+        this.confirmDeleteId.set(null);
+        alert('Failed to delete KPI.');
+      }
     });
   }
 

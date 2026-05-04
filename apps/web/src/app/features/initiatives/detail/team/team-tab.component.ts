@@ -27,7 +27,7 @@ import { ApiService } from '../../../../core/services/api.service';
         <!-- Initiative Owner -->
         <div class="card p-8 border-t-4 border-[var(--t-accent)] relative group">
           <div class="flex items-center gap-6">
-            <div class="w-20 h-20 rounded-full bg-gradient-to-br from-[var(--t-accent)] to-[#a855f7] flex items-center justify-center text-3xl text-white font-black shadow-xl">
+            <div class="w-20 h-20 rounded-full bg-gradient-to-br from-[var(--t-accent)] to-[var(--t-blue-light)] flex items-center justify-center text-3xl text-white font-black shadow-xl">
               {{ (initiative()?.owner_name || 'U').substring(0,1) }}
             </div>
             <div>
@@ -84,11 +84,18 @@ import { ApiService } from '../../../../core/services/api.service';
                    </span>
                 </div>
               </div>
-              <button (click)="removeMember(member.id)"
-                      class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity text-red-500 hover:scale-110"
-                      aria-label="Remove team member">
-                <span class="material-icons text-sm">person_remove</span>
-              </button>
+              @if (confirmDeleteId() === member.id) {
+                <div class="flex gap-2">
+                  <button (click)="removeMember(member.id)" class="text-[9px] font-black uppercase text-red-600 bg-red-50 px-2 py-1 rounded">Remove</button>
+                  <button (click)="confirmDeleteId.set(null)" class="text-[9px] font-black uppercase text-[var(--t-text-tertiary)]">Cancel</button>
+                </div>
+              } @else {
+                <button (click)="confirmDeleteId.set(member.id)"
+                        class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity text-red-500 hover:scale-110"
+                        aria-label="Remove team member">
+                  <span class="material-icons text-sm">person_remove</span>
+                </button>
+              }
             </div>
           }
           
@@ -184,6 +191,7 @@ export class TeamTabComponent implements OnInit {
   showAddModal = signal(false);
   ownerModal = signal<'owner' | 'group' | null>(null);
   selectedOwnerId = '';
+  confirmDeleteId = signal<string | null>(null);
 
   newMember = {
     user_id: null as string | null,
@@ -245,8 +253,8 @@ export class TeamTabComponent implements OnInit {
   }
 
   removeMember(memberId: string) {
-    if (!confirm('Are you sure you want to remove this team member?')) return;
     this.api.delete(`/initiatives/${this.initiativeId}/team/${memberId}`).subscribe(() => {
+      this.confirmDeleteId.set(null);
       this.fetchMembers();
     });
   }

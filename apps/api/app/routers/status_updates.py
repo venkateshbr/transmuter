@@ -8,6 +8,11 @@ from fastapi import APIRouter, Depends
 
 from app.core.auth import CurrentUser, get_current_user, require_role
 from app.core.database import get_supabase_admin
+from app.core.rbac import (
+    assert_can_manage_initiatives,
+    assert_can_view_initiative,
+    assert_can_view_portfolio,
+)
 from app.domain.status_updates import (
     NudgeCreate,
     NudgeItem,
@@ -24,13 +29,23 @@ from app.services.status_update import StatusUpdateService
 router = APIRouter(tags=["status_updates"])
 
 
+def _svc(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> StatusUpdateService:
+    return StatusUpdateService(
+        get_supabase_admin(), current_user.tenant_id, current_user.id
+    )
+
+
 @router.get(
     "/status-updates/portfolio",
     response_model=list[StatusUpdateItem],
 )
 async def list_portfolio_updates(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[StatusUpdateService, Depends(_svc)],
 ) -> list[StatusUpdateItem]:
+    assert_can_view_portfolio(current_user)
     return svc.list_recent_updates()
 
 
@@ -39,8 +54,10 @@ async def list_portfolio_updates(
     response_model=StatusComplianceResponse,
 )
 async def get_compliance_stats(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[StatusUpdateService, Depends(_svc)],
 ) -> StatusComplianceResponse:
+    assert_can_view_portfolio(current_user)
     return svc.get_compliance_stats()
 
 
@@ -49,8 +66,10 @@ async def get_compliance_stats(
     response_model=StatusComplianceResponse,
 )
 async def get_portfolio_compliance_stats(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[StatusUpdateService, Depends(_svc)],
 ) -> StatusComplianceResponse:
+    assert_can_view_portfolio(current_user)
     return svc.get_compliance_stats()
 
 
@@ -61,8 +80,10 @@ async def get_portfolio_compliance_stats(
 async def nudge_initiative(
     initiative_id: str,
     body: NudgeCreate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[StatusUpdateService, Depends(_svc)],
 ) -> NudgeResponse:
+    assert_can_manage_initiatives(current_user)
     return svc.nudge_owner(initiative_id, body)
 
 
@@ -71,8 +92,10 @@ async def nudge_initiative(
     response_model=list[NudgeItem],
 )
 async def list_nudges(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[StatusUpdateService, Depends(_svc)],
 ) -> list[NudgeItem]:
+    assert_can_view_portfolio(current_user)
     return svc.list_nudges()
 
 
@@ -89,22 +112,16 @@ async def run_daily_nudges(
     return svc.nudge_non_compliant_initiatives()
 
 
-def _svc(
-    current_user: Annotated[CurrentUser, Depends(get_current_user)],
-) -> StatusUpdateService:
-    return StatusUpdateService(
-        get_supabase_admin(), current_user.tenant_id, current_user.id
-    )
-
-
 @router.get(
     "/initiatives/{initiative_id}/status-updates",
     response_model=StatusUpdateListResponse,
 )
 async def list_status_updates(
     initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[StatusUpdateService, Depends(_svc)],
 ) -> StatusUpdateListResponse:
+    assert_can_view_initiative(get_supabase_admin(), current_user, initiative_id)
     return svc.list_history(initiative_id)
 
 
@@ -114,8 +131,10 @@ async def list_status_updates(
 )
 async def get_status_update_draft(
     initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[StatusUpdateService, Depends(_svc)],
 ) -> StatusUpdateItem | None:
+    assert_can_view_initiative(get_supabase_admin(), current_user, initiative_id)
     return svc.get_draft(initiative_id)
 
 
@@ -125,8 +144,10 @@ async def get_status_update_draft(
 )
 async def generate_status_update_draft(
     initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[StatusUpdateService, Depends(_svc)],
 ) -> StatusUpdateDraftSuggestion:
+    assert_can_manage_initiatives(current_user)
     return svc.generate_draft(initiative_id)
 
 
@@ -138,8 +159,10 @@ async def generate_status_update_draft(
 async def create_status_update(
     initiative_id: str,
     body: StatusUpdateCreate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[StatusUpdateService, Depends(_svc)],
 ) -> StatusUpdateItem:
+    assert_can_manage_initiatives(current_user)
     return svc.create_update(initiative_id, body)
 
 
@@ -151,8 +174,10 @@ async def patch_status_update(
     initiative_id: str,
     update_id: str,
     body: StatusUpdatePatch,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[StatusUpdateService, Depends(_svc)],
 ) -> StatusUpdateItem:
+    assert_can_manage_initiatives(current_user)
     return svc.patch_update(update_id, body)
 
 
@@ -163,8 +188,10 @@ async def patch_status_update(
 async def submit_status_update(
     initiative_id: str,
     update_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[StatusUpdateService, Depends(_svc)],
 ) -> StatusUpdateItem:
+    assert_can_manage_initiatives(current_user)
     return svc.submit_update(update_id)
 
 
@@ -173,7 +200,10 @@ async def submit_status_update(
     status_code=204,
 )
 async def delete_status_update(
+    initiative_id: str,
     update_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[StatusUpdateService, Depends(_svc)],
 ) -> None:
+    assert_can_manage_initiatives(current_user)
     svc.delete_update(update_id)

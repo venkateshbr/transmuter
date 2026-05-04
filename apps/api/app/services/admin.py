@@ -1,0 +1,180 @@
+"""Admin service — organization settings and governance configuration."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from typing import Any
+from uuid import UUID
+
+from supabase import Client
+
+from app.repositories.audit import AuditRepository
+from app.repositories.governance import GovernanceRepository
+from app.repositories.organization import OrganizationRepository
+from app.core.config import settings
+from app.services.billing import stripe_price_configuration
+
+
+class AdminService:
+    def __init__(self, client: Client, tenant_id: UUID) -> None:
+        self._org_repo = OrganizationRepository(client, tenant_id)
+        self._gov_repo = GovernanceRepository(client, tenant_id)
+        self._audit_repo = AuditRepository(client, tenant_id)
+        self._c = client
+        self._tid = str(tenant_id)
+
+    # ── Organization Settings ──────────────────────────────────────
+
+    def get_settings(self) -> dict[str, Any]:
+        org = self._org_repo.get_organization()
+        if not org:
+            return {}
+        return {
+            "name": org["name"],
+            "logo_url": org.get("logo_url"),
+            "settings": org.get("settings", {}),
+        }
+
+    def get_billing_status(self) -> dict[str, Any]:
+        org = self._org_repo.get_organization()
+        settings = (org or {}).get("settings") or {}
+        billing = settings.get("billing") or {}
+        subscription_response = (
+            self._c.table("tenant_subscriptions")
+            .select("*, subscription_plans(code,name,amount_cents,currency,billing_interval,stripe_price_id,user_limit_min,user_limit_max)")
+            .eq("tenant_id", self._tid)
+            .maybe_single()
+            .execute()
+        )
+        subscription = subscription_response.data if subscription_response else None
+        plan = (subscription or {}).get("subscription_plans") or {}
+        active_users = (
+            self._c.table("users")
+            .select("id", count="exact")
+            .eq("tenant_id", self._tid)
+            .eq("status", "active")
+            .execute()
+        )
+        return {
+            "provider": billing.get("provider", "stripe"),
+            "subscription_status": (subscription or {}).get("status") or billing.get("subscription_status", "not_configured"),
+            "checkout_status": (subscription or {}).get("checkout_status") or billing.get("checkout_status"),
+            "payment_status": (subscription or {}).get("payment_status") or billing.get("payment_status"),
+            "planned_user_count": (subscription or {}).get("planned_user_count") or billing.get("planned_user_count"),
+            "active_user_count": active_users.count or 0,
+            "price_per_user_cents": billing.get("price_per_user_cents"),
+            "amount_cents": plan.get("amount_cents") or billing.get("amount_cents"),
+            "currency": plan.get("currency") or billing.get("currency", "usd"),
+            "billing_interval": plan.get("billing_interval") or billing.get("billing_interval", "month"),
+            "plan_code": plan.get("code") or billing.get("plan_code"),
+            "plan_name": plan.get("name") or billing.get("plan_name"),
+            "stripe_price_id": plan.get("stripe_price_id"),
+            "stripe_customer_id": (subscription or {}).get("stripe_customer_id") or billing.get("customer_id"),
+            "stripe_subscription_id": (subscription or {}).get("stripe_subscription_id") or billing.get("subscription_id"),
+            "stripe_checkout_session_id": (subscription or {}).get("stripe_checkout_session_id") or billing.get("checkout_session_id"),
+            "last_event_at": (subscription or {}).get("updated_at") or billing.get("last_event_at"),
+            "stripe_price_configuration": stripe_price_configuration(),
+        }
+
+    def get_launch_readiness(self) -> dict[str, Any]:
+        checks = [
+            self._check("supabase_url", bool(settings.supabase_url), "Supabase URL is configured."),
+            self._check("supabase_service_key", bool(settings.supabase_service_key), "Supabase service key is configured."),
+            self._check("jwt_secret", len(settings.jwt_secret) >= 32, "JWT secret is at least 32 characters."),
+            self._check("payment_provider", settings.payment_provider == "stripe", "Stripe is the active payment provider."),
+            self._check("stripe_secret_key", settings.stripe_secret_key.startswith("sk_"), "Stripe secret key is configured."),
+            self._check("stripe_publishable_key", settings.stripe_publishable_key.startswith("pk_"), "Stripe publishable key is configured."),
+            self._check("stripe_webhook_secret", settings.stripe_webhook_secret.startswith("whsec_"), "Stripe webhook secret is configured."),
+            self._check("stripe_price_team_monthly", bool(settings.stripe_price_team_monthly), "Team monthly Stripe Price ID is configured."),
+            self._check("stripe_price_team_annual", bool(settings.stripe_price_team_annual), "Team annual Stripe Price ID is configured."),
+            self._check("stripe_price_business_monthly", bool(settings.stripe_price_business_monthly), "Business monthly Stripe Price ID is configured."),
+            self._check("stripe_price_business_annual", bool(settings.stripe_price_business_annual), "Business annual Stripe Price ID is configured."),
+            self._check("encryption_key", bool(settings.encryption_key), "Encryption key is configured."),
+            self._check("openrouter_api_key", bool(settings.openrouter_api_key), "OpenRouter key is configured for AI."),
+        ]
+        for table in (
+            "organizations",
+            "users",
+            "initiatives",
+            "financial_entries",
+            "financial_cost_lines",
+            "kpis",
+            "risks",
+            "milestones",
+            "meetings",
+            "action_items",
+            "subscription_plans",
+            "signup_intents",
+            "tenant_subscriptions",
+        ):
+            checks.append(self._table_check(table))
+
+        billing = self.get_billing_status()
+        checks.append(
+            self._check(
+                "tenant_billing_status",
+                billing.get("subscription_status") not in {None, "", "not_configured"},
+                "Tenant billing status has been initialized.",
+                severity="warning",
+            )
+        )
+        blockers = [check for check in checks if check["severity"] == "blocker" and not check["passed"]]
+        warnings = [check for check in checks if check["severity"] == "warning" and not check["passed"]]
+        return {
+            "ready": not blockers,
+            "blockers": len(blockers),
+            "warnings": len(warnings),
+            "checks": checks,
+        }
+
+    def update_settings(self, data: dict[str, Any]) -> dict[str, Any]:
+        patch = {}
+        if "name" in data:
+            patch["name"] = data["name"]
+        if "logo_url" in data:
+            patch["logo_url"] = data["logo_url"]
+        if "settings" in data:
+            patch["settings"] = data["settings"]
+        
+        patch["updated_at"] = datetime.now(UTC).isoformat()
+        return self._org_repo.update_organization(patch)
+
+    # ── Governance Criteria ────────────────────────────────────────
+
+    def list_gate_criteria(self, gate_number: int | None = None) -> dict[str, Any]:
+        items = self._gov_repo.list_criteria(gate_number)
+        return {"items": items, "total": len(items)}
+
+    def upsert_gate_criterion(self, data: dict[str, Any]) -> dict[str, Any]:
+        return self._gov_repo.upsert_criterion(data)
+
+    def delete_gate_criterion(self, criterion_id: str) -> None:
+        self._gov_repo.delete_criterion(criterion_id)
+
+    # ── Audit Logs ───────────────────────────────────────────────
+
+    def list_audit_logs(self, limit: int = 100) -> dict[str, Any]:
+        items = self._audit_repo.list_logs(limit)
+        return {"items": items, "total": len(items)}
+
+    @staticmethod
+    def _check(
+        code: str,
+        passed: bool,
+        message: str,
+        *,
+        severity: str = "blocker",
+    ) -> dict[str, Any]:
+        return {
+            "code": code,
+            "passed": passed,
+            "message": message,
+            "severity": severity,
+        }
+
+    def _table_check(self, table: str) -> dict[str, Any]:
+        try:
+            self._c.table(table).select("*").limit(1).execute()
+            return self._check(f"table_{table}", True, f"{table} table is queryable.")
+        except Exception:
+            return self._check(f"table_{table}", False, f"{table} table is not queryable.")

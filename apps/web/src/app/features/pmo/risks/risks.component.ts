@@ -101,7 +101,7 @@ import { FormsModule } from '@angular/forms';
                     </span>
                   </div>
                   <div class="h-1.5 bg-[var(--t-surface-raised)] rounded-full overflow-hidden">
-                    <div class="h-full bg-gradient-to-r from-[var(--t-accent)] to-[#a855f7] transition-all duration-1000" 
+                    <div class="h-full bg-gradient-to-r from-[var(--t-accent)] to-[var(--t-blue-light)] transition-all duration-1000" 
                          [style.width.%]="getTypePercentage(type)"></div>
                   </div>
                 </div>

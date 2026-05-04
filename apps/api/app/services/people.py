@@ -12,6 +12,7 @@ from fastapi import HTTPException, status
 from supabase import Client
 from supabase_auth.errors import AuthApiError
 
+from app.core.rbac import assert_valid_role
 from app.domain.people import InviteCreate, UserUpdate, WorkstreamAssignment
 from app.repositories.people import PeopleRepository
 
@@ -54,6 +55,8 @@ class PeopleService:
         patch = data.model_dump(exclude_none=True)
         if not patch:
             return self.get_profile(user_id)
+        if "role" in patch:
+            assert_valid_role(str(patch["role"]))
         patch["updated_at"] = datetime.now(UTC).isoformat()
         self._repo.update_user(user_id, patch)
         return self.get_profile(user_id)
@@ -75,6 +78,7 @@ class PeopleService:
         return self.get_profile(user_id)
 
     def invite_user(self, data: InviteCreate) -> dict[str, Any]:
+        assert_valid_role(data.role)
         existing = self._repo.get_user_by_email(str(data.email))
         if existing:
             return self.get_profile(existing["id"])

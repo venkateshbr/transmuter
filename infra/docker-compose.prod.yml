@@ -1,0 +1,40 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile.prod
+    image: transmuter-api:prod
+    ports:
+      - "8001:8001"
+    env_file:
+      - ../.env
+    environment:
+      DEBUG: "false"
+      PAYMENT_PROVIDER: stripe
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../apps/web
+      dockerfile: Dockerfile
+    image: transmuter-web:prod
+    ports:
+      - "4301:80"
+    environment:
+      TRANSMUTER_API_URL: ${TRANSMUTER_API_URL:-https://transmuter-api.ishirock.com}
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped

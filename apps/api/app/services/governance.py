@@ -22,7 +22,15 @@ from app.domain.governance import (
 )
 from app.repositories.governance import GovernanceRepository
 
-GATES_PATH = Path(__file__).resolve().parents[4] / "domain_packs/transmuter/gates.yaml"
+def _find_gates_path() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / "domain_packs/transmuter/gates.yaml"
+        if candidate.exists():
+            return candidate
+    return Path("/app/domain_packs/transmuter/gates.yaml")
+
+
+GATES_PATH = _find_gates_path()
 
 
 class GovernanceService:

@@ -1,48 +1,53 @@
 from typing import Annotated
+
 from fastapi import APIRouter, Depends
-from app.core.auth import CurrentUser, get_current_user
+
+from app.core.auth import CurrentUser, get_current_user, require_role
 from app.core.database import get_supabase_admin
+from app.services.business_unit import BusinessUnitService
 
 router = APIRouter(prefix="/business-units", tags=["business-units"])
 
+
+def _svc(current_user: Annotated[CurrentUser, Depends(get_current_user)]) -> BusinessUnitService:
+    return BusinessUnitService(get_supabase_admin(), current_user.tenant_id)
+
+
 @router.get("")
-async def list_business_units(current_user: Annotated[CurrentUser, Depends(get_current_user)]):
+async def list_business_units(
+    svc: Annotated[BusinessUnitService, Depends(_svc)],
+) -> dict[str, object]:
     """List all business units for the tenant."""
-    client = get_supabase_admin()
-    tid = str(current_user.tenant_id)
-    res = client.table("business_units").select("*").eq("tenant_id", tid).order("name").execute()
-    return {"data": res.data}
+    return svc.list_business_units()
+
 
 @router.post("", status_code=201)
 async def create_business_unit(
-    body: dict,
-    current_user: Annotated[CurrentUser, Depends(get_current_user)]
-):
+    body: dict[str, object],
+    svc: Annotated[BusinessUnitService, Depends(_svc)],
+    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+) -> dict[str, object]:
     """Create a new business unit."""
-    client = get_supabase_admin()
-    payload = {**body, "tenant_id": str(current_user.tenant_id)}
-    res = client.table("business_units").insert(payload).execute()
-    return res.data[0]
+    return svc.create_business_unit(body)
+
 
 @router.put("/{bu_id}")
 async def update_business_unit(
     bu_id: str,
-    body: dict,
-    current_user: Annotated[CurrentUser, Depends(get_current_user)]
-):
+    body: dict[str, object],
+    svc: Annotated[BusinessUnitService, Depends(_svc)],
+    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+) -> dict[str, object]:
     """Update an existing business unit."""
-    client = get_supabase_admin()
-    tid = str(current_user.tenant_id)
-    res = client.table("business_units").update(body).eq("id", bu_id).eq("tenant_id", tid).execute()
-    return res.data[0]
+    return svc.update_business_unit(bu_id, body)
+
 
 @router.delete("/{bu_id}", status_code=204)
 async def delete_business_unit(
     bu_id: str,
-    current_user: Annotated[CurrentUser, Depends(get_current_user)]
-):
+    svc: Annotated[BusinessUnitService, Depends(_svc)],
+    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+) -> None:
     """Delete a business unit."""
-    client = get_supabase_admin()
-    tid = str(current_user.tenant_id)
-    client.table("business_units").delete().eq("id", bu_id).eq("tenant_id", tid).execute()
+    svc.delete_business_unit(bu_id)
     return None

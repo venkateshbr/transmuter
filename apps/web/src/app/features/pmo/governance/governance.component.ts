@@ -220,8 +220,6 @@ export class GovernanceComponent implements OnInit {
   }
 
   decide(submissionId: string, decision: 'approved' | 'rejected') {
-    if (!confirm(`Are you sure you want to ${decision} this submission?`)) return;
-
     this.api.patch(`/governance/submissions/${submissionId}/decide`, {
       decision,
       commentary: `${decision.charAt(0).toUpperCase() + decision.slice(1)} via Governance Dashboard`

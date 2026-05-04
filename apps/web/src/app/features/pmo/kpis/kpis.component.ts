@@ -59,7 +59,7 @@ import { FormsModule } from '@angular/forms';
           <p class="text-[10px] font-bold text-[var(--t-text-secondary)] uppercase mt-2">Metrics Underperforming</p>
         </div>
 
-        <div class="card p-8 bg-gradient-to-br from-[var(--t-accent)] to-[#a855f7] text-white border-none shadow-xl shadow-purple-500/20">
+        <div class="card p-8 bg-gradient-to-br from-[var(--t-accent)] to-[var(--t-blue-light)] text-white border-none shadow-xl shadow-blue-900/10">
           <div class="flex justify-between items-start mb-6">
             <span class="text-[10px] font-black opacity-70 uppercase tracking-widest">Value Score</span>
             <span class="material-icons opacity-70 text-xl">insights</span>

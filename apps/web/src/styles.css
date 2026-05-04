@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Material+Icons&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@300;400;500;600;700;800;900&family=Material+Icons&display=swap");
 @import 'handsontable/styles/handsontable.min.css';
 @import 'handsontable/styles/ht-theme-main.min.css';
 
@@ -6,46 +6,75 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── Design Tokens (Light Theme — Purple / White / Lavender) ── */
+/* ── Design Tokens (Light Theme — A&M-inspired consulting system) ── */
 :root {
-  --t-bg:             #f8f7fc;
+  --t-bg:             #f4f6f8;
+  --t-bg-page:        #f4f6f8;
+  --t-bg-card:        #ffffff;
   --t-surface:        #ffffff;
-  --t-surface-raised: #f0eef5;
-  --t-border:         #e4e0ee;
-  --t-text-primary:   #1a1035;
-  --t-text-secondary: #6b6280;
-  --t-accent:         #7c3aed;
-  --t-accent-hover:   #6d28d9;
-  --t-accent-soft:    rgba(124,58,237,0.08);
-  --t-accent-ring:    rgba(124,58,237,0.25);
-  --t-accent-gradient: linear-gradient(135deg, #7c3aed, #a855f7);
-  --t-red:            #ef4444;
-  --t-amber:          #f59e0b;
-  --t-green:          #10b981;
-  --t-teal:           #14b8a6;
+  --t-surface-raised: #edf2f6;
+  --t-border:         #cfd8e2;
+  --t-border-strong:  #9aaabe;
+  --t-text-primary:   #071f3c;
+  --t-text-secondary: #4c6178;
+  --t-text-tertiary:  #77879a;
+  --t-primary:        #071f3c;
+  --t-accent:         #0c4f86;
+  --t-accent-hover:   #063962;
+  --t-accent-soft:    rgba(12,79,134,0.09);
+  --t-accent-ring:    rgba(12,79,134,0.22);
+  --t-accent-gradient: linear-gradient(135deg, #071f3c 0%, #0c4f86 58%, #63a9d8 100%);
+  --t-blue-light:     #63a9d8;
+  --t-red:            #b42318;
+  --t-amber:          #b7791f;
+  --t-green:          #166534;
+  --t-teal:           #0f766e;
+  --t-shadow:         0 10px 28px rgba(7,31,60,0.08);
+  --t-shadow-hover:   0 16px 38px rgba(7,31,60,0.13);
 }
 
 /* ── Dark Theme ── */
 .dark {
-  --t-bg:             #0c0a14;
-  --t-surface:        #16132a;
-  --t-surface-raised: #1e1a35;
-  --t-border:         #2a2545;
-  --t-text-primary:   #ece8f5;
-  --t-text-secondary: #a099b4;
-  --t-accent:         #a78bfa;
-  --t-accent-hover:   #c4b5fd;
-  --t-accent-soft:    rgba(167,139,250,0.12);
-  --t-accent-ring:    rgba(167,139,250,0.30);
-  --t-accent-gradient: linear-gradient(135deg, #a78bfa, #c084fc);
+  --t-bg:             #07111f;
+  --t-bg-page:        #07111f;
+  --t-bg-card:        #0d1c2f;
+  --t-surface:        #0d1c2f;
+  --t-surface-raised: #132a44;
+  --t-border:         #27415c;
+  --t-border-strong:  #41627e;
+  --t-text-primary:   #f3f7fb;
+  --t-text-secondary: #b6c6d8;
+  --t-text-tertiary:  #879bb0;
+  --t-primary:        #f3f7fb;
+  --t-accent:         #63a9d8;
+  --t-accent-hover:   #8cc8ec;
+  --t-accent-soft:    rgba(99,169,216,0.14);
+  --t-accent-ring:    rgba(99,169,216,0.28);
+  --t-accent-gradient: linear-gradient(135deg, #071f3c 0%, #0c4f86 52%, #63a9d8 100%);
+  --t-shadow:         0 12px 34px rgba(0,0,0,0.34);
+  --t-shadow-hover:   0 18px 44px rgba(0,0,0,0.44);
 }
 
 /* ── Global Base ── */
+html {
+  scrollbar-color: var(--t-border-strong) var(--t-bg);
+}
+
 body {
   background: var(--t-bg);
   color: var(--t-text-primary);
-  font-family: 'Inter', sans-serif;
+  font-family: 'Libre Franklin', 'Franklin Gothic Medium', 'Arial Narrow', Arial, sans-serif;
+  letter-spacing: 0;
   transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+body::selection {
+  background: var(--t-blue-light);
+  color: #071f3c;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  letter-spacing: 0;
 }
 
 .material-icons {
@@ -73,36 +102,40 @@ body {
 @layer components {
 
   .btn-primary {
-    @apply inline-flex items-center font-medium px-4 py-2 rounded-lg
-           cursor-pointer transition-all duration-200 border-none;
+    @apply inline-flex items-center font-bold px-4 py-2 rounded-none
+           cursor-pointer transition-all duration-200;
     background: var(--t-accent-gradient);
-    box-shadow: 0 2px 8px var(--t-accent-ring);
+    border: 1px solid var(--t-accent);
+    box-shadow: none;
     color: #fff;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
   .btn-primary:hover {
-    background: linear-gradient(135deg, var(--t-accent-hover), #9333ea);
-    box-shadow: 0 4px 14px var(--t-accent-ring);
-    transform: translateY(-1px);
+    background: linear-gradient(135deg, var(--t-accent-hover), var(--t-accent));
+    box-shadow: inset 0 -3px 0 var(--t-blue-light);
   }
   .btn-primary:active {
-    transform: translateY(0);
-    box-shadow: 0 1px 4px var(--t-accent-ring);
+    box-shadow: inset 0 -1px 0 var(--t-blue-light);
   }
 
   .btn-secondary {
-    @apply inline-flex items-center font-medium px-4 py-2 rounded-lg
+    @apply inline-flex items-center font-bold px-4 py-2 rounded-none
            transition-all duration-200;
-    background: var(--t-surface-raised);
+    background: var(--t-surface);
     color: var(--t-text-primary);
     border: 1px solid var(--t-border);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
   .btn-secondary:hover {
-    background: var(--t-border);
+    background: var(--t-surface-raised);
     border-color: var(--t-accent);
+    color: var(--t-accent);
   }
 
   .btn-ghost {
-    @apply px-3 py-2 rounded-lg transition-all duration-200;
+    @apply px-3 py-2 rounded-none transition-all duration-200;
     background: transparent;
     border: none;
     color: var(--t-text-secondary);
@@ -114,93 +147,98 @@ body {
   }
 
   .card {
-    @apply rounded-xl shadow-sm p-5;
+    @apply rounded-none p-5;
     background: var(--t-surface);
     border: 1px solid var(--t-border);
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: var(--t-shadow);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
   }
   .card:hover {
-    border-color: var(--t-accent);
-    box-shadow: 0 4px 16px var(--t-accent-ring);
+    border-color: var(--t-border-strong);
+    box-shadow: var(--t-shadow-hover);
   }
 
   .glass-panel {
-    @apply rounded-xl shadow-sm backdrop-blur-sm;
-    background: rgba(255,255,255,0.85);
+    @apply rounded-none backdrop-blur-sm;
+    background: color-mix(in srgb, var(--t-surface) 88%, transparent);
     border: 1px solid var(--t-border);
+    box-shadow: var(--t-shadow);
   }
-  .dark .glass-panel { background: rgba(22,19,42,0.85); }
 
   .input-field {
-    @apply rounded-lg px-3 py-2 w-full text-sm outline-none
+    @apply rounded-none px-3 py-2 w-full text-sm outline-none
            transition duration-200;
-    background: var(--t-surface-raised);
+    background: var(--t-surface);
     border: 1px solid var(--t-border);
     color: var(--t-text-primary);
   }
   .input-field::placeholder { color: var(--t-text-secondary); }
   .input-field:focus {
     border-color: var(--t-accent);
-    box-shadow: 0 0 0 2px var(--t-accent-ring);
+    box-shadow: inset 3px 0 0 var(--t-accent), 0 0 0 2px var(--t-accent-ring);
   }
 
   /* RAG badges */
   .badge-green {
-    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
-    background: #dcfce7; color: #166534;
+    @apply inline-flex items-center px-2 py-0.5 rounded-none text-xs font-bold uppercase;
+    background: #e6f4ed; color: #166534;
   }
-  .dark .badge-green { background: rgba(16,185,129,0.15); color: #86efac; }
+  .dark .badge-green { background: rgba(22,101,52,0.22); color: #9de5b5; }
 
   .badge-amber {
-    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
-    background: #fef3c7; color: #92400e;
+    @apply inline-flex items-center px-2 py-0.5 rounded-none text-xs font-bold uppercase;
+    background: #fff3d6; color: #8a4d0f;
   }
-  .dark .badge-amber { background: rgba(245,158,11,0.15); color: #fcd34d; }
+  .dark .badge-amber { background: rgba(183,121,31,0.22); color: #f4cc79; }
 
   .badge-red {
-    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
-    background: #fee2e2; color: #991b1b;
+    @apply inline-flex items-center px-2 py-0.5 rounded-none text-xs font-bold uppercase;
+    background: #fde7e5; color: #9f1f17;
   }
-  .dark .badge-red { background: rgba(239,68,68,0.15); color: #fca5a5; }
+  .dark .badge-red { background: rgba(180,35,24,0.22); color: #f4aaa3; }
 
   .badge-teal {
-    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
-    background: #ccfbf1; color: #134e4a;
+    @apply inline-flex items-center px-2 py-0.5 rounded-none text-xs font-bold uppercase;
+    background: #dff5f2; color: #0f766e;
   }
-  .dark .badge-teal { background: rgba(20,184,166,0.15); color: #5eead4; }
+  .dark .badge-teal { background: rgba(15,118,110,0.22); color: #7ee4dc; }
 
   .badge-gray {
-    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
-    background: #f3f4f6; color: #374151;
+    @apply inline-flex items-center px-2 py-0.5 rounded-none text-xs font-bold uppercase;
+    background: #edf2f6; color: #34465a;
   }
-  .dark .badge-gray { background: rgba(107,114,128,0.15); color: #d1d5db; }
+  .dark .badge-gray { background: rgba(135,155,176,0.18); color: #d2dce8; }
 
   .badge-purple {
-    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
-    background: #ede9fe; color: #6d28d9;
+    @apply inline-flex items-center px-2 py-0.5 rounded-none text-xs font-bold uppercase;
+    background: var(--t-accent-soft);
+    color: var(--t-accent);
   }
-  .dark .badge-purple { background: rgba(167,139,250,0.15); color: #c4b5fd; }
+  .dark .badge-purple { background: rgba(99,169,216,0.16); color: #a7d8f4; }
 
   /* Nav items */
   .nav-item {
-    @apply flex items-center gap-3 px-3 py-2 rounded-lg text-sm
+    @apply flex items-center gap-3 px-3 py-2 rounded-none text-sm
            transition-all duration-200 cursor-pointer no-underline;
     color: var(--t-text-secondary);
+    border-bottom: 2px solid transparent;
   }
   .nav-item:hover {
-    background: var(--t-accent-soft);
+    background: transparent;
     color: var(--t-accent);
+    border-bottom-color: var(--t-blue-light);
   }
   .nav-item.active {
-    background: var(--t-accent-soft);
+    background: transparent;
     color: var(--t-accent);
-    @apply font-medium;
+    border-bottom-color: var(--t-accent);
+    @apply font-bold;
   }
 
   /* Overlay & Modals */
   .overlay {
     @apply fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-sm;
-    background: rgba(0,0,0,0.4);
+    background: rgba(7,31,60,0.44);
   }
   .dark .overlay { background: rgba(0,0,0,0.6); }
 

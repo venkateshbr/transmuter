@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from app.core.auth import CurrentUser, get_current_user
 from app.core.database import get_supabase_admin
+from app.core.rbac import assert_can_manage_initiatives, assert_can_view_initiative
 
 router = APIRouter(tags=["initiative-team"])
 
@@ -52,7 +53,7 @@ async def get_initiative_team(
 ):
     client = get_supabase_admin()
     tid = str(current_user.tenant_id)
-    _assert_initiative_access(client, initiative_id, tid)
+    assert_can_view_initiative(client, current_user, str(initiative_id))
     
     res = client.table("initiative_team")\
         .select("*, users(display_name, email)")\
@@ -81,6 +82,7 @@ async def add_team_member(
 ):
     client = get_supabase_admin()
     tid = str(current_user.tenant_id)
+    assert_can_manage_initiatives(current_user)
     _assert_initiative_access(client, initiative_id, tid)
     _assert_user_access(client, data.user_id, tid)
     
@@ -104,6 +106,7 @@ async def remove_team_member(
 ):
     client = get_supabase_admin()
     tid = str(current_user.tenant_id)
+    assert_can_manage_initiatives(current_user)
     _assert_initiative_access(client, initiative_id, tid)
     
     deleted = client.table("initiative_team")\

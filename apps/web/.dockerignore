@@ -1,0 +1,8 @@
+node_modules
+dist
+out-tsc
+.angular
+.vscode
+web.log
+*.log
+.DS_Store

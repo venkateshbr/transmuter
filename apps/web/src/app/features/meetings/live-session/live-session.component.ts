@@ -52,7 +52,7 @@ import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
               <p class="text-2xl font-mono font-black text-[var(--t-accent)] tabular-nums">{{ duration() }}</p>
             </div>
             
-            <button (click)="endSession()" class="btn-primary px-8 py-3 rounded-2xl text-xs font-black shadow-xl shadow-purple-500/20 hover:scale-[1.02] active:scale-95 transition-all">
+            <button (click)="endSession()" class="btn-primary px-8 py-3 rounded-2xl text-xs font-black shadow-xl shadow-blue-900/10 hover:scale-[1.02] active:scale-95 transition-all">
               Complete Session
             </button>
           </div>
@@ -152,7 +152,7 @@ import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
                   <p class="text-xs font-bold text-[var(--t-text-primary)] leading-relaxed">{{ ai.description }}</p>
                   <div class="mt-4 pt-4 border-t border-[var(--t-border)]/50 flex items-center justify-between">
                      <div class="flex items-center gap-2">
-                        <div class="w-5 h-5 rounded-full bg-gradient-to-br from-[var(--t-accent)] to-[#a855f7] flex items-center justify-center text-[8px] text-white font-black">
+                        <div class="w-5 h-5 rounded-full bg-gradient-to-br from-[var(--t-accent)] to-[var(--t-blue-light)] flex items-center justify-center text-[8px] text-white font-black">
                           {{ (ai.owner_name || 'U').substring(0,1) }}
                         </div>
                         <span class="text-[9px] font-bold text-[var(--t-text-tertiary)]">{{ ai.owner_name || 'Unassigned' }}</span>
@@ -182,7 +182,7 @@ import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
                 <button (click)="addActionItem()" 
                         [disabled]="!newActionItem.trim()"
                         aria-label="Add action item"
-                        class="absolute right-3 bottom-3 w-8 h-8 rounded-xl bg-[var(--t-accent)] text-white flex items-center justify-center shadow-lg shadow-purple-500/20 disabled:opacity-50 disabled:shadow-none hover:scale-105 active:scale-95 transition-all">
+                        class="absolute right-3 bottom-3 w-8 h-8 rounded-xl bg-[var(--t-accent)] text-white flex items-center justify-center shadow-lg shadow-blue-900/10 disabled:opacity-50 disabled:shadow-none hover:scale-105 active:scale-95 transition-all">
                   <span class="material-icons text-sm">send</span>
                 </button>
               </div>

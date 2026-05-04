@@ -66,7 +66,7 @@ import { RouterLink } from '@angular/router';
       <!-- Dependency Matrix / Grid -->
       <div class="grid grid-cols-1 xl:grid-cols-2 gap-8">
         @for (d of dependencies(); track d.id) {
-          <div class="card p-0 overflow-hidden hover:border-[var(--t-accent)] transition-all group shadow-xl hover:shadow-purple-500/5">
+          <div class="card p-0 overflow-hidden hover:border-[var(--t-accent)] transition-all group shadow-xl hover:shadow-blue-900/5">
             <div class="flex h-full">
               <!-- Upstream Panel -->
               <div class="flex-1 p-6 bg-gradient-to-br from-[var(--t-surface)] to-[var(--t-surface-raised)] border-r border-[var(--t-border)]">
@@ -137,7 +137,7 @@ import { RouterLink } from '@angular/router';
              <p class="text-xs text-[var(--t-text-secondary)] mt-2 max-w-xs mx-auto">
                Cross-initiative dependencies will appear here once you link milestones between workstreams.
              </p>
-             <button class="btn-primary mt-8 px-8 rounded-2xl shadow-xl shadow-purple-500/20">Initialize Mapping</button>
+             <button class="btn-primary mt-8 px-8 rounded-2xl shadow-xl shadow-blue-900/10">Initialize Mapping</button>
           </div>
         }
       </div>

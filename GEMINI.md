@@ -68,22 +68,24 @@ The single canonical engineering process is `docs/team/SDLC_PROTOCOL.md`. Do not
 - Standalone components only (no NgModules)
 - All routes lazy-loaded
 - CSS variable design tokens (not hardcoded hex) — see `team/DESIGN_SYSTEM.md`
-- Every component: light + dark theme support (purple design system)
+- Every component: light + dark theme support (A&M-inspired design system)
 - ARIA labels on all interactive elements
 
 ## UI Design System
-- **Primary accent**: Purple (`#7c3aed` light / `#a78bfa` dark)
+- **Design direction**: A&M-inspired consulting UI: deep navy, steel blue, light blue accents, white/grey surfaces, Libre Franklin typography, square structural geometry, thin dividers, restrained shadows, and dense executive layouts.
+- **Primary accent**: Steel blue (`#0c4f86` light / `#63a9d8` dark via CSS variables)
 - **All tokens**: Defined in `apps/web/src/styles.css` as `--t-*` CSS variables
 - **Full spec**: `team/DESIGN_SYSTEM.md`
 - **Component classes**: `.btn-primary`, `.btn-secondary`, `.btn-ghost`, `.card`, `.glass-panel`, `.input-field`, `.nav-item`, `.badge-*`
 - **NEVER hardcode hex colors** for theme-sensitive properties — always use `var(--t-*)`
+- **NEVER reintroduce** purple/lavender/violet palettes, purple gradients, decorative blobs/orbs, or rounded pill-heavy SaaS styling unless explicitly required by an existing component contract.
 
 ## Key Files
 - `prd.txt` — Full product requirements (708 lines, 12 modules)
 - `supabase/migrations/20260430000001_core_schema.sql` — All 25 tables
 - `apps/api/` — FastAPI backend (Router → Service → Repository)
 - `apps/web/` — Angular 18 frontend
-- `team/DESIGN_SYSTEM.md` — Authoritative purple design system
+- `team/DESIGN_SYSTEM.md` — Authoritative A&M-inspired frontend design system
 - `team/ARCHITECTURE.md` — System architecture
 - `start.sh` / `stop.sh` — Local development control
 - `backend.log` / `frontend.log` — Server logs

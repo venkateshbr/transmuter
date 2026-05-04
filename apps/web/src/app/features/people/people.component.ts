@@ -64,7 +64,7 @@ import { FormsModule } from '@angular/forms';
             <option value="">All roles</option>
             <option value="transformation_office">Transformation Office</option>
             <option value="initiative_owner">Initiative Owner</option>
-            <option value="workstream_lead">Workstream Lead</option>
+            <option value="viewer">Viewer</option>
           </select>
           <select [(ngModel)]="statusFilter" (ngModelChange)="loadPeople()" class="input-field h-10 w-40 text-sm" aria-label="Filter people by status">
             <option value="active">Active</option>
@@ -173,9 +173,9 @@ import { FormsModule } from '@angular/forms';
               <input [(ngModel)]="inviteForm.display_name" class="input-field w-full" placeholder="Display name" aria-label="Invite display name" />
               <input [(ngModel)]="inviteForm.title" class="input-field w-full" placeholder="Title" aria-label="Invite title" />
               <select [(ngModel)]="inviteForm.role" class="input-field w-full" aria-label="Invite role">
-                <option value="initiative_owner">Initiative Owner</option>
-                <option value="workstream_lead">Workstream Lead</option>
                 <option value="transformation_office">Transformation Office</option>
+                <option value="initiative_owner">Initiative Owner</option>
+                <option value="viewer">Viewer</option>
               </select>
               <button (click)="createInvite()" class="btn-primary w-full h-11 rounded-xl">Send Invite</button>
             </div>
@@ -230,6 +230,11 @@ import { FormsModule } from '@angular/forms';
                  <div class="grid grid-cols-1 gap-3">
                    <input [(ngModel)]="selectedUser.display_name" class="input-field text-sm" aria-label="User display name" placeholder="Display name" />
                    <input [(ngModel)]="selectedUser.title" class="input-field text-sm" aria-label="User title" placeholder="Title" />
+                   <select [(ngModel)]="selectedUser.role" class="input-field text-sm" aria-label="User platform role">
+                     <option value="transformation_office">Transformation Office</option>
+                     <option value="initiative_owner">Initiative Owner</option>
+                     <option value="viewer">Viewer</option>
+                   </select>
                    <input [(ngModel)]="selectedUser.department" class="input-field text-sm" aria-label="User department" placeholder="Department" />
                    <input [(ngModel)]="selectedUser.market" class="input-field text-sm" aria-label="User market" placeholder="Market" />
                  </div>
@@ -381,6 +386,7 @@ export class PeopleComponent implements OnInit {
     this.api.put<any>(`/users/${user.id}`, {
       display_name: user.display_name,
       title: user.title,
+      role: user.role,
       department: user.department,
       market: user.market,
     }).subscribe(updated => {

@@ -3,6 +3,22 @@ import { authGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
   {
+    path: '',
+    pathMatch: 'full',
+    loadComponent: () =>
+      import('./features/marketing/home/home.component').then(m => m.HomeComponent),
+  },
+  {
+    path: 'get-started',
+    loadComponent: () =>
+      import('./features/marketing/get-started/get-started.component').then(m => m.GetStartedComponent),
+  },
+  {
+    path: 'subscription/success',
+    loadComponent: () =>
+      import('./features/marketing/subscription-success/subscription-success.component').then(m => m.SubscriptionSuccessComponent),
+  },
+  {
     path: 'auth/login',
     loadComponent: () =>
       import('./features/auth/login/login.component').then(m => m.LoginComponent),
@@ -12,7 +28,14 @@ export const routes: Routes = [
     canActivate: [authGuard],
     children: [
       {
-        path: '',
+        path: 'platform',
+        canActivate: [authGuard],
+        data: { roles: ['platform_admin'] },
+        loadComponent: () =>
+          import('./features/platform/platform-console.component').then(m => m.PlatformConsoleComponent),
+      },
+      {
+        path: 'dashboard',
         loadComponent: () =>
           import('./features/dashboard/dashboard.component').then(m => m.DashboardComponent),
       },
@@ -129,10 +152,12 @@ export const routes: Routes = [
       },
       {
         path: 'admin',
+        canActivate: [authGuard],
+        data: { roles: ['transformation_office'] },
         loadComponent: () =>
           import('./features/admin/admin.component').then(m => m.AdminComponent),
       },
     ]
   },
-  { path: '**', redirectTo: '' },
+  { path: '**', redirectTo: 'dashboard' },
 ];

@@ -9,6 +9,11 @@ from fastapi.responses import Response
 
 from app.core.auth import CurrentUser, get_current_user
 from app.core.database import get_supabase_admin
+from app.core.rbac import (
+    assert_can_manage_initiatives,
+    assert_can_view_initiative,
+    assert_can_view_portfolio,
+)
 from app.domain.financials import (
     BreakEvenResponse,
     CostLineCreate,
@@ -39,9 +44,11 @@ def _svc(current_user: Annotated[CurrentUser, Depends(get_current_user)]) -> Fin
 @router.get("/initiatives/{initiative_id}/financials", response_model=FinancialGridResponse)
 async def get_financials(
     initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> FinancialGridResponse:
     """Return full financial grid (2026–2030, quarterly) for an initiative."""
+    assert_can_view_initiative(get_supabase_admin(), current_user, initiative_id)
     return svc.get_financial_grid(initiative_id)
 
 
@@ -49,18 +56,22 @@ async def get_financials(
 async def update_financials(
     initiative_id: str,
     body: FinancialGridUpdate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> FinancialGridResponse:
     """Upsert the full financial grid for an initiative."""
+    assert_can_manage_initiatives(current_user)
     return svc.update_financial_grid(initiative_id, body)
 
 
 @router.get("/initiatives/{initiative_id}/financials/export.xlsx")
 async def export_financials_workbook(
     initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> Response:
     """Export financial entries and cost lines as an XLSX workbook."""
+    assert_can_view_initiative(get_supabase_admin(), current_user, initiative_id)
     workbook = svc.export_workbook(initiative_id)
     return Response(
         content=workbook,
@@ -79,10 +90,12 @@ async def export_financials_workbook(
 )
 async def import_financials_workbook(
     initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
     file: UploadFile = File(...),
 ) -> FinancialGridResponse:
     """Import financial entries and cost lines from an XLSX workbook."""
+    assert_can_manage_initiatives(current_user)
     return svc.import_workbook(initiative_id, await file.read())
 
 
@@ -94,8 +107,10 @@ async def import_financials_workbook(
 )
 async def list_cost_lines(
     initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> CostLineListResponse:
+    assert_can_view_initiative(get_supabase_admin(), current_user, initiative_id)
     return svc.list_cost_lines(initiative_id)
 
 
@@ -107,8 +122,10 @@ async def list_cost_lines(
 async def create_cost_line(
     initiative_id: str,
     body: CostLineCreate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> CostLineItem:
+    assert_can_manage_initiatives(current_user)
     return svc.create_cost_line(initiative_id, body)
 
 
@@ -120,8 +137,10 @@ async def update_cost_line(
     initiative_id: str,
     cost_line_id: str,
     body: CostLineUpdate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> CostLineItem:
+    assert_can_manage_initiatives(current_user)
     return svc.update_cost_line(cost_line_id, body)
 
 
@@ -132,8 +151,10 @@ async def update_cost_line(
 async def delete_cost_line(
     initiative_id: str,
     cost_line_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> None:
+    assert_can_manage_initiatives(current_user)
     svc.delete_cost_line(cost_line_id)
 
 
@@ -145,9 +166,11 @@ async def delete_cost_line(
 )
 async def get_value_bridge(
     initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> ValueBridgeResponse:
     """Value Bridge for a single initiative."""
+    assert_can_view_initiative(get_supabase_admin(), current_user, initiative_id)
     return svc.get_value_bridge(initiative_id)
 
 
@@ -157,9 +180,11 @@ async def get_value_bridge(
 )
 async def get_scenario_summary(
     initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
     scenario: FinancialScenario = Query("base"),
 ) -> ScenarioFinancialSummary:
+    assert_can_view_initiative(get_supabase_admin(), current_user, initiative_id)
     return svc.get_scenario_summary(initiative_id, scenario)
 
 
@@ -169,9 +194,11 @@ async def get_scenario_summary(
 )
 async def get_break_even(
     initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
     scenario: FinancialScenario = Query("base"),
 ) -> BreakEvenResponse:
+    assert_can_view_initiative(get_supabase_admin(), current_user, initiative_id)
     return svc.get_break_even(initiative_id, scenario)
 
 
@@ -181,8 +208,10 @@ async def get_break_even(
 )
 async def list_cell_assumptions(
     initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> FinancialCellAssumptionListResponse:
+    assert_can_view_initiative(get_supabase_admin(), current_user, initiative_id)
     return svc.list_cell_assumptions(initiative_id)
 
 
@@ -197,6 +226,7 @@ async def upsert_cell_assumption(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> FinancialCellAssumption:
+    assert_can_manage_initiatives(current_user)
     return svc.upsert_cell_assumption(initiative_id, body, current_user.id)
 
 
@@ -211,6 +241,7 @@ async def update_cell_assumption(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> FinancialCellAssumption:
+    assert_can_manage_initiatives(current_user)
     return svc.update_cell_assumption(assumption_id, body, current_user.id)
 
 
@@ -221,14 +252,18 @@ async def update_cell_assumption(
 async def delete_cell_assumption(
     initiative_id: str,
     assumption_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> None:
+    assert_can_manage_initiatives(current_user)
     svc.delete_cell_assumption(assumption_id)
 
 
 @router.get("/portfolio/value-bridge", response_model=ValueBridgeResponse)
 async def get_portfolio_value_bridge(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> ValueBridgeResponse:
     """Portfolio-level Value Bridge across all initiatives."""
+    assert_can_view_portfolio(current_user)
     return svc.get_portfolio_value_bridge()

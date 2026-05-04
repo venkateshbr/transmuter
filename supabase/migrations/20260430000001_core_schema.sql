@@ -35,6 +35,87 @@ CREATE POLICY "orgs_select" ON organizations FOR SELECT
 
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- 1A. BILLING / SUBSCRIPTION RECORDS
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE subscription_plans (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id         UUID NOT NULL REFERENCES organizations(id),
+  code              TEXT NOT NULL CHECK (code IN ('team','business','enterprise')),
+  name              TEXT NOT NULL,
+  user_limit_min    INTEGER NOT NULL CHECK (user_limit_min > 0),
+  user_limit_max    INTEGER CHECK (user_limit_max IS NULL OR user_limit_max >= user_limit_min),
+  amount_cents      INTEGER CHECK (amount_cents IS NULL OR amount_cents >= 0),
+  currency          TEXT NOT NULL DEFAULT 'usd',
+  billing_interval  TEXT NOT NULL DEFAULT 'month' CHECK (billing_interval IN ('month','year','custom')),
+  stripe_price_id   TEXT,
+  is_active         BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (tenant_id, code, billing_interval)
+);
+
+CREATE INDEX sub_plans_tenant_idx ON subscription_plans(tenant_id);
+ALTER TABLE subscription_plans ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "sub_plans_select" ON subscription_plans FOR SELECT USING (tenant_id = current_tenant_id());
+CREATE POLICY "sub_plans_insert" ON subscription_plans FOR INSERT WITH CHECK (tenant_id = current_tenant_id());
+CREATE POLICY "sub_plans_update" ON subscription_plans FOR UPDATE USING (tenant_id = current_tenant_id()) WITH CHECK (tenant_id = current_tenant_id());
+
+CREATE TABLE signup_intents (
+  id                         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id                  UUID NOT NULL REFERENCES organizations(id),
+  organization_name          TEXT NOT NULL,
+  organization_slug          TEXT NOT NULL,
+  admin_email                TEXT NOT NULL,
+  admin_display_name         TEXT NOT NULL,
+  planned_user_count         INTEGER NOT NULL CHECK (planned_user_count > 0),
+  plan_code                  TEXT NOT NULL CHECK (plan_code IN ('team','business','enterprise')),
+  billing_interval           TEXT NOT NULL DEFAULT 'month' CHECK (billing_interval IN ('month','year','custom')),
+  status                     TEXT NOT NULL DEFAULT 'pending_checkout'
+    CHECK (status IN ('pending_checkout','checkout_created','paid','provisioned','failed','abandoned')),
+  stripe_checkout_session_id TEXT UNIQUE,
+  stripe_customer_id         TEXT,
+  stripe_subscription_id     TEXT,
+  metadata                   JSONB DEFAULT '{}'::jsonb,
+  created_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX signup_intents_tenant_idx ON signup_intents(tenant_id);
+CREATE INDEX signup_intents_status_idx ON signup_intents(status, created_at DESC);
+ALTER TABLE signup_intents ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "signup_intents_select" ON signup_intents FOR SELECT USING (tenant_id = current_tenant_id());
+CREATE POLICY "signup_intents_insert" ON signup_intents FOR INSERT WITH CHECK (tenant_id = current_tenant_id());
+CREATE POLICY "signup_intents_update" ON signup_intents FOR UPDATE USING (tenant_id = current_tenant_id()) WITH CHECK (tenant_id = current_tenant_id());
+
+CREATE TABLE tenant_subscriptions (
+  id                         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id                  UUID NOT NULL REFERENCES organizations(id),
+  plan_id                    UUID REFERENCES subscription_plans(id),
+  signup_intent_id           UUID REFERENCES signup_intents(id),
+  provider                   TEXT NOT NULL DEFAULT 'stripe',
+  status                     TEXT NOT NULL DEFAULT 'not_configured',
+  checkout_status            TEXT,
+  payment_status             TEXT,
+  planned_user_count         INTEGER NOT NULL DEFAULT 1 CHECK (planned_user_count > 0),
+  stripe_customer_id         TEXT,
+  stripe_subscription_id     TEXT UNIQUE,
+  stripe_checkout_session_id TEXT,
+  current_period_end         TIMESTAMPTZ,
+  cancel_at_period_end       BOOLEAN NOT NULL DEFAULT FALSE,
+  metadata                   JSONB DEFAULT '{}'::jsonb,
+  created_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at                 TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (tenant_id)
+);
+
+CREATE INDEX tenant_subscriptions_tenant_idx ON tenant_subscriptions(tenant_id);
+ALTER TABLE tenant_subscriptions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "tenant_subs_select" ON tenant_subscriptions FOR SELECT USING (tenant_id = current_tenant_id());
+CREATE POLICY "tenant_subs_insert" ON tenant_subscriptions FOR INSERT WITH CHECK (tenant_id = current_tenant_id());
+CREATE POLICY "tenant_subs_update" ON tenant_subscriptions FOR UPDATE USING (tenant_id = current_tenant_id()) WITH CHECK (tenant_id = current_tenant_id());
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- 2. USERS
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE users (
@@ -47,7 +128,7 @@ CREATE TABLE users (
   department   TEXT,
   market       TEXT,
   timezone     TEXT DEFAULT 'UTC',
-  role         TEXT NOT NULL CHECK (role IN ('transformation_office','initiative_owner','workstream_lead')),
+  role         TEXT NOT NULL CHECK (role IN ('transformation_office','initiative_owner','viewer')),
   status       TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','ghost','deactivated')),
   last_login_at TIMESTAMPTZ,
   onboarding_completed BOOLEAN DEFAULT FALSE,
@@ -675,6 +756,7 @@ CREATE POLICY "ac_insert" ON agent_corrections FOR INSERT WITH CHECK (tenant_id 
 
 CREATE TABLE agent_metrics (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id        UUID NOT NULL REFERENCES organizations(id),
   metric_date      DATE NOT NULL,
   agent_id         TEXT NOT NULL,
   total_runs       INTEGER DEFAULT 0,
@@ -683,9 +765,13 @@ CREATE TABLE agent_metrics (
   correction_count INTEGER DEFAULT 0,
   avg_latency_ms   NUMERIC(8,2),
   avg_confidence   NUMERIC(5,4),
-  UNIQUE (metric_date, agent_id)
+  UNIQUE (tenant_id, metric_date, agent_id)
 );
--- No RLS — metrics are not tenant-specific (tenant is aggregated per agent globally)
+CREATE INDEX am_tenant_agent_idx ON agent_metrics(tenant_id, agent_id, metric_date DESC);
+ALTER TABLE agent_metrics ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "am_select" ON agent_metrics FOR SELECT USING (tenant_id = current_tenant_id());
+CREATE POLICY "am_insert" ON agent_metrics FOR INSERT WITH CHECK (tenant_id = current_tenant_id());
+CREATE POLICY "am_update" ON agent_metrics FOR UPDATE USING (tenant_id = current_tenant_id()) WITH CHECK (tenant_id = current_tenant_id());
 
 
 -- ─────────────────────────────────────────────────────────────────────────────

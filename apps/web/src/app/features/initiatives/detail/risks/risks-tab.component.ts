@@ -87,9 +87,16 @@ import { ApiService } from '../../../../core/services/api.service';
                 @if (risk.status === 'open') {
                   <button class="btn-secondary py-1.5 px-4 text-xs w-full" (click)="onOpenEditModal(risk)">Edit</button>
                   <button class="btn-primary py-1.5 px-4 text-xs w-full" (click)="onCloseRisk(risk.id)">Close</button>
-                  <button class="btn-ghost p-2 text-red-500 hover:bg-red-50" (click)="onDeleteRisk(risk.id)">
-                    <span class="material-icons text-sm">delete</span>
-                  </button>
+                  @if (confirmDeleteId() === risk.id) {
+                    <div class="flex flex-col gap-2">
+                      <button class="btn-ghost text-[9px] font-black uppercase text-red-600 bg-red-50 py-1" (click)="onDeleteRisk(risk.id)">Confirm Delete</button>
+                      <button class="btn-ghost text-[9px] font-black uppercase" (click)="confirmDeleteId.set(null)">Cancel</button>
+                    </div>
+                  } @else {
+                    <button class="btn-ghost p-2 text-red-500 hover:bg-red-50" (click)="confirmDeleteId.set(risk.id)">
+                      <span class="material-icons text-sm">delete</span>
+                    </button>
+                  }
                 } @else {
                    <span class="material-icons text-green-500">check_circle</span>
                    <p class="text-[10px] font-bold text-green-500 uppercase">Resolved</p>
@@ -188,6 +195,7 @@ export class RisksTabComponent implements OnInit {
   risks = signal<any[]>([]);
   loading = signal(true);
   editingRiskId: string | null = null;
+  confirmDeleteId = signal<string | null>(null);
 
   // Modal state
   showAddModal = signal(false);
@@ -281,9 +289,11 @@ export class RisksTabComponent implements OnInit {
   }
 
   onDeleteRisk(riskId: string) {
-    if (!confirm('Are you sure you want to delete this risk?')) return;
     this.api.delete(`/initiatives/${this.initiativeId}/risks/${riskId}`).subscribe({
-      next: () => this.fetchRisks()
+      next: () => {
+        this.confirmDeleteId.set(null);
+        this.fetchRisks();
+      }
     });
   }
 }

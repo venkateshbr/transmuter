@@ -314,12 +314,19 @@ interface DependencyItem {
                         <option value="complete">Complete</option>
                         <option value="overdue">Overdue</option>
                       </select>
-                      <button class="btn-ghost text-xs justify-center"
-                              aria-label="Delete milestone"
-                              (click)="deleteMilestone(ms.id)">
-                        <span class="material-icons text-sm">delete</span>
-                        Delete Milestone
-                      </button>
+                      @if (confirmDeleteId() === ms.id) {
+                        <div class="flex gap-2 justify-center">
+                          <button class="btn-ghost text-[9px] font-black uppercase text-red-600 bg-red-50 py-1" (click)="deleteMilestone(ms.id)">Confirm</button>
+                          <button class="btn-ghost text-[9px] font-black uppercase" (click)="confirmDeleteId.set(null)">Cancel</button>
+                        </div>
+                      } @else {
+                        <button class="btn-ghost text-xs justify-center"
+                                aria-label="Delete milestone"
+                                (click)="confirmDeleteId.set(ms.id)">
+                          <span class="material-icons text-sm">delete</span>
+                          Delete Milestone
+                        </button>
+                      }
                     </div>
                     <div>
                       <p class="text-[10px] font-bold uppercase tracking-wider mb-1" style="color:var(--t-text-secondary)">Total Pressure</p>
@@ -438,6 +445,7 @@ export class MilestonesTabComponent implements OnInit {
   sortKey: 'manual' | 'due' | 'pressure' | 'priority' | 'name' = 'manual';
   checklistDraft = '';
   dependencyDraft = '';
+  confirmDeleteId = signal<string | null>(null);
 
   // Add Modal State
   showAddModal = signal(false);
@@ -615,14 +623,17 @@ export class MilestonesTabComponent implements OnInit {
   }
 
   deleteMilestone(milestoneId: string): void {
-    if (!confirm('Delete this milestone?')) return;
     this.api.delete(`/milestones/${milestoneId}`).subscribe({
       next: () => {
+        this.confirmDeleteId.set(null);
         this.expandedId.set(null);
         this.expandedDetail.set(null);
         this.loadMilestones();
       },
-      error: () => alert('Failed to delete milestone.'),
+      error: () => {
+        this.confirmDeleteId.set(null);
+        alert('Failed to delete milestone.');
+      },
     });
   }
 

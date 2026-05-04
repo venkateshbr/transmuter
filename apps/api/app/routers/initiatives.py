@@ -8,8 +8,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import Response, StreamingResponse
 
-from app.core.auth import AnyRole, CurrentUser, RequireAdmin, get_current_user
+from app.core.auth import CurrentUser, RequireAdmin, get_current_user
 from app.core.database import get_supabase_admin
+from app.core.rbac import assert_can_manage_initiatives
 from app.domain.initiatives import (
     InitiativeCreate,
     InitiativeDetail,
@@ -36,6 +37,7 @@ def _svc(current_user: Annotated[CurrentUser, Depends(get_current_user)]) -> Ini
 
 @router.get("", response_model=InitiativeListResponse)
 async def list_initiatives(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[InitiativeService, Depends(_svc)],
     workstream_id: str | None = Query(None),
     rag_status: str | None = Query(None),
@@ -57,14 +59,18 @@ async def list_initiatives(
         sort_desc=sort_desc,
         page=page,
         page_size=page_size,
+        current_user=current_user,
     )
 
 
 # ── Export ────────────────────────────────────────────────────────────────────
 
 @router.get("/export", response_class=StreamingResponse)
-async def export_csv(svc: Annotated[InitiativeService, Depends(_svc)]) -> StreamingResponse:
-    csv_data = svc.export_csv()
+async def export_csv(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[InitiativeService, Depends(_svc)],
+) -> StreamingResponse:
+    csv_data = svc.export_csv(current_user)
     return StreamingResponse(
         iter([csv_data]),
         media_type="text/csv",
@@ -96,6 +102,7 @@ async def import_initiative(
     svc: Annotated[InitiativeService, Depends(_svc)],
     file: UploadFile = File(...),
 ) -> InitiativeDetail:
+    assert_can_manage_initiatives(current_user)
     return svc.import_template(await file.read(), current_user.id)
 
 
@@ -113,6 +120,7 @@ async def create_initiative_from_intake(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[InitiativeService, Depends(_svc)],
 ) -> InitiativeDetail:
+    assert_can_manage_initiatives(current_user)
     return svc.create_from_intake(body, current_user.id)
 
 
@@ -124,6 +132,7 @@ async def create_initiative(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[InitiativeService, Depends(_svc)],
 ) -> InitiativeDetail:
+    assert_can_manage_initiatives(current_user)
     return svc.create_initiative(body, current_user.id)
 
 
@@ -132,9 +141,10 @@ async def create_initiative(
 @router.get("/{initiative_id}", response_model=InitiativeDetail)
 async def get_initiative(
     initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[InitiativeService, Depends(_svc)],
 ) -> InitiativeDetail:
-    return svc.get_initiative(initiative_id)
+    return svc.get_initiative(initiative_id, current_user)
 
 
 @router.get("/{initiative_id}/export")
@@ -155,9 +165,11 @@ async def export_initiative_workbook(
 @router.post("/{initiative_id}/import", response_model=InitiativeDetail)
 async def import_into_existing_initiative(
     initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[InitiativeService, Depends(_svc)],
     file: UploadFile = File(...),
 ) -> InitiativeDetail:
+    assert_can_manage_initiatives(current_user)
     return svc.import_into_existing_initiative(initiative_id, await file.read())
 
 
@@ -167,8 +179,10 @@ async def import_into_existing_initiative(
 async def update_initiative(
     initiative_id: str,
     body: InitiativeUpdate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[InitiativeService, Depends(_svc)],
 ) -> InitiativeDetail:
+    assert_can_manage_initiatives(current_user)
     return svc.update_initiative(initiative_id, body)
 
 
@@ -177,8 +191,10 @@ async def update_initiative(
 @router.post("/{initiative_id}/archive", response_model=InitiativeDetail)
 async def archive_initiative(
     initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[InitiativeService, Depends(_svc)],
 ) -> InitiativeDetail:
+    assert_can_manage_initiatives(current_user)
     return svc.archive_initiative(initiative_id)
 
 
@@ -186,10 +202,11 @@ async def archive_initiative(
 @router.get("/{initiative_id}/summary")
 async def get_initiative_summary(
     initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[InitiativeService, Depends(_svc)],
 ):
     """Fetch persistent closure summary and value-realisation fields."""
-    init = svc.get_initiative(initiative_id)
+    init = svc.get_initiative(initiative_id, current_user)
     fin = init.financial_summary
     planned_value = Decimal(fin.net_value_plan) if fin else Decimal("0")
     realized_value = Decimal(fin.net_value_actual) if fin and fin.net_value_actual else Decimal("0")
@@ -208,9 +225,11 @@ async def get_initiative_summary(
 async def update_initiative_summary(
     initiative_id: str,
     body: dict,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[InitiativeService, Depends(_svc)],
 ):
     """Persist closure narrative fields on the initiative record."""
+    assert_can_manage_initiatives(current_user)
     update_data = {}
     if "final_summary" in body:
         update_data["summary"] = body["final_summary"]
@@ -221,7 +240,7 @@ async def update_initiative_summary(
     
     if update_data:
         svc.update_initiative(initiative_id, InitiativeUpdate(**update_data))
-    return await get_initiative_summary(initiative_id, svc)
+    return await get_initiative_summary(initiative_id, current_user, svc)
 
 # ── Delete (TO only) ──────────────────────────────────────────────────────────
 

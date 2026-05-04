@@ -2,7 +2,29 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import auth, financials, governance, health, initiatives, kpis, milestones, risks, status_updates, dashboard, meetings, people, ai, action_items, dependencies, workstreams, business_units, team
+from app.routers import (
+    action_items,
+    admin,
+    ai,
+    auth,
+    billing,
+    business_units,
+    dashboard,
+    dependencies,
+    financials,
+    governance,
+    health,
+    initiatives,
+    kpis,
+    meetings,
+    milestones,
+    people,
+    platform,
+    risks,
+    status_updates,
+    team,
+    workstreams,
+)
 
 app = FastAPI(
     title=settings.app_name,
@@ -22,6 +44,7 @@ app.add_middleware(
         "http://127.0.0.1:4302",
         "http://localhost:4303",
         "http://127.0.0.1:4303",
+        "https://transmuter.ishirock.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -30,11 +53,14 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(auth.router)
+app.include_router(billing.router)
 app.include_router(dashboard.router)
 app.include_router(meetings.router)
 app.include_router(people.router)
+app.include_router(platform.router)
 app.include_router(workstreams.router)
 app.include_router(business_units.router)
+app.include_router(admin.router)
 app.include_router(ai.router)
 app.include_router(action_items.router)
 app.include_router(dependencies.router)

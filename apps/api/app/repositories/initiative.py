@@ -52,6 +52,7 @@ class InitiativeRepository:
         page: int = 1,
         page_size: int = 50,
         include_archived: bool = False,
+        owner_user_id: str | None = None,
     ) -> tuple[list[dict], int]:  # type: ignore[type-arg]
         q = (
             self._c.table("initiatives")
@@ -77,6 +78,8 @@ class InitiativeRepository:
             q = q.eq("priority", priority)
         if search:
             q = q.ilike("name", f"%{search}%")
+        if owner_user_id:
+            q = q.or_(f"owner_id.eq.{owner_user_id},group_owner_id.eq.{owner_user_id}")
 
         q = q.order(sort_by, desc=sort_desc)
         q = q.range((page - 1) * page_size, page * page_size - 1)
@@ -219,9 +222,9 @@ class InitiativeRepository:
     def delete(self, initiative_id: str) -> None:
         self._c.table("initiatives").delete().eq("tenant_id", self._tid).eq("id", initiative_id).execute()
 
-    def export_csv(self, filters: dict | None = None) -> str:  # type: ignore[type-arg]
+    def export_csv(self, owner_user_id: str | None = None) -> str:
         """Return CSV string of all non-archived initiatives."""
-        rows, _ = self.list(page_size=10000, include_archived=False)
+        rows, _ = self.list(page_size=10000, include_archived=False, owner_user_id=owner_user_id)
         output = io.StringIO()
         fieldnames = [
             "initiative_code", "name", "stage", "rag_status", "priority",

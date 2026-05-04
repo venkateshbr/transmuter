@@ -21,6 +21,8 @@ from app.domain.initiatives import (
     PressureBreakdown,
 )
 from app.domain.financials import FinancialGridUpdate, FinancialSummary
+from app.core.auth import CurrentUser
+from app.core.rbac import can_view_all_initiatives
 from app.domain.initiative_intake import (
     InitiativeIntakeCreate,
     InitiativeWorkbookPreview,
@@ -62,7 +64,13 @@ class InitiativeService:
         sort_desc: bool = False,
         page: int = 1,
         page_size: int = 50,
+        current_user: CurrentUser | None = None,
     ) -> InitiativeListResponse:
+        owner_user_id = (
+            str(current_user.id)
+            if current_user and current_user.role == "initiative_owner"
+            else None
+        )
         rows, total = self._repo.list(
             workstream_id=workstream_id,
             rag_status=rag_status,
@@ -73,14 +81,26 @@ class InitiativeService:
             sort_desc=sort_desc,
             page=page,
             page_size=page_size,
+            owner_user_id=owner_user_id,
         )
-        items = [self._to_list_item(r) for r in rows]
+        items = [
+            self._to_list_item(r, self._fin.get_financial_summary(str(r["id"])))
+            for r in rows
+        ]
         return InitiativeListResponse(items=items, total=total, page=page, page_size=page_size)
 
-    def get_initiative(self, initiative_id: str) -> InitiativeDetail:
+    def get_initiative(
+        self,
+        initiative_id: str,
+        current_user: CurrentUser | None = None,
+    ) -> InitiativeDetail:
         row = self._repo.get(initiative_id)
         if not row:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Initiative not found")
+        if current_user and not can_view_all_initiatives(current_user.role):
+            user_id = str(current_user.id)
+            if row.get("owner_id") != user_id and row.get("group_owner_id") != user_id:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Initiative not found")
         counts = self._repo.get_counts(initiative_id)
         fin_summary = self._fin.get_financial_summary(initiative_id)
         team_members = self._get_team_members(initiative_id)
@@ -162,8 +182,13 @@ class InitiativeService:
         self._assert_exists(initiative_id)
         self._repo.delete(initiative_id)
 
-    def export_csv(self) -> str:
-        return self._repo.export_csv()
+    def export_csv(self, current_user: CurrentUser | None = None) -> str:
+        owner_user_id = (
+            str(current_user.id)
+            if current_user and current_user.role == "initiative_owner"
+            else None
+        )
+        return self._repo.export_csv(owner_user_id=owner_user_id)
 
     def export_template(self) -> bytes:
         return build_initiative_template()
@@ -484,7 +509,23 @@ class InitiativeService:
         return MilestoneCreate.model_validate(raw)
 
     @staticmethod
-    def _to_list_item(row: dict) -> InitiativeListItem:  # type: ignore[type-arg]
+    @staticmethod
+    def _net_value(
+        benefit: str | None,
+        cost: str | None,
+        *,
+        require_benefit: bool = False,
+    ) -> str | None:
+        if require_benefit and benefit is None:
+            return None
+        return str(Decimal(benefit or "0") - Decimal(cost or "0"))
+
+    @classmethod
+    def _to_list_item(
+        cls,
+        row: dict,  # type: ignore[type-arg]
+        fin: FinancialSummary | None = None,
+    ) -> InitiativeListItem:
         ws = row.get("workstreams") or {}
         owner = row.get("users") or {}
         return InitiativeListItem(
@@ -501,9 +542,19 @@ class InitiativeService:
             stage=row["stage"],
             country=row.get("country"),
             tag=row.get("tag"),
-            planned_value_base=None,
-            planned_value_high=None,
-            actual_value=None,
+            planned_value_base=cls._net_value(
+                fin.gm_uplift_plan_base if fin else None,
+                fin.costs_plan if fin else None,
+            ) if fin else None,
+            planned_value_high=cls._net_value(
+                fin.gm_uplift_plan_high if fin else None,
+                fin.costs_plan if fin else None,
+            ) if fin else None,
+            actual_value=cls._net_value(
+                fin.gm_uplift_actual if fin else None,
+                fin.costs_actual if fin else None,
+                require_benefit=True,
+            ) if fin else None,
             pressure_score=str(row["pressure_score"]) if row.get("pressure_score") is not None else None,
             archived_at=row.get("archived_at"),
         )

@@ -24,15 +24,20 @@ export class AuthService {
     return this.api.post<AuthResponse>('/auth/login', { email, password }).pipe(
       tap((resp) => {
         localStorage.setItem('access_token', resp.access_token);
-        localStorage.setItem('user_role', resp.role);
         this.isAuthenticated.set(true);
+        this.loadProfile().subscribe();
       })
+    );
+  }
+
+  loadProfile(): Observable<any> {
+    return this.api.get<any>('/auth/me').pipe(
+      tap(profile => this.user.set(profile))
     );
   }
 
   logout() {
     localStorage.removeItem('access_token');
-    localStorage.removeItem('user_role');
     this.isAuthenticated.set(false);
     this.user.set(null);
     this.router.navigate(['/auth/login']);
@@ -43,6 +48,17 @@ export class AuthService {
   }
 
   getRole(): string | null {
-    return localStorage.getItem('user_role');
+    const profileRole = this.user()?.role;
+    if (profileRole) return profileRole;
+
+    const token = this.getToken();
+    if (!token) return null;
+
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1] ?? ''));
+      return typeof payload.role === 'string' ? payload.role : null;
+    } catch {
+      return null;
+    }
   }
 }

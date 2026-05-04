@@ -39,5 +39,19 @@ class Settings(BaseSettings):
     # Feature flags
     ai_enabled: bool = True
 
+    # Billing / payments
+    payment_provider: str = ""
+    stripe_secret_key: str = ""
+    stripe_publishable_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_price_team_monthly: str = ""
+    stripe_price_team_annual: str = ""
+    stripe_price_business_monthly: str = ""
+    stripe_price_business_annual: str = ""
+    encryption_key: str = ""
+
+    # SaaS operator access
+    platform_admin_emails: str = ""
+
 
 settings = Settings()  # type: ignore[call-arg]

@@ -1,6 +1,6 @@
 # Transmuter — Value Creation Platform
 
-Transmuter is a high-performance platform for managing digital transformation portfolios, governance, and AI-driven insights. It follows a rigorous multi-tenant architecture with Supabase RLS and a "Purple" design system.
+Transmuter is a high-performance platform for managing digital transformation portfolios, governance, and AI-driven insights. It follows a rigorous multi-tenant architecture with Supabase RLS and an A&M-inspired consulting design system.
 
 ## 🚀 Quick Start
 
@@ -40,7 +40,7 @@ For detailed coding rules and standards, refer to:
 - **Multi-Tenancy**: Every table MUST have `tenant_id`. All queries MUST be scoped by `tenant_id`.
 - **Security**: Supabase RLS policies are mandatory on all tables. Never send raw PII to external LLMs.
 - **AI Agents**: All LLM calls must be traced via Langfuse. HITL (Human-In-The-Loop) checkpoints are required for DB writes by agents.
-- **UI/UX**: Follow the Purple Design System (`team/DESIGN_SYSTEM.md`). Components must support both Light and Dark modes using CSS variables (`--t-*`).
+- **UI/UX**: Follow the A&M-inspired Transmuter Design System (`team/DESIGN_SYSTEM.md`). Components must support both Light and Dark modes using CSS variables (`--t-*`).
 
 ## 📂 Project Structure
 

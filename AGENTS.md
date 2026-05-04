@@ -70,6 +70,9 @@ The single canonical engineering process is `docs/team/SDLC_PROTOCOL.md`. Do not
 - CSS variable design tokens (not hardcoded hex)
 - Every component: light + dark theme support
 - ARIA labels on all interactive elements
+- Every new or changed frontend page/component must follow `team/DESIGN_SYSTEM.md`.
+- Use the A&M-inspired Transmuter design direction: deep navy, steel blue, light blue accents, white/grey surfaces, Libre Franklin typography, square structural geometry, thin dividers, restrained shadows, and dense executive layouts.
+- Do not introduce purple/lavender/violet palettes, purple gradients, decorative blobs/orbs, or rounded pill-heavy SaaS styling unless explicitly required by an existing component contract.
 
 ## Agent Execution Order (per feature)
 ```

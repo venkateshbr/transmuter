@@ -117,7 +117,7 @@ import { FormsModule } from '@angular/forms';
                             <span class="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-500 font-bold uppercase">Transcript</span>
                           }
                           @if (s.ai_optimised) {
-                            <span class="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/10 text-purple-500 font-bold uppercase">AI Optimized</span>
+                            <span class="text-[9px] px-1.5 py-0.5 rounded bg-[var(--t-accent-soft)] text-[var(--t-accent)] font-bold uppercase">AI Optimized</span>
                           }
                         </div>
                       </div>

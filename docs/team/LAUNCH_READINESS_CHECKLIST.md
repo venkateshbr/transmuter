@@ -1,0 +1,40 @@
+# Transmuter Launch Readiness Checklist
+
+## Current Status
+
+Local launch gate reports:
+
+- Blockers: 0
+- Warnings: 1
+- Runtime: API and Angular app verified locally
+- Billing: Stripe Checkout, webhook provisioning, formal signup intents, tenant subscription records, Admin billing status, and Billing Portal handoff are implemented
+- RBAC: Transformation Office, Initiative Owner, and Viewer are enforced on core portfolio routes
+- RLS: Supabase catalog verification passed on 2026-05-04 with 34 tables checked, 32 tenant tables, 0 blockers, and 0 warnings
+- Prahari: Billing/RBAC/RLS security review is documented in `docs/team/PRAHARI_SECURITY_REVIEW_BILLING_RBAC.md`
+- Platform Admin: SaaS operator login and `/platform` console are available through server-side `PLATFORM_ADMIN_EMAILS`
+
+## Launch-Critical Controls
+
+- Public homepage and Get Started flow are available.
+- Stripe Checkout is created server-side.
+- Stripe webhook signatures are verified before provisioning.
+- Signup creates a pending tenant, signup intent, and tenant-specific plan record before redirecting to Stripe Checkout.
+- Initial signup admin is provisioned as `transformation_office`.
+- Admins can view billing state and open Stripe Billing Portal after checkout has created a customer.
+- Admins can view production Stripe Price ID configuration status in Admin Billing.
+- Platform admins can view cross-tenant signup, billing, tenant, and Stripe catalog readiness without being tenant members.
+- Admins can grant only `transformation_office`, `initiative_owner`, or `viewer`.
+- Initiative owners are scoped to initiatives where they are owner or group owner.
+- Viewers can see portfolio data but cannot mutate initiative data or grant roles.
+- Transformation Office owns mutation paths for users, initiatives, meetings, action items, governance, financials, KPIs, risks, milestones, dependencies, and team assignments.
+- Supabase RLS verification is repeatable via `apps/api/scripts/verify_rls.py`.
+
+## Remaining Production Hardening
+
+- Configure production Stripe product/price IDs from `docs/team/STRIPE_PRODUCT_CATALOG.md`; Admin Billing and Launch Readiness now show missing IDs.
+- Configure Stripe webhook endpoint in the Stripe dashboard for production.
+- Configure production domain redirect URLs for checkout success, cancel, and Billing Portal return.
+- Decide whether beta tenants start empty or with optional sample data.
+- Run the full real API acceptance suite and browser E2E suite in CI against a seeded test tenant.
+- Complete Prahari security review for auth, RLS, Stripe, Supabase service-role usage, and AI data masking.
+- Configure production `PLATFORM_ADMIN_EMAILS` with named operator accounts and require MFA in Supabase Auth.

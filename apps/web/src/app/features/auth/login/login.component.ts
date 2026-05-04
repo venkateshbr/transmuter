@@ -100,7 +100,7 @@ export class LoginComponent {
 
     this.auth.login(this.email, this.password).subscribe({
       next: () => {
-        this.router.navigate(['/']);
+        this.router.navigate([this.auth.getRole() === 'platform_admin' ? '/platform' : '/dashboard']);
       },
       error: (err) => {
         this.error.set(err.error?.detail || 'Authentication failed');

@@ -15,17 +15,26 @@ class GovernanceRepository:
 
     # ── Criteria ─────────────────────────────────────────────────────
 
-    def list_criteria(self, gate_number: int) -> list[dict[str, Any]]:
-        result = (
+    def list_criteria(self, gate_number: int | None = None) -> list[dict[str, Any]]:
+        query = self._c.table("gate_criteria").select("*").eq("tenant_id", self._tid)
+        if gate_number:
+            query = query.eq("gate_number", gate_number)
+        result = query.order("gate_number").order("sort_order").execute()
+        return result.data or []
+
+    def upsert_criterion(self, data: dict[str, Any]) -> dict[str, Any]:
+        data["tenant_id"] = self._tid
+        result = self._c.table("gate_criteria").upsert(data).execute()
+        return result.data[0] if result.data else {}
+
+    def delete_criterion(self, criterion_id: str) -> None:
+        (
             self._c.table("gate_criteria")
-            .select("*")
+            .delete()
             .eq("tenant_id", self._tid)
-            .eq("gate_number", gate_number)
-            .eq("is_active", True)
-            .order("sort_order")
+            .eq("id", criterion_id)
             .execute()
         )
-        return result.data or []
 
     # ── Gates ────────────────────────────────────────────────────────
 

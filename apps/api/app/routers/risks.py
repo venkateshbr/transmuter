@@ -8,6 +8,11 @@ from fastapi import APIRouter, Depends, Query
 
 from app.core.auth import CurrentUser, get_current_user
 from app.core.database import get_supabase_admin
+from app.core.rbac import (
+    assert_can_manage_initiatives,
+    assert_can_view_initiative,
+    assert_can_view_portfolio,
+)
 from app.domain.risks import (
     RiskCreate,
     RiskHeatmapResponse,
@@ -35,11 +40,13 @@ def _svc(
     response_model=RiskListResponse,
 )
 async def list_portfolio_risks(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[RiskService, Depends(_svc)],
     status: str | None = Query(None),
     type: str | None = Query(None),
     rating: str | None = Query(None),
 ) -> RiskListResponse:
+    assert_can_view_portfolio(current_user)
     return svc.list_portfolio_risks(status=status, type=type, rating=rating)
 
 
@@ -48,8 +55,10 @@ async def list_portfolio_risks(
     response_model=RiskHeatmapResponse,
 )
 async def get_risk_heatmap(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[RiskService, Depends(_svc)],
 ) -> RiskHeatmapResponse:
+    assert_can_view_portfolio(current_user)
     return svc.get_heatmap()
 
 
@@ -61,8 +70,10 @@ async def get_risk_heatmap(
 )
 async def list_initiative_risks(
     initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[RiskService, Depends(_svc)],
 ) -> RiskListResponse:
+    assert_can_view_initiative(get_supabase_admin(), current_user, initiative_id)
     return svc.list_risks(initiative_id)
 
 
@@ -74,8 +85,10 @@ async def list_initiative_risks(
 async def create_risk(
     initiative_id: str,
     body: RiskCreate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[RiskService, Depends(_svc)],
 ) -> RiskItem:
+    assert_can_manage_initiatives(current_user)
     return svc.create_risk(initiative_id, body)
 
 
@@ -87,8 +100,10 @@ async def update_risk(
     initiative_id: str,
     risk_id: str,
     body: RiskUpdate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[RiskService, Depends(_svc)],
 ) -> RiskItem:
+    assert_can_manage_initiatives(current_user)
     return svc.update_risk(initiative_id, risk_id, body)
 
 
@@ -99,6 +114,8 @@ async def update_risk(
 async def delete_risk(
     initiative_id: str,
     risk_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[RiskService, Depends(_svc)],
 ) -> None:
+    assert_can_manage_initiatives(current_user)
     svc.delete_risk(initiative_id, risk_id)

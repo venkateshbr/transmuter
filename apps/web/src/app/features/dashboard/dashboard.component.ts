@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ApiService } from '../../core/services/api.service';
+import { AuthService } from '../../core/services/auth.service';
 import { RouterLink } from '@angular/router';
 
 @Component({
@@ -10,21 +11,21 @@ import { RouterLink } from '@angular/router';
   template: `
     <div class="p-8 space-y-10 animate-fade-in" style="background:var(--t-bg)">
       
-      <!-- Premium Hero Section -->
-      <section class="relative p-10 rounded-[2.5rem] overflow-hidden bg-gradient-to-br from-[var(--t-accent)] to-[#a855f7] text-white shadow-2xl shadow-purple-500/20">
-        <!-- Abstract Background Elements -->
-        <div class="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl -mr-20 -mt-20"></div>
-        <div class="absolute bottom-0 left-0 w-64 h-64 bg-black/10 rounded-full blur-2xl -ml-20 -mb-20"></div>
+      <!-- Executive Hero Section -->
+      <section class="relative overflow-hidden bg-[var(--t-primary)] p-10 text-white shadow-2xl">
+        <div class="absolute inset-y-0 right-0 w-1/3 border-l border-white/15 bg-white/5"></div>
+        <div class="absolute right-10 top-8 h-24 w-24 border-t-4 border-r-4 border-[var(--t-blue-light)]/70"></div>
+        <div class="absolute bottom-8 right-24 h-16 w-40 border-b-4 border-[var(--t-blue-light)]/45"></div>
         
         <div class="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
           <div class="flex-1">
             <div class="flex items-center gap-2 mb-4">
-              <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+              <span class="h-2 w-8 bg-[var(--t-blue-light)]"></span>
               <span class="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Portfolio Live Context</span>
             </div>
             <h1 class="text-4xl font-black tracking-tight leading-tight">
               Operational Excellence <br/>
-              & Strategic Yield Dashboard<span class="opacity-50">.</span>
+              & Strategic Yield Dashboard<span class="text-[var(--t-blue-light)]">.</span>
             </h1>
             <p class="text-sm font-medium opacity-80 mt-4 max-w-xl leading-relaxed">
               Real-time synchronization across {{ data()?.summary?.total_initiatives }} strategic workstreams. 
@@ -39,11 +40,11 @@ import { RouterLink } from '@angular/router';
                   (click)="generateReport()"
                   data-testid="dashboard-executive-summary"
                   aria-label="Generate executive summary"
-                  class="px-6 py-3 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/10 text-xs font-black uppercase tracking-widest transition-all"
+                  class="border border-white/20 bg-white/10 px-6 py-3 text-xs font-black uppercase tracking-widest transition-all hover:bg-white/20"
                 >
                   {{ reporting() ? 'Generating...' : 'Executive Summary' }}
                 </button>
-                <button routerLink="/initiatives/new" class="px-6 py-3 rounded-2xl bg-white text-[var(--t-accent)] hover:scale-105 active:scale-95 text-xs font-black uppercase tracking-widest shadow-lg transition-all">
+                <button routerLink="/initiatives/new" class="bg-white px-6 py-3 text-xs font-black uppercase tracking-widest text-[var(--t-primary)] shadow-lg transition-all hover:shadow-[inset_0_-4px_0_var(--t-blue-light)]">
                   + Executive Action
                 </button>
               </div>
@@ -408,10 +409,11 @@ import { RouterLink } from '@angular/router';
     @if (showWelcome()) {
       <div class="overlay flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
         <div class="card max-w-2xl w-full p-0 overflow-hidden shadow-2xl animate-scale-in">
-           <div class="h-48 bg-gradient-to-br from-[var(--t-accent)] to-[#a855f7] p-10 relative overflow-hidden">
-              <div class="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-20 -mt-20"></div>
+           <div class="h-48 bg-[var(--t-primary)] p-10 relative overflow-hidden">
+              <div class="absolute inset-y-0 right-0 w-1/3 border-l border-white/15 bg-white/5"></div>
+              <div class="absolute right-8 top-8 h-20 w-20 border-t-4 border-r-4 border-[var(--t-blue-light)]/70"></div>
               <div class="relative z-10">
-                 <h2 class="text-3xl font-black text-white leading-tight">Welcome to <br/>Transmuter Platform<span class="opacity-50">.</span></h2>
+                 <h2 class="text-3xl font-black text-white leading-tight">Welcome to <br/>Transmuter Platform<span class="text-[var(--t-blue-light)]">.</span></h2>
                  <p class="text-white/70 text-xs font-bold uppercase tracking-widest mt-2">Executive Onboarding (May 2026 Release)</p>
               </div>
            </div>
@@ -440,8 +442,8 @@ import { RouterLink } from '@angular/router';
                  You are logged in as the **Transformation Office Administrator**. You have full visibility across 4 workstreams and 24 strategic initiatives. 
               </p>
               <div class="flex gap-4 pt-4">
-                 <button (click)="showWelcome.set(false)" class="flex-1 btn-primary py-4 rounded-2xl shadow-xl shadow-purple-500/20 font-black uppercase text-[10px] tracking-widest">Enter Command Center</button>
-                 <button (click)="showWelcome.set(false)" class="px-8 py-4 rounded-2xl border border-[var(--t-border)] font-black uppercase text-[10px] tracking-widest hover:bg-[var(--t-surface-raised)] transition-all">Quick Tour</button>
+                 <button (click)="completeOnboarding()" class="flex-1 btn-primary py-4 font-black uppercase text-[10px] tracking-widest">Enter Command Center</button>
+                 <button (click)="completeOnboarding()" class="px-8 py-4 border border-[var(--t-border)] font-black uppercase text-[10px] tracking-widest hover:bg-[var(--t-surface-raised)] transition-all">Quick Tour</button>
               </div>
            </div>
         </div>
@@ -461,11 +463,12 @@ import { RouterLink } from '@angular/router';
 })
 export class DashboardComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly auth = inject(AuthService);
   
   data = signal<any>(null);
   reporting = signal(false);
   reportReady = signal(false);
-  showWelcome = signal(true);
+  showWelcome = signal(false);
   filters = signal({ business_unit_id: '', workstream_id: '', rag_status: '' });
   heatmapLevels = ['high', 'medium', 'low'];
   stages = [
@@ -476,6 +479,22 @@ export class DashboardComponent implements OnInit {
 
   ngOnInit() {
     this.loadDashboard();
+    this.checkOnboarding();
+  }
+
+  checkOnboarding() {
+    this.auth.loadProfile().subscribe(user => {
+      if (!user.onboarding_completed) {
+        this.showWelcome.set(true);
+      }
+    });
+  }
+
+  completeOnboarding() {
+    this.showWelcome.set(false);
+    this.api.patch('/auth/me', { onboarding_completed: true }).subscribe(() => {
+      this.auth.loadProfile().subscribe();
+    });
   }
 
   loadDashboard() {
