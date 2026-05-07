@@ -54,11 +54,15 @@ export const routes: Routes = [
           },
           {
             path: 'new',
+            canActivate: [authGuard],
+            data: { roles: ['transformation_office'] },
             loadComponent: () =>
               import('./features/initiatives/create/create-initiative.component').then(m => m.CreateInitiativeComponent),
           },
           {
             path: ':id/edit',
+            canActivate: [authGuard],
+            data: { roles: ['transformation_office'] },
             loadComponent: () =>
               import('./features/initiatives/create/create-initiative.component').then(m => m.CreateInitiativeComponent),
           },

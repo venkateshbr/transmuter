@@ -215,7 +215,7 @@ export class App {
     { label: 'AI Insights',      path: '/pmo/ai-insights',    icon: 'cpu' },
     { label: 'Meetings',         path: '/meetings',           icon: 'calendar' },
     { label: 'People',           path: '/people',             icon: 'users' },
-    { label: 'Admin',            path: '/admin',              icon: 'settings' },
+    ...(this.canManageTenant() ? [{ label: 'Admin', path: '/admin', icon: 'settings' }] : []),
     ];
   }
 
@@ -236,6 +236,10 @@ export class App {
 
   protected isPlatformAdmin(): boolean {
     return this.auth.getRole() === 'platform_admin';
+  }
+
+  protected canManageTenant(): boolean {
+    return this.auth.getRole() === 'transformation_office';
   }
 
   protected homeLink(): string {

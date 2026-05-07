@@ -6,22 +6,58 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
+from fastapi import HTTPException, status
 from supabase import Client
 
+from app.core.config import settings
 from app.repositories.audit import AuditRepository
 from app.repositories.governance import GovernanceRepository
 from app.repositories.organization import OrganizationRepository
-from app.core.config import settings
 from app.services.billing import stripe_price_configuration
+
+PORTFOLIO_CLEANUP_TABLES = [
+    "action_items",
+    "agenda_items",
+    "meeting_sessions",
+    "meeting_initiatives",
+    "meeting_attendees",
+    "meetings",
+    "gate_submissions",
+    "stage_gates",
+    "nudge_log",
+    "status_updates",
+    "financial_cost_lines",
+    "financial_entries",
+    "financial_cell_assumptions",
+    "risks",
+    "kpi_entries",
+    "kpis",
+    "milestone_dependencies",
+    "milestone_checklist",
+    "milestones",
+    "initiative_team",
+    "initiatives",
+]
+
+PRESERVED_PORTFOLIO_CLEANUP_OBJECTS = [
+    "organization",
+    "users",
+    "billing",
+    "business_units",
+    "workstreams",
+    "gate_criteria",
+    "audit_logs",
+]
 
 
 class AdminService:
-    def __init__(self, client: Client, tenant_id: UUID) -> None:
+    def __init__(self, client: Client, tenant_id: UUID, user_id: UUID | None = None) -> None:
         self._org_repo = OrganizationRepository(client, tenant_id)
         self._gov_repo = GovernanceRepository(client, tenant_id)
         self._audit_repo = AuditRepository(client, tenant_id)
         self._c = client
         self._tid = str(tenant_id)
+        self._user_id = str(user_id) if user_id else None
 
     # ── Organization Settings ──────────────────────────────────────
 
@@ -41,7 +77,11 @@ class AdminService:
         billing = settings.get("billing") or {}
         subscription_response = (
             self._c.table("tenant_subscriptions")
-            .select("*, subscription_plans(code,name,amount_cents,currency,billing_interval,stripe_price_id,user_limit_min,user_limit_max)")
+            .select(
+                "*, subscription_plans("
+                "code,name,amount_cents,currency,billing_interval,stripe_price_id,"
+                "user_limit_min,user_limit_max)"
+            )
             .eq("tenant_id", self._tid)
             .maybe_single()
             .execute()
@@ -57,21 +97,29 @@ class AdminService:
         )
         return {
             "provider": billing.get("provider", "stripe"),
-            "subscription_status": (subscription or {}).get("status") or billing.get("subscription_status", "not_configured"),
-            "checkout_status": (subscription or {}).get("checkout_status") or billing.get("checkout_status"),
-            "payment_status": (subscription or {}).get("payment_status") or billing.get("payment_status"),
-            "planned_user_count": (subscription or {}).get("planned_user_count") or billing.get("planned_user_count"),
+            "subscription_status": (subscription or {}).get("status")
+            or billing.get("subscription_status", "not_configured"),
+            "checkout_status": (subscription or {}).get("checkout_status")
+            or billing.get("checkout_status"),
+            "payment_status": (subscription or {}).get("payment_status")
+            or billing.get("payment_status"),
+            "planned_user_count": (subscription or {}).get("planned_user_count")
+            or billing.get("planned_user_count"),
             "active_user_count": active_users.count or 0,
             "price_per_user_cents": billing.get("price_per_user_cents"),
             "amount_cents": plan.get("amount_cents") or billing.get("amount_cents"),
             "currency": plan.get("currency") or billing.get("currency", "usd"),
-            "billing_interval": plan.get("billing_interval") or billing.get("billing_interval", "month"),
+            "billing_interval": plan.get("billing_interval")
+            or billing.get("billing_interval", "month"),
             "plan_code": plan.get("code") or billing.get("plan_code"),
             "plan_name": plan.get("name") or billing.get("plan_name"),
             "stripe_price_id": plan.get("stripe_price_id"),
-            "stripe_customer_id": (subscription or {}).get("stripe_customer_id") or billing.get("customer_id"),
-            "stripe_subscription_id": (subscription or {}).get("stripe_subscription_id") or billing.get("subscription_id"),
-            "stripe_checkout_session_id": (subscription or {}).get("stripe_checkout_session_id") or billing.get("checkout_session_id"),
+            "stripe_customer_id": (subscription or {}).get("stripe_customer_id")
+            or billing.get("customer_id"),
+            "stripe_subscription_id": (subscription or {}).get("stripe_subscription_id")
+            or billing.get("subscription_id"),
+            "stripe_checkout_session_id": (subscription or {}).get("stripe_checkout_session_id")
+            or billing.get("checkout_session_id"),
             "last_event_at": (subscription or {}).get("updated_at") or billing.get("last_event_at"),
             "stripe_price_configuration": stripe_price_configuration(),
         }
@@ -79,18 +127,66 @@ class AdminService:
     def get_launch_readiness(self) -> dict[str, Any]:
         checks = [
             self._check("supabase_url", bool(settings.supabase_url), "Supabase URL is configured."),
-            self._check("supabase_service_key", bool(settings.supabase_service_key), "Supabase service key is configured."),
-            self._check("jwt_secret", len(settings.jwt_secret) >= 32, "JWT secret is at least 32 characters."),
-            self._check("payment_provider", settings.payment_provider == "stripe", "Stripe is the active payment provider."),
-            self._check("stripe_secret_key", settings.stripe_secret_key.startswith("sk_"), "Stripe secret key is configured."),
-            self._check("stripe_publishable_key", settings.stripe_publishable_key.startswith("pk_"), "Stripe publishable key is configured."),
-            self._check("stripe_webhook_secret", settings.stripe_webhook_secret.startswith("whsec_"), "Stripe webhook secret is configured."),
-            self._check("stripe_price_team_monthly", bool(settings.stripe_price_team_monthly), "Team monthly Stripe Price ID is configured."),
-            self._check("stripe_price_team_annual", bool(settings.stripe_price_team_annual), "Team annual Stripe Price ID is configured."),
-            self._check("stripe_price_business_monthly", bool(settings.stripe_price_business_monthly), "Business monthly Stripe Price ID is configured."),
-            self._check("stripe_price_business_annual", bool(settings.stripe_price_business_annual), "Business annual Stripe Price ID is configured."),
-            self._check("encryption_key", bool(settings.encryption_key), "Encryption key is configured."),
-            self._check("openrouter_api_key", bool(settings.openrouter_api_key), "OpenRouter key is configured for AI."),
+            self._check(
+                "supabase_service_key",
+                bool(settings.supabase_service_key),
+                "Supabase service key is configured.",
+            ),
+            self._check(
+                "jwt_secret",
+                len(settings.jwt_secret) >= 32,
+                "JWT secret is at least 32 characters.",
+            ),
+            self._check(
+                "payment_provider",
+                settings.payment_provider == "stripe",
+                "Stripe is the active payment provider.",
+            ),
+            self._check(
+                "stripe_secret_key",
+                settings.stripe_secret_key.startswith("sk_"),
+                "Stripe secret key is configured.",
+            ),
+            self._check(
+                "stripe_publishable_key",
+                settings.stripe_publishable_key.startswith("pk_"),
+                "Stripe publishable key is configured.",
+            ),
+            self._check(
+                "stripe_webhook_secret",
+                settings.stripe_webhook_secret.startswith("whsec_"),
+                "Stripe webhook secret is configured.",
+            ),
+            self._check(
+                "stripe_price_team_monthly",
+                bool(settings.stripe_price_team_monthly),
+                "Team monthly Stripe Price ID is configured.",
+            ),
+            self._check(
+                "stripe_price_team_annual",
+                bool(settings.stripe_price_team_annual),
+                "Team annual Stripe Price ID is configured.",
+            ),
+            self._check(
+                "stripe_price_business_monthly",
+                bool(settings.stripe_price_business_monthly),
+                "Business monthly Stripe Price ID is configured.",
+            ),
+            self._check(
+                "stripe_price_business_annual",
+                bool(settings.stripe_price_business_annual),
+                "Business annual Stripe Price ID is configured.",
+            ),
+            self._check(
+                "encryption_key",
+                bool(settings.encryption_key),
+                "Encryption key is configured.",
+            ),
+            self._check(
+                "openrouter_api_key",
+                bool(settings.openrouter_api_key),
+                "OpenRouter key is configured for AI.",
+            ),
         ]
         for table in (
             "organizations",
@@ -118,8 +214,12 @@ class AdminService:
                 severity="warning",
             )
         )
-        blockers = [check for check in checks if check["severity"] == "blocker" and not check["passed"]]
-        warnings = [check for check in checks if check["severity"] == "warning" and not check["passed"]]
+        blockers = [
+            check for check in checks if check["severity"] == "blocker" and not check["passed"]
+        ]
+        warnings = [
+            check for check in checks if check["severity"] == "warning" and not check["passed"]
+        ]
         return {
             "ready": not blockers,
             "blockers": len(blockers),
@@ -135,7 +235,7 @@ class AdminService:
             patch["logo_url"] = data["logo_url"]
         if "settings" in data:
             patch["settings"] = data["settings"]
-        
+
         patch["updated_at"] = datetime.now(UTC).isoformat()
         return self._org_repo.update_organization(patch)
 
@@ -150,6 +250,55 @@ class AdminService:
 
     def delete_gate_criterion(self, criterion_id: str) -> None:
         self._gov_repo.delete_criterion(criterion_id)
+
+    # ── Portfolio Cleanup ─────────────────────────────────────────
+
+    def get_portfolio_cleanup_preview(self) -> dict[str, Any]:
+        org = self._require_organization()
+        table_counts = self._portfolio_cleanup_table_counts()
+        return {
+            "tenant_id": self._tid,
+            "tenant_slug": org["slug"],
+            "tenant_name": org["name"],
+            "object_counts": self._portfolio_cleanup_object_counts(table_counts),
+            "table_counts": table_counts,
+            "preserved_objects": PRESERVED_PORTFOLIO_CLEANUP_OBJECTS,
+        }
+
+    def delete_portfolio_data(self, confirm_slug: str) -> dict[str, Any]:
+        org = self._require_organization()
+        if confirm_slug != org["slug"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Confirmation slug does not match tenant slug",
+            )
+
+        deletion_counts: dict[str, int] = {}
+        for table in PORTFOLIO_CLEANUP_TABLES:
+            deletion_counts[table] = self._delete_tenant_rows(table)
+
+        if self._user_id:
+            self._audit_repo.log(
+                "delete",
+                "portfolio_cleanup",
+                self._tid,
+                self._user_id,
+                {
+                    "deleted_rows": deletion_counts,
+                    "object_counts": self._portfolio_cleanup_object_counts(deletion_counts),
+                    "preserved_objects": PRESERVED_PORTFOLIO_CLEANUP_OBJECTS,
+                },
+            )
+
+        return {
+            "deleted": True,
+            "tenant_id": self._tid,
+            "tenant_slug": org["slug"],
+            "tenant_name": org["name"],
+            "deleted_rows": deletion_counts,
+            "object_counts": self._portfolio_cleanup_object_counts(deletion_counts),
+            "preserved_objects": PRESERVED_PORTFOLIO_CLEANUP_OBJECTS,
+        }
 
     # ── Audit Logs ───────────────────────────────────────────────
 
@@ -178,3 +327,53 @@ class AdminService:
             return self._check(f"table_{table}", True, f"{table} table is queryable.")
         except Exception:
             return self._check(f"table_{table}", False, f"{table} table is not queryable.")
+
+    def _require_organization(self) -> dict[str, Any]:
+        org = self._org_repo.get_organization()
+        if not org:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        return org
+
+    def _portfolio_cleanup_table_counts(self) -> dict[str, int]:
+        return {table: self._count_tenant_rows(table) for table in PORTFOLIO_CLEANUP_TABLES}
+
+    def _count_tenant_rows(self, table: str) -> int:
+        response = (
+            self._c.table(table).select("id", count="exact").eq("tenant_id", self._tid).execute()
+        )
+        return response.count or 0
+
+    def _delete_tenant_rows(self, table: str) -> int:
+        count = self._count_tenant_rows(table)
+        if count == 0:
+            return 0
+        self._c.table(table).delete().eq("tenant_id", self._tid).execute()
+        return count
+
+    @staticmethod
+    def _portfolio_cleanup_object_counts(table_counts: dict[str, int]) -> dict[str, int]:
+        groups = {
+            "initiatives": ["initiatives", "initiative_team"],
+            "financials": [
+                "financial_entries",
+                "financial_cost_lines",
+                "financial_cell_assumptions",
+            ],
+            "kpis": ["kpis", "kpi_entries"],
+            "risks": ["risks"],
+            "milestones": ["milestones", "milestone_checklist", "milestone_dependencies"],
+            "meetings": [
+                "meetings",
+                "meeting_attendees",
+                "meeting_initiatives",
+                "meeting_sessions",
+                "agenda_items",
+            ],
+            "action_items": ["action_items"],
+            "governance": ["gate_submissions", "stage_gates"],
+            "status_updates": ["status_updates", "nudge_log"],
+        }
+        return {
+            key: sum(table_counts.get(table, 0) for table in tables)
+            for key, tables in groups.items()
+        }

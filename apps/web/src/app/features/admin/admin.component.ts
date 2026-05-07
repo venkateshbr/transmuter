@@ -30,7 +30,7 @@ import { FormsModule } from '@angular/forms';
       <!-- Admin Navigation -->
       <div class="border-b border-[var(--t-border)]">
         <nav class="-mb-px flex space-x-8">
-          @for (tab of ['General', 'Billing', 'Launch Readiness', 'Strategic Parameters', 'Access Control', 'Governance Engine', 'Audit Logs']; track tab) {
+          @for (tab of ['General', 'Billing', 'Launch Readiness', 'Data Cleanup', 'Strategic Parameters', 'Access Control', 'Governance Engine', 'Audit Logs']; track tab) {
             <button
               type="button"
               (click)="activeTab = tab"
@@ -227,6 +227,82 @@ import { FormsModule } from '@angular/forms';
                     </span>
                   </div>
                 }
+              </section>
+            </div>
+          }
+
+          @if (activeTab === 'Data Cleanup') {
+            <div class="card overflow-hidden">
+              <section class="border-b border-red-500/30 bg-red-500/10 p-8">
+                <p class="text-[10px] font-black uppercase tracking-widest text-red-500">Destructive tenant operation</p>
+                <h3 class="mt-2 text-2xl font-black text-[var(--t-text-primary)]">Delete portfolio data</h3>
+                <p class="mt-2 max-w-2xl text-sm leading-6 text-[var(--t-text-secondary)]">
+                  Remove initiatives and their dependent KPIs, risks, milestones, financials, meetings,
+                  action items, status updates, and gate submissions for this tenant only.
+                </p>
+              </section>
+
+              <section class="grid gap-4 p-8 md:grid-cols-3">
+                @for (item of cleanupObjects(); track item.key) {
+                  <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4">
+                    <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">{{ item.label }}</p>
+                    <p class="mt-2 text-3xl font-black text-[var(--t-text-primary)]">{{ item.count }}</p>
+                  </div>
+                }
+              </section>
+
+              <section class="border-t border-[var(--t-border)] p-8">
+                <div class="grid gap-6 lg:grid-cols-[1fr_0.8fr]">
+                  <div>
+                    <p class="text-sm font-black text-[var(--t-text-primary)]">Preserved tenant records</p>
+                    <p class="mt-2 text-sm leading-6 text-[var(--t-text-secondary)]">
+                      This action does not delete the tenant organization, users, auth users, billing/subscription records,
+                      workstreams, business units, gate criteria, or audit history.
+                    </p>
+                    <p class="mt-4 font-mono text-xs text-[var(--t-text-tertiary)]">
+                      Tenant slug: {{ cleanupPreview().tenant_slug || 'Loading' }}
+                    </p>
+                  </div>
+
+                  <div class="border border-red-500/30 bg-[var(--t-surface-raised)] p-5">
+                    <label class="block">
+                      <span class="text-[10px] font-black uppercase tracking-widest text-red-500">
+                        Type tenant slug to confirm
+                      </span>
+                      <input
+                        class="input-field mt-2 w-full font-mono"
+                        [(ngModel)]="cleanupConfirmation"
+                        [placeholder]="cleanupPreview().tenant_slug || ''"
+                        aria-label="Portfolio cleanup confirmation slug">
+                    </label>
+
+                    @if (cleanupError()) {
+                      <div class="mt-4 border border-red-500/30 bg-red-500/10 p-3 text-sm font-bold text-red-500">
+                        {{ cleanupError() }}
+                      </div>
+                    }
+
+                    @if (cleanupResult()) {
+                      <div class="mt-4 border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm font-bold text-emerald-600">
+                        Portfolio cleanup completed for {{ cleanupResult().tenant_name }}.
+                      </div>
+                    }
+
+                    <div class="mt-5 flex justify-end gap-3">
+                      <button type="button" class="btn-ghost border border-[var(--t-border)] px-4 py-2 text-xs font-black uppercase" (click)="loadCleanupPreview()" aria-label="Refresh portfolio cleanup preview">
+                        Refresh
+                      </button>
+                      <button
+                        type="button"
+                        class="border border-red-500 bg-red-500 px-4 py-2 text-xs font-black uppercase text-white disabled:cursor-not-allowed disabled:opacity-40"
+                        [disabled]="cleanupConfirmation !== cleanupPreview().tenant_slug || cleanupDeleting()"
+                        (click)="deletePortfolioData()"
+                        aria-label="Delete all tenant portfolio data">
+                        {{ cleanupDeleting() ? 'Deleting...' : 'Delete portfolio data' }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </section>
             </div>
           }
@@ -497,8 +573,13 @@ export class AdminComponent implements OnInit {
   billing = signal<any>({});
   billingError = signal<string | null>(null);
   launchReadiness = signal<any>({ ready: false, blockers: 0, warnings: 0, checks: [] });
+  cleanupPreview = signal<any>({ object_counts: {}, preserved_objects: [] });
+  cleanupResult = signal<any | null>(null);
+  cleanupError = signal<string | null>(null);
+  cleanupDeleting = signal(false);
   gateCriteria = signal<any[]>([]);
   auditLogs = signal<any[]>([]);
+  cleanupConfirmation = '';
 
   // Inline add state
   newWorkstreamName = signal('');
@@ -517,6 +598,7 @@ export class AdminComponent implements OnInit {
     this.loadSettings();
     this.loadBilling();
     this.loadLaunchReadiness();
+    this.loadCleanupPreview();
     this.loadGateCriteria();
     this.loadAuditLogs();
   }
@@ -557,6 +639,16 @@ export class AdminComponent implements OnInit {
 
   loadLaunchReadiness() {
     this.api.get<any>('/admin/launch-readiness').subscribe(res => this.launchReadiness.set(res));
+  }
+
+  loadCleanupPreview() {
+    this.cleanupError.set(null);
+    this.cleanupResult.set(null);
+    this.cleanupConfirmation = '';
+    this.api.get<any>('/admin/portfolio-cleanup-preview').subscribe({
+      next: res => this.cleanupPreview.set(res),
+      error: err => this.cleanupError.set(err.error?.detail || 'Could not load portfolio cleanup preview'),
+    });
   }
 
   loadGateCriteria() {
@@ -636,6 +728,30 @@ export class AdminComponent implements OnInit {
     this.api.delete(`/admin/gate-criteria/${id}`).subscribe(() => this.loadGateCriteria());
   }
 
+  deletePortfolioData() {
+    const tenantSlug = this.cleanupPreview().tenant_slug;
+    if (!tenantSlug || this.cleanupConfirmation !== tenantSlug || this.cleanupDeleting()) return;
+
+    this.cleanupDeleting.set(true);
+    this.cleanupError.set(null);
+    this.api.delete('/admin/portfolio-cleanup', { confirm_slug: this.cleanupConfirmation }).subscribe({
+      next: res => {
+        this.cleanupResult.set(res);
+        this.cleanupPreview.set(res);
+        this.cleanupConfirmation = '';
+        this.cleanupDeleting.set(false);
+        this.loadWorkstreams();
+        this.loadBusinessUnits();
+        this.loadUsers();
+        this.loadAuditLogs();
+      },
+      error: err => {
+        this.cleanupError.set(err.error?.detail || 'Could not delete portfolio data');
+        this.cleanupDeleting.set(false);
+      },
+    });
+  }
+
   getAuditIcon(action: string): string {
     switch(action) {
       case 'create': return 'add_circle';
@@ -665,6 +781,21 @@ export class AdminComponent implements OnInit {
 
   configuredPriceCount(): number {
     return this.priceConfiguration().filter(price => price.configured).length;
+  }
+
+  cleanupObjects(): { key: string; label: string; count: number }[] {
+    const counts = this.cleanupPreview().object_counts || {};
+    return [
+      { key: 'initiatives', label: 'Initiatives', count: Number(counts.initiatives || 0) },
+      { key: 'financials', label: 'Financials', count: Number(counts.financials || 0) },
+      { key: 'kpis', label: 'KPIs', count: Number(counts.kpis || 0) },
+      { key: 'risks', label: 'Risks', count: Number(counts.risks || 0) },
+      { key: 'milestones', label: 'Milestones', count: Number(counts.milestones || 0) },
+      { key: 'meetings', label: 'Meetings', count: Number(counts.meetings || 0) },
+      { key: 'action_items', label: 'Action items', count: Number(counts.action_items || 0) },
+      { key: 'governance', label: 'Gate submissions', count: Number(counts.governance || 0) },
+      { key: 'status_updates', label: 'Status updates', count: Number(counts.status_updates || 0) },
+    ];
   }
 
   formatCents(cents: number | undefined, currency: string | undefined): string {

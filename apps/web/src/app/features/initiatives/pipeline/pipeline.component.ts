@@ -2,6 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
+import { AuthService } from '../../../core/services/auth.service';
 
 interface InitiativeItem {
   id: string;
@@ -109,14 +110,16 @@ const STAGE_LABELS: Record<string, string> = {
            style="color:var(--t-text-secondary)">
           Export CSV ↗
         </a>
-        <button class="btn-primary text-sm flex items-center gap-2"
-                (click)="openNewInitiative()"
-                aria-label="Create new initiative">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-          New Initiative
-        </button>
+        @if (canManageInitiatives()) {
+          <button class="btn-primary text-sm flex items-center gap-2"
+                  (click)="openNewInitiative()"
+                  aria-label="Create new initiative">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+            New Initiative
+          </button>
+        }
       </div>
     </div>
 
@@ -203,11 +206,12 @@ const STAGE_LABELS: Record<string, string> = {
         </h3>
         <p class="text-sm mb-6 max-w-xs" style="color:var(--t-text-secondary)">
           @if (hasFilters()) { Try adjusting your filters to see more results. }
-          @else { Start by creating your first transformation initiative. }
+          @else if (canManageInitiatives()) { Start by creating your first transformation initiative. }
+          @else { No initiatives are currently available for your role. }
         </p>
         @if (hasFilters()) {
           <button (click)="clearFilters()" class="btn-secondary text-sm">Clear filters</button>
-        } @else {
+        } @else if (canManageInitiatives()) {
           <button class="btn-primary text-sm flex items-center gap-2"
                   (click)="openNewInitiative()"
                   aria-label="Create new initiative">
@@ -216,6 +220,8 @@ const STAGE_LABELS: Record<string, string> = {
             </svg>
             New Initiative
           </button>
+        } @else {
+          <a routerLink="/dashboard" class="btn-secondary text-sm">Back to dashboard</a>
         }
       </div>
     }
@@ -418,6 +424,7 @@ const STAGE_LABELS: Record<string, string> = {
 })
 export class PipelineComponent {
   private readonly api = inject(ApiService);
+  private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
 
   readonly loading = signal(true);
@@ -460,7 +467,12 @@ export class PipelineComponent {
   }
 
   openNewInitiative(): void {
+    if (!this.canManageInitiatives()) return;
     this.router.navigate(['/initiatives/new']);
+  }
+
+  canManageInitiatives(): boolean {
+    return this.auth.getRole() === 'transformation_office';
   }
 
   reload(): void {
