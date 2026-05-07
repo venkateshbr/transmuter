@@ -68,7 +68,7 @@ class DashboardService:
         # 6. Financials
         fin_entries, costs = self.repo.get_financial_summary_data()
         value_bridge = self._calculate_value_bridge(fin_entries, costs, initiative_ids)
-        value_matrix = self._calculate_value_matrix(filtered_inits, fin_entries, target_year)
+        value_matrix = self._calculate_value_matrix(filtered_inits, fin_entries, costs, target_year)
         
         # 7. Other data
         my_milestones = self.repo.get_my_milestones(user_id)
@@ -253,6 +253,7 @@ class DashboardService:
         self,
         initiatives: list[dict[str, Any]],
         entries: list[dict[str, Any]],
+        costs: list[dict[str, Any]],
         target_year: int | None,
     ) -> dict[str, Any]:
         def _dec(value: object) -> Decimal:
@@ -266,8 +267,9 @@ class DashboardService:
 
         scoped_ids = {i["id"] for i in initiatives}
         scoped_entries = [e for e in entries if e.get("initiative_id") in scoped_ids]
+        scoped_costs = [c for c in costs if c.get("initiative_id") in scoped_ids]
         available_years = sorted(
-            {int(e["year"]) for e in scoped_entries if e.get("year") is not None}
+            {int(e["year"]) for e in [*scoped_entries, *scoped_costs] if e.get("year") is not None}
         )
         selected_year = target_year if target_year in available_years else (
             max(available_years) if available_years else target_year
@@ -307,26 +309,90 @@ class DashboardService:
                 continue
             entries_by_initiative.setdefault(entry["initiative_id"], []).append(entry)
 
+        costs_by_initiative: dict[str, list[dict[str, Any]]] = {}
+        for cost in scoped_costs:
+            if selected_year is not None and cost.get("year") != selected_year:
+                continue
+            costs_by_initiative.setdefault(cost["initiative_id"], []).append(cost)
+
         initiative_values: dict[str, dict[str, Decimal]] = {}
-        for initiative_id, initiative_entries in entries_by_initiative.items():
+        for initiative_id in scoped_ids:
+            initiative_entries = entries_by_initiative.get(initiative_id, [])
             annual_rows = [e for e in initiative_entries if e.get("quarter") is None]
             rows_to_sum = annual_rows or initiative_entries
+            initiative_costs = costs_by_initiative.get(initiative_id, [])
+            annual_costs = [c for c in initiative_costs if c.get("quarter") is None]
+            costs_to_sum = annual_costs or initiative_costs
+            recurring_plan = sum(
+                (_dec(c.get("amount_plan")) for c in costs_to_sum if c.get("is_recurring")),
+                Decimal("0"),
+            )
+            recurring_actual = sum(
+                (_dec(c.get("amount_actual")) for c in costs_to_sum if c.get("is_recurring")),
+                Decimal("0"),
+            )
+            one_time_plan = sum(
+                (_dec(c.get("amount_plan")) for c in costs_to_sum if not c.get("is_recurring")),
+                Decimal("0"),
+            )
+            one_time_actual = sum(
+                (_dec(c.get("amount_actual")) for c in costs_to_sum if not c.get("is_recurring")),
+                Decimal("0"),
+            )
+            gm_base = sum((_dec(e.get("gm_uplift_base")) for e in rows_to_sum), Decimal("0"))
+            gm_high = sum((_dec(e.get("gm_uplift_high")) for e in rows_to_sum), Decimal("0"))
+            gm_actual = sum((_dec(e.get("gm_uplift_actual")) for e in rows_to_sum), Decimal("0"))
             initiative_values[initiative_id] = {
-                "base": sum((_dec(e.get("gm_uplift_base")) for e in rows_to_sum), Decimal("0")),
-                "high": sum((_dec(e.get("gm_uplift_high")) for e in rows_to_sum), Decimal("0")),
-                "actual": sum((_dec(e.get("gm_uplift_actual")) for e in rows_to_sum), Decimal("0")),
+                "base": gm_base,
+                "high": gm_high,
+                "actual": gm_actual,
+                "gross_margin_base": gm_base,
+                "gross_margin_high": gm_high,
+                "gross_margin_actual": gm_actual,
+                "recurring_costs_plan": recurring_plan,
+                "recurring_costs_actual": recurring_actual,
+                "one_time_costs_plan": one_time_plan,
+                "one_time_costs_actual": one_time_actual,
+                "net_value_base": gm_base - recurring_plan - one_time_plan,
+                "net_value_high": gm_high - recurring_plan - one_time_plan,
+                "net_value_actual": gm_actual - recurring_actual - one_time_actual,
             }
 
         for initiative in initiatives:
             values = initiative_values.get(
                 initiative["id"],
-                {"base": Decimal("0"), "high": Decimal("0"), "actual": Decimal("0")},
+                {
+                    "base": Decimal("0"),
+                    "high": Decimal("0"),
+                    "actual": Decimal("0"),
+                    "gross_margin_base": Decimal("0"),
+                    "gross_margin_high": Decimal("0"),
+                    "gross_margin_actual": Decimal("0"),
+                    "recurring_costs_plan": Decimal("0"),
+                    "recurring_costs_actual": Decimal("0"),
+                    "one_time_costs_plan": Decimal("0"),
+                    "one_time_costs_actual": Decimal("0"),
+                    "net_value_base": Decimal("0"),
+                    "net_value_high": Decimal("0"),
+                    "net_value_actual": Decimal("0"),
+                },
             )
             tag = initiative.get("tag") or "other"
             workstream_id = initiative.get("workstream_id") or "unassigned"
             row = row_lookup[workstream_id]
             cell = row["cells"].setdefault(tag, self._empty_matrix_cell(tag))
-            if not any(values.values()):
+            if not any(
+                values[field]
+                for field in (
+                    "gross_margin_base",
+                    "gross_margin_high",
+                    "gross_margin_actual",
+                    "recurring_costs_plan",
+                    "recurring_costs_actual",
+                    "one_time_costs_plan",
+                    "one_time_costs_actual",
+                )
+            ):
                 continue
             self._add_initiative_to_cell(cell, initiative, values)
             self._add_initiative_to_cell(row["total"], initiative, values)
@@ -383,6 +449,16 @@ class DashboardService:
                 "base": values["base"],
                 "high": values["high"],
                 "actual": values["actual"],
+                "gross_margin_base": values["gross_margin_base"],
+                "gross_margin_high": values["gross_margin_high"],
+                "gross_margin_actual": values["gross_margin_actual"],
+                "recurring_costs_plan": values["recurring_costs_plan"],
+                "recurring_costs_actual": values["recurring_costs_actual"],
+                "one_time_costs_plan": values["one_time_costs_plan"],
+                "one_time_costs_actual": values["one_time_costs_actual"],
+                "net_value_base": values["net_value_base"],
+                "net_value_high": values["net_value_high"],
+                "net_value_actual": values["net_value_actual"],
             }
         )
 
@@ -398,6 +474,19 @@ class DashboardService:
         cell["high"] = money_formatter(Decimal(str(cell["high"])))
         cell["actual"] = money_formatter(Decimal(str(cell["actual"])))
         for initiative in cell["initiatives"]:
-            initiative["base"] = money_formatter(Decimal(str(initiative["base"])))
-            initiative["high"] = money_formatter(Decimal(str(initiative["high"])))
-            initiative["actual"] = money_formatter(Decimal(str(initiative["actual"])))
+            for field in (
+                "base",
+                "high",
+                "actual",
+                "gross_margin_base",
+                "gross_margin_high",
+                "gross_margin_actual",
+                "recurring_costs_plan",
+                "recurring_costs_actual",
+                "one_time_costs_plan",
+                "one_time_costs_actual",
+                "net_value_base",
+                "net_value_high",
+                "net_value_actual",
+            ):
+                initiative[field] = money_formatter(Decimal(str(initiative[field])))

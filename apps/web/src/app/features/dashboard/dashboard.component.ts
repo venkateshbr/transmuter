@@ -606,16 +606,42 @@ import { RouterLink } from '@angular/router';
                 </div>
                 <div class="mt-4 grid grid-cols-3 gap-2 text-center">
                   <div class="bg-[var(--t-surface)] p-2">
-                    <p class="text-[9px] font-black uppercase text-[var(--t-text-tertiary)]">Base</p>
+                    <p class="text-[9px] font-black uppercase text-[var(--t-text-tertiary)]">GM Base</p>
                     <p class="text-xs font-black text-[var(--t-text-primary)]">{{ formatMoney(initiative.base) }}</p>
                   </div>
                   <div class="bg-[var(--t-surface)] p-2">
-                    <p class="text-[9px] font-black uppercase text-[var(--t-text-tertiary)]">High</p>
+                    <p class="text-[9px] font-black uppercase text-[var(--t-text-tertiary)]">GM High</p>
                     <p class="text-xs font-black text-[var(--t-text-primary)]">{{ formatMoney(initiative.high) }}</p>
                   </div>
                   <div class="bg-[var(--t-surface)] p-2">
-                    <p class="text-[9px] font-black uppercase text-[var(--t-text-tertiary)]">Actual</p>
+                    <p class="text-[9px] font-black uppercase text-[var(--t-text-tertiary)]">GM Actual</p>
                     <p class="text-xs font-black text-[var(--t-accent)]">{{ formatMoney(initiative.actual) }}</p>
+                  </div>
+                </div>
+                <div class="mt-2 grid grid-cols-2 gap-2 text-center">
+                  <div class="bg-[var(--t-surface)] p-2">
+                    <p class="text-[9px] font-black uppercase text-[var(--t-text-tertiary)]">Recurring Costs</p>
+                    <p class="text-xs font-black text-[var(--t-text-primary)]">{{ formatMoney(initiative.recurring_costs_plan) }}</p>
+                    <p class="mt-0.5 text-[9px] font-bold text-[var(--t-text-tertiary)]">Actual {{ formatMoney(initiative.recurring_costs_actual) }}</p>
+                  </div>
+                  <div class="bg-[var(--t-surface)] p-2">
+                    <p class="text-[9px] font-black uppercase text-[var(--t-text-tertiary)]">One-Time Costs</p>
+                    <p class="text-xs font-black text-[var(--t-text-primary)]">{{ formatMoney(initiative.one_time_costs_plan) }}</p>
+                    <p class="mt-0.5 text-[9px] font-bold text-[var(--t-text-tertiary)]">Actual {{ formatMoney(initiative.one_time_costs_actual) }}</p>
+                  </div>
+                </div>
+                <div class="mt-2 grid grid-cols-3 gap-2 text-center">
+                  <div class="bg-[var(--t-surface)] p-2">
+                    <p class="text-[9px] font-black uppercase text-[var(--t-text-tertiary)]">Net Base</p>
+                    <p class="text-xs font-black text-[var(--t-text-primary)]">{{ formatMoney(initiative.net_value_base) }}</p>
+                  </div>
+                  <div class="bg-[var(--t-surface)] p-2">
+                    <p class="text-[9px] font-black uppercase text-[var(--t-text-tertiary)]">Net High</p>
+                    <p class="text-xs font-black text-[var(--t-text-primary)]">{{ formatMoney(initiative.net_value_high) }}</p>
+                  </div>
+                  <div class="bg-[var(--t-surface)] p-2">
+                    <p class="text-[9px] font-black uppercase text-[var(--t-text-tertiary)]">Net Actual</p>
+                    <p class="text-xs font-black text-[var(--t-accent)]">{{ formatMoney(initiative.net_value_actual) }}</p>
                   </div>
                 </div>
               </a>

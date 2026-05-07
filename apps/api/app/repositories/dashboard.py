@@ -107,7 +107,7 @@ class DashboardRepository:
         
         costs = (
             self.client.table("financial_cost_lines")
-            .select("initiative_id, amount_plan, amount_actual")
+            .select("initiative_id, year, quarter, amount_plan, amount_actual, is_recurring")
             .eq("tenant_id", self.tenant_id)
             .execute()
         ).data or []
