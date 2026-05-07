@@ -52,7 +52,9 @@ interface InitiativeDetail {
   id: string;
   initiative_code: string;
   name: string;
+  workstream_id: string | null;
   workstream_name: string | null;
+  business_unit_id: string | null;
   business_unit_name: string | null;
   owner_name: string | null;
   group_owner_name: string | null;
@@ -91,6 +93,17 @@ interface InitiativeDetail {
     this_year_actual: string | null;
     all_time_actual: string | null;
   }>;
+}
+
+interface WorkstreamOption {
+  id: string;
+  name: string;
+  business_unit_id: string | null;
+}
+
+interface BusinessUnitOption {
+  id: string;
+  name: string;
 }
 
 @Component({
@@ -404,6 +417,46 @@ interface InitiativeDetail {
               </div>
               <div class="grid grid-cols-2 gap-4">
                 <div>
+                  <label class="block text-xs font-semibold uppercase text-[var(--t-text-secondary)] mb-1">Business Unit</label>
+                  <select [(ngModel)]="editData.business_unit_id" (ngModelChange)="onEditBusinessUnitChange($event)" aria-label="Initiative business unit" class="w-full bg-[var(--t-surface-raised)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text-primary)] focus:border-[var(--t-primary)] outline-none">
+                    <option value="">Select business unit</option>
+                    @for (bu of businessUnits(); track bu.id) {
+                      <option [value]="bu.id">{{ bu.name }}</option>
+                    }
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold uppercase text-[var(--t-text-secondary)] mb-1">Workstream</label>
+                  <select [(ngModel)]="editData.workstream_id" (ngModelChange)="onEditWorkstreamChange($event)" aria-label="Initiative workstream" class="w-full bg-[var(--t-surface-raised)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text-primary)] focus:border-[var(--t-primary)] outline-none">
+                    <option value="">Select workstream</option>
+                    @for (ws of filteredWorkstreams(); track ws.id) {
+                      <option [value]="ws.id">{{ ws.name }}</option>
+                    }
+                  </select>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-semibold uppercase text-[var(--t-text-secondary)] mb-1">Market</label>
+                  <select [(ngModel)]="editData.country" aria-label="Initiative market" class="w-full bg-[var(--t-surface-raised)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text-primary)] focus:border-[var(--t-primary)] outline-none">
+                    <option value="">Select market</option>
+                    @for (market of marketOptions(); track market) {
+                      <option [value]="market">{{ market }}</option>
+                    }
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold uppercase text-[var(--t-text-secondary)] mb-1">Theme</label>
+                  <select [(ngModel)]="editData.theme" aria-label="Initiative theme" class="w-full bg-[var(--t-surface-raised)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text-primary)] focus:border-[var(--t-primary)] outline-none">
+                    <option value="">Select theme</option>
+                    @for (theme of themeOptions(); track theme) {
+                      <option [value]="theme">{{ theme }}</option>
+                    }
+                  </select>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-4">
+                <div>
                   <label class="block text-xs font-semibold uppercase text-[var(--t-text-secondary)] mb-1">Stage</label>
                   <select [(ngModel)]="editData.stage" class="w-full bg-[var(--t-surface-raised)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text-primary)] focus:border-[var(--t-primary)] outline-none">
                     <option value="scoping">Scoping</option>
@@ -484,6 +537,10 @@ export class OverviewTabComponent implements OnInit {
   detail = signal<InitiativeDetail | null>(null);
   grid = signal<any | null>(null);
   valueBridge = signal<any | null>(null);
+  workstreams = signal<WorkstreamOption[]>([]);
+  businessUnits = signal<BusinessUnitOption[]>([]);
+  markets = signal<string[]>([]);
+  themes = signal<string[]>([]);
 
   isEditing = signal(false);
   saving = signal(false);
@@ -534,6 +591,7 @@ export class OverviewTabComponent implements OnInit {
 
   ngOnInit(): void {
     if (!this.initiativeId) return;
+    this.loadDropdownData();
     this.loadDetail();
     this.api.get<any>(`/initiatives/${this.initiativeId}/financials`).subscribe(g => this.grid.set(g));
     this.api.get<any>(`/initiatives/${this.initiativeId}/financials/value-bridge`).subscribe(vb => this.valueBridge.set(vb));
@@ -555,6 +613,10 @@ export class OverviewTabComponent implements OnInit {
     if (!d) return;
     this.editData = {
       name: d.name,
+      business_unit_id: d.business_unit_id || '',
+      workstream_id: d.workstream_id || '',
+      country: d.country || '',
+      theme: d.theme || '',
       stage: d.stage,
       rag_status: d.rag_status,
       summary: d.summary,
@@ -574,7 +636,14 @@ export class OverviewTabComponent implements OnInit {
 
   saveInitiative(): void {
     this.saving.set(true);
-    this.api.put(`/initiatives/${this.initiativeId}`, this.editData).subscribe({
+    const payload = {
+      ...this.editData,
+      workstream_id: this.editData.workstream_id || null,
+      country: this.editData.country || null,
+      theme: this.editData.theme || null,
+    };
+    delete payload.business_unit_id;
+    this.api.put(`/initiatives/${this.initiativeId}`, payload).subscribe({
       next: (d) => {
         this.detail.set(d as any);
         this.saving.set(false);
@@ -587,6 +656,66 @@ export class OverviewTabComponent implements OnInit {
         this.saving.set(false);
       }
     });
+  }
+
+  private loadDropdownData(): void {
+    this.api.get<{ data?: WorkstreamOption[]; items?: WorkstreamOption[] }>('/workstreams').subscribe({
+      next: r => this.workstreams.set(r.data ?? r.items ?? []),
+      error: () => {},
+    });
+    this.api.get<{ data?: BusinessUnitOption[]; items?: BusinessUnitOption[] }>('/business-units').subscribe({
+      next: r => this.businessUnits.set(r.data ?? r.items ?? []),
+      error: () => {},
+    });
+    this.api.get<any>('/admin/settings').subscribe({
+      next: r => {
+        const strategicParameters = r.settings?.strategic_parameters || {};
+        this.markets.set(this.normalizeConfigList(strategicParameters.markets));
+        this.themes.set(this.normalizeConfigList(strategicParameters.themes));
+      },
+      error: () => {},
+    });
+  }
+
+  filteredWorkstreams(): WorkstreamOption[] {
+    const businessUnitId = this.editData.business_unit_id;
+    if (!businessUnitId) return this.workstreams();
+    return this.workstreams().filter(ws => ws.business_unit_id === businessUnitId);
+  }
+
+  marketOptions(): string[] {
+    return this.withCurrentOption(this.markets(), this.editData.country || '');
+  }
+
+  themeOptions(): string[] {
+    return this.withCurrentOption(this.themes(), this.editData.theme || '');
+  }
+
+  onEditBusinessUnitChange(businessUnitId: string): void {
+    this.editData.business_unit_id = businessUnitId;
+    if (!businessUnitId) return;
+    const selectedWorkstream = this.workstreams().find(ws => ws.id === this.editData.workstream_id);
+    if (selectedWorkstream && selectedWorkstream.business_unit_id !== businessUnitId) {
+      this.editData.workstream_id = '';
+    }
+  }
+
+  onEditWorkstreamChange(workstreamId: string): void {
+    this.editData.workstream_id = workstreamId;
+    const selectedWorkstream = this.workstreams().find(ws => ws.id === workstreamId);
+    if (selectedWorkstream?.business_unit_id) {
+      this.editData.business_unit_id = selectedWorkstream.business_unit_id;
+    }
+  }
+
+  private normalizeConfigList(values: unknown): string[] {
+    if (!Array.isArray(values)) return [];
+    return [...new Set(values.map(value => String(value).trim()).filter(Boolean))];
+  }
+
+  private withCurrentOption(options: string[], currentValue: string): string[] {
+    const current = currentValue.trim();
+    return this.normalizeConfigList(current ? [...options, current] : options);
   }
 
   formatMoney(val: string | null | undefined): string {

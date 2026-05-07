@@ -7,6 +7,12 @@ import { ApiService } from '../../../core/services/api.service';
 interface WorkstreamOption {
   id: string;
   name: string;
+  business_unit_id: string | null;
+}
+
+interface BusinessUnitOption {
+  id: string;
+  name: string;
 }
 
 interface UserOption {
@@ -239,15 +245,34 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
           <div class="grid grid-cols-2 gap-4">
             <div>
               <label for="init-workstream" class="field-label">Workstream</label>
-              <select id="init-workstream" class="input-field" [(ngModel)]="form.workstream_id">
+              <select id="init-workstream" class="input-field" [(ngModel)]="form.workstream_id" (ngModelChange)="onWorkstreamChange($event)">
                 <option value="">Select workstream</option>
-                <option *ngFor="let ws of workstreams()" [value]="ws.id">{{ ws.name }}</option>
+                <option *ngFor="let ws of filteredWorkstreams()" [value]="ws.id">{{ ws.name }}</option>
               </select>
             </div>
             <div>
-              <label for="init-country" class="field-label">Country / Market</label>
-              <input id="init-country" type="text" class="input-field"
-                     [(ngModel)]="form.country" placeholder="e.g. HK, SG, AU">
+              <label for="init-business-unit" class="field-label">Business Unit</label>
+              <select id="init-business-unit" class="input-field" [(ngModel)]="form.business_unit_id" (ngModelChange)="onBusinessUnitChange($event)">
+                <option value="">Select business unit</option>
+                <option *ngFor="let bu of businessUnits()" [value]="bu.id">{{ bu.name }}</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label for="init-country" class="field-label">Market</label>
+              <select id="init-country" class="input-field" [(ngModel)]="form.country">
+                <option value="">Select market</option>
+                <option *ngFor="let market of marketOptions()" [value]="market">{{ market }}</option>
+              </select>
+            </div>
+            <div>
+              <label for="init-theme" class="field-label">Theme</label>
+              <select id="init-theme" class="input-field" [(ngModel)]="form.theme">
+                <option value="">Select theme</option>
+                <option *ngFor="let theme of themeOptions()" [value]="theme">{{ theme }}</option>
+              </select>
             </div>
           </div>
 
@@ -271,12 +296,6 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
                 <option value="one_off">One-off</option>
               </select>
             </div>
-          </div>
-
-          <div>
-            <label for="init-theme" class="field-label">Theme</label>
-            <input id="init-theme" type="text" class="input-field"
-                   [(ngModel)]="form.theme" placeholder="e.g. Finance automation">
           </div>
 
           <div class="grid grid-cols-2 gap-4">
@@ -611,6 +630,9 @@ export class CreateInitiativeComponent {
   readonly generating = signal(false);
   readonly error = signal<string | null>(null);
   readonly workstreams = signal<WorkstreamOption[]>([]);
+  readonly businessUnits = signal<BusinessUnitOption[]>([]);
+  readonly markets = signal<string[]>([]);
+  readonly themes = signal<string[]>([]);
   readonly users = signal<UserOption[]>([]);
   readonly uploadedFileName = signal<string | null>(null);
   readonly uploadPreview = signal<any | null>(null);
@@ -621,6 +643,7 @@ export class CreateInitiativeComponent {
 
   form = {
     name: '',
+    business_unit_id: '',
     workstream_id: '',
     owner_id: '',
     group_owner_id: '',
@@ -663,6 +686,18 @@ export class CreateInitiativeComponent {
       next: r => this.workstreams.set(r.data ?? []),
       error: () => {},  // graceful — dropdowns remain empty
     });
+    this.api.get<{ data: BusinessUnitOption[] }>('/business-units').subscribe({
+      next: r => this.businessUnits.set(r.data ?? []),
+      error: () => {},
+    });
+    this.api.get<any>('/admin/settings').subscribe({
+      next: r => {
+        const strategicParameters = r.settings?.strategic_parameters || {};
+        this.markets.set(this.normalizeConfigList(strategicParameters.markets));
+        this.themes.set(this.normalizeConfigList(strategicParameters.themes));
+      },
+      error: () => {},
+    });
     this.api.get<{ data: UserOption[] }>('/users').subscribe({
       next: r => this.users.set(r.data ?? []),
       error: () => {},
@@ -674,6 +709,7 @@ export class CreateInitiativeComponent {
       next: item => {
         this.form = {
           name: item.name ?? '',
+          business_unit_id: item.business_unit_id ?? '',
           workstream_id: item.workstream_id ?? '',
           owner_id: item.owner_id ?? '',
           group_owner_id: item.group_owner_id ?? '',
@@ -709,13 +745,13 @@ export class CreateInitiativeComponent {
 
   private buildPayload(): Record<string, unknown> {
     const payload: Record<string, unknown> = { name: this.form.name.trim() };
-    if (this.form.workstream_id) payload['workstream_id'] = this.form.workstream_id;
+    if (this.editId || this.form.workstream_id) payload['workstream_id'] = this.form.workstream_id || null;
     if (this.form.owner_id) payload['owner_id'] = this.form.owner_id;
     if (this.form.group_owner_id) payload['group_owner_id'] = this.form.group_owner_id;
     if (this.form.type) payload['type'] = this.form.type;
     if (this.form.impact_type) payload['impact_type'] = this.form.impact_type;
-    if (this.form.theme) payload['theme'] = this.form.theme;
-    if (this.form.country) payload['country'] = this.form.country;
+    if (this.editId || this.form.theme) payload['theme'] = this.form.theme || null;
+    if (this.editId || this.form.country) payload['country'] = this.form.country || null;
     if (this.form.tag) payload['tag'] = this.form.tag;
     if (this.form.priority) payload['priority'] = this.form.priority;
     if (this.form.summary) payload['summary'] = this.form.summary;
@@ -724,6 +760,47 @@ export class CreateInitiativeComponent {
     if (this.form.planned_start) payload['planned_start'] = this.form.planned_start;
     if (this.form.planned_end) payload['planned_end'] = this.form.planned_end;
     return payload;
+  }
+
+  filteredWorkstreams(): WorkstreamOption[] {
+    const businessUnitId = this.form.business_unit_id;
+    if (!businessUnitId) return this.workstreams();
+    return this.workstreams().filter(ws => ws.business_unit_id === businessUnitId);
+  }
+
+  marketOptions(): string[] {
+    return this.withCurrentOption(this.markets(), this.form.country);
+  }
+
+  themeOptions(): string[] {
+    return this.withCurrentOption(this.themes(), this.form.theme);
+  }
+
+  onBusinessUnitChange(businessUnitId: string): void {
+    this.form.business_unit_id = businessUnitId;
+    if (!businessUnitId) return;
+    const selectedWorkstream = this.workstreams().find(ws => ws.id === this.form.workstream_id);
+    if (selectedWorkstream && selectedWorkstream.business_unit_id !== businessUnitId) {
+      this.form.workstream_id = '';
+    }
+  }
+
+  onWorkstreamChange(workstreamId: string): void {
+    this.form.workstream_id = workstreamId;
+    const selectedWorkstream = this.workstreams().find(ws => ws.id === workstreamId);
+    if (selectedWorkstream?.business_unit_id) {
+      this.form.business_unit_id = selectedWorkstream.business_unit_id;
+    }
+  }
+
+  private normalizeConfigList(values: unknown): string[] {
+    if (!Array.isArray(values)) return [];
+    return [...new Set(values.map(value => String(value).trim()).filter(Boolean))];
+  }
+
+  private withCurrentOption(options: string[], currentValue: string): string[] {
+    const current = currentValue.trim();
+    return this.normalizeConfigList(current ? [...options, current] : options);
   }
 
   generateSuggestions(): void {
