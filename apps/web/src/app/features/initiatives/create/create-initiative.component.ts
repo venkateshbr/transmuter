@@ -752,7 +752,7 @@ export class CreateInitiativeComponent {
     if (this.form.impact_type) payload['impact_type'] = this.form.impact_type;
     if (this.editId || this.form.theme) payload['theme'] = this.form.theme || null;
     if (this.editId || this.form.country) payload['country'] = this.form.country || null;
-    if (this.form.tag) payload['tag'] = this.form.tag;
+    if (this.editId || this.form.tag) payload['tag'] = this.form.tag || null;
     if (this.form.priority) payload['priority'] = this.form.priority;
     if (this.form.summary) payload['summary'] = this.form.summary;
     if (this.form.value_logic) payload['value_logic'] = this.form.value_logic;

@@ -155,6 +155,7 @@ interface BusinessUnitOption {
                 <span><strong style="color:var(--t-text-primary)">Workstream:</strong> {{ detail()!.workstream_name || 'Unassigned' }}</span>
                 <span><strong style="color:var(--t-text-primary)">Market:</strong> {{ detail()!.country || 'N/A' }}</span>
                 <span><strong style="color:var(--t-text-primary)">Theme:</strong> {{ detail()!.theme || 'N/A' }}</span>
+                <span><strong style="color:var(--t-text-primary)">Tag:</strong> {{ labelize(detail()!.tag || '') || 'N/A' }}</span>
               </div>
             </div>
             <button (click)="openEditModal()" class="btn-secondary text-sm flex items-center gap-2" aria-label="Edit initiative overview">
@@ -455,6 +456,16 @@ interface BusinessUnitOption {
                   </select>
                 </div>
               </div>
+              <div>
+                <label class="block text-xs font-semibold uppercase text-[var(--t-text-secondary)] mb-1">Tag</label>
+                <select [(ngModel)]="editData.tag" aria-label="Initiative tag" class="w-full bg-[var(--t-surface-raised)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text-primary)] focus:border-[var(--t-primary)] outline-none">
+                  <option value="">Select tag</option>
+                  <option value="automation">Automation</option>
+                  <option value="offshoring">Offshoring</option>
+                  <option value="commercial">Commercial</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
               <div class="grid grid-cols-2 gap-4">
                 <div>
                   <label class="block text-xs font-semibold uppercase text-[var(--t-text-secondary)] mb-1">Stage</label>
@@ -617,6 +628,7 @@ export class OverviewTabComponent implements OnInit {
       workstream_id: d.workstream_id || '',
       country: d.country || '',
       theme: d.theme || '',
+      tag: d.tag || '',
       stage: d.stage,
       rag_status: d.rag_status,
       summary: d.summary,
@@ -641,6 +653,7 @@ export class OverviewTabComponent implements OnInit {
       workstream_id: this.editData.workstream_id || null,
       country: this.editData.country || null,
       theme: this.editData.theme || null,
+      tag: this.editData.tag || null,
     };
     delete payload.business_unit_id;
     this.api.put(`/initiatives/${this.initiativeId}`, payload).subscribe({
