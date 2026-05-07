@@ -24,14 +24,21 @@ class AuditRepository:
         )
         return result.data or []
 
-    def log(self, action: str, entity_type: str, entity_id: str, actor_id: str, metadata: dict[str, Any] | None = None) -> dict[str, Any]:
+    def log(
+        self,
+        action: str,
+        entity_type: str,
+        entity_id: str,
+        actor_id: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         data = {
             "tenant_id": self._tid,
             "action": action,
             "entity_type": entity_type,
             "entity_id": entity_id,
             "user_id": actor_id,
-            "metadata": metadata or {},
+            "after_data": metadata or {},
         }
         result = self._c.table("audit_log").insert(data).execute()
         return result.data[0] if result.data else {}
