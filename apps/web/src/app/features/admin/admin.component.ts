@@ -296,7 +296,7 @@ import { FormsModule } from '@angular/forms';
                       <button
                         type="button"
                         class="border border-red-500 bg-red-500 px-4 py-2 text-xs font-black uppercase text-white disabled:cursor-not-allowed disabled:opacity-40"
-                        [disabled]="!cleanupConfirmationMatches() || cleanupDeleting()"
+                        [disabled]="!normalizedCleanupConfirmation() || cleanupDeleting()"
                         (click)="deletePortfolioData()"
                         aria-label="Delete all tenant portfolio data">
                         {{ cleanupDeleting() ? 'Deleting...' : 'Delete portfolio data' }}
@@ -730,9 +730,8 @@ export class AdminComponent implements OnInit {
   }
 
   deletePortfolioData() {
-    const tenantSlug = this.cleanupPreview().tenant_slug;
     const confirmation = this.normalizedCleanupConfirmation();
-    if (!tenantSlug || confirmation !== tenantSlug || this.cleanupDeleting()) return;
+    if (!confirmation || this.cleanupDeleting()) return;
 
     this.cleanupDeleting.set(true);
     this.cleanupError.set(null);
@@ -802,11 +801,6 @@ export class AdminComponent implements OnInit {
 
   normalizedCleanupConfirmation(): string {
     return this.cleanupConfirmation().trim();
-  }
-
-  cleanupConfirmationMatches(): boolean {
-    const tenantSlug = this.cleanupPreview().tenant_slug;
-    return Boolean(tenantSlug) && this.normalizedCleanupConfirmation() === tenantSlug;
   }
 
   formatCents(cents: number | undefined, currency: string | undefined): string {
