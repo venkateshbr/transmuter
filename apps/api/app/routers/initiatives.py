@@ -170,7 +170,7 @@ async def import_into_existing_initiative(
     file: UploadFile = File(...),
 ) -> InitiativeDetail:
     assert_can_manage_initiatives(current_user)
-    return svc.import_into_existing_initiative(initiative_id, await file.read())
+    return svc.import_into_existing_initiative(initiative_id, await file.read(), current_user.id)
 
 
 # ── Update ────────────────────────────────────────────────────────────────────

@@ -699,21 +699,35 @@ export class FinancialsTabComponent implements OnInit {
          sum = costs
            .filter(c => c.year === year && (months.includes(c.month!) || c.quarter === q) && c.is_recurring === recurring)
            .reduce((s, c) => s + parseFloat(actual ? (c.amount_actual || '0') : c.amount_plan), 0);
+         sum += costs
+           .filter(c => c.year === year && c.month === null && c.quarter === null && c.is_recurring === recurring)
+           .reduce((s, c) => s + (parseFloat(actual ? (c.amount_actual || '0') : c.amount_plan) / 4), 0);
        } else {
          sum = entries
            .filter(x => x.year === year && months.includes(x.month!))
            .reduce((s, x) => s + parseFloat((x as any)[m.key] || '0'), 0);
          sum += parseFloat((e as any)?.[m.key] || '0');
+         sum += entries
+           .filter(x => x.year === year && x.month === null && x.quarter === null)
+           .reduce((s, x) => s + (parseFloat((x as any)[m.key] || '0') / 4), 0);
        }
        return sum;
     }
 
     if (isCost) {
-       return costs
+       const exact = costs
          .filter(c => c.year === year && c.month === mon && c.quarter === q && c.is_recurring === recurring)
          .reduce((sum, c) => sum + parseFloat(actual ? (c.amount_actual || '0') : c.amount_plan), 0);
+       if (exact) return exact;
+       return costs
+         .filter(c => c.year === year && c.month === null && c.quarter === null && c.is_recurring === recurring)
+         .reduce((sum, c) => sum + (parseFloat(actual ? (c.amount_actual || '0') : c.amount_plan) / (mon ? 12 : 4)), 0);
     }
-    return parseFloat((e as any)?.[m.key] || '0');
+    const exact = parseFloat((e as any)?.[m.key] || '0');
+    if (exact) return exact;
+    return entries
+      .filter(x => x.year === year && x.month === null && x.quarter === null)
+      .reduce((sum, x) => sum + (parseFloat((x as any)[m.key] || '0') / (mon ? 12 : 4)), 0);
   }
 
   formatMoney(val: string | number | null): string {

@@ -30,8 +30,12 @@ from app.domain.initiative_intake import (
 from app.domain.kpis import KPICreate
 from app.domain.milestones import MilestoneCreate
 from app.domain.risks import RiskCreate
+from app.domain.status_updates import StatusUpdateCreate
+from app.repositories.business_unit import BusinessUnitRepository
 from app.repositories.initiative import InitiativeRepository
+from app.repositories.people import PeopleRepository
 from app.repositories.status_update import StatusUpdateRepository
+from app.repositories.workstream import WorkstreamRepository
 from app.services.kpi import KPIService
 from app.services.financial import FinancialService
 from app.services.initiative_workbook import (
@@ -44,6 +48,7 @@ from app.services.initiative_workbook import (
 )
 from app.services.milestone import MilestoneService
 from app.services.risk import RiskService
+from app.services.status_update import StatusUpdateService
 
 
 class InitiativeService:
@@ -310,10 +315,12 @@ class InitiativeService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=[error.model_dump() for error in parsed.validation_errors],
             )
-        created = self.create_initiative(parsed.overview, created_by)
+        overview = self._apply_workbook_metadata(parsed.overview, parsed.metadata, created_by)
+        created = self.create_initiative(overview, created_by)
         initiative_id = str(created.id)
         if parsed.financial_entries or parsed.cost_lines:
-            self._fin.update_financial_grid(
+            writer = self._fin.replace_financial_grid if parsed.metadata.get("format") == "alchemist" else self._fin.update_financial_grid
+            writer(
                 initiative_id,
                 FinancialGridUpdate(
                     entries=parsed.financial_entries,
@@ -334,10 +341,18 @@ class InitiativeService:
             risk_service.create_risk(initiative_id, risk)
         milestone_service = MilestoneService(self._client, self._tenant_id)
         for milestone in parsed.milestones:
+            if not milestone.owner_id:
+                milestone.owner_id = str(created_by)
             milestone_service.create_milestone(initiative_id, milestone)
+        self._import_status_updates(initiative_id, parsed.status_updates, created_by)
         return self.get_initiative(initiative_id)
 
-    def import_into_existing_initiative(self, initiative_id: str, data: bytes) -> InitiativeDetail:
+    def import_into_existing_initiative(
+        self,
+        initiative_id: str,
+        data: bytes,
+        updated_by: UUID | None = None,
+    ) -> InitiativeDetail:
         self._assert_exists(initiative_id)
         reference = parse_workbook_reference(data)
         referenced_id = reference.get("initiative_id")
@@ -354,7 +369,8 @@ class InitiativeService:
                 detail=[error.model_dump() for error in parsed.validation_errors],
             )
 
-        overview_patch = parsed.overview.model_dump(exclude_none=True)
+        overview = self._apply_workbook_metadata(parsed.overview, parsed.metadata, updated_by)
+        overview_patch = overview.model_dump(exclude_none=True)
         metadata = parse_workbook_overview_metadata(data)
         for field in ("stage", "rag_status"):
             if metadata.get(field):
@@ -362,14 +378,122 @@ class InitiativeService:
         self.update_initiative(initiative_id, InitiativeUpdate(**overview_patch))
 
         if parsed.financial_entries or parsed.cost_lines:
-            self._fin.update_financial_grid(
+            writer = self._fin.replace_financial_grid if parsed.metadata.get("format") == "alchemist" else self._fin.update_financial_grid
+            writer(
                 initiative_id,
                 FinancialGridUpdate(
                     entries=parsed.financial_entries,
                     cost_lines=parsed.cost_lines,
                 ),
             )
+        if parsed.status_updates:
+            self._import_status_updates(initiative_id, parsed.status_updates, updated_by)
         return self.get_initiative(initiative_id)
+
+    def _apply_workbook_metadata(
+        self,
+        overview: InitiativeCreate,
+        metadata: dict,
+        fallback_user_id: UUID | None,
+    ) -> InitiativeCreate:
+        if not metadata:
+            return overview
+
+        patch = overview.model_dump()
+        business_unit_id = self._ensure_business_unit_id(metadata)
+        workstream_id = self._ensure_workstream_id(metadata, business_unit_id)
+        if workstream_id:
+            patch["workstream_id"] = workstream_id
+
+        owner_id = self._resolve_user_id(metadata.get("owner_name"))
+        group_owner_id = self._resolve_user_id(metadata.get("group_owner_name"))
+        if not owner_id and fallback_user_id:
+            owner_id = str(fallback_user_id)
+        if not group_owner_id and fallback_user_id:
+            group_owner_id = str(fallback_user_id)
+        if owner_id:
+            patch["owner_id"] = owner_id
+        if group_owner_id:
+            patch["group_owner_id"] = group_owner_id
+
+        return InitiativeCreate(**patch)
+
+    def _ensure_business_unit_id(self, metadata: dict) -> str | None:
+        names = metadata.get("business_unit_names") or []
+        name = next((str(item).strip() for item in names if str(item).strip()), "")
+        if not name:
+            return None
+        repo = BusinessUnitRepository(self._client, self._tenant_id)
+        existing = next((row for row in repo.list() if row.get("name", "").lower() == name.lower()), None)
+        if existing:
+            return existing["id"]
+        created = repo.create({"name": name, "code": self._business_unit_code(name)})
+        return created.get("id")
+
+    def _ensure_workstream_id(self, metadata: dict, business_unit_id: str | None) -> str | None:
+        name = str(metadata.get("workstream_name") or "").strip()
+        if not name:
+            return None
+        repo = WorkstreamRepository(self._client, self._tenant_id)
+        workstreams = repo.list()
+        if business_unit_id:
+            scoped = next(
+                (
+                    row for row in workstreams
+                    if row.get("name", "").lower() == name.lower()
+                    and row.get("business_unit_id") == business_unit_id
+                ),
+                None,
+            )
+            if scoped:
+                return scoped["id"]
+            try:
+                created = repo.create({"name": name, "business_unit_id": business_unit_id})
+                if created.get("id"):
+                    return created["id"]
+            except Exception:
+                pass
+        existing = next((row for row in workstreams if row.get("name", "").lower() == name.lower()), None)
+        return existing["id"] if existing else None
+
+    def _resolve_user_id(self, display_name: str | None) -> str | None:
+        name = str(display_name or "").strip().lower()
+        if not name:
+            return None
+        users = PeopleRepository(self._client, self._tenant_id).list_users(status="active")
+        exact = next((row for row in users if str(row.get("display_name") or "").strip().lower() == name), None)
+        if exact:
+            return exact["id"]
+        tokens = {part for part in name.split() if part}
+        if not tokens:
+            return None
+        return next(
+            (
+                row["id"] for row in users
+                if tokens.issubset(set(str(row.get("display_name") or "").strip().lower().split()))
+            ),
+            None,
+        )
+
+    def _import_status_updates(
+        self,
+        initiative_id: str,
+        rows: list[dict],
+        author_id: UUID | None,
+    ) -> None:
+        if not rows:
+            return
+        existing = StatusUpdateService(self._client, self._tenant_id, author_id).list_history(initiative_id)
+        existing_summaries = {item.summary for item in existing.items}
+        service = StatusUpdateService(self._client, self._tenant_id, author_id)
+        for row in rows:
+            if row.get("summary") in existing_summaries:
+                continue
+            service.create_update(initiative_id, StatusUpdateCreate(**row))
+
+    def _business_unit_code(self, name: str) -> str:
+        code = "".join(ch for ch in name.upper() if ch.isalnum())
+        return (code[:8] or "BU")
 
     def _list_meeting_notes(self, initiative_id: str) -> list[dict]:  # type: ignore[type-arg]
         links = (

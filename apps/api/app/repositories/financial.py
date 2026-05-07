@@ -104,6 +104,23 @@ class FinancialRepository:
             .eq("id", cost_line_id)
             .execute()
         )
+
+    def delete_grid(self, initiative_id: str) -> None:
+        (
+            self._c.table("financial_cost_lines")
+            .delete()
+            .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
+            .execute()
+        )
+        (
+            self._c.table("financial_entries")
+            .delete()
+            .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
+            .execute()
+        )
+
     def upsert_cost_lines_batch(self, initiative_id: str, rows: list[dict]) -> list[dict]:
         """Upsert multiple cost lines at once."""
         saved = []

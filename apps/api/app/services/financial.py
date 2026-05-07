@@ -140,6 +140,13 @@ class FinancialService:
 
         return self.get_financial_grid(initiative_id)
 
+    def replace_financial_grid(
+        self, initiative_id: str, data: FinancialGridUpdate
+    ) -> FinancialGridResponse:
+        """Replace every financial row for a workbook-style full import."""
+        self._repo.delete_grid(initiative_id)
+        return self.update_financial_grid(initiative_id, data)
+
     def export_workbook(self, initiative_id: str) -> bytes:
         """Export initiative financial entries and cost lines as an XLSX workbook."""
         entries = self._unique_entries(self._repo.get_entries(initiative_id))

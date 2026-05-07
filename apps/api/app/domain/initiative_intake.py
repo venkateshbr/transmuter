@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -31,6 +31,8 @@ class InitiativeWorkbookData(BaseModel):
     kpis: list[KPIWorkbookItem] = Field(default_factory=list)
     risks: list[RiskCreate] = Field(default_factory=list)
     milestones: list[MilestoneCreate] = Field(default_factory=list)
+    status_updates: list[dict[str, Any]] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
     validation_errors: list[WorkbookValidationError] = Field(default_factory=list)
 
 
