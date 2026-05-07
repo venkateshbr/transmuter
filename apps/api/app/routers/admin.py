@@ -57,6 +57,15 @@ async def delete_portfolio_data(
     return svc.delete_portfolio_data(body.confirm_slug)
 
 
+@router.post("/portfolio-cleanup/delete")
+async def delete_portfolio_data_action(
+    body: PortfolioCleanupRequest,
+    svc: Annotated[AdminService, Depends(_svc)],
+) -> dict[str, object]:
+    """Delete current-tenant portfolio data via an action endpoint for browser clients."""
+    return svc.delete_portfolio_data(body.confirm_slug)
+
+
 @router.put("/settings")
 async def update_settings(
     body: dict[str, object],

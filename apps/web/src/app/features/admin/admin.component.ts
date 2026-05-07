@@ -735,7 +735,7 @@ export class AdminComponent implements OnInit {
 
     this.cleanupDeleting.set(true);
     this.cleanupError.set(null);
-    this.api.delete('/admin/portfolio-cleanup', { confirm_slug: confirmation }).subscribe({
+    this.api.post('/admin/portfolio-cleanup/delete', { confirm_slug: confirmation }).subscribe({
       next: res => {
         this.cleanupResult.set(res);
         this.cleanupPreview.set(res);
