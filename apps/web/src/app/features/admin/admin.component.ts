@@ -30,7 +30,7 @@ import { FormsModule } from '@angular/forms';
       <!-- Admin Navigation -->
       <div class="border-b border-[var(--t-border)]">
         <nav class="-mb-px flex space-x-8">
-          @for (tab of ['General', 'Billing', 'Launch Readiness', 'Data Cleanup', 'Strategic Parameters', 'Access Control', 'Governance Engine', 'Audit Logs']; track tab) {
+          @for (tab of ['General', 'Billing', 'Data Cleanup', 'Strategic Parameters', 'Access Control', 'Governance Engine', 'Audit Logs']; track tab) {
             <button
               type="button"
               (click)="activeTab = tab"
@@ -43,10 +43,10 @@ import { FormsModule } from '@angular/forms';
         </nav>
       </div>
 
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div class="grid grid-cols-1 gap-8">
         
         <!-- Left: Main Content -->
-        <div class="lg:col-span-2 space-y-8">
+        <div class="space-y-8">
           
           @if (activeTab === 'General') {
             <div class="card p-8 space-y-8">
@@ -187,50 +187,6 @@ import { FormsModule } from '@angular/forms';
             </div>
           }
 
-          @if (activeTab === 'Launch Readiness') {
-            <div class="card p-8 space-y-8">
-              <section class="flex items-start justify-between gap-8">
-                <div>
-                  <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Launch Gate</p>
-                  <h3 class="mt-2 text-2xl font-black text-[var(--t-text-primary)]">
-                    {{ launchReadiness().ready ? 'Ready for controlled beta' : 'Blockers remain' }}
-                  </h3>
-                  <p class="mt-2 max-w-xl text-sm leading-6 text-[var(--t-text-secondary)]">
-                    Runtime, billing, schema, and security-sensitive configuration checks for launch readiness.
-                  </p>
-                </div>
-                <div class="grid grid-cols-2 gap-3 text-right">
-                  <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-3">
-                    <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Blockers</p>
-                    <p class="mt-1 text-2xl font-black text-red-500">{{ launchReadiness().blockers || 0 }}</p>
-                  </div>
-                  <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-3">
-                    <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Warnings</p>
-                    <p class="mt-1 text-2xl font-black text-amber-500">{{ launchReadiness().warnings || 0 }}</p>
-                  </div>
-                </div>
-              </section>
-
-              <section class="space-y-3">
-                @for (check of launchReadiness().checks || []; track check.code) {
-                  <div class="flex items-center justify-between gap-5 border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4">
-                    <div>
-                      <p class="text-sm font-black text-[var(--t-text-primary)]">{{ check.message }}</p>
-                      <p class="mt-1 font-mono text-[10px] text-[var(--t-text-tertiary)]">{{ check.code }}</p>
-                    </div>
-                    <span
-                      class="px-3 py-1 text-[9px] font-black uppercase tracking-widest"
-                      [class.text-emerald-500]="check.passed"
-                      [class.text-red-500]="!check.passed && check.severity === 'blocker'"
-                      [class.text-amber-500]="!check.passed && check.severity === 'warning'">
-                      {{ check.passed ? 'Passed' : check.severity }}
-                    </span>
-                  </div>
-                }
-              </section>
-            </div>
-          }
-
           @if (activeTab === 'Data Cleanup') {
             <div class="card overflow-hidden">
               <section class="border-b border-red-500/30 bg-red-500/10 p-8">
@@ -309,7 +265,7 @@ import { FormsModule } from '@angular/forms';
           }
 
           @if (activeTab === 'Strategic Parameters') {
-            <div class="space-y-8">
+            <div class="grid gap-6 xl:grid-cols-2">
               <!-- Workstreams CRUD -->
               <div class="card p-8">
                 <div class="flex justify-between items-center mb-6">
@@ -317,18 +273,27 @@ import { FormsModule } from '@angular/forms';
                     <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Workstream Management</h3>
                     <p class="text-[10px] text-[var(--t-text-tertiary)] uppercase tracking-widest font-black mt-1">Configure primary portfolio streams</p>
                   </div>
-                  <button type="button" (click)="addWorkstream()" aria-label="Add workstream" class="btn-primary text-[10px] py-2 px-4 rounded-xl font-black uppercase">Add Workstream</button>
                 </div>
                 
                 <div class="space-y-3">
                   @for (ws of workstreams(); track ws.id) {
-                    <div class="flex items-center justify-between p-4 rounded-xl border border-[var(--t-border)] hover:bg-[var(--t-surface-raised)]/30 transition-all">
-                      <div class="flex items-center gap-4">
+                    <div class="grid gap-4 p-4 rounded-xl border border-[var(--t-border)] hover:bg-[var(--t-surface-raised)]/30 transition-all sm:grid-cols-[1fr_220px_auto] sm:items-center">
+                      <div class="flex items-center gap-4 min-w-0">
                         <div class="w-8 h-8 rounded-lg bg-[var(--t-accent-soft)] flex items-center justify-center text-[var(--t-accent)]">
                           <span class="material-icons text-sm">hub</span>
                         </div>
-                        <input type="text" [ngModel]="ws.name" (ngModelChange)="ws.name = $event" (blur)="updateWorkstream(ws)" aria-label="Workstream name" class="bg-transparent border-none outline-none font-bold text-sm text-[var(--t-text-primary)] min-w-[200px]">
+                        <input type="text" [ngModel]="ws.name" (ngModelChange)="ws.name = $event" (blur)="updateWorkstream(ws)" aria-label="Workstream name" class="bg-transparent border-none outline-none font-bold text-sm text-[var(--t-text-primary)] min-w-0 w-full">
                       </div>
+                      <select
+                        [ngModel]="ws.business_unit_id || ''"
+                        (ngModelChange)="ws.business_unit_id = $event || null; updateWorkstream(ws)"
+                        aria-label="Workstream business unit"
+                        class="input-field w-full py-2 text-xs">
+                        <option value="">No business unit</option>
+                        @for (bu of businessUnits(); track bu.id) {
+                          <option [value]="bu.id">{{ bu.name }}</option>
+                        }
+                      </select>
                       <button type="button" (click)="deleteWorkstream(ws.id)" aria-label="Delete workstream" class="btn-ghost p-2 text-red-500/60 hover:text-red-500 hover:bg-red-500/10">
                         <span class="material-icons text-sm">delete</span>
                       </button>
@@ -336,16 +301,24 @@ import { FormsModule } from '@angular/forms';
                   }
                   
                   <!-- Inline Add -->
-                  <div class="flex items-center justify-between p-4 rounded-xl border border-dashed border-[var(--t-border)]">
-                    <div class="flex items-center gap-4">
+                  <div class="grid gap-4 p-4 rounded-xl border border-dashed border-[var(--t-border)] sm:grid-cols-[1fr_220px_auto] sm:items-center">
+                    <div class="flex items-center gap-4 min-w-0">
                       <div class="w-8 h-8 rounded-lg bg-[var(--t-surface-raised)] flex items-center justify-center text-[var(--t-text-tertiary)]">
                         <span class="material-icons text-sm">add</span>
                       </div>
-                      <input type="text" [ngModel]="newWorkstreamName()" (ngModelChange)="newWorkstreamName.set($event)" (keyup.enter)="addWorkstream()" aria-label="New workstream name" placeholder="Type new workstream name..." class="bg-transparent border-none outline-none text-sm text-[var(--t-text-primary)] min-w-[200px]">
+                      <input type="text" [ngModel]="newWorkstreamName()" (ngModelChange)="newWorkstreamName.set($event)" (keyup.enter)="addWorkstream()" aria-label="New workstream name" placeholder="Type new workstream name..." class="bg-transparent border-none outline-none text-sm text-[var(--t-text-primary)] min-w-0 w-full">
                     </div>
-                    @if (newWorkstreamName()) {
-                      <button type="button" (click)="addWorkstream()" aria-label="Create workstream" class="text-[var(--t-accent)] font-black text-[10px] uppercase tracking-widest">Create</button>
-                    }
+                    <select
+                      [ngModel]="newWorkstreamBusinessUnitId()"
+                      (ngModelChange)="newWorkstreamBusinessUnitId.set($event)"
+                      aria-label="New workstream business unit"
+                      class="input-field w-full py-2 text-xs">
+                      <option value="">No business unit</option>
+                      @for (bu of businessUnits(); track bu.id) {
+                        <option [value]="bu.id">{{ bu.name }}</option>
+                      }
+                    </select>
+                    <button type="button" (click)="addWorkstream()" [disabled]="!newWorkstreamName().trim()" aria-label="Create workstream" class="text-[var(--t-accent)] font-black text-[10px] uppercase tracking-widest disabled:cursor-not-allowed disabled:opacity-40">Create</button>
                   </div>
                 </div>
               </div>
@@ -357,7 +330,6 @@ import { FormsModule } from '@angular/forms';
                     <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Business Units</h3>
                     <p class="text-[10px] text-[var(--t-text-tertiary)] uppercase tracking-widest font-black mt-1">Market and functional segments</p>
                   </div>
-                  <button type="button" (click)="addBusinessUnit()" aria-label="Add business unit" class="btn-primary text-[10px] py-2 px-4 rounded-xl font-black uppercase">Add Segment</button>
                 </div>
                 
                 <div class="space-y-3">
@@ -386,6 +358,74 @@ import { FormsModule } from '@angular/forms';
                     @if (newBusinessUnitName()) {
                       <button type="button" (click)="addBusinessUnit()" aria-label="Create business unit" class="text-[var(--t-accent)] font-black text-[10px] uppercase tracking-widest">Create</button>
                     }
+                  </div>
+                </div>
+              </div>
+
+              <!-- Markets Configuration -->
+              <div class="card p-8">
+                <div class="mb-6">
+                  <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Markets</h3>
+                  <p class="text-[10px] text-[var(--t-text-tertiary)] uppercase tracking-widest font-black mt-1">Tenant market configuration</p>
+                </div>
+
+                <div class="space-y-3">
+                  @for (market of markets(); track $index) {
+                    <div class="flex items-center justify-between gap-4 p-4 rounded-xl border border-[var(--t-border)] hover:bg-[var(--t-surface-raised)]/30 transition-all">
+                      <div class="flex items-center gap-4 min-w-0 flex-1">
+                        <div class="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center text-sky-500">
+                          <span class="material-icons text-sm">public</span>
+                        </div>
+                        <input type="text" [ngModel]="market" (ngModelChange)="updateMarket($index, $event)" (blur)="saveStrategicParameterConfig()" aria-label="Market name" class="bg-transparent border-none outline-none font-bold text-sm text-[var(--t-text-primary)] min-w-0 w-full">
+                      </div>
+                      <button type="button" (click)="deleteMarket($index)" aria-label="Delete market" class="btn-ghost p-2 text-red-500/60 hover:text-red-500 hover:bg-red-500/10">
+                        <span class="material-icons text-sm">delete</span>
+                      </button>
+                    </div>
+                  }
+
+                  <div class="flex items-center justify-between gap-4 p-4 rounded-xl border border-dashed border-[var(--t-border)]">
+                    <div class="flex items-center gap-4 min-w-0 flex-1">
+                      <div class="w-8 h-8 rounded-lg bg-[var(--t-surface-raised)] flex items-center justify-center text-[var(--t-text-tertiary)]">
+                        <span class="material-icons text-sm">add</span>
+                      </div>
+                      <input type="text" [ngModel]="newMarketName()" (ngModelChange)="newMarketName.set($event)" (keyup.enter)="addMarket()" aria-label="New market name" placeholder="Type new market name..." class="bg-transparent border-none outline-none text-sm text-[var(--t-text-primary)] min-w-0 w-full">
+                    </div>
+                    <button type="button" (click)="addMarket()" [disabled]="!newMarketName().trim()" aria-label="Create market" class="text-[var(--t-accent)] font-black text-[10px] uppercase tracking-widest disabled:cursor-not-allowed disabled:opacity-40">Create</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Themes Configuration -->
+              <div class="card p-8">
+                <div class="mb-6">
+                  <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Themes</h3>
+                  <p class="text-[10px] text-[var(--t-text-tertiary)] uppercase tracking-widest font-black mt-1">Strategic theme configuration</p>
+                </div>
+
+                <div class="space-y-3">
+                  @for (theme of themes(); track $index) {
+                    <div class="flex items-center justify-between gap-4 p-4 rounded-xl border border-[var(--t-border)] hover:bg-[var(--t-surface-raised)]/30 transition-all">
+                      <div class="flex items-center gap-4 min-w-0 flex-1">
+                        <div class="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-500">
+                          <span class="material-icons text-sm">category</span>
+                        </div>
+                        <input type="text" [ngModel]="theme" (ngModelChange)="updateTheme($index, $event)" (blur)="saveStrategicParameterConfig()" aria-label="Theme name" class="bg-transparent border-none outline-none font-bold text-sm text-[var(--t-text-primary)] min-w-0 w-full">
+                      </div>
+                      <button type="button" (click)="deleteTheme($index)" aria-label="Delete theme" class="btn-ghost p-2 text-red-500/60 hover:text-red-500 hover:bg-red-500/10">
+                        <span class="material-icons text-sm">delete</span>
+                      </button>
+                    </div>
+                  }
+
+                  <div class="flex items-center justify-between gap-4 p-4 rounded-xl border border-dashed border-[var(--t-border)]">
+                    <div class="flex items-center gap-4 min-w-0 flex-1">
+                      <div class="w-8 h-8 rounded-lg bg-[var(--t-surface-raised)] flex items-center justify-center text-[var(--t-text-tertiary)]">
+                        <span class="material-icons text-sm">add</span>
+                      </div>
+                      <input type="text" [ngModel]="newThemeName()" (ngModelChange)="newThemeName.set($event)" (keyup.enter)="addTheme()" aria-label="New theme name" placeholder="Type new theme name..." class="bg-transparent border-none outline-none text-sm text-[var(--t-text-primary)] min-w-0 w-full">
+                    </div>
+                    <button type="button" (click)="addTheme()" [disabled]="!newThemeName().trim()" aria-label="Create theme" class="text-[var(--t-accent)] font-black text-[10px] uppercase tracking-widest disabled:cursor-not-allowed disabled:opacity-40">Create</button>
                   </div>
                 </div>
               </div>
@@ -534,24 +574,6 @@ import { FormsModule } from '@angular/forms';
           }
         </div>
 
-        <!-- Right: System Info -->
-        <div class="space-y-8">
-          <div class="card p-8 bg-gradient-to-br from-[var(--t-surface)] to-[var(--t-surface-raised)] border-l-4 border-[var(--t-accent)]">
-            <h3 class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)] mb-6">Deployment Insights</h3>
-            <div class="space-y-6">
-               <div class="flex items-center gap-4">
-                  <div class="w-10 h-10 rounded-xl bg-white shadow-sm flex items-center justify-center text-[var(--t-accent)] border border-[var(--t-border)]">
-                     <span class="material-icons">storage</span>
-                  </div>
-                  <div>
-                    <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Database</p>
-                    <p class="text-sm font-bold text-[var(--t-text-primary)]">PostgreSQL 15</p>
-                  </div>
-               </div>
-            </div>
-          </div>
-        </div>
-
       </div>
 
     </div>
@@ -571,9 +593,10 @@ export class AdminComponent implements OnInit {
   businessUnits = signal<any[]>([]);
   users = signal<any[]>([]);
   settings = signal<any>({ name: '', logo_url: '', settings: {} });
+  markets = signal<string[]>([]);
+  themes = signal<string[]>([]);
   billing = signal<any>({});
   billingError = signal<string | null>(null);
-  launchReadiness = signal<any>({ ready: false, blockers: 0, warnings: 0, checks: [] });
   cleanupPreview = signal<any>({ object_counts: {}, preserved_objects: [] });
   cleanupResult = signal<any | null>(null);
   cleanupError = signal<string | null>(null);
@@ -584,7 +607,10 @@ export class AdminComponent implements OnInit {
 
   // Inline add state
   newWorkstreamName = signal('');
+  newWorkstreamBusinessUnitId = signal('');
   newBusinessUnitName = signal('');
+  newMarketName = signal('');
+  newThemeName = signal('');
   newCriterionG1 = signal('');
   newCriterionG2 = signal('');
 
@@ -598,7 +624,6 @@ export class AdminComponent implements OnInit {
     this.loadUsers();
     this.loadSettings();
     this.loadBilling();
-    this.loadLaunchReadiness();
     this.loadCleanupPreview();
     this.loadGateCriteria();
     this.loadAuditLogs();
@@ -617,7 +642,12 @@ export class AdminComponent implements OnInit {
   }
 
   loadSettings() {
-    this.api.get<any>('/admin/settings').subscribe(res => this.settings.set(res));
+    this.api.get<any>('/admin/settings').subscribe(res => {
+      this.settings.set(res);
+      const strategicParameters = res.settings?.strategic_parameters || {};
+      this.markets.set(this.normalizeConfigList(strategicParameters.markets));
+      this.themes.set(this.normalizeConfigList(strategicParameters.themes));
+    });
   }
 
   loadBilling() {
@@ -636,10 +666,6 @@ export class AdminComponent implements OnInit {
         this.billingError.set(err.error?.detail || 'Billing portal is not available yet.');
       },
     });
-  }
-
-  loadLaunchReadiness() {
-    this.api.get<any>('/admin/launch-readiness').subscribe(res => this.launchReadiness.set(res));
   }
 
   loadCleanupPreview() {
@@ -671,24 +697,39 @@ export class AdminComponent implements OnInit {
   }
 
   addWorkstream() {
-    const name = this.newWorkstreamName();
+    const name = this.newWorkstreamName().trim();
     if (!name) return;
-    this.api.post('/workstreams', { name }).subscribe(() => {
+    this.api.post('/workstreams', {
+      name,
+      business_unit_id: this.newWorkstreamBusinessUnitId() || null,
+    }).subscribe(() => {
       this.loadWorkstreams();
       this.newWorkstreamName.set('');
+      this.newWorkstreamBusinessUnitId.set('');
     });
   }
 
   updateWorkstream(ws: any) {
-    this.api.put(`/workstreams/${ws.id}`, { name: ws.name }).subscribe(() => this.loadAuditLogs());
+    const name = String(ws.name || '').trim();
+    if (!name) return;
+    this.api.put(`/workstreams/${ws.id}`, {
+      name,
+      business_unit_id: ws.business_unit_id || null,
+    }).subscribe(() => {
+      this.loadWorkstreams();
+      this.loadAuditLogs();
+    });
   }
 
   deleteWorkstream(id: string) {
-    this.api.delete(`/workstreams/${id}`).subscribe(() => this.loadWorkstreams());
+    this.api.delete(`/workstreams/${id}`).subscribe(() => {
+      this.loadWorkstreams();
+      this.loadAuditLogs();
+    });
   }
 
   addBusinessUnit() {
-    const name = this.newBusinessUnitName();
+    const name = this.newBusinessUnitName().trim();
     if (!name) return;
     this.api.post('/business-units', { name }).subscribe(() => {
       this.loadBusinessUnits();
@@ -697,11 +738,82 @@ export class AdminComponent implements OnInit {
   }
 
   updateBusinessUnit(bu: any) {
-    this.api.put(`/business-units/${bu.id}`, { name: bu.name }).subscribe(() => this.loadAuditLogs());
+    const name = String(bu.name || '').trim();
+    if (!name) return;
+    this.api.put(`/business-units/${bu.id}`, { name }).subscribe(() => {
+      this.loadBusinessUnits();
+      this.loadAuditLogs();
+    });
   }
 
   deleteBusinessUnit(id: string) {
-    this.api.delete(`/business-units/${id}`).subscribe(() => this.loadBusinessUnits());
+    this.api.delete(`/business-units/${id}`).subscribe(() => {
+      this.loadBusinessUnits();
+      this.loadWorkstreams();
+      this.loadAuditLogs();
+    });
+  }
+
+  addMarket() {
+    const name = this.newMarketName().trim();
+    if (!name) return;
+    this.markets.update(markets => [...markets, name]);
+    this.newMarketName.set('');
+    this.saveStrategicParameterConfig();
+  }
+
+  updateMarket(index: number, value: string) {
+    this.markets.update(markets => markets.map((market, idx) => idx === index ? value : market));
+  }
+
+  deleteMarket(index: number) {
+    this.markets.update(markets => markets.filter((_, idx) => idx !== index));
+    this.saveStrategicParameterConfig();
+  }
+
+  addTheme() {
+    const name = this.newThemeName().trim();
+    if (!name) return;
+    this.themes.update(themes => [...themes, name]);
+    this.newThemeName.set('');
+    this.saveStrategicParameterConfig();
+  }
+
+  updateTheme(index: number, value: string) {
+    this.themes.update(themes => themes.map((theme, idx) => idx === index ? value : theme));
+  }
+
+  deleteTheme(index: number) {
+    this.themes.update(themes => themes.filter((_, idx) => idx !== index));
+    this.saveStrategicParameterConfig();
+  }
+
+  saveStrategicParameterConfig() {
+    const current = this.settings();
+    const currentSettings = current.settings || {};
+    const strategicParameters = currentSettings.strategic_parameters || {};
+    const nextSettings = {
+      ...currentSettings,
+      strategic_parameters: {
+        ...strategicParameters,
+        markets: this.normalizeConfigList(this.markets()),
+        themes: this.normalizeConfigList(this.themes()),
+      },
+    };
+
+    this.api.put('/admin/settings', {
+      name: current.name,
+      logo_url: current.logo_url,
+      settings: nextSettings,
+    }).subscribe(() => {
+      this.loadSettings();
+      this.loadAuditLogs();
+    });
+  }
+
+  private normalizeConfigList(values: unknown): string[] {
+    if (!Array.isArray(values)) return [];
+    return [...new Set(values.map(value => String(value).trim()).filter(Boolean))];
   }
 
   addCriterion(gate: number) {
