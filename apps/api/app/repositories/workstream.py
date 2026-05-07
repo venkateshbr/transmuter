@@ -50,4 +50,11 @@ class WorkstreamRepository:
         return result.data[0] if result.data else {}
 
     def delete(self, ws_id: str) -> None:
+        (
+            self._c.table("initiatives")
+            .update({"workstream_id": None})
+            .eq("tenant_id", self._tid)
+            .eq("workstream_id", ws_id)
+            .execute()
+        )
         self._c.table("workstreams").delete().eq("tenant_id", self._tid).eq("id", ws_id).execute()

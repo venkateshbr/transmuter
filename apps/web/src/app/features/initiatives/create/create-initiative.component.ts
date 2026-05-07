@@ -311,10 +311,7 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
               <label for="init-tag" class="field-label">Tag</label>
               <select id="init-tag" class="input-field" [(ngModel)]="form.tag">
                 <option value="">Select tag</option>
-                <option value="automation">Automation</option>
-                <option value="offshoring">Offshoring</option>
-                <option value="commercial">Commercial</option>
-                <option value="other">Other</option>
+                <option *ngFor="let tag of tagOptions()" [value]="tag">{{ labelize(tag) }}</option>
               </select>
             </div>
           </div>
@@ -633,11 +630,13 @@ export class CreateInitiativeComponent {
   readonly businessUnits = signal<BusinessUnitOption[]>([]);
   readonly markets = signal<string[]>([]);
   readonly themes = signal<string[]>([]);
+  readonly tags = signal<string[]>([]);
   readonly users = signal<UserOption[]>([]);
   readonly uploadedFileName = signal<string | null>(null);
   readonly uploadPreview = signal<any | null>(null);
   readonly suggestions = signal<any | null>(null);
   readonly workbookCountKeys = ['financials', 'costs', 'kpis', 'risks', 'milestones'];
+  private readonly defaultTags = ['automation', 'offshoring', 'commercial', 'other'];
 
   private uploadedFile: File | null = null;
 
@@ -695,6 +694,8 @@ export class CreateInitiativeComponent {
         const strategicParameters = r.settings?.strategic_parameters || {};
         this.markets.set(this.normalizeConfigList(strategicParameters.markets));
         this.themes.set(this.normalizeConfigList(strategicParameters.themes));
+        const configuredTags = this.normalizeConfigList(strategicParameters.tags);
+        this.tags.set(configuredTags.length ? configuredTags : this.defaultTags);
       },
       error: () => {},
     });
@@ -776,6 +777,10 @@ export class CreateInitiativeComponent {
     return this.withCurrentOption(this.themes(), this.form.theme);
   }
 
+  tagOptions(): string[] {
+    return this.withCurrentOption(this.tags(), this.form.tag);
+  }
+
   onBusinessUnitChange(businessUnitId: string): void {
     this.form.business_unit_id = businessUnitId;
     if (!businessUnitId) return;
@@ -801,6 +806,10 @@ export class CreateInitiativeComponent {
   private withCurrentOption(options: string[], currentValue: string): string[] {
     const current = currentValue.trim();
     return this.normalizeConfigList(current ? [...options, current] : options);
+  }
+
+  labelize(value: string): string {
+    return value.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   }
 
   generateSuggestions(): void {

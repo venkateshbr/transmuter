@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, Field
@@ -20,6 +20,11 @@ def _svc(current_user: Annotated[CurrentUser, Depends(get_current_user)]) -> Adm
 
 class PortfolioCleanupRequest(BaseModel):
     confirm_slug: str = Field(..., min_length=2, max_length=80)
+
+
+class StrategicParameterReferenceResetRequest(BaseModel):
+    parameter_type: Literal["market", "theme", "tag"]
+    value: str = Field(..., min_length=1, max_length=300)
 
 
 @router.get("/settings")
@@ -73,6 +78,15 @@ async def update_settings(
 ) -> dict[str, object]:
     """Update organization settings."""
     return svc.update_settings(body)
+
+
+@router.post("/strategic-parameters/reset-references")
+async def reset_strategic_parameter_references(
+    body: StrategicParameterReferenceResetRequest,
+    svc: Annotated[AdminService, Depends(_svc)],
+) -> dict[str, object]:
+    """Clear initiative references before deleting a configured strategic parameter."""
+    return svc.reset_strategic_parameter_references(body.parameter_type, body.value)
 
 
 @router.get("/gate-criteria")

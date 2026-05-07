@@ -460,10 +460,9 @@ interface BusinessUnitOption {
                 <label class="block text-xs font-semibold uppercase text-[var(--t-text-secondary)] mb-1">Tag</label>
                 <select [(ngModel)]="editData.tag" aria-label="Initiative tag" class="w-full bg-[var(--t-surface-raised)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text-primary)] focus:border-[var(--t-primary)] outline-none">
                   <option value="">Select tag</option>
-                  <option value="automation">Automation</option>
-                  <option value="offshoring">Offshoring</option>
-                  <option value="commercial">Commercial</option>
-                  <option value="other">Other</option>
+                  @for (tag of tagOptions(); track tag) {
+                    <option [value]="tag">{{ labelize(tag) }}</option>
+                  }
                 </select>
               </div>
               <div class="grid grid-cols-2 gap-4">
@@ -552,10 +551,12 @@ export class OverviewTabComponent implements OnInit {
   businessUnits = signal<BusinessUnitOption[]>([]);
   markets = signal<string[]>([]);
   themes = signal<string[]>([]);
+  tags = signal<string[]>([]);
 
   isEditing = signal(false);
   saving = signal(false);
   editData: any = {};
+  private readonly defaultTags = ['automation', 'offshoring', 'commercial', 'other'];
 
   summaryCards = computed(() => {
     const s = this.grid()?.summary;
@@ -685,6 +686,8 @@ export class OverviewTabComponent implements OnInit {
         const strategicParameters = r.settings?.strategic_parameters || {};
         this.markets.set(this.normalizeConfigList(strategicParameters.markets));
         this.themes.set(this.normalizeConfigList(strategicParameters.themes));
+        const configuredTags = this.normalizeConfigList(strategicParameters.tags);
+        this.tags.set(configuredTags.length ? configuredTags : this.defaultTags);
       },
       error: () => {},
     });
@@ -702,6 +705,10 @@ export class OverviewTabComponent implements OnInit {
 
   themeOptions(): string[] {
     return this.withCurrentOption(this.themes(), this.editData.theme || '');
+  }
+
+  tagOptions(): string[] {
+    return this.withCurrentOption(this.tags(), this.editData.tag || '');
   }
 
   onEditBusinessUnitChange(businessUnitId: string): void {

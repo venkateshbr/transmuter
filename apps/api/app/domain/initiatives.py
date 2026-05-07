@@ -21,7 +21,7 @@ ImpactType = Literal["recurring", "one_off"]
 Priority = Literal["high", "medium", "low"]
 RAGStatus = Literal["red", "amber", "green"]
 Stage = Literal["scoping", "in_progress", "complete"]
-InitiativeTag = Literal["automation", "offshoring", "commercial", "other"]
+InitiativeTag = str
 
 
 # ── Write models (request bodies) ─────────────────────────────────────────────

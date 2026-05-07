@@ -239,6 +239,51 @@ class AdminService:
         patch["updated_at"] = datetime.now(UTC).isoformat()
         return self._org_repo.update_organization(patch)
 
+    def reset_strategic_parameter_references(
+        self,
+        parameter_type: str,
+        value: str,
+    ) -> dict[str, Any]:
+        field_by_parameter = {
+            "market": "country",
+            "theme": "theme",
+            "tag": "tag",
+        }
+        field = field_by_parameter.get(parameter_type)
+        if not field:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Unsupported strategic parameter type",
+            )
+
+        result = (
+            self._c.table("initiatives")
+            .update({field: None})
+            .eq("tenant_id", self._tid)
+            .eq(field, value)
+            .execute()
+        )
+        reset_count = len(result.data or [])
+        if self._user_id:
+            self._audit_repo.log(
+                "update",
+                "strategic_parameter_references",
+                self._tid,
+                self._user_id,
+                {
+                    "parameter_type": parameter_type,
+                    "value": value,
+                    "field": field,
+                    "reset_count": reset_count,
+                },
+            )
+        return {
+            "parameter_type": parameter_type,
+            "value": value,
+            "field": field,
+            "reset_count": reset_count,
+        }
+
     # ── Governance Criteria ────────────────────────────────────────
 
     def list_gate_criteria(self, gate_number: int | None = None) -> dict[str, Any]:

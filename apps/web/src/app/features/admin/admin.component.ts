@@ -429,6 +429,40 @@ import { FormsModule } from '@angular/forms';
                   </div>
                 </div>
               </div>
+
+              <!-- Tags Configuration -->
+              <div class="card p-8">
+                <div class="mb-6">
+                  <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Tags</h3>
+                  <p class="text-[10px] text-[var(--t-text-tertiary)] uppercase tracking-widest font-black mt-1">Initiative value-matrix tags</p>
+                </div>
+
+                <div class="space-y-3">
+                  @for (tag of tags(); track $index) {
+                    <div class="flex items-center justify-between gap-4 p-4 rounded-xl border border-[var(--t-border)] hover:bg-[var(--t-surface-raised)]/30 transition-all">
+                      <div class="flex items-center gap-4 min-w-0 flex-1">
+                        <div class="w-8 h-8 rounded-lg bg-[var(--t-accent-soft)] flex items-center justify-center text-[var(--t-accent)]">
+                          <span class="material-icons text-sm">sell</span>
+                        </div>
+                        <input type="text" [ngModel]="tag" (ngModelChange)="updateTag($index, $event)" (blur)="saveStrategicParameterConfig()" aria-label="Tag name" class="bg-transparent border-none outline-none font-bold text-sm text-[var(--t-text-primary)] min-w-0 w-full">
+                      </div>
+                      <button type="button" (click)="deleteTag($index)" aria-label="Delete tag" class="btn-ghost p-2 text-red-500/60 hover:text-red-500 hover:bg-red-500/10">
+                        <span class="material-icons text-sm">delete</span>
+                      </button>
+                    </div>
+                  }
+
+                  <div class="flex items-center justify-between gap-4 p-4 rounded-xl border border-dashed border-[var(--t-border)]">
+                    <div class="flex items-center gap-4 min-w-0 flex-1">
+                      <div class="w-8 h-8 rounded-lg bg-[var(--t-surface-raised)] flex items-center justify-center text-[var(--t-text-tertiary)]">
+                        <span class="material-icons text-sm">add</span>
+                      </div>
+                      <input type="text" [ngModel]="newTagName()" (ngModelChange)="newTagName.set($event)" (keyup.enter)="addTag()" aria-label="New tag name" placeholder="Type new tag name..." class="bg-transparent border-none outline-none text-sm text-[var(--t-text-primary)] min-w-0 w-full">
+                    </div>
+                    <button type="button" (click)="addTag()" [disabled]="!newTagName().trim()" aria-label="Create tag" class="text-[var(--t-accent)] font-black text-[10px] uppercase tracking-widest disabled:cursor-not-allowed disabled:opacity-40">Create</button>
+                  </div>
+                </div>
+              </div>
             </div>
           }
 
@@ -595,6 +629,7 @@ export class AdminComponent implements OnInit {
   settings = signal<any>({ name: '', logo_url: '', settings: {} });
   markets = signal<string[]>([]);
   themes = signal<string[]>([]);
+  tags = signal<string[]>([]);
   billing = signal<any>({});
   billingError = signal<string | null>(null);
   cleanupPreview = signal<any>({ object_counts: {}, preserved_objects: [] });
@@ -611,8 +646,11 @@ export class AdminComponent implements OnInit {
   newBusinessUnitName = signal('');
   newMarketName = signal('');
   newThemeName = signal('');
+  newTagName = signal('');
   newCriterionG1 = signal('');
   newCriterionG2 = signal('');
+
+  private readonly defaultTags = ['automation', 'offshoring', 'commercial', 'other'];
 
   ngOnInit() {
     this.loadAll();
@@ -647,6 +685,7 @@ export class AdminComponent implements OnInit {
       const strategicParameters = res.settings?.strategic_parameters || {};
       this.markets.set(this.normalizeConfigList(strategicParameters.markets));
       this.themes.set(this.normalizeConfigList(strategicParameters.themes));
+      this.tags.set(this.normalizeConfigList(strategicParameters.tags).length ? this.normalizeConfigList(strategicParameters.tags) : this.defaultTags);
     });
   }
 
@@ -767,8 +806,11 @@ export class AdminComponent implements OnInit {
   }
 
   deleteMarket(index: number) {
-    this.markets.update(markets => markets.filter((_, idx) => idx !== index));
-    this.saveStrategicParameterConfig();
+    const value = this.markets()[index];
+    this.resetStrategicParameterReferences('market', value, () => {
+      this.markets.update(markets => markets.filter((_, idx) => idx !== index));
+      this.saveStrategicParameterConfig();
+    });
   }
 
   addTheme() {
@@ -784,8 +826,31 @@ export class AdminComponent implements OnInit {
   }
 
   deleteTheme(index: number) {
-    this.themes.update(themes => themes.filter((_, idx) => idx !== index));
+    const value = this.themes()[index];
+    this.resetStrategicParameterReferences('theme', value, () => {
+      this.themes.update(themes => themes.filter((_, idx) => idx !== index));
+      this.saveStrategicParameterConfig();
+    });
+  }
+
+  addTag() {
+    const name = this.newTagName().trim();
+    if (!name) return;
+    this.tags.update(tags => [...tags, name]);
+    this.newTagName.set('');
     this.saveStrategicParameterConfig();
+  }
+
+  updateTag(index: number, value: string) {
+    this.tags.update(tags => tags.map((tag, idx) => idx === index ? value : tag));
+  }
+
+  deleteTag(index: number) {
+    const value = this.tags()[index];
+    this.resetStrategicParameterReferences('tag', value, () => {
+      this.tags.update(tags => tags.filter((_, idx) => idx !== index));
+      this.saveStrategicParameterConfig();
+    });
   }
 
   saveStrategicParameterConfig() {
@@ -798,6 +863,7 @@ export class AdminComponent implements OnInit {
         ...strategicParameters,
         markets: this.normalizeConfigList(this.markets()),
         themes: this.normalizeConfigList(this.themes()),
+        tags: this.normalizeConfigList(this.tags()),
       },
     };
 
@@ -814,6 +880,25 @@ export class AdminComponent implements OnInit {
   private normalizeConfigList(values: unknown): string[] {
     if (!Array.isArray(values)) return [];
     return [...new Set(values.map(value => String(value).trim()).filter(Boolean))];
+  }
+
+  private resetStrategicParameterReferences(
+    parameterType: 'market' | 'theme' | 'tag',
+    value: string | undefined,
+    next: () => void,
+  ) {
+    const normalizedValue = String(value || '').trim();
+    if (!normalizedValue) {
+      next();
+      return;
+    }
+    this.api.post('/admin/strategic-parameters/reset-references', {
+      parameter_type: parameterType,
+      value: normalizedValue,
+    }).subscribe(() => {
+      next();
+      this.loadAuditLogs();
+    });
   }
 
   addCriterion(gate: number) {

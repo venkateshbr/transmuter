@@ -50,6 +50,29 @@ class BusinessUnitRepository:
         return result.data[0] if result.data else {}
 
     def delete(self, bu_id: str) -> None:
+        workstreams = (
+            self._c.table("workstreams")
+            .select("id")
+            .eq("tenant_id", self._tid)
+            .eq("business_unit_id", bu_id)
+            .execute()
+        )
+        workstream_ids = [row["id"] for row in workstreams.data or []]
+        if workstream_ids:
+            (
+                self._c.table("initiatives")
+                .update({"workstream_id": None})
+                .eq("tenant_id", self._tid)
+                .in_("workstream_id", workstream_ids)
+                .execute()
+            )
+        (
+            self._c.table("workstreams")
+            .update({"business_unit_id": None})
+            .eq("tenant_id", self._tid)
+            .eq("business_unit_id", bu_id)
+            .execute()
+        )
         (
             self._c.table("business_units")
             .delete()
