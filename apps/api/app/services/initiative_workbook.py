@@ -705,13 +705,7 @@ def _parse_alchemist_benefits(
     headers, body = _headered_alchemist_rows(rows, "Name")
     if not headers:
         return []
-    fy_columns = [
-        (index, fiscal_years[offset])
-        for offset, index in enumerate(
-            [index for index, value in enumerate(headers) if re.fullmatch(r"FY\d{2,4}", value.strip())]
-        )
-        if offset < len(fiscal_years)
-    ]
+    period_columns = _period_columns(headers, fiscal_years)
     by_period: dict[tuple[int, int], dict[str, Decimal | int | None]] = {}
     metric_map = {
         ("revenue uplift", "plan base"): "revenue_uplift_base",
@@ -730,17 +724,20 @@ def _parse_alchemist_benefits(
         field = metric_map.get((name, lane))
         if not field:
             continue
-        for index, year in fy_columns:
+        for index, year, month in period_columns:
             amount = _optional_decimal(_cell(named, headers, row, index))
             if amount is None:
                 continue
             if amount == 0:
                 continue
-            for month, monthly_amount in enumerate(_monthly_distribution(_scale_millions(amount)), start=1):
-                period = by_period.setdefault((year, month), {"year": year, "month": month, "quarter": None})
-                period[field] = monthly_amount
-                if field.startswith("gross_margin_"):
-                    period[field.replace("gross_margin_", "gm_uplift_")] = monthly_amount
+            monthly_amount = _scale_millions(amount)
+            period = by_period.setdefault(
+                (year, month),
+                {"year": year, "month": month, "quarter": None},
+            )
+            period[field] = monthly_amount
+            if field.startswith("gross_margin_"):
+                period[field.replace("gross_margin_", "gm_uplift_")] = monthly_amount
     items: list[FinancialEntryUpdate] = []
     for row in by_period.values():
         try:
@@ -1267,13 +1264,6 @@ def _period_columns(headers: list[str], fiscal_years: list[int]) -> list[tuple[i
 
 def _scale_millions(value: Decimal) -> Decimal:
     return (value * Decimal("1000000")).quantize(Decimal("0.0001"))
-
-
-def _monthly_distribution(total: Decimal) -> list[Decimal]:
-    base = (total / Decimal("12")).quantize(Decimal("0.0001"))
-    values = [base for _ in range(11)]
-    values.append(total - sum(values, Decimal("0")))
-    return values
 
 
 def _norm(value: str | None) -> str:
