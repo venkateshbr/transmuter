@@ -7,7 +7,7 @@ import { environment } from '../../../environments/environment';
 export class ApiService {
   private readonly http = inject(HttpClient);
   private readonly base =
-    (globalThis as { __TRANSMUTER_API_URL__?: string }).__TRANSMUTER_API_URL__
+    (globalThis as { __TRANSMUTER_API_URL__?: string }).__TRANSMUTER_API_URL__?.trim()
     || environment.apiUrl;
 
   get<T>(path: string, params?: Record<string, string | number | boolean>): Observable<T> {

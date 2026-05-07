@@ -17,8 +17,9 @@ replace them.
 - Docker CLI path on this machine is `/usr/local/bin/docker`.
 - Cloudflare tunnel hostnames:
   - Frontend: `https://transmuter.ishirock.com`
-  - API: `https://transmuter-api.ishirock.com`
-- Frontend runtime config should point to `https://transmuter-api.ishirock.com`.
+  - Optional direct API: `https://transmuter-api.ishirock.com`
+- Frontend runtime config should point to `/api`; the web nginx container proxies
+  that path to the Docker Compose API service at `http://api:8001`.
 
 ## Product Direction
 
@@ -47,7 +48,7 @@ replace them.
 ## Stripe And Webhooks
 
 - Stripe checkout and webhook flow has been tested through Cloudflare.
-- Webhook endpoint is `https://transmuter-api.ishirock.com/billing/webhook`.
+- Webhook endpoint is `https://transmuter.ishirock.com/api/billing/webhook`.
 - Stripe events handled include checkout completion and subscription updates/deletes.
 - Use test card `4242 4242 4242 4242` only in sandbox regression runs.
 - Payment, auth, webhook, tenant provisioning, and RBAC changes require Prahari review.

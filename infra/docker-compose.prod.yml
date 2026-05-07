@@ -27,7 +27,7 @@ services:
     ports:
       - "4301:80"
     environment:
-      TRANSMUTER_API_URL: ${TRANSMUTER_API_URL:-https://transmuter-api.ishirock.com}
+      TRANSMUTER_API_URL: ${TRANSMUTER_API_URL:-/api}
     depends_on:
       api:
         condition: service_healthy

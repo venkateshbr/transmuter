@@ -8,7 +8,7 @@ This scenario validates:
 
 - Public marketing and subscription signup on `https://transmuter.ishirock.com`.
 - Stripe sandbox checkout using the configured test product/price IDs.
-- Stripe webhook delivery to `https://transmuter-api.ishirock.com/billing/webhook`.
+- Stripe webhook delivery to `https://transmuter.ishirock.com/api/billing/webhook`.
 - Tenant provisioning from the webhook.
 - Initial tenant admin login.
 - Initiative creation through the tenant UI.
@@ -22,10 +22,9 @@ This scenario validates:
 - Production Docker stack is running and healthy.
 - Cloudflare tunnel routes are active:
   - `https://transmuter.ishirock.com` -> frontend.
-  - `https://transmuter-api.ishirock.com` -> backend.
-- Frontend runtime config resolves to the public API hostname:
+- Frontend runtime config resolves to the same-origin API proxy:
   - `https://transmuter.ishirock.com/assets/runtime-config.js`
-  - Expected: `window.__TRANSMUTER_API_URL__ = "https://transmuter-api.ishirock.com";`
+  - Expected: `window.__TRANSMUTER_API_URL__ = "/api";`
 - Stripe sandbox webhook endpoint is enabled for:
   - `checkout.session.completed`
   - `customer.subscription.updated`
@@ -265,7 +264,7 @@ Record the following for every regression run:
 ## Failure Triage
 
 - Checkout does not redirect to Stripe:
-  - Verify frontend runtime config points at `https://transmuter-api.ishirock.com`.
+  - Verify frontend runtime config points at `/api`.
   - Verify API CORS allows `https://transmuter.ishirock.com`.
 - Checkout succeeds but tenant is not provisioned:
   - Verify Stripe webhook endpoint URL and signing secret.
@@ -292,7 +291,7 @@ Recommended future command:
 
 ```bash
 TRANSMUTER_UI_BASE_URL=https://transmuter.ishirock.com \
-TRANSMUTER_API_BASE_URL=https://transmuter-api.ishirock.com \
+TRANSMUTER_API_BASE_URL=https://transmuter.ishirock.com/api \
 TRANSMUTER_E2E_STRIPE=true \
 npm run e2e:stripe-onboarding
 ```

@@ -144,73 +144,79 @@ import { ApiService } from '../../core/services/api.service';
       </section>
 
       @if (deleteTarget()) {
-        <div class="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-6">
-          <section class="w-full max-w-xl border border-red-500/40 bg-[var(--t-surface)] p-6 shadow-2xl">
-            <p class="text-[10px] font-black uppercase tracking-[0.28em] text-red-500">Destructive cleanup</p>
-            <h2 class="mt-3 text-2xl font-black">Delete tenant data</h2>
-            <p class="mt-3 text-sm leading-6 text-[var(--t-text-secondary)]">
-              This permanently deletes the tenant, users, initiatives, financials, meetings, risks, KPIs,
-              billing records, and related tenant data. This is intended only for demo cleanup.
-            </p>
+        <div class="fixed inset-0 z-[80] flex items-start justify-center overflow-y-auto bg-black/60 p-4 sm:items-center sm:p-6">
+          <section
+            class="flex max-h-[calc(100vh-2rem)] w-full max-w-xl flex-col border border-red-500/40 bg-[var(--t-surface)] shadow-2xl sm:max-h-[calc(100vh-3rem)]"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-tenant-title">
+            <div class="overflow-y-auto p-6">
+              <p class="text-[10px] font-black uppercase tracking-[0.28em] text-red-500">Destructive cleanup</p>
+              <h2 id="delete-tenant-title" class="mt-3 text-2xl font-black">Delete tenant data</h2>
+              <p class="mt-3 text-sm leading-6 text-[var(--t-text-secondary)]">
+                This permanently deletes the tenant, users, initiatives, financials, meetings, risks, KPIs,
+                billing records, and related tenant data. This is intended only for demo cleanup.
+              </p>
 
-            <div class="mt-5 border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4">
-              <p class="text-sm font-black">{{ deleteTarget()?.name }}</p>
-              <p class="mt-1 font-mono text-xs text-[var(--t-text-tertiary)]">{{ deleteTarget()?.slug }}</p>
-            </div>
-
-            <label class="mt-5 block">
-              <span class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">
-                Type tenant slug to confirm
-              </span>
-              <input
-                class="input-field mt-2 w-full font-mono"
-                [(ngModel)]="deleteConfirmation"
-                [placeholder]="deleteTarget()?.slug"
-                aria-label="Tenant deletion confirmation slug">
-            </label>
-
-            @if (deleteError()) {
-              <div class="mt-4 border border-red-500/30 bg-red-500/10 p-3 text-sm font-bold text-red-500">
-                {{ deleteError() }}
+              <div class="mt-5 border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4">
+                <p class="text-sm font-black">{{ deleteTarget()?.name }}</p>
+                <p class="mt-1 font-mono text-xs text-[var(--t-text-tertiary)]">{{ deleteTarget()?.slug }}</p>
               </div>
-            }
 
-            <div class="mt-5 border border-[var(--t-border)]">
-              <div class="border-b border-[var(--t-border)] bg-[var(--t-surface-raised)] px-4 py-3">
-                <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">
-                  {{ deleteResult() ? 'Deletion completed' : deleting() ? 'Deletion in progress' : 'Objects queued for deletion' }}
-                </p>
-              </div>
-              <div class="grid gap-0 md:grid-cols-2">
-                @for (item of deletionObjects(); track item.key) {
-                  <div class="flex items-center justify-between border-b border-[var(--t-border)] px-4 py-3 md:odd:border-r">
-                    <div class="flex items-center gap-3">
-                      <span
-                        class="flex h-6 w-6 items-center justify-center border text-[10px] font-black"
-                        [class.border-emerald-500]="deleteResult()"
-                        [class.text-emerald-500]="deleteResult()"
-                        [class.border-amber-500]="deleting() && !deleteResult()"
-                        [class.text-amber-500]="deleting() && !deleteResult()"
-                        [class.border-[var(--t-border)]]="!deleting() && !deleteResult()">
-                        {{ deleteResult() ? '✓' : deleting() ? '…' : item.count }}
-                      </span>
-                      <p class="text-sm font-black">{{ item.label }}</p>
+              <label class="mt-5 block">
+                <span class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">
+                  Type tenant slug to confirm
+                </span>
+                <input
+                  class="input-field mt-2 w-full font-mono"
+                  [(ngModel)]="deleteConfirmation"
+                  [placeholder]="deleteTarget()?.slug"
+                  aria-label="Tenant deletion confirmation slug">
+              </label>
+
+              @if (deleteError()) {
+                <div class="mt-4 border border-red-500/30 bg-red-500/10 p-3 text-sm font-bold text-red-500">
+                  {{ deleteError() }}
+                </div>
+              }
+
+              <div class="mt-5 border border-[var(--t-border)]">
+                <div class="border-b border-[var(--t-border)] bg-[var(--t-surface-raised)] px-4 py-3">
+                  <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">
+                    {{ deleteResult() ? 'Deletion completed' : deleting() ? 'Deletion in progress' : 'Objects queued for deletion' }}
+                  </p>
+                </div>
+                <div class="grid gap-0 md:grid-cols-2">
+                  @for (item of deletionObjects(); track item.key) {
+                    <div class="flex items-center justify-between border-b border-[var(--t-border)] px-4 py-3 md:odd:border-r">
+                      <div class="flex items-center gap-3">
+                        <span
+                          class="flex h-6 w-6 items-center justify-center border text-[10px] font-black"
+                          [class.border-emerald-500]="deleteResult()"
+                          [class.text-emerald-500]="deleteResult()"
+                          [class.border-amber-500]="deleting() && !deleteResult()"
+                          [class.text-amber-500]="deleting() && !deleteResult()"
+                          [class.border-[var(--t-border)]]="!deleting() && !deleteResult()">
+                          {{ deleteResult() ? '✓' : deleting() ? '...' : item.count }}
+                        </span>
+                        <p class="text-sm font-black">{{ item.label }}</p>
+                      </div>
+                      <p class="text-xs font-bold text-[var(--t-text-secondary)]">
+                        {{ deleteResult() ? item.count + ' deleted' : item.count + ' found' }}
+                      </p>
                     </div>
-                    <p class="text-xs font-bold text-[var(--t-text-secondary)]">
-                      {{ deleteResult() ? item.count + ' deleted' : item.count + ' found' }}
-                    </p>
-                  </div>
-                }
+                  }
+                </div>
               </div>
+
+              @if (deleteResult()) {
+                <div class="mt-4 border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm font-bold text-emerald-600">
+                  Tenant deleted. Organization row: {{ deleteResult().organization_deleted }}. Auth users deleted: {{ deleteResult().auth_users_deleted }}.
+                </div>
+              }
             </div>
 
-            @if (deleteResult()) {
-              <div class="mt-4 border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm font-bold text-emerald-600">
-                Tenant deleted. Organization row: {{ deleteResult().organization_deleted }}. Auth users deleted: {{ deleteResult().auth_users_deleted }}.
-              </div>
-            }
-
-            <div class="mt-6 flex justify-end gap-3">
+            <div class="sticky bottom-0 flex justify-end gap-3 border-t border-[var(--t-border)] bg-[var(--t-surface)] p-4 shadow-[0_-14px_24px_rgba(7,31,60,0.08)]">
               <button type="button" class="btn-ghost border border-[var(--t-border)] px-4 py-2 text-xs font-black uppercase" (click)="closeDeleteTenant()">
                 {{ deleteResult() ? 'Close' : 'Cancel' }}
               </button>

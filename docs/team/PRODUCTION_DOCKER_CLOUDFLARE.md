@@ -2,12 +2,13 @@
 
 ## Recommended Hostnames
 
-Use two hostnames:
+Use one public app hostname for browser traffic and Stripe webhooks:
 
 - Frontend: `https://transmuter.ishirock.com`
-- Backend API: `https://transmuter-api.ishirock.com`
 
-This is the better launch setup for Transmuter because it gives the API an explicit origin for Stripe webhooks, operational logs, Cloudflare rules, rate limits, and future API-specific monitoring.
+The frontend nginx container serves the Angular app and proxies `/api` to the API
+container over the Docker Compose network. A separate API hostname is optional
+for direct API debugging, but it is not required for normal app or Stripe traffic.
 
 ## Local Production-Image Test
 
@@ -33,13 +34,14 @@ Stop them:
 The web image is runtime-configurable. Set:
 
 ```bash
-TRANSMUTER_API_URL=https://transmuter-api.ishirock.com
+TRANSMUTER_API_URL=/api
 ```
 
-For local container testing, `start-prod.sh` defaults this to:
+The default is `/api`. The frontend nginx container proxies that same-origin path
+to the API service over the Docker Compose network:
 
 ```bash
-http://localhost:8001
+http://api:8001
 ```
 
 ## Cloudflare Tunnel Routing
@@ -49,6 +51,11 @@ Recommended tunnel routes:
 | Public hostname | Local service |
 | --- | --- |
 | `transmuter.ishirock.com` | `http://localhost:4301` |
+
+Optional direct API route:
+
+| Public hostname | Local service |
+| --- | --- |
 | `transmuter-api.ishirock.com` | `http://localhost:8001` |
 
 ## Stripe Webhook
@@ -56,7 +63,7 @@ Recommended tunnel routes:
 Configure Stripe webhook endpoint:
 
 ```text
-https://transmuter-api.ishirock.com/billing/webhook
+https://transmuter.ishirock.com/api/billing/webhook
 ```
 
 Events:
@@ -73,4 +80,5 @@ The backend must allow the production frontend origin:
 https://transmuter.ishirock.com
 ```
 
-Keep Stripe webhooks pointed at the API hostname, not the frontend hostname.
+Keep Stripe webhooks pointed at the same-origin `/api` proxy unless a separate
+API hostname is deliberately enabled.

@@ -19,6 +19,8 @@
   --t-text-secondary: #4c6178;
   --t-text-tertiary:  #77879a;
   --t-primary:        #071f3c;
+  --t-executive:      #071f3c;
+  --t-executive-text: #ffffff;
   --t-accent:         #0c4f86;
   --t-accent-hover:   #063962;
   --t-accent-soft:    rgba(12,79,134,0.09);
@@ -46,6 +48,8 @@
   --t-text-secondary: #b6c6d8;
   --t-text-tertiary:  #879bb0;
   --t-primary:        #f3f7fb;
+  --t-executive:      #071f3c;
+  --t-executive-text: #ffffff;
   --t-accent:         #63a9d8;
   --t-accent-hover:   #8cc8ec;
   --t-accent-soft:    rgba(99,169,216,0.14);

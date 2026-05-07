@@ -93,7 +93,7 @@ Current product catalog direction:
 Stripe webhook endpoint for the current Cloudflare deployment:
 
 ```text
-https://transmuter-api.ishirock.com/billing/webhook
+https://transmuter.ishirock.com/api/billing/webhook
 ```
 
 At minimum, configure these events:
@@ -132,12 +132,11 @@ The production frontend image writes runtime API configuration from
 
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
-| `TRANSMUTER_API_URL` | Production recommended | `https://transmuter-api.ishirock.com` in compose, `http://localhost:8001` in static fallback | API base URL used by the Angular app at runtime. |
+| `TRANSMUTER_API_URL` | Optional | `/api` | API base URL used by the Angular app at runtime. In the production web container, nginx proxies `/api` to `http://api:8001` on the Docker network. |
 
 For the current Cloudflare deployment:
 
 ```bash
-TRANSMUTER_API_URL=https://transmuter-api.ishirock.com \
 docker compose -f infra/docker-compose.prod.yml --env-file .env up -d
 ```
 
@@ -163,5 +162,6 @@ Before local or production startup:
 - Stripe keys, webhook secret, and Price IDs all come from the same Stripe mode
   (`test` or `live`), never mixed.
 - `PLATFORM_ADMIN_EMAILS` includes the intended operator emails.
-- `TRANSMUTER_API_URL` matches the URL the browser can use to reach the API.
+- `TRANSMUTER_API_URL` is `/api` for the production web container unless there is
+  a deliberate reason to call an external API origin from the browser.
 - For production, `DEBUG=false`.

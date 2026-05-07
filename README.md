@@ -123,14 +123,13 @@ If Docker is installed at `/usr/local/bin/docker`, use:
 ### Start Or Recreate The Production Stack
 
 ```bash
-TRANSMUTER_API_URL=https://transmuter-api.ishirock.com \
 docker compose -f infra/docker-compose.prod.yml --env-file .env up -d
 ```
 
 Equivalent convenience script:
 
 ```bash
-TRANSMUTER_API_URL=https://transmuter-api.ishirock.com ./start-prod.sh
+./start-prod.sh
 ```
 
 ### Rebuild Only The Frontend
@@ -158,8 +157,8 @@ curl -fsS http://127.0.0.1:4301/health
 If the Cloudflare tunnel is configured, public health checks should also pass:
 
 ```bash
-curl -fsS https://transmuter-api.ishirock.com/health
 curl -fsS https://transmuter.ishirock.com/health
+curl -fsS https://transmuter.ishirock.com/api/health
 ```
 
 ### Stop Production Stack

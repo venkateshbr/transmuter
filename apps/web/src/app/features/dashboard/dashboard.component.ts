@@ -12,7 +12,7 @@ import { RouterLink } from '@angular/router';
     <div class="p-8 space-y-10 animate-fade-in" style="background:var(--t-bg)">
       
       <!-- Executive Hero Section -->
-      <section class="relative overflow-hidden bg-[var(--t-primary)] p-10 text-white shadow-2xl">
+      <section class="executive-surface relative overflow-hidden p-10 shadow-2xl">
         <div class="absolute inset-y-0 right-0 w-1/3 border-l border-white/15 bg-white/5"></div>
         <div class="absolute right-10 top-8 h-24 w-24 border-t-4 border-r-4 border-[var(--t-blue-light)]/70"></div>
         <div class="absolute bottom-8 right-24 h-16 w-40 border-b-4 border-[var(--t-blue-light)]/45"></div>
@@ -44,7 +44,7 @@ import { RouterLink } from '@angular/router';
                 >
                   {{ reporting() ? 'Generating...' : 'Executive Summary' }}
                 </button>
-                <button routerLink="/initiatives/new" class="bg-white px-6 py-3 text-xs font-black uppercase tracking-widest text-[var(--t-primary)] shadow-lg transition-all hover:shadow-[inset_0_-4px_0_var(--t-blue-light)]">
+                <button routerLink="/initiatives/new" class="executive-action-button bg-white px-6 py-3 text-xs font-black uppercase tracking-widest shadow-lg transition-all hover:shadow-[inset_0_-4px_0_var(--t-blue-light)]">
                   + Executive Action
                 </button>
               </div>
@@ -162,7 +162,7 @@ import { RouterLink } from '@angular/router';
 
       <!-- Value Matrix -->
       <section class="card overflow-hidden" data-testid="dashboard-value-matrix">
-        <div class="flex flex-col gap-4 border-b border-[var(--t-border)] bg-[var(--t-primary)] p-6 text-white lg:flex-row lg:items-end lg:justify-between">
+        <div class="executive-surface flex flex-col gap-4 border-b border-[var(--t-border)] p-6 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <div class="mb-3 flex items-center gap-2">
               <span class="h-2 w-8 bg-[var(--t-blue-light)]"></span>
@@ -176,7 +176,7 @@ import { RouterLink } from '@angular/router';
           <label class="min-w-40 text-[10px] font-black uppercase tracking-widest text-white/70">
             Target Year
             <select
-              class="mt-2 w-full border border-white/20 bg-white px-3 py-2 text-sm font-black text-[var(--t-primary)]"
+              class="executive-select mt-2 w-full border border-white/20 bg-white px-3 py-2 text-sm font-black"
               data-testid="dashboard-value-matrix-year"
               aria-label="Select value matrix target year"
               [value]="data()?.value_matrix?.selected_year || ''"
@@ -192,7 +192,7 @@ import { RouterLink } from '@angular/router';
         <div class="overflow-x-auto">
           <table class="w-full min-w-[920px] border-collapse text-left">
             <thead>
-              <tr class="bg-[var(--t-primary)] text-white">
+              <tr class="executive-surface">
                 <th class="w-56 border-r border-white/20 px-4 py-4 text-xs font-black uppercase tracking-widest">Workstream</th>
                 @for (tag of data()?.value_matrix?.tags || []; track tag.id) {
                   <th class="border-r border-white/20 px-4 py-4 text-center text-xs font-black uppercase tracking-widest">{{ tag.label }}</th>
@@ -240,7 +240,7 @@ import { RouterLink } from '@angular/router';
               }
             </tbody>
             <tfoot>
-              <tr class="bg-[var(--t-primary)] text-white">
+              <tr class="executive-surface">
                 <th class="border-r border-white/20 px-4 py-4 text-sm font-black uppercase tracking-widest">Total</th>
                 @for (tag of data()?.value_matrix?.tags || []; track tag.id) {
                   <td class="border-r border-white/20 px-2 py-2 text-center">
@@ -492,11 +492,13 @@ import { RouterLink } from '@angular/router';
                 <a
                   routerLink="/pmo/risks"
                   [queryParams]="{ impact, likelihood }"
-                  class="aspect-square rounded-lg border border-[var(--t-border)] flex flex-col items-center justify-center hover:border-[var(--t-accent)] hover:bg-[var(--t-surface-raised)] transition-colors"
+                  class="heatmap-cell aspect-square flex flex-col items-center justify-center"
+                  [ngClass]="getHeatmapClass(impact, likelihood)"
+                  [attr.aria-label]="'Open ' + impact + ' impact, ' + likelihood + ' likelihood risks'"
                   [attr.data-testid]="'dashboard-risk-' + impact + '-' + likelihood"
                 >
-                  <span class="text-xl font-black text-[var(--t-text-primary)]">{{ getHeatmapCount(impact, likelihood) }}</span>
-                  <span class="text-[9px] font-bold uppercase text-[var(--t-text-tertiary)]">{{ impact }}/{{ likelihood }}</span>
+                  <span class="heatmap-count">{{ getHeatmapCount(impact, likelihood) }}</span>
+                  <span class="heatmap-label">{{ impact }}/{{ likelihood }}</span>
                 </a>
               }
             }
@@ -531,7 +533,7 @@ import { RouterLink } from '@angular/router';
     @if (showWelcome()) {
       <div class="overlay flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
         <div class="card max-w-2xl w-full p-0 overflow-hidden shadow-2xl animate-scale-in">
-           <div class="h-48 bg-[var(--t-primary)] p-10 relative overflow-hidden">
+           <div class="executive-surface h-48 p-10 relative overflow-hidden">
               <div class="absolute inset-y-0 right-0 w-1/3 border-l border-white/15 bg-white/5"></div>
               <div class="absolute right-8 top-8 h-20 w-20 border-t-4 border-r-4 border-[var(--t-blue-light)]/70"></div>
               <div class="relative z-10">
@@ -579,7 +581,7 @@ import { RouterLink } from '@angular/router';
           data-testid="dashboard-value-matrix-drilldown"
           (click)="$event.stopPropagation()"
         >
-          <div class="sticky top-0 z-10 border-b border-[var(--t-border)] bg-[var(--t-primary)] p-6 text-white">
+          <div class="executive-surface sticky top-0 z-10 border-b border-[var(--t-border)] p-6">
             <div class="flex items-start justify-between gap-4">
               <div>
                 <p class="text-[10px] font-black uppercase tracking-[0.2em] text-white/60">{{ selectedMatrixCell()?.tagLabel }}</p>
@@ -628,6 +630,14 @@ import { RouterLink } from '@angular/router';
   `,
   styles: [`
     :host { display: block; }
+    .executive-surface {
+      background: var(--t-executive, #071f3c) !important;
+      color: var(--t-executive-text, #ffffff) !important;
+    }
+    .executive-action-button,
+    .executive-select {
+      color: var(--t-executive, #071f3c) !important;
+    }
     .matrix-cell {
       min-height: 4.25rem;
       width: 100%;
@@ -652,6 +662,45 @@ import { RouterLink } from '@angular/router';
     .matrix-cell-total:hover {
       background: rgba(255,255,255,0.16);
       border-color: rgba(255,255,255,0.28);
+    }
+    .heatmap-cell {
+      min-height: 8rem;
+      border: 1px solid rgba(255,255,255,0.18);
+      color: white;
+      box-shadow: inset 0 0 22px rgba(7,31,60,0.1);
+      transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+    }
+    .heatmap-cell:hover {
+      border-color: rgba(255,255,255,0.55);
+      box-shadow: inset 0 0 0 2px rgba(255,255,255,0.18), 0 14px 30px rgba(7,31,60,0.16);
+      transform: translateY(-1px);
+    }
+    .heatmap-count {
+      color: white;
+      font-size: 1.5rem;
+      font-weight: 900;
+      line-height: 1;
+      text-shadow: 0 1px 4px rgba(7,31,60,0.28);
+    }
+    .heatmap-label {
+      color: rgba(255,255,255,0.88);
+      font-size: 0.56rem;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      margin-top: 0.75rem;
+      text-transform: uppercase;
+    }
+    .heatmap-risk-critical {
+      background: rgba(239,68,68,0.86);
+    }
+    .heatmap-risk-high {
+      background: rgba(239,68,68,0.78);
+    }
+    .heatmap-risk-medium {
+      background: rgba(245,158,11,0.82);
+    }
+    .heatmap-risk-low {
+      background: rgba(34,197,94,0.78);
     }
     .animate-pulse-subtle {
       animation: pulse-subtle 3s infinite ease-in-out;
@@ -762,6 +811,17 @@ export class DashboardComponent implements OnInit {
 
   getHeatmapCount(impact: string, likelihood: string): number {
     return this.data()?.risk_heatmap?.[`${impact}_${likelihood}`] || 0;
+  }
+
+  getHeatmapClass(impact: string, likelihood: string): string {
+    const impactScore = impact === 'high' ? 3 : impact === 'medium' ? 2 : 1;
+    const likelihoodScore = likelihood === 'high' ? 3 : likelihood === 'medium' ? 2 : 1;
+    const score = impactScore * likelihoodScore;
+
+    if (score >= 9) return 'heatmap-risk-critical';
+    if (score >= 6) return 'heatmap-risk-high';
+    if (score >= 4) return 'heatmap-risk-medium';
+    return 'heatmap-risk-low';
   }
 
   formatMoney(value: string | null | undefined): string {

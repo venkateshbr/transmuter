@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 
-API_URL="${TRANSMUTER_API_URL:-https://transmuter-api.ishirock.com}"
+API_URL="${TRANSMUTER_API_URL:-/api}"
 
 cat > /usr/share/nginx/html/assets/runtime-config.js <<EOF
 window.__TRANSMUTER_API_URL__ = "${API_URL}";

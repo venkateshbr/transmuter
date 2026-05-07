@@ -36,6 +36,10 @@ import { RouterLink } from '@angular/router';
             Transmuter gives transformation offices one operating layer for initiatives,
             financial value, milestones, risks, KPIs, meetings, and AI-assisted portfolio intelligence.
           </p>
+          <p class="mt-8 max-w-2xl border-l-4 border-[var(--t-blue-light)] bg-[var(--t-surface)] px-5 py-4 text-base font-bold leading-7 text-[var(--t-text-primary)] shadow-[var(--t-shadow)]">
+            Turning raw operational complexity into something more valuable: decisions,
+            value capture, governance discipline, and transformation outcomes.
+          </p>
           <div class="mt-10 flex flex-wrap gap-3">
             <a routerLink="/get-started" class="btn-primary px-6 py-3 text-xs">Start subscription</a>
             <a routerLink="/auth/login" class="btn-ghost px-6 py-3 text-xs font-black uppercase">Login</a>

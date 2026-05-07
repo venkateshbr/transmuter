@@ -40,3 +40,4 @@ supabase/.branches/
 
 # Local operational scratch scripts and one-off diagnostics
 scratch/
+samples/
