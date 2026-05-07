@@ -271,7 +271,8 @@ import { FormsModule } from '@angular/forms';
                       </span>
                       <input
                         class="input-field mt-2 w-full font-mono"
-                        [(ngModel)]="cleanupConfirmation"
+                        [ngModel]="cleanupConfirmation()"
+                        (ngModelChange)="cleanupConfirmation.set($event)"
                         [placeholder]="cleanupPreview().tenant_slug || ''"
                         aria-label="Portfolio cleanup confirmation slug">
                     </label>
@@ -295,7 +296,7 @@ import { FormsModule } from '@angular/forms';
                       <button
                         type="button"
                         class="border border-red-500 bg-red-500 px-4 py-2 text-xs font-black uppercase text-white disabled:cursor-not-allowed disabled:opacity-40"
-                        [disabled]="cleanupConfirmation !== cleanupPreview().tenant_slug || cleanupDeleting()"
+                        [disabled]="!cleanupConfirmationMatches() || cleanupDeleting()"
                         (click)="deletePortfolioData()"
                         aria-label="Delete all tenant portfolio data">
                         {{ cleanupDeleting() ? 'Deleting...' : 'Delete portfolio data' }}
@@ -577,9 +578,9 @@ export class AdminComponent implements OnInit {
   cleanupResult = signal<any | null>(null);
   cleanupError = signal<string | null>(null);
   cleanupDeleting = signal(false);
+  cleanupConfirmation = signal('');
   gateCriteria = signal<any[]>([]);
   auditLogs = signal<any[]>([]);
-  cleanupConfirmation = '';
 
   // Inline add state
   newWorkstreamName = signal('');
@@ -644,7 +645,7 @@ export class AdminComponent implements OnInit {
   loadCleanupPreview() {
     this.cleanupError.set(null);
     this.cleanupResult.set(null);
-    this.cleanupConfirmation = '';
+    this.cleanupConfirmation.set('');
     this.api.get<any>('/admin/portfolio-cleanup-preview').subscribe({
       next: res => this.cleanupPreview.set(res),
       error: err => this.cleanupError.set(err.error?.detail || 'Could not load portfolio cleanup preview'),
@@ -730,15 +731,16 @@ export class AdminComponent implements OnInit {
 
   deletePortfolioData() {
     const tenantSlug = this.cleanupPreview().tenant_slug;
-    if (!tenantSlug || this.cleanupConfirmation !== tenantSlug || this.cleanupDeleting()) return;
+    const confirmation = this.normalizedCleanupConfirmation();
+    if (!tenantSlug || confirmation !== tenantSlug || this.cleanupDeleting()) return;
 
     this.cleanupDeleting.set(true);
     this.cleanupError.set(null);
-    this.api.delete('/admin/portfolio-cleanup', { confirm_slug: this.cleanupConfirmation }).subscribe({
+    this.api.delete('/admin/portfolio-cleanup', { confirm_slug: confirmation }).subscribe({
       next: res => {
         this.cleanupResult.set(res);
         this.cleanupPreview.set(res);
-        this.cleanupConfirmation = '';
+        this.cleanupConfirmation.set('');
         this.cleanupDeleting.set(false);
         this.loadWorkstreams();
         this.loadBusinessUnits();
@@ -796,6 +798,15 @@ export class AdminComponent implements OnInit {
       { key: 'governance', label: 'Gate submissions', count: Number(counts.governance || 0) },
       { key: 'status_updates', label: 'Status updates', count: Number(counts.status_updates || 0) },
     ];
+  }
+
+  normalizedCleanupConfirmation(): string {
+    return this.cleanupConfirmation().trim();
+  }
+
+  cleanupConfirmationMatches(): boolean {
+    const tenantSlug = this.cleanupPreview().tenant_slug;
+    return Boolean(tenantSlug) && this.normalizedCleanupConfirmation() === tenantSlug;
   }
 
   formatCents(cents: number | undefined, currency: string | undefined): string {
