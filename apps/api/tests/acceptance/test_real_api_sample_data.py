@@ -190,7 +190,9 @@ def test_real_api_meeting_crud_session_and_action_flow() -> None:
             portfolio_actions = client.get("/portfolio/action-items", headers=headers)
             portfolio_actions.raise_for_status()
             portfolio_data = portfolio_actions.json()
-            portfolio_item = next(item for item in portfolio_data["items"] if item["id"] == action_id)
+            portfolio_item = next(
+                item for item in portfolio_data["items"] if item["id"] == action_id
+            )
             assert portfolio_item["meeting_sessions"]["meeting_id"] == meeting_id
             assert portfolio_item["users"]["display_name"]
             assert portfolio_data["stats"]["in_progress"] >= 1
@@ -325,14 +327,17 @@ def test_real_api_initiative_template_import_flow() -> None:
             assert exported.headers["content-type"] == XLSX_MEDIA_TYPE
             assert _workbook_sheet_names(exported.content) == [
                 "Overview",
+                "Summary",
                 "Benefits",
                 "Costs",
                 "KPIs",
-                "Risks",
                 "Milestones",
+                "Action Items",
+                "Risks",
                 "Status Updates",
                 "Meeting Notes",
                 "_Reference",
+                "_Validation",
             ]
             with ZipFile(BytesIO(exported.content)) as zf:
                 names = set(zf.namelist())
@@ -340,16 +345,17 @@ def test_real_api_initiative_template_import_flow() -> None:
                 assert any(name.startswith("xl/media/") for name in names)
                 assert "xl/drawings/drawing1.xml" in names
                 assert "xl/worksheets/_rels/sheet1.xml.rels" in names
-                assert b"<dataValidations" in zf.read("xl/worksheets/sheet1.xml")
-                assert b"<f>SUM(" in zf.read("xl/worksheets/sheet2.xml")
-                assert initiative_id in zf.read("xl/worksheets/sheet9.xml").decode()
+                summary_sheet = zf.read("xl/worksheets/sheet2.xml")
+                assert b"Revenue Plan - Base" in summary_sheet
+                assert b"0.100000" in summary_sheet
+                assert initiative_id in zf.read("xl/worksheets/sheet11.xml").decode()
+                assert b"Stages" in zf.read("xl/worksheets/sheet12.xml")
 
             updated_name = f"Imported Acceptance Initiative Updated {uuid4()}"
             patched = _patched_initiative_workbook(
                 exported.content,
                 name=updated_name,
                 summary="Updated through existing initiative workbook import.",
-                revenue_uplift_base="222222.2200",
             )
             updated = client.post(
                 f"/initiatives/{initiative_id}/import",
@@ -369,9 +375,9 @@ def test_real_api_initiative_template_import_flow() -> None:
             updated_financials.raise_for_status()
             updated_row = next(
                 item for item in updated_financials.json()["entries"]
-                if item["year"] == 2030 and item["quarter"] == 1
+                if item["year"] == 2030 and item["month"] == 1
             )
-            assert Decimal(updated_row["revenue_uplift_base"]) == Decimal("222222.2200")
+            assert Decimal(updated_row["revenue_uplift_base"]) == Decimal("33333.0")
 
             wrong_ref = _patched_reference_value(exported.content, "initiative_id", str(uuid4()))
             mismatch = client.post(
@@ -1492,7 +1498,6 @@ def _patched_initiative_workbook(
     *,
     name: str,
     summary: str,
-    revenue_uplift_base: str,
 ) -> bytes:
     output = BytesIO()
     with ZipFile(BytesIO(data)) as zin, ZipFile(output, "w", compression=ZIP_DEFLATED) as zout:
@@ -1500,8 +1505,6 @@ def _patched_initiative_workbook(
             content = zin.read(item.filename)
             if item.filename == "xl/worksheets/sheet1.xml":
                 content = _patch_initiative_overview_sheet(content, name=name, summary=summary)
-            elif item.filename == "xl/worksheets/sheet2.xml":
-                content = _patch_initiative_benefits_sheet(content, revenue_uplift_base=revenue_uplift_base)
             zout.writestr(item, content)
     return output.getvalue()
 
@@ -1511,7 +1514,7 @@ def _patched_reference_value(data: bytes, key: str, value: str) -> bytes:
     with ZipFile(BytesIO(data)) as zin, ZipFile(output, "w", compression=ZIP_DEFLATED) as zout:
         for item in zin.infolist():
             content = zin.read(item.filename)
-            if item.filename == "xl/worksheets/sheet9.xml":
+            if item.filename == "xl/worksheets/sheet11.xml":
                 content = _patch_reference_sheet(content, key=key, value=value)
             zout.writestr(item, content)
     return output.getvalue()
@@ -1522,19 +1525,17 @@ def _patch_initiative_overview_sheet(data: bytes, *, name: str, summary: str) ->
     root = ET.fromstring(data)
     rows = root.findall("main:sheetData/main:row", SHEET_NS)
     headers = _row_values(rows[0])
-    target = rows[1]
-    _set_cell(target, headers.index("name") + 1, name)
-    _set_cell(target, headers.index("summary") + 1, summary)
-    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
-
-
-def _patch_initiative_benefits_sheet(data: bytes, *, revenue_uplift_base: str) -> bytes:
-    ET.register_namespace("", SHEET_NS["main"])
-    root = ET.fromstring(data)
-    rows = root.findall("main:sheetData/main:row", SHEET_NS)
-    headers = _row_values(rows[0])
-    target = rows[1]
-    _set_cell(target, headers.index("revenue_uplift_base") + 1, revenue_uplift_base)
+    if "name" in headers:
+        target = rows[1]
+        _set_cell(target, headers.index("name") + 1, name)
+        _set_cell(target, headers.index("summary") + 1, summary)
+        return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+    for row in rows:
+        values = _row_values(row)
+        if values and values[0] == "Name":
+            _set_cell(row, 2, name)
+        if values and values[0] == "Description":
+            _set_cell(row, 2, summary)
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
@@ -1614,7 +1615,19 @@ def _row_values(row: ET.Element) -> list[str]:
 
 
 def _set_cell(row: ET.Element, col_index: int, value: str) -> None:
-    cell = row.findall("main:c", SHEET_NS)[col_index - 1]
+    row_index = int(row.attrib["r"])
+    ref = f"{_column_name(col_index)}{row_index}"
+    cell = next(
+        (
+            candidate
+            for candidate in row.findall("main:c", SHEET_NS)
+            if candidate.attrib.get("r") == ref
+        ),
+        None,
+    )
+    if cell is None:
+        _add_inline_cell(row, col_index, row_index, value)
+        return
     text = cell.find("main:is/main:t", SHEET_NS)
     assert text is not None
     text.text = value

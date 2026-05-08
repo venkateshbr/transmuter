@@ -79,10 +79,29 @@ def test_value_matrix_groups_workstreams_tags_and_selected_year() -> None:
             "gm_uplift_actual": "999.0000",
         },
     ]
+    costs = [
+        {
+            "initiative_id": "init-1",
+            "year": 2028,
+            "quarter": None,
+            "amount_plan": "10.0000",
+            "amount_actual": "4.0000",
+            "is_recurring": True,
+        },
+        {
+            "initiative_id": "init-1",
+            "year": 2028,
+            "quarter": None,
+            "amount_plan": "5.0000",
+            "amount_actual": "2.0000",
+            "is_recurring": False,
+        },
+    ]
 
-    matrix = service._calculate_value_matrix(initiatives, entries, 2028)
+    matrix = service._calculate_value_matrix(initiatives, entries, costs, 2028)
     operations = next(row for row in matrix["rows"] if row["workstream_name"] == "Operations")
     finance = next(row for row in matrix["rows"] if row["workstream_name"] == "Finance")
+    automation_initiative = operations["cells"]["automation"]["initiatives"][0]
 
     assert matrix["selected_year"] == 2028
     assert matrix["available_years"] == [2027, 2028]
@@ -91,6 +110,10 @@ def test_value_matrix_groups_workstreams_tags_and_selected_year() -> None:
     assert operations["cells"]["automation"]["initiative_count"] == 1
     assert operations["cells"]["commercial"]["base"] == "200.0000"
     assert operations["total"]["base"] == "350.0000"
+    assert automation_initiative["gross_margin_base"] == "150.0000"
+    assert automation_initiative["recurring_costs_plan"] == "10.0000"
+    assert automation_initiative["one_time_costs_plan"] == "5.0000"
+    assert automation_initiative["net_value_base"] == "135.0000"
     assert finance["cells"]["offshoring"]["initiative_count"] == 0
     assert matrix["totals"]["total"]["high"] == "525.0000"
 
@@ -108,7 +131,10 @@ def test_value_matrix_uses_latest_available_year_when_target_missing() -> None:
                 "rag_status": "green",
                 "workstream_id": "ws-1",
                 "tag": "automation",
-                "workstreams": {"name": "Operations", "business_units": {"name": "North America"}},
+                "workstreams": {
+                    "name": "Operations",
+                    "business_units": {"name": "North America"},
+                },
             }
         ],
         entries=[
@@ -121,6 +147,7 @@ def test_value_matrix_uses_latest_available_year_when_target_missing() -> None:
                 "gm_uplift_actual": None,
             }
         ],
+        costs=[],
         target_year=2030,
     )
 
