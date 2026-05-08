@@ -1,6 +1,6 @@
 # Codex Context - Transmuter
 
-Last updated: 2026-05-04
+Last updated: 2026-05-08
 
 This file captures durable working context for future Codex sessions. It supplements
 `AGENTS.md`, `docs/team/SDLC_PROTOCOL.md`, and `team/DESIGN_SYSTEM.md`; it does not
@@ -10,6 +10,9 @@ replace them.
 
 - First release snapshot is committed as `3ab8dcb` and tagged `v0.1.0`.
 - Dashboard value matrix work is committed after the release tag as `9015e86`.
+- Current release snapshot is committed as `e9b670f` and tagged `v0.3.1`.
+- `v0.3.1` includes the Alchemist workbook/dashboard acceptance test updates and
+  the CI/CD pipeline gates from issue #77.
 - Running production Docker stack uses:
   - API image `transmuter-api:prod` on host port `8001`.
   - Frontend image `transmuter-web:prod` on host port `4301`.
