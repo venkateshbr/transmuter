@@ -41,6 +41,7 @@ def _svc(current_user: Annotated[CurrentUser, Depends(get_current_user)]) -> Fin
 
 # ── Financial Grid ────────────────────────────────────────────────────────────
 
+
 @router.get("/initiatives/{initiative_id}/financials", response_model=FinancialGridResponse)
 async def get_financials(
     initiative_id: str,
@@ -101,6 +102,7 @@ async def import_financials_workbook(
 
 # ── Cost Lines ────────────────────────────────────────────────────────────────
 
+
 @router.get(
     "/initiatives/{initiative_id}/financials/cost-lines",
     response_model=CostLineListResponse,
@@ -159,6 +161,7 @@ async def delete_cost_line(
 
 
 # ── Value Bridge ──────────────────────────────────────────────────────────────
+
 
 @router.get(
     "/initiatives/{initiative_id}/financials/value-bridge",

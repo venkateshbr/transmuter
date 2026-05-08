@@ -11,7 +11,6 @@ from pydantic import BaseModel, Field
 
 from app.domain.financials import FinancialSummary
 
-
 # ── Enums ─────────────────────────────────────────────────────────────────────
 
 InitiativeType = Literal[
@@ -25,6 +24,7 @@ InitiativeTag = str
 
 
 # ── Write models (request bodies) ─────────────────────────────────────────────
+
 
 class InitiativeCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=300)
@@ -69,6 +69,7 @@ class InitiativeUpdate(BaseModel):
 
 # ── Read models (response bodies) ─────────────────────────────────────────────
 
+
 class PressureBreakdown(BaseModel):
     schedule: Decimal | None = None
     milestone_health: Decimal | None = None
@@ -80,6 +81,7 @@ class PressureBreakdown(BaseModel):
 
 class InitiativeListItem(BaseModel):
     """Compact row for the pipeline list view."""
+
     id: UUID
     initiative_code: str
     name: str
@@ -93,7 +95,7 @@ class InitiativeListItem(BaseModel):
     stage: str
     country: str | None
     tag: str | None
-    planned_value_base: str | None    # Decimal as string
+    planned_value_base: str | None  # Decimal as string
     planned_value_high: str | None
     actual_value: str | None
     pressure_score: str | None
@@ -130,6 +132,7 @@ class InitiativeKPIIndicator(BaseModel):
 
 class InitiativeDetail(BaseModel):
     """Full detail — used on the 8-tab initiative page."""
+
     id: UUID
     initiative_code: str
     name: str

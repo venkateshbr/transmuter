@@ -27,31 +27,29 @@ class DashboardService:
             if self._matches_filters(i, business_unit_id, workstream_id, rag_status)
         ]
         initiative_ids = {i["id"] for i in filtered_inits}
-        
+
         # 2. Aggregates
         total_initiatives = len(filtered_inits)
         at_risk = len([i for i in filtered_inits if i["rag_status"] == "red"])
-        
+
         pipeline_by_stage = {
             "scoping": len([i for i in filtered_inits if i["stage"] == "scoping"]),
             "in_progress": len([i for i in filtered_inits if i["stage"] == "in_progress"]),
             "complete": len([i for i in filtered_inits if i["stage"] == "complete"]),
         }
-        
+
         rag_breakdown = {
             "red": at_risk,
             "amber": len([i for i in filtered_inits if i["rag_status"] == "amber"]),
             "green": len([i for i in filtered_inits if i["rag_status"] == "green"]),
         }
-        
+
         # 3. Pressure
         scores = [
-            float(i["pressure_score"])
-            for i in filtered_inits
-            if i["pressure_score"] is not None
+            float(i["pressure_score"]) for i in filtered_inits if i["pressure_score"] is not None
         ]
         avg_pressure = sum(scores) / len(scores) if scores else 0
-        
+
         # 4. Risks Heatmap
         risks = self.repo.get_risks_for_heatmap()
         risk_heatmap = {}
@@ -60,26 +58,26 @@ class DashboardService:
                 continue
             key = f"{r['impact']}_{r['likelihood']}"
             risk_heatmap[key] = risk_heatmap.get(key, 0) + 1
-            
+
         # 5. KPIs
         kpis, entries = self.repo.get_kpi_data()
         kpi_pulse = self._calculate_kpi_pulse(kpis, entries, initiative_ids)
-        
+
         # 6. Financials
         fin_entries, costs = self.repo.get_financial_summary_data()
         value_bridge = self._calculate_value_bridge(fin_entries, costs, initiative_ids)
         value_matrix = self._calculate_value_matrix(filtered_inits, fin_entries, costs, target_year)
-        
+
         # 7. Other data
         my_milestones = self.repo.get_my_milestones(user_id)
         # Filter milestones by initiative if dashboard is filtered
         if initiative_ids:
-            my_milestones = [
-                m for m in my_milestones if m.get("initiative_id") in initiative_ids
-            ][:5]
-        
+            my_milestones = [m for m in my_milestones if m.get("initiative_id") in initiative_ids][
+                :5
+            ]
+
         pending_count = self.repo.get_pending_approvals_count()
-        
+
         all_actions = self.repo.get_my_actions(user_id)
         closed_statuses = {"done", "complete", "completed", "closed"}
         my_actions = [
@@ -88,15 +86,16 @@ class DashboardService:
             if a.get("status") not in closed_statuses
             and (not initiative_ids or a.get("initiative_id") in initiative_ids)
         ][:5]
-        
+
         recent_activity = [
-            a for a in self.repo.get_recent_activity()
+            a
+            for a in self.repo.get_recent_activity()
             if not initiative_ids or a.get("initiative_id") in initiative_ids
         ][:5]
-        
+
         bus, wss = self.repo.get_filter_options()
         rag_values = sorted({i.get("rag_status") for i in all_inits if i.get("rag_status")})
-        
+
         return {
             "summary": {
                 "total_initiatives": total_initiatives,
@@ -197,9 +196,7 @@ class DashboardService:
 
         tracked = hitting + missing
         health = (
-            Decimal("0")
-            if tracked == 0
-            else (Decimal(hitting) / Decimal(tracked)) * Decimal("100")
+            Decimal("0") if tracked == 0 else (Decimal(hitting) / Decimal(tracked)) * Decimal("100")
         )
 
         return {
@@ -271,8 +268,10 @@ class DashboardService:
         available_years = sorted(
             {int(e["year"]) for e in [*scoped_entries, *scoped_costs] if e.get("year") is not None}
         )
-        selected_year = target_year if target_year in available_years else (
-            max(available_years) if available_years else target_year
+        selected_year = (
+            target_year
+            if target_year in available_years
+            else (max(available_years) if available_years else target_year)
         )
 
         tags = ["automation", "offshoring", "commercial", "other"]

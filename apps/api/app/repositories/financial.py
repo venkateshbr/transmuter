@@ -150,21 +150,13 @@ class FinancialRepository:
 
     def get_all_entries(self) -> list[dict]:  # type: ignore[type-arg]
         """Return all financial_entries for the tenant (portfolio-level)."""
-        result = (
-            self._c.table("financial_entries")
-            .select("*")
-            .eq("tenant_id", self._tid)
-            .execute()
-        )
+        result = self._c.table("financial_entries").select("*").eq("tenant_id", self._tid).execute()
         return result.data or []
 
     def get_all_cost_lines(self) -> list[dict]:  # type: ignore[type-arg]
         """Return all cost lines for the tenant (portfolio-level)."""
         result = (
-            self._c.table("financial_cost_lines")
-            .select("*")
-            .eq("tenant_id", self._tid)
-            .execute()
+            self._c.table("financial_cost_lines").select("*").eq("tenant_id", self._tid).execute()
         )
         return result.data or []
 
@@ -229,11 +221,13 @@ class FinancialRepository:
     ) -> dict:  # type: ignore[type-arg]
         result = (
             self._c.table("financial_cell_assumptions")
-            .update({
-                "comment": comment,
-                "updated_by": user_id,
-                "updated_at": datetime.now(UTC).isoformat(),
-            })
+            .update(
+                {
+                    "comment": comment,
+                    "updated_by": user_id,
+                    "updated_at": datetime.now(UTC).isoformat(),
+                }
+            )
             .eq("tenant_id", self._tid)
             .eq("id", assumption_id)
             .execute()
@@ -269,9 +263,7 @@ class FinancialRepository:
             if "Could not find the" not in text or "financial_entries" not in text:
                 raise
             trimmed = {
-                key: value
-                for key, value in row.items()
-                if key not in _OPTIONAL_ENTRY_COLUMNS
+                key: value for key, value in row.items() if key not in _OPTIONAL_ENTRY_COLUMNS
             }
             return self._execute_financial_entry_write(trimmed, row_id)
 

@@ -63,9 +63,21 @@ async def platform_overview(
 ) -> dict[str, Any]:
     client = get_supabase_admin()
 
-    orgs = client.table("organizations").select("id, name, slug, created_at, updated_at, settings").order("created_at", desc=True).limit(100).execute()
+    orgs = (
+        client.table("organizations")
+        .select("id, name, slug, created_at, updated_at, settings")
+        .order("created_at", desc=True)
+        .limit(100)
+        .execute()
+    )
     subscriptions = client.table("tenant_subscriptions").select("*").execute()
-    signup_intents = client.table("signup_intents").select("*").order("created_at", desc=True).limit(100).execute()
+    signup_intents = (
+        client.table("signup_intents")
+        .select("*")
+        .order("created_at", desc=True)
+        .limit(100)
+        .execute()
+    )
     users = client.table("users").select("tenant_id, status").execute()
 
     subscription_by_tenant = {item["tenant_id"]: item for item in subscriptions.data or []}
@@ -82,7 +94,7 @@ async def platform_overview(
     tenants = []
     for org in orgs.data or []:
         tenant_id = org["id"]
-        billing_settings = ((org.get("settings") or {}).get("billing") or {})
+        billing_settings = (org.get("settings") or {}).get("billing") or {}
         subscription = subscription_by_tenant.get(tenant_id) or {}
         user_counts = users_by_tenant.get(tenant_id, {"active": 0, "total": 0})
         tenants.append(
@@ -92,13 +104,19 @@ async def platform_overview(
                 "slug": org["slug"],
                 "created_at": org.get("created_at"),
                 "updated_at": org.get("updated_at"),
-                "subscription_status": subscription.get("status") or billing_settings.get("subscription_status") or "not_configured",
-                "payment_status": subscription.get("payment_status") or billing_settings.get("payment_status"),
-                "planned_user_count": subscription.get("planned_user_count") or billing_settings.get("planned_user_count"),
+                "subscription_status": subscription.get("status")
+                or billing_settings.get("subscription_status")
+                or "not_configured",
+                "payment_status": subscription.get("payment_status")
+                or billing_settings.get("payment_status"),
+                "planned_user_count": subscription.get("planned_user_count")
+                or billing_settings.get("planned_user_count"),
                 "active_user_count": user_counts["active"],
                 "total_user_count": user_counts["total"],
-                "stripe_customer_id": subscription.get("stripe_customer_id") or billing_settings.get("customer_id"),
-                "stripe_subscription_id": subscription.get("stripe_subscription_id") or billing_settings.get("subscription_id"),
+                "stripe_customer_id": subscription.get("stripe_customer_id")
+                or billing_settings.get("customer_id"),
+                "stripe_subscription_id": subscription.get("stripe_subscription_id")
+                or billing_settings.get("subscription_id"),
             }
         )
 
@@ -124,9 +142,19 @@ async def platform_overview(
             }
         )
 
-    active_tenants = len([tenant for tenant in tenants if tenant["subscription_status"] == "active"])
-    pending_signups = len([intent for intent in intents if intent["status"] in {"pending_checkout", "checkout_created"}])
-    configured_prices = len([price for price in stripe_price_configuration() if price["configured"]])
+    active_tenants = len(
+        [tenant for tenant in tenants if tenant["subscription_status"] == "active"]
+    )
+    pending_signups = len(
+        [
+            intent
+            for intent in intents
+            if intent["status"] in {"pending_checkout", "checkout_created"}
+        ]
+    )
+    configured_prices = len(
+        [price for price in stripe_price_configuration() if price["configured"]]
+    )
 
     return {
         "generated_at": datetime.now(UTC).isoformat(),
@@ -151,7 +179,9 @@ async def tenant_delete_preview(
     client = get_supabase_admin()
     org = _get_tenant_or_404(client, tenant_id)
     tenant_id_str = str(tenant_id)
-    table_counts = {table: _count_tenant_rows(client, table, tenant_id_str) for table in TENANT_DELETE_TABLES}
+    table_counts = {
+        table: _count_tenant_rows(client, table, tenant_id_str) for table in TENANT_DELETE_TABLES
+    }
     table_counts["users"] = _count_tenant_rows(client, "users", tenant_id_str)
     return {
         "tenant_id": tenant_id_str,
@@ -183,10 +213,7 @@ async def delete_tenant(
         )
 
     user_response = (
-        client.table("users")
-        .select("id, email")
-        .eq("tenant_id", str(tenant_id))
-        .execute()
+        client.table("users").select("id, email").eq("tenant_id", str(tenant_id)).execute()
     )
     tenant_users = user_response.data or []
 
@@ -203,7 +230,9 @@ async def delete_tenant(
             client.auth.admin.delete_user(user["id"])
             auth_deleted += 1
         except Exception as exc:  # noqa: BLE001 - report and continue cleanup summary.
-            auth_errors.append({"id": user["id"], "email": user.get("email") or "", "error": str(exc)})
+            auth_errors.append(
+                {"id": user["id"], "email": user.get("email") or "", "error": str(exc)}
+            )
 
     org_delete = client.table("organizations").delete().eq("id", str(tenant_id)).execute()
     organization_deleted = len(org_delete.data or [])
@@ -236,12 +265,7 @@ def _get_tenant_or_404(client: Any, tenant_id: UUID) -> dict[str, Any]:
 
 
 def _count_tenant_rows(client: Any, table: str, tenant_id: str) -> int:
-    response = (
-        client.table(table)
-        .select("id", count="exact")
-        .eq("tenant_id", tenant_id)
-        .execute()
-    )
+    response = client.table(table).select("id", count="exact").eq("tenant_id", tenant_id).execute()
     return response.count or 0
 
 
@@ -261,7 +285,13 @@ def _object_counts(table_counts: dict[str, int]) -> dict[str, int]:
         "kpis": ["kpis", "kpi_entries"],
         "risks": ["risks"],
         "milestones": ["milestones", "milestone_checklist", "milestone_dependencies"],
-        "meetings": ["meetings", "meeting_attendees", "meeting_initiatives", "meeting_sessions", "agenda_items"],
+        "meetings": [
+            "meetings",
+            "meeting_attendees",
+            "meeting_initiatives",
+            "meeting_sessions",
+            "agenda_items",
+        ],
         "action_items": ["action_items"],
         "governance": ["gate_criteria", "gate_submissions", "stage_gates"],
         "billing": ["tenant_subscriptions", "signup_intents", "subscription_plans"],
@@ -270,6 +300,5 @@ def _object_counts(table_counts: dict[str, int]) -> dict[str, int]:
         "master_data": ["business_units", "workstreams", "user_workstreams"],
     }
     return {
-        key: sum(table_counts.get(table, 0) for table in tables)
-        for key, tables in groups.items()
+        key: sum(table_counts.get(table, 0) for table in tables) for key, tables in groups.items()
     }

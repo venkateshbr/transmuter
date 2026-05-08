@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+import re
 from base64 import b64decode
+from collections.abc import Iterable
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from html import unescape
 from io import BytesIO
-import re
 from typing import Any
 from xml.etree import ElementTree as ET
 from zipfile import ZIP_DEFLATED, ZipFile
@@ -26,7 +26,6 @@ from app.domain.initiatives import InitiativeCreate
 from app.domain.kpis import KPIEntryUpsert
 from app.domain.milestones import MilestoneCreate
 from app.domain.risks import RiskCreate
-
 
 OVERVIEW_COLUMNS = [
     "name",
@@ -73,12 +72,35 @@ SHEET_DEFS = [
     (
         "Benefits",
         [
-            "year", "quarter", "month",
-            "revenue_uplift_base", "revenue_uplift_high", "revenue_uplift_actual",
-            "gross_margin_base", "gross_margin_high", "gross_margin_actual",
-            "gm_uplift_base", "gm_uplift_high", "gm_uplift_actual",
+            "year",
+            "quarter",
+            "month",
+            "revenue_uplift_base",
+            "revenue_uplift_high",
+            "revenue_uplift_actual",
+            "gross_margin_base",
+            "gross_margin_high",
+            "gross_margin_actual",
+            "gm_uplift_base",
+            "gm_uplift_high",
+            "gm_uplift_actual",
         ],
-        [["2030", "1", "", "100000.0000", "150000.0000", "", "45000.0000", "70000.0000", "", "45000.0000", "70000.0000", ""]],
+        [
+            [
+                "2030",
+                "1",
+                "",
+                "100000.0000",
+                "150000.0000",
+                "",
+                "45000.0000",
+                "70000.0000",
+                "",
+                "45000.0000",
+                "70000.0000",
+                "",
+            ]
+        ],
     ),
     (
         "Costs",
@@ -87,18 +109,58 @@ SHEET_DEFS = [
     ),
     (
         "KPIs",
-        ["name", "type", "category", "frequency", "unit", "year", "quarter", "value_base", "value_high", "value_actual"],
-        [["Cycle time reduction", "operational", "delivery", "quarterly", "%", "2030", "1", "15.0000", "25.0000", ""]],
+        [
+            "name",
+            "type",
+            "category",
+            "frequency",
+            "unit",
+            "year",
+            "quarter",
+            "value_base",
+            "value_high",
+            "value_actual",
+        ],
+        [
+            [
+                "Cycle time reduction",
+                "operational",
+                "delivery",
+                "quarterly",
+                "%",
+                "2030",
+                "1",
+                "15.0000",
+                "25.0000",
+                "",
+            ]
+        ],
     ),
     (
         "Risks",
         ["description", "type", "impact", "likelihood", "mitigation"],
-        [["Adoption may lag without local champions", "people", "medium", "medium", "Assign market champions and weekly adoption review."]],
+        [
+            [
+                "Adoption may lag without local champions",
+                "people",
+                "medium",
+                "medium",
+                "Assign market champions and weekly adoption review.",
+            ]
+        ],
     ),
     (
         "Milestones",
         ["name", "description", "priority", "planned_start", "planned_end"],
-        [["Pilot launch complete", "Complete pilot and validate benefits tracking.", "high", "2030-02-01", "2030-03-31"]],
+        [
+            [
+                "Pilot launch complete",
+                "Complete pilot and validate benefits tracking.",
+                "high",
+                "2030-02-01",
+                "2030-03-31",
+            ]
+        ],
     ),
 ]
 
@@ -169,25 +231,104 @@ def _alchemist_export_sheet_defs(
     overview = overview_rows[0] if overview_rows else []
     overview_map = dict(zip(OVERVIEW_COLUMNS, overview, strict=False))
     years = _export_years(benefit_rows, cost_rows, kpi_rows, overview_map)
-    months = [month for _year in years for month in ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]]
+    months = [
+        month
+        for _year in years
+        for month in [
+            "Jan",
+            "Feb",
+            "Mar",
+            "Apr",
+            "May",
+            "Jun",
+            "Jul",
+            "Aug",
+            "Sep",
+            "Oct",
+            "Nov",
+            "Dec",
+        ]
+    ]
     benefit_headers = [
-        "Name", "Lane", "Benefit Type", "Denomination", "P&L Line", "Impact Type", "Timing",
-        "Confidence", "Description", "_id", "_value_translation", "_sort_order", "_is_draft",
-        "_metadata", "_created_at", "_updated_at", *[f"FY{str(year)[-2:]}" for year in years], *months,
+        "Name",
+        "Lane",
+        "Benefit Type",
+        "Denomination",
+        "P&L Line",
+        "Impact Type",
+        "Timing",
+        "Confidence",
+        "Description",
+        "_id",
+        "_value_translation",
+        "_sort_order",
+        "_is_draft",
+        "_metadata",
+        "_created_at",
+        "_updated_at",
+        *[f"FY{str(year)[-2:]}" for year in years],
+        *months,
     ]
     cost_headers = [
-        "Name", "Lane", "Plan Mode", "Amount", "Start FY", "Start Month", "End FY", "End Month",
-        "Lump Month", "Inflation %", "Cost Category", "P&L Line", "Service Line", "Timing",
-        "Confidence", "Impact Type", "Description", "Notes", "_id", "_overrides", "_sort_order",
-        "_is_draft", "_metadata", "_created_at", "_updated_at", *[f"FY{str(year)[-2:]}" for year in years], *months,
+        "Name",
+        "Lane",
+        "Plan Mode",
+        "Amount",
+        "Start FY",
+        "Start Month",
+        "End FY",
+        "End Month",
+        "Lump Month",
+        "Inflation %",
+        "Cost Category",
+        "P&L Line",
+        "Service Line",
+        "Timing",
+        "Confidence",
+        "Impact Type",
+        "Description",
+        "Notes",
+        "_id",
+        "_overrides",
+        "_sort_order",
+        "_is_draft",
+        "_metadata",
+        "_created_at",
+        "_updated_at",
+        *[f"FY{str(year)[-2:]}" for year in years],
+        *months,
     ]
     kpi_headers = [
-        "Name", "Lane", "Type", "Unit", "Cadence", "Indicator", "Impacted Metric", "RAG Green Min",
-        "RAG Amber Min", "Custom Type Label", "Custom Unit Label", "Assessment Score",
-        "Assessment Evidence", "Assessment Date", "Description", "_id", "_linked_kpi_id",
-        "_library_template_id", "_category", "_kpi_category", "_value_translation", "_sort_order",
-        "_is_draft", "_is_auto_generated", "_auto_generated_reason", "_metadata", "_created_at",
-        "_updated_at", *[f"FY{str(year)[-2:]}" for year in years], *months,
+        "Name",
+        "Lane",
+        "Type",
+        "Unit",
+        "Cadence",
+        "Indicator",
+        "Impacted Metric",
+        "RAG Green Min",
+        "RAG Amber Min",
+        "Custom Type Label",
+        "Custom Unit Label",
+        "Assessment Score",
+        "Assessment Evidence",
+        "Assessment Date",
+        "Description",
+        "_id",
+        "_linked_kpi_id",
+        "_library_template_id",
+        "_category",
+        "_kpi_category",
+        "_value_translation",
+        "_sort_order",
+        "_is_draft",
+        "_is_auto_generated",
+        "_auto_generated_reason",
+        "_metadata",
+        "_created_at",
+        "_updated_at",
+        *[f"FY{str(year)[-2:]}" for year in years],
+        *months,
     ]
     return [
         ("Overview", [], _alchemist_overview_rows(overview_map)),
@@ -198,38 +339,98 @@ def _alchemist_export_sheet_defs(
         (
             "Milestones",
             [
-                "Name", "Type", "Priority", "Owner", "Planned Start", "Planned End", "Actual Start",
-                "Actual End", "Status", "Evidence URL", "Depends On (names)", "Risk Reason",
-                "Pressure Score", "Pressure Level", "Checklist Done", "Checklist Total", "_id",
-                "_sort_order", "_created_at", "_updated_at",
+                "Name",
+                "Type",
+                "Priority",
+                "Owner",
+                "Planned Start",
+                "Planned End",
+                "Actual Start",
+                "Actual End",
+                "Status",
+                "Evidence URL",
+                "Depends On (names)",
+                "Risk Reason",
+                "Pressure Score",
+                "Pressure Level",
+                "Checklist Done",
+                "Checklist Total",
+                "_id",
+                "_sort_order",
+                "_created_at",
+                "_updated_at",
             ],
             _alchemist_milestone_rows(milestone_rows),
         ),
         (
             "Action Items",
-            ["Milestone", "Action", "Owner", "Due Date", "Status", "Notes", "_id", "_milestone_id", "_meeting_note_id"],
+            [
+                "Milestone",
+                "Action",
+                "Owner",
+                "Due Date",
+                "Status",
+                "Notes",
+                "_id",
+                "_milestone_id",
+                "_meeting_note_id",
+            ],
             [["", "", "", "", "", "", "", "", ""]],
         ),
         (
             "Risks",
             [
-                "Name", "Type", "Impact", "Likelihood", "Owner", "Status", "Mitigation", "Linked Milestone",
-                "Escalation Reason", "SME Consultation", "Description", "_id", "_risk_milestone_id",
-                "_sort_order", "_created_at", "_updated_at",
+                "Name",
+                "Type",
+                "Impact",
+                "Likelihood",
+                "Owner",
+                "Status",
+                "Mitigation",
+                "Linked Milestone",
+                "Escalation Reason",
+                "SME Consultation",
+                "Description",
+                "_id",
+                "_risk_milestone_id",
+                "_sort_order",
+                "_created_at",
+                "_updated_at",
             ],
             _alchemist_risk_rows(risk_rows),
         ),
         (
             "Status Updates",
             [
-                "Date (week of)", "Submitted At", "RAG", "Submitted By", "Summary", "Achievements",
-                "Issues", "Next Steps", "Help Needed", "_id", "_is_draft", "_was_pre_populated",
-                "_created_at", "_updated_at", "_author_id",
+                "Date (week of)",
+                "Submitted At",
+                "RAG",
+                "Submitted By",
+                "Summary",
+                "Achievements",
+                "Issues",
+                "Next Steps",
+                "Help Needed",
+                "_id",
+                "_is_draft",
+                "_was_pre_populated",
+                "_created_at",
+                "_updated_at",
+                "_author_id",
             ],
             _alchemist_status_update_rows(status_update_rows),
         ),
         ("Meeting Notes", ["Session Date", "Meeting", "Notes", "Status"], meeting_note_rows),
-        ("_Reference", ["key", "value"], [*reference_rows, ["template_name", "alchemist-initiative-template"], ["version", "3"], ["fiscal_years (csv)", ",".join(str(year) for year in years)]]),
+        (
+            "_Reference",
+            ["key", "value"],
+            [
+                *reference_rows,
+                ["template_name", "alchemist-initiative-template"],
+                ["version", "3"],
+                ["fiscal_years (csv)", ",".join(str(year) for year in years)],
+            ],
+        ),
         ("_Validation", [], _alchemist_validation_rows()),
     ]
 
@@ -308,7 +509,12 @@ def _alchemist_summary_rows(
     years: list[int],
 ) -> list[list[str]]:
     headers = ["Metric", *[f"FY{str(year)[-2:]}" for year in years], "All Years"]
-    rows = [["Financial Summary", *["" for _ in years], ""], ["All values are computed from Benefits / Costs.", *["" for _ in years], ""], ["", *["" for _ in years], ""], headers]
+    rows = [
+        ["Financial Summary", *["" for _ in years], ""],
+        ["All values are computed from Benefits / Costs.", *["" for _ in years], ""],
+        ["", *["" for _ in years], ""],
+        headers,
+    ]
     for label, metric in [
         ("Revenue Plan - Base (USD m)", "revenue_uplift_base"),
         ("Revenue Plan - High (USD m)", "revenue_uplift_high"),
@@ -317,11 +523,19 @@ def _alchemist_summary_rows(
         ("Gross Margin Plan - High (USD m)", "gross_margin_high"),
         ("Gross Margin Actual (USD m)", "gross_margin_actual"),
     ]:
-        values = [_million(sum(_period_value(row, metric, year) for row in benefit_rows)) for year in years]
+        values = [
+            _million(sum(_period_value(row, metric, year) for row in benefit_rows))
+            for year in years
+        ]
         rows.append([label, *[str(value) for value in values], str(sum(values, Decimal("0")))])
     rows.append(["COSTS", *["" for _ in years], ""])
-    values = [_million(sum(_period_value(row, "amount_plan", year) for row in cost_rows)) for year in years]
-    rows.append(["Cost Plan (USD m)", *[str(value) for value in values], str(sum(values, Decimal("0")))])
+    values = [
+        _million(sum(_period_value(row, "amount_plan", year) for row in cost_rows))
+        for year in years
+    ]
+    rows.append(
+        ["Cost Plan (USD m)", *[str(value) for value in values], str(sum(values, Decimal("0")))]
+    )
     return rows
 
 
@@ -351,10 +565,40 @@ def _alchemist_cost_rows(rows: list[list[str]], years: list[int]) -> list[list[s
         for lane, field in (("Plan", "amount_plan"), ("Actual", "amount_actual")):
             output.append(
                 [
-                    name, lane, "Manual", "", "", "", "", "", "", "0", "", "", "", "", "",
-                    "Recurring" if recurring else "One-off", "", "", "", "{}", "0", "false", "{}", "", "",
-                    *[str(_million(sum(_cost_period_value(row, field, year) for row in group))) for year in years],
-                    *[str(_million(_cost_month_value(group, field, year, month))) for year in years for month in range(1, 13)],
+                    name,
+                    lane,
+                    "Manual",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "0",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "Recurring" if recurring else "One-off",
+                    "",
+                    "",
+                    "",
+                    "{}",
+                    "0",
+                    "false",
+                    "{}",
+                    "",
+                    "",
+                    *[
+                        str(_million(sum(_cost_period_value(row, field, year) for row in group)))
+                        for year in years
+                    ],
+                    *[
+                        str(_million(_cost_month_value(group, field, year, month)))
+                        for year in years
+                        for month in range(1, 13)
+                    ],
                 ]
             )
     return output
@@ -365,24 +609,119 @@ def _alchemist_kpi_rows(rows: list[list[str]], years: list[int]) -> list[list[st
     for row in rows:
         if len(row) < 5:
             continue
-        output.append([
-            row[0], "Base Case", row[1] or "Custom", row[4] or "", row[3] or "Quarterly", "Leading", row[2] or "",
-            "90", "70", "", "", "", "", "", "", "", "", "", "", row[2] or "", '{"type":"none"}',
-            "0", "false", "false", "", "{}", "", "", *["" for _ in years], *["" for _ in years for _month in range(12)],
-        ])
+        output.append(
+            [
+                row[0],
+                "Base Case",
+                row[1] or "Custom",
+                row[4] or "",
+                row[3] or "Quarterly",
+                "Leading",
+                row[2] or "",
+                "90",
+                "70",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                row[2] or "",
+                '{"type":"none"}',
+                "0",
+                "false",
+                "false",
+                "",
+                "{}",
+                "",
+                "",
+                *["" for _ in years],
+                *["" for _ in years for _month in range(12)],
+            ]
+        )
     return output
 
 
 def _alchemist_milestone_rows(rows: list[list[str]]) -> list[list[str]]:
-    return [[row[0], "", row[2], "", row[3], row[4], "", "", "Not Started", "", "", "", "", "", "", "", "", "", "", ""] for row in rows if row]
+    return [
+        [
+            row[0],
+            "",
+            row[2],
+            "",
+            row[3],
+            row[4],
+            "",
+            "",
+            "Not Started",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+        ]
+        for row in rows
+        if row
+    ]
 
 
 def _alchemist_risk_rows(rows: list[list[str]]) -> list[list[str]]:
-    return [[row[0], row[1], row[2], row[3], "", row[5] if len(row) > 5 else "Open", row[4] if len(row) > 4 else "", "", "", "not_required", row[0], "", "", "", "", ""] for row in rows if row]
+    return [
+        [
+            row[0],
+            row[1],
+            row[2],
+            row[3],
+            "",
+            row[5] if len(row) > 5 else "Open",
+            row[4] if len(row) > 4 else "",
+            "",
+            "",
+            "not_required",
+            row[0],
+            "",
+            "",
+            "",
+            "",
+            "",
+        ]
+        for row in rows
+        if row
+    ]
 
 
 def _alchemist_status_update_rows(rows: list[list[str]]) -> list[list[str]]:
-    return [["", row[0], row[1], row[6], row[2], row[3], row[4], row[5], "", "", "false", "false", "", "", ""] for row in rows if row]
+    return [
+        [
+            "",
+            row[0],
+            row[1],
+            row[6],
+            row[2],
+            row[3],
+            row[4],
+            row[5],
+            "",
+            "",
+            "false",
+            "false",
+            "",
+            "",
+            "",
+        ]
+        for row in rows
+        if row
+    ]
 
 
 def _alchemist_validation_rows() -> list[list[str]]:
@@ -404,11 +743,32 @@ def _alchemist_metric_row(
     years: list[int],
     prefix_len: int,
 ) -> list[str]:
-    prefix = [name, lane, benefit_type, denomination, "", "", "", "", "", "", '{"mode":"none"}', "0", "false", '{"show_in_summary":true}', "", ""]
+    prefix = [
+        name,
+        lane,
+        benefit_type,
+        denomination,
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        '{"mode":"none"}',
+        "0",
+        "false",
+        '{"show_in_summary":true}',
+        "",
+        "",
+    ]
     return [
         *prefix[:prefix_len],
         *[str(_million(sum(_period_value(row, metric, year) for row in rows))) for year in years],
-        *[str(_million(_month_value(rows, metric, year, month))) for year in years for month in range(1, 13)],
+        *[
+            str(_million(_month_value(rows, metric, year, month)))
+            for year in years
+            for month in range(1, 13)
+        ],
     ]
 
 
@@ -516,11 +876,21 @@ def parse_initiative_template(data: bytes) -> InitiativeWorkbookData:
             overview_rows = _read_sheet(zf, sheets["Overview"], shared_strings)
             if _is_alchemist_workbook(zf, sheets, overview_rows, shared_strings):
                 return _parse_alchemist_workbook(zf, sheets, overview_rows, shared_strings)
-            benefits_rows = _read_sheet(zf, sheets["Benefits"], shared_strings) if "Benefits" in sheets else []
-            costs_rows = _read_sheet(zf, sheets["Costs"], shared_strings) if "Costs" in sheets else []
+            benefits_rows = (
+                _read_sheet(zf, sheets["Benefits"], shared_strings) if "Benefits" in sheets else []
+            )
+            costs_rows = (
+                _read_sheet(zf, sheets["Costs"], shared_strings) if "Costs" in sheets else []
+            )
             kpi_rows = _read_sheet(zf, sheets["KPIs"], shared_strings) if "KPIs" in sheets else []
-            risk_rows = _read_sheet(zf, sheets["Risks"], shared_strings) if "Risks" in sheets else []
-            milestone_rows = _read_sheet(zf, sheets["Milestones"], shared_strings) if "Milestones" in sheets else []
+            risk_rows = (
+                _read_sheet(zf, sheets["Risks"], shared_strings) if "Risks" in sheets else []
+            )
+            milestone_rows = (
+                _read_sheet(zf, sheets["Milestones"], shared_strings)
+                if "Milestones" in sheets
+                else []
+            )
     except KeyError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -601,7 +971,11 @@ def _is_alchemist_workbook(
     overview_rows: list[list[str]],
     shared_strings: list[str],
 ) -> bool:
-    if overview_rows and overview_rows[0] and overview_rows[0][0].strip().lower() == "initiative charter":
+    if (
+        overview_rows
+        and overview_rows[0]
+        and overview_rows[0][0].strip().lower() == "initiative charter"
+    ):
         return True
     if "_Reference" not in sheets:
         return False
@@ -633,7 +1007,9 @@ def _parse_alchemist_workbook(
             for item in re.split(r"[,;/]", _clean_text(overview_values.get("Business Units")) or "")
             if item.strip()
         ],
-        "owner_name": _clean_text(overview_values.get("Owner") or overview_values.get("Market Owner")),
+        "owner_name": _clean_text(
+            overview_values.get("Owner") or overview_values.get("Market Owner")
+        ),
         "group_owner_name": _clean_text(overview_values.get("Group Owner")),
     }
     overview = _parse_alchemist_overview(overview_values, errors)
@@ -663,7 +1039,9 @@ def _parse_alchemist_workbook(
             errors,
         ),
         status_updates=_parse_alchemist_status_updates(
-            _read_sheet(zf, sheets["Status Updates"], shared_strings) if "Status Updates" in sheets else [],
+            _read_sheet(zf, sheets["Status Updates"], shared_strings)
+            if "Status Updates" in sheets
+            else [],
         ),
         metadata=metadata,
         validation_errors=errors,
@@ -676,7 +1054,9 @@ def _parse_alchemist_overview(
 ) -> InitiativeCreate:
     name = _clean_text(values.get("Name")) or "Invalid workbook"
     if name == "Invalid workbook":
-        errors.append(WorkbookValidationError(sheet="Overview", row=5, column="Name", message="Missing Name"))
+        errors.append(
+            WorkbookValidationError(sheet="Overview", row=5, column="Name", message="Missing Name")
+        )
     try:
         return InitiativeCreate(
             name=name,
@@ -686,14 +1066,18 @@ def _parse_alchemist_overview(
             country=_blank_to_none(_clean_text(values.get("Country"))),
             tag=_initiative_tag(values.get("Initiative Tag")),
             priority=_choice(values.get("Priority"), {"high", "medium", "low"}) or "medium",
-            summary=_blank_to_none(_clean_text(values.get("Description") or values.get("Context & Problem"))),
+            summary=_blank_to_none(
+                _clean_text(values.get("Description") or values.get("Context & Problem"))
+            ),
             value_logic=_blank_to_none(_clean_text(values.get("Value Logic / Assumptions"))),
             dependencies_text=_blank_to_none(_clean_text(values.get("Dependencies"))),
             planned_start=_blank_to_none(_date_text(values.get("Planned Start Date"))),
             planned_end=_blank_to_none(_date_text(values.get("Planned Completion Date"))),
         )
     except ValueError as exc:
-        errors.append(WorkbookValidationError(sheet="Overview", row=None, column=None, message=str(exc)))
+        errors.append(
+            WorkbookValidationError(sheet="Overview", row=None, column=None, message=str(exc))
+        )
         return InitiativeCreate(name=name)
 
 
@@ -743,7 +1127,9 @@ def _parse_alchemist_benefits(
         try:
             items.append(FinancialEntryUpdate(**row))
         except ValueError as exc:
-            errors.append(WorkbookValidationError(sheet="Benefits", row=None, column=None, message=str(exc)))
+            errors.append(
+                WorkbookValidationError(sheet="Benefits", row=None, column=None, message=str(exc))
+            )
     return items
 
 
@@ -794,7 +1180,9 @@ def _parse_alchemist_costs(
         try:
             items.append(CostLineCreate(**row))
         except ValueError as exc:
-            errors.append(WorkbookValidationError(sheet="Costs", row=None, column=None, message=str(exc)))
+            errors.append(
+                WorkbookValidationError(sheet="Costs", row=None, column=None, message=str(exc))
+            )
     return items
 
 
@@ -818,14 +1206,22 @@ def _parse_alchemist_kpis(
             {
                 "name": name,
                 "type": _kpi_type(named.get("Type")),
-                "category": _blank_to_none(_clean_text(named.get("_kpi_category") or named.get("Impacted Metric"))),
+                "category": _blank_to_none(
+                    _clean_text(named.get("_kpi_category") or named.get("Impacted Metric"))
+                ),
                 "frequency": _frequency(named.get("Cadence")),
-                "unit": _blank_to_none(_clean_text(named.get("Unit") or named.get("Custom Unit Label"))),
+                "unit": _blank_to_none(
+                    _clean_text(named.get("Unit") or named.get("Custom Unit Label"))
+                ),
                 "entries": {},
             },
         )
         lane = _norm(named.get("Lane"))
-        target = {"base case": "value_base", "high case": "value_high", "actual": "value_actual"}.get(lane)
+        target = {
+            "base case": "value_base",
+            "high case": "value_high",
+            "actual": "value_actual",
+        }.get(lane)
         if not target:
             continue
         for index, year, month in period_columns:
@@ -841,7 +1237,9 @@ def _parse_alchemist_kpis(
         try:
             result.append(KPIWorkbookItem(**item))
         except ValueError as exc:
-            errors.append(WorkbookValidationError(sheet="KPIs", row=None, column=None, message=str(exc)))
+            errors.append(
+                WorkbookValidationError(sheet="KPIs", row=None, column=None, message=str(exc))
+            )
     return result
 
 
@@ -868,7 +1266,9 @@ def _parse_alchemist_risks(
                 )
             )
         except ValueError as exc:
-            errors.append(WorkbookValidationError(sheet="Risks", row=index, column=None, message=str(exc)))
+            errors.append(
+                WorkbookValidationError(sheet="Risks", row=index, column=None, message=str(exc))
+            )
     return items
 
 
@@ -884,7 +1284,11 @@ def _parse_alchemist_milestones(
         if not name:
             continue
         description_parts = []
-        for label, key in (("Type", "Type"), ("Source owner", "Owner"), ("Source status", "Status")):
+        for label, key in (
+            ("Type", "Type"),
+            ("Source owner", "Owner"),
+            ("Source status", "Status"),
+        ):
             value = _clean_text(named.get(key))
             if value:
                 description_parts.append(f"{label}: {value}")
@@ -899,7 +1303,11 @@ def _parse_alchemist_milestones(
                 )
             )
         except ValueError as exc:
-            errors.append(WorkbookValidationError(sheet="Milestones", row=index, column=None, message=str(exc)))
+            errors.append(
+                WorkbookValidationError(
+                    sheet="Milestones", row=index, column=None, message=str(exc)
+                )
+            )
     return items
 
 
@@ -962,7 +1370,12 @@ def _dict_rows(
         )
         return
     for values in rows[1:]:
-        row = {header: values[headers.index(header)].strip() if headers.index(header) < len(values) else "" for header in expected_headers}
+        row = {
+            header: values[headers.index(header)].strip()
+            if headers.index(header) < len(values)
+            else ""
+            for header in expected_headers
+        }
         if any(row.values()):
             yield row
 
@@ -990,7 +1403,9 @@ def _parse_overview(
             planned_end=_blank_to_none(row["planned_end"]),
         )
     except ValueError as exc:
-        errors.append(WorkbookValidationError(sheet="Overview", row=2, column=None, message=str(exc)))
+        errors.append(
+            WorkbookValidationError(sheet="Overview", row=2, column=None, message=str(exc))
+        )
         return InitiativeCreate(name=name)
 
 
@@ -1019,11 +1434,15 @@ def _parse_benefits(
                 )
             )
         except (InvalidOperation, ValueError) as exc:
-            errors.append(WorkbookValidationError(sheet="Benefits", row=index, column=None, message=str(exc)))
+            errors.append(
+                WorkbookValidationError(sheet="Benefits", row=index, column=None, message=str(exc))
+            )
     return items
 
 
-def _parse_costs(rows: list[list[str]], errors: list[WorkbookValidationError]) -> list[CostLineCreate]:
+def _parse_costs(
+    rows: list[list[str]], errors: list[WorkbookValidationError]
+) -> list[CostLineCreate]:
     expected = SHEET_DEFS[2][1]
     items = []
     for index, row in enumerate(_dict_rows(rows, expected, "Costs", errors), start=2):
@@ -1043,11 +1462,15 @@ def _parse_costs(rows: list[list[str]], errors: list[WorkbookValidationError]) -
                 )
             )
         except (InvalidOperation, ValueError) as exc:
-            errors.append(WorkbookValidationError(sheet="Costs", row=index, column=None, message=str(exc)))
+            errors.append(
+                WorkbookValidationError(sheet="Costs", row=index, column=None, message=str(exc))
+            )
     return items
 
 
-def _parse_kpis(rows: list[list[str]], errors: list[WorkbookValidationError]) -> list[KPIWorkbookItem]:
+def _parse_kpis(
+    rows: list[list[str]], errors: list[WorkbookValidationError]
+) -> list[KPIWorkbookItem]:
     expected = SHEET_DEFS[3][1]
     items = []
     for index, row in enumerate(_dict_rows(rows, expected, "KPIs", errors), start=2):
@@ -1077,7 +1500,9 @@ def _parse_kpis(rows: list[list[str]], errors: list[WorkbookValidationError]) ->
                 )
             )
         except ValueError as exc:
-            errors.append(WorkbookValidationError(sheet="KPIs", row=index, column=None, message=str(exc)))
+            errors.append(
+                WorkbookValidationError(sheet="KPIs", row=index, column=None, message=str(exc))
+            )
     return items
 
 
@@ -1099,7 +1524,9 @@ def _parse_risks(rows: list[list[str]], errors: list[WorkbookValidationError]) -
                 )
             )
         except ValueError as exc:
-            errors.append(WorkbookValidationError(sheet="Risks", row=index, column=None, message=str(exc)))
+            errors.append(
+                WorkbookValidationError(sheet="Risks", row=index, column=None, message=str(exc))
+            )
     return items
 
 
@@ -1124,7 +1551,11 @@ def _parse_milestones(
                 )
             )
         except ValueError as exc:
-            errors.append(WorkbookValidationError(sheet="Milestones", row=index, column=None, message=str(exc)))
+            errors.append(
+                WorkbookValidationError(
+                    sheet="Milestones", row=index, column=None, message=str(exc)
+                )
+            )
     return items
 
 
@@ -1215,7 +1646,9 @@ def _key_value_rows(rows: list[list[str]]) -> dict[str, str]:
     return result
 
 
-def _headered_alchemist_rows(rows: list[list[str]], first_header: str) -> tuple[list[str], list[list[str]]]:
+def _headered_alchemist_rows(
+    rows: list[list[str]], first_header: str
+) -> tuple[list[str], list[list[str]]]:
     for index, row in enumerate(rows):
         if row and row[0].strip() == first_header:
             return [value.strip() for value in row], rows[index + 1 :]
@@ -1248,7 +1681,9 @@ def _fiscal_years(reference: dict[str, str], overview: dict[str, str]) -> list[i
 
 
 def _period_columns(headers: list[str], fiscal_years: list[int]) -> list[tuple[int, int, int]]:
-    fy_indexes = [index for index, value in enumerate(headers) if re.fullmatch(r"FY\d{2,4}", value.strip())]
+    fy_indexes = [
+        index for index, value in enumerate(headers) if re.fullmatch(r"FY\d{2,4}", value.strip())
+    ]
     start = (fy_indexes[-1] + 1) if fy_indexes else 0
     periods: list[tuple[int, int, int]] = []
     month_offset = 0
@@ -1256,7 +1691,11 @@ def _period_columns(headers: list[str], fiscal_years: list[int]) -> list[tuple[i
         month = _MONTHS.get(headers[index].strip().lower())
         if not month:
             continue
-        year = fiscal_years[month_offset // 12] if month_offset // 12 < len(fiscal_years) else fiscal_years[-1]
+        year = (
+            fiscal_years[month_offset // 12]
+            if month_offset // 12 < len(fiscal_years)
+            else fiscal_years[-1]
+        )
         periods.append((index, year, month))
         month_offset += 1
     return periods
@@ -1456,7 +1895,7 @@ def _sheet(
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
         'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
-        f'<sheetData>{"".join(row_xml)}</sheetData>{data_validations}{drawing_xml}</worksheet>'
+        f"<sheetData>{''.join(row_xml)}</sheetData>{data_validations}{drawing_xml}</worksheet>"
     )
 
 
@@ -1484,7 +1923,10 @@ def _data_validations(name: str, headers: list[str], row_count: int) -> str:
             [
                 ("stage", '"scoping,in_progress,complete"'),
                 ("rag_status", '"green,amber,red"'),
-                ("type", '"revenue_growth,cost_reduction,cost_avoidance,compliance,capability_building"'),
+                (
+                    "type",
+                    '"revenue_growth,cost_reduction,cost_avoidance,compliance,capability_building"',
+                ),
                 ("impact_type", '"recurring,one_off"'),
                 ("tag", '"automation,offshoring,commercial,other"'),
                 ("priority", '"high,medium,low"'),
@@ -1524,7 +1966,9 @@ def _column_name(index: int) -> str:
 
 
 def _xml(value: str) -> str:
-    return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+    return (
+        value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+    )
 
 
 def _content_types(sheet_count: int) -> str:

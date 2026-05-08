@@ -15,19 +15,10 @@ class OrganizationRepository:
 
     def get_organization(self) -> dict[str, Any] | None:
         result = (
-            self._c.table("organizations")
-            .select("*")
-            .eq("id", self._tid)
-            .maybe_single()
-            .execute()
+            self._c.table("organizations").select("*").eq("id", self._tid).maybe_single().execute()
         )
         return result.data if result else None
 
     def update_organization(self, patch: dict[str, Any]) -> dict[str, Any]:
-        result = (
-            self._c.table("organizations")
-            .update(patch)
-            .eq("id", self._tid)
-            .execute()
-        )
+        result = self._c.table("organizations").update(patch).eq("id", self._tid).execute()
         return result.data[0] if result.data else {}

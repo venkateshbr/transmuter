@@ -7,7 +7,9 @@ class DashboardRepository:
         self.client = client
         self.tenant_id = str(tenant_id)
 
-    def get_initiatives_for_dashboard(self, owner_user_id: str | None = None) -> list[dict[str, Any]]:
+    def get_initiatives_for_dashboard(
+        self, owner_user_id: str | None = None
+    ) -> list[dict[str, Any]]:
         select = (
             "id, name, initiative_code, stage, rag_status, pressure_score, workstream_id, tag, "
             "workstreams(name, business_unit_id, business_units(name))"
@@ -79,7 +81,7 @@ class DashboardRepository:
             .eq("tenant_id", self.tenant_id)
             .execute()
         ).data or []
-        
+
         kpi_ids = [k["id"] for k in kpis]
         entries = []
         if kpi_ids:
@@ -90,7 +92,7 @@ class DashboardRepository:
                 .in_("kpi_id", kpi_ids)
                 .execute()
             ).data or []
-            
+
         return kpis, entries
 
     def get_financial_summary_data(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -104,14 +106,14 @@ class DashboardRepository:
             .eq("tenant_id", self.tenant_id)
             .execute()
         ).data or []
-        
+
         costs = (
             self.client.table("financial_cost_lines")
             .select("initiative_id, year, quarter, amount_plan, amount_actual, is_recurring")
             .eq("tenant_id", self.tenant_id)
             .execute()
         ).data or []
-        
+
         return entries, costs
 
     def get_recent_activity(self) -> list[dict[str, Any]]:
@@ -139,7 +141,7 @@ class DashboardRepository:
             .order("name")
             .execute()
         ).data or []
-        
+
         wss = (
             self.client.table("workstreams")
             .select("id, name, business_unit_id")
@@ -147,5 +149,5 @@ class DashboardRepository:
             .order("name")
             .execute()
         ).data or []
-        
+
         return bus, wss

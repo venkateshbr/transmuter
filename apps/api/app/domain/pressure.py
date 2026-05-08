@@ -19,7 +19,9 @@ D1 = Decimal("1")
 
 
 def clamp(
-    value: Decimal, min_val: Decimal, max_val: Decimal,
+    value: Decimal,
+    min_val: Decimal,
+    max_val: Decimal,
 ) -> Decimal:
     return max(min_val, min(value, max_val))
 
@@ -54,6 +56,7 @@ def pressure_level(score: Decimal) -> str:
 
 # ── Result models ────────────────────────────────────────────────────
 
+
 class MilestonePressureResult(BaseModel):
     pressure_score: str
     level: str
@@ -78,6 +81,7 @@ class InitiativePressureResult(BaseModel):
 
 # ── Milestone Pressure Engine ────────────────────────────────────────
 
+
 class MilestonePressureEngine:
     """Calculate pressure for a single milestone."""
 
@@ -99,7 +103,8 @@ class MilestonePressureEngine:
 
         total = clamp(
             blast + dep + cl + slk + chk + ss,
-            D0, Decimal("10"),
+            D0,
+            Decimal("10"),
         )
         return MilestonePressureResult(
             pressure_score=str(round_pressure(total)),
@@ -114,6 +119,7 @@ class MilestonePressureEngine:
 
 
 # ── Sub-score functions ──────────────────────────────────────────────
+
 
 def _blast_radius(
     downstream: list[dict],  # type: ignore[type-arg]
@@ -169,12 +175,14 @@ def _cluster_bonus(
             struggling += 1
     return clamp(
         Decimal(str(struggling)) * Decimal("0.5"),
-        D0, Decimal("1.5"),
+        D0,
+        Decimal("1.5"),
     )
 
 
 def _slack_penalty(
-    milestone: dict, today: date,  # type: ignore[type-arg]
+    milestone: dict,
+    today: date,  # type: ignore[type-arg]
 ) -> Decimal:
     if milestone.get("status") == "complete":
         return D0
@@ -221,7 +229,8 @@ def _checklist_score(stats: tuple[int, int]) -> Decimal:
 
 
 def _self_status(
-    milestone: dict, today: date,  # type: ignore[type-arg]
+    milestone: dict,
+    today: date,  # type: ignore[type-arg]
 ) -> Decimal:
     status = milestone.get("status", "not_started")
     if status == "complete":
@@ -236,7 +245,8 @@ def _self_status(
             days_late = (today - ps).days
             return clamp(
                 Decimal("0.1") + Decimal(str(days_late)) * Decimal("0.02"),
-                Decimal("0.1"), Decimal("0.5"),
+                Decimal("0.1"),
+                Decimal("0.5"),
             )
         return Decimal("0.1")
     return D0

@@ -52,9 +52,7 @@ class StatusUpdateRepository:
         )
         return result.data if result else None
 
-    def create(
-        self, initiative_id: str, author_id: str, data: dict[str, Any]
-    ) -> dict[str, Any]:
+    def create(self, initiative_id: str, author_id: str, data: dict[str, Any]) -> dict[str, Any]:
         data["id"] = str(uuid4())
         data["tenant_id"] = self._tid
         data["initiative_id"] = initiative_id
@@ -63,6 +61,7 @@ class StatusUpdateRepository:
         # If created directly as submitted, set submitted_at
         if not data.get("is_draft", True):
             from datetime import datetime
+
             data["submitted_at"] = datetime.now(UTC).isoformat()
 
         result = self._c.table("status_updates").insert(data).execute()
@@ -72,9 +71,9 @@ class StatusUpdateRepository:
 
     def update(self, update_id: str, data: dict[str, Any]) -> dict[str, Any]:
         from datetime import datetime
-        
+
         data["updated_at"] = datetime.now(UTC).isoformat()
-        
+
         result = (
             self._c.table("status_updates")
             .update(data)
@@ -152,10 +151,7 @@ class StatusUpdateRepository:
 
     def list_nudge_counts(self) -> dict[str, int]:
         result = (
-            self._c.table("nudge_log")
-            .select("initiative_id")
-            .eq("tenant_id", self._tid)
-            .execute()
+            self._c.table("nudge_log").select("initiative_id").eq("tenant_id", self._tid).execute()
         )
         counts: dict[str, int] = {}
         for row in result.data or []:
@@ -174,7 +170,10 @@ class StatusUpdateRepository:
         return {row["initiative_id"] for row in result.data or []}
 
     def log_nudge(
-        self, initiative_id: str, sent_by_id: str | None, channel: str = "both",
+        self,
+        initiative_id: str,
+        sent_by_id: str | None,
+        channel: str = "both",
     ) -> dict[str, Any]:
         """Logs a nudge in the nudge_log table."""
         data = {

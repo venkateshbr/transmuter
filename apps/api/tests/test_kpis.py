@@ -12,6 +12,7 @@ from app.main import app  # noqa: E402
 
 client = TestClient(app, raise_server_exceptions=True)
 
+
 def get_token(email: str = "admin@ishirock.dev", password: str = "Transmuter2026!") -> str:
     resp = client.post("/auth/login", json={"email": email, "password": password})
     assert resp.status_code == 200, resp.text
@@ -45,7 +46,7 @@ def test_kpi_crud(admin_token: str, init_id: str) -> None:
             "name": "EBITDA Margin",
             "type": "gross_margin",
             "frequency": "quarterly",
-            "unit": "%"
+            "unit": "%",
         },
         headers=auth(admin_token),
     )
@@ -86,14 +87,14 @@ def test_kpi_entries_upsert(admin_token: str, init_id: str) -> None:
         f"/initiatives/{init_id}/kpis/{kpi_id}/entries",
         json=[
             {"year": 2026, "quarter": 1, "value_base": "1000", "value_actual": "1100"},
-            {"year": 2026, "quarter": 2, "value_base": "1200"} # No actuals yet
+            {"year": 2026, "quarter": 2, "value_base": "1200"},  # No actuals yet
         ],
         headers=auth(admin_token),
     )
     assert resp.status_code == 200
     entries = resp.json()
     assert len(entries) == 2
-    
+
     q1 = next(e for e in entries if e["quarter"] == 1)
     q2 = next(e for e in entries if e["quarter"] == 2)
     assert float(q1["value_base"]) == 1000.0
@@ -105,9 +106,11 @@ def test_kpi_entries_upsert(admin_token: str, init_id: str) -> None:
         f"/initiatives/{init_id}/kpis/{kpi_id}/entries",
         json=[
             {
-                "year": 2026, "quarter": 2,
-                "value_base": "1200", "value_actual": "1000"
-            } # Missed target
+                "year": 2026,
+                "quarter": 2,
+                "value_base": "1200",
+                "value_actual": "1000",
+            }  # Missed target
         ],
         headers=auth(admin_token),
     )
@@ -127,6 +130,6 @@ def test_kpi_pulse_summary(admin_token: str, init_id: str) -> None:
     assert "missing_base" in data
     assert "no_actuals" in data
     assert "health_score" in data
-    
+
     # We should have at least 1 hitting and 1 missing (from Revenue Target Q1 and Q2)
     assert data["total_kpis"] > 0

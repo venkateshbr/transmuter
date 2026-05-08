@@ -1,14 +1,18 @@
-from pydantic import BaseModel
 from typing import Any
+
+from pydantic import BaseModel
+
 
 class DashboardSummary(BaseModel):
     total_initiatives: int
     at_risk: int
     pending_approvals: int
 
+
 class PressureInfo(BaseModel):
     score: float
     label: str
+
 
 class DashboardResponse(BaseModel):
     summary: DashboardSummary

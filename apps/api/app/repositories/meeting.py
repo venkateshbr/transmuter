@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from uuid import UUID, uuid4
+from uuid import UUID
+
 from supabase import Client
+
 
 class MeetingRepository:
     def __init__(self, client: Client, tenant_id: UUID) -> None:
@@ -37,11 +39,7 @@ class MeetingRepository:
         return meeting
 
     def create(self, data: dict) -> dict:
-        result = (
-            self._c.table("meetings")
-            .insert({"tenant_id": self._tid, **data})
-            .execute()
-        )
+        result = self._c.table("meetings").insert({"tenant_id": self._tid, **data}).execute()
         return result.data[0] if result.data else {}
 
     def update(self, meeting_id: str, data: dict) -> dict:
@@ -177,11 +175,13 @@ class MeetingRepository:
             return existing.data
         result = (
             self._c.table("meeting_initiatives")
-            .insert({
-                "tenant_id": self._tid,
-                "meeting_id": meeting_id,
-                "initiative_id": initiative_id,
-            })
+            .insert(
+                {
+                    "tenant_id": self._tid,
+                    "meeting_id": meeting_id,
+                    "initiative_id": initiative_id,
+                }
+            )
             .execute()
         )
         return result.data[0] if result.data else {}
@@ -199,12 +199,14 @@ class MeetingRepository:
     def create_session(self, meeting_id: str, session_date: str) -> dict:
         result = (
             self._c.table("meeting_sessions")
-            .insert({
-                "tenant_id": self._tid,
-                "meeting_id": meeting_id,
-                "session_date": session_date,
-                "status": "in_progress"
-            })
+            .insert(
+                {
+                    "tenant_id": self._tid,
+                    "meeting_id": meeting_id,
+                    "session_date": session_date,
+                    "status": "in_progress",
+                }
+            )
             .execute()
         )
         return result.data[0] if result.data else {}
@@ -233,11 +235,7 @@ class MeetingRepository:
     def create_action_item(self, session_id: str, data: dict) -> dict:
         result = (
             self._c.table("action_items")
-            .insert({
-                "tenant_id": self._tid,
-                "session_id": session_id,
-                **data
-            })
+            .insert({"tenant_id": self._tid, "session_id": session_id, **data})
             .execute()
         )
         return result.data[0] if result.data else {}
@@ -245,7 +243,9 @@ class MeetingRepository:
     def get_session_action_items(self, session_id: str) -> list[dict]:
         result = (
             self._c.table("action_items")
-            .select("*, users!action_items_assignee_id_fkey(display_name), initiatives(name, initiative_code)")
+            .select(
+                "*, users!action_items_assignee_id_fkey(display_name), initiatives(name, initiative_code)"
+            )
             .eq("tenant_id", self._tid)
             .eq("session_id", session_id)
             .execute()

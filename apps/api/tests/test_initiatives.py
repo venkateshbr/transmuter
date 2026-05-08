@@ -8,7 +8,6 @@ from fastapi.testclient import TestClient
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "../../../.env"))
 
-from app.core.config import settings
 from app.main import app
 
 client = TestClient(app, raise_server_exceptions=True)
@@ -17,6 +16,7 @@ ORG_ID = "9a739f1b-cba1-45e9-af8d-ec0c9807f56e"
 
 
 # ── Auth helper ───────────────────────────────────────────────────────────────
+
 
 def get_token(email: str = "admin@ishirock.dev", password: str = "Transmuter2026!") -> str:
     resp = client.post("/auth/login", json={"email": email, "password": password})
@@ -39,6 +39,7 @@ def auth(token: str) -> dict:
 
 
 # ── List tests ────────────────────────────────────────────────────────────────
+
 
 def test_list_initiatives_returns_seeded_data(admin_token: str) -> None:
     resp = client.get("/initiatives", headers=auth(admin_token))
@@ -80,6 +81,7 @@ def test_list_requires_auth() -> None:
 
 
 # ── Create + Get + Update ─────────────────────────────────────────────────────
+
 
 def test_create_get_update_delete(admin_token: str) -> None:
     # Create
@@ -147,7 +149,9 @@ def test_initiative_code_unique_and_sequential(admin_token: str) -> None:
     assert all(c.startswith("TRN-") for c in codes)
 
     # Clean up
-    for resp_data in [client.get(f"/initiatives?search=Sequential+test", headers=auth(admin_token)).json()["items"]]:
+    for resp_data in [
+        client.get("/initiatives?search=Sequential+test", headers=auth(admin_token)).json()["items"]
+    ]:
         for item in resp_data:
             client.delete(f"/initiatives/{item['id']}", headers=auth(admin_token))
 
@@ -164,6 +168,7 @@ def test_delete_requires_admin_role(owner_token: str) -> None:
 
 
 # ── CSV Export ────────────────────────────────────────────────────────────────
+
 
 def test_export_csv(admin_token: str) -> None:
     resp = client.get("/initiatives/export", headers=auth(admin_token))

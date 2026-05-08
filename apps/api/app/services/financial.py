@@ -24,8 +24,8 @@ from app.domain.financials import (
     FinancialEntryRow,
     FinancialGridResponse,
     FinancialGridUpdate,
-    FinancialSummary,
     FinancialScenario,
+    FinancialSummary,
     ScenarioFinancialSummary,
     ValueBridgeCase,
     ValueBridgeResponse,
@@ -50,15 +50,31 @@ def _str_or_none(val: Decimal | None) -> str | None:
 
 # Fields that exist on financial_entries for the new uplift model
 _ENTRY_FIELDS = [
-    "revenue_uplift_base", "revenue_uplift_high", "revenue_uplift_actual",
-    "revenue_uplift_pct_base", "revenue_uplift_pct_high", "revenue_uplift_pct_actual",
-    "gross_margin_base", "gross_margin_high", "gross_margin_high",
+    "revenue_uplift_base",
+    "revenue_uplift_high",
+    "revenue_uplift_actual",
+    "revenue_uplift_pct_base",
+    "revenue_uplift_pct_high",
+    "revenue_uplift_pct_actual",
+    "gross_margin_base",
+    "gross_margin_high",
+    "gross_margin_high",
     "gross_margin_actual",
-    "gm_pct_base", "gm_pct_high", "gm_pct_actual",
-    "gm_uplift_base", "gm_uplift_high", "gm_uplift_actual",
-    "gm_uplift_pct_base", "gm_uplift_pct_high", "gm_uplift_pct_actual",
-    "cogs_base", "cogs_high", "cogs_actual",
-    "cogs_pct_base", "cogs_pct_high", "cogs_pct_actual",
+    "gm_pct_base",
+    "gm_pct_high",
+    "gm_pct_actual",
+    "gm_uplift_base",
+    "gm_uplift_high",
+    "gm_uplift_actual",
+    "gm_uplift_pct_base",
+    "gm_uplift_pct_high",
+    "gm_uplift_pct_actual",
+    "cogs_base",
+    "cogs_high",
+    "cogs_actual",
+    "cogs_pct_base",
+    "cogs_pct_high",
+    "cogs_pct_actual",
 ]
 
 
@@ -98,22 +114,34 @@ class FinancialService:
             }
             # Add all numeric fields — base/high as required, actual as optional
             for field_name in [
-                "revenue_uplift_base", "revenue_uplift_high",
-                "revenue_uplift_pct_base", "revenue_uplift_pct_high",
-            "gross_margin_base", "gross_margin_high",
-                "gm_pct_base", "gm_pct_high",
-                "gm_uplift_base", "gm_uplift_high",
-                "gm_uplift_pct_base", "gm_uplift_pct_high",
-                "cogs_base", "cogs_high",
-                "cogs_pct_base", "cogs_pct_high",
+                "revenue_uplift_base",
+                "revenue_uplift_high",
+                "revenue_uplift_pct_base",
+                "revenue_uplift_pct_high",
+                "gross_margin_base",
+                "gross_margin_high",
+                "gm_pct_base",
+                "gm_pct_high",
+                "gm_uplift_base",
+                "gm_uplift_high",
+                "gm_uplift_pct_base",
+                "gm_uplift_pct_high",
+                "cogs_base",
+                "cogs_high",
+                "cogs_pct_base",
+                "cogs_pct_high",
             ]:
                 row[field_name] = str(getattr(entry, field_name))
 
             for field_name in [
-                "revenue_uplift_actual", "revenue_uplift_pct_actual",
-                "gross_margin_actual", "gm_pct_actual",
-                "gm_uplift_actual", "gm_uplift_pct_actual",
-                "cogs_actual", "cogs_pct_actual",
+                "revenue_uplift_actual",
+                "revenue_uplift_pct_actual",
+                "gross_margin_actual",
+                "gm_pct_actual",
+                "gm_uplift_actual",
+                "gm_uplift_pct_actual",
+                "cogs_actual",
+                "cogs_pct_actual",
             ]:
                 val = getattr(entry, field_name)
                 row[field_name] = str(val) if val is not None else None
@@ -127,15 +155,19 @@ class FinancialService:
         if data.cost_lines:
             cost_rows = []
             for cl in data.cost_lines:
-                cost_rows.append({
-                    "name": cl.name,
-                    "year": cl.year,
-                    "quarter": cl.quarter,
-                    "month": cl.month,
-                    "amount_plan": str(cl.amount_plan),
-                    "amount_actual": str(cl.amount_actual) if cl.amount_actual is not None else None,
-                    "is_recurring": cl.is_recurring,
-                })
+                cost_rows.append(
+                    {
+                        "name": cl.name,
+                        "year": cl.year,
+                        "quarter": cl.quarter,
+                        "month": cl.month,
+                        "amount_plan": str(cl.amount_plan),
+                        "amount_actual": str(cl.amount_actual)
+                        if cl.amount_actual is not None
+                        else None,
+                        "is_recurring": cl.is_recurring,
+                    }
+                )
             self._repo.upsert_cost_lines_batch(initiative_id, cost_rows)
 
         return self.get_financial_grid(initiative_id)
@@ -166,15 +198,20 @@ class FinancialService:
         return CostLineListResponse(items=items, total=len(items))
 
     def create_cost_line(self, initiative_id: str, data: CostLineCreate) -> CostLineItem:
-        row = self._repo.create_cost_line(initiative_id, {
-            "name": data.name,
-            "year": data.year,
-            "quarter": data.quarter,
-            "month": data.month,
-            "amount_plan": str(data.amount_plan),
-            "amount_actual": str(data.amount_actual) if data.amount_actual is not None else None,
-            "is_recurring": data.is_recurring,
-        })
+        row = self._repo.create_cost_line(
+            initiative_id,
+            {
+                "name": data.name,
+                "year": data.year,
+                "quarter": data.quarter,
+                "month": data.month,
+                "amount_plan": str(data.amount_plan),
+                "amount_actual": str(data.amount_actual)
+                if data.amount_actual is not None
+                else None,
+                "is_recurring": data.is_recurring,
+            },
+        )
         return self._to_cost_line(row)
 
     def update_cost_line(self, cost_line_id: str, data: CostLineUpdate) -> CostLineItem:
@@ -233,20 +270,33 @@ class FinancialService:
             period_entries = [
                 row
                 for row in entries
-                if row["year"] == year and row.get("quarter") == quarter and row.get("month") == month
+                if row["year"] == year
+                and row.get("quarter") == quarter
+                and row.get("month") == month
             ]
             period_costs = [
                 row
                 for row in cost_lines
-                if row["year"] == year and row.get("quarter") == quarter and row.get("month") == month
+                if row["year"] == year
+                and row.get("quarter") == quarter
+                and row.get("month") == month
             ]
-            period_gm = sum((self._scenario_entry_value(row, "gm_uplift", scenario) for row in period_entries), Decimal("0"))
-            period_cost = sum((self._scenario_cost_value(row, scenario) for row in period_costs), Decimal("0"))
+            period_gm = sum(
+                (self._scenario_entry_value(row, "gm_uplift", scenario) for row in period_entries),
+                Decimal("0"),
+            )
+            period_cost = sum(
+                (self._scenario_cost_value(row, scenario) for row in period_costs), Decimal("0")
+            )
             cumulative_gm += period_gm
             cumulative_costs += period_cost
             cumulative_net = cumulative_gm - cumulative_costs
             label = self._period_label(year, quarter, month)
-            crossed = break_even_period is None and cumulative_net >= Decimal("0") and cumulative_costs > Decimal("0")
+            crossed = (
+                break_even_period is None
+                and cumulative_net >= Decimal("0")
+                and cumulative_costs > Decimal("0")
+            )
             if crossed:
                 break_even_period = label
             points.append(
@@ -278,8 +328,7 @@ class FinancialService:
 
     def list_cell_assumptions(self, initiative_id: str) -> FinancialCellAssumptionListResponse:
         items = [
-            self._to_cell_assumption(row)
-            for row in self._repo.list_cell_assumptions(initiative_id)
+            self._to_cell_assumption(row) for row in self._repo.list_cell_assumptions(initiative_id)
         ]
         return FinancialCellAssumptionListResponse(items=items, total=len(items))
 
@@ -428,7 +477,9 @@ class FinancialService:
             if cl.get("is_recurring", False):
                 costs_recurring_plan += plan
                 if actual_val is not None:
-                    costs_recurring_actual = (costs_recurring_actual or Decimal("0")) + _dec(actual_val)
+                    costs_recurring_actual = (costs_recurring_actual or Decimal("0")) + _dec(
+                        actual_val
+                    )
             else:
                 costs_one_off_plan += plan
                 if actual_val is not None:
@@ -437,7 +488,9 @@ class FinancialService:
         costs_plan = costs_recurring_plan + costs_one_off_plan
         costs_actual: Decimal | None = None
         if costs_recurring_actual is not None or costs_one_off_actual is not None:
-            costs_actual = (costs_recurring_actual or Decimal("0")) + (costs_one_off_actual or Decimal("0"))
+            costs_actual = (costs_recurring_actual or Decimal("0")) + (
+                costs_one_off_actual or Decimal("0")
+            )
 
         # Net Value = GM Uplift - Recurring Costs
         net_plan = gm_up_base - costs_recurring_plan

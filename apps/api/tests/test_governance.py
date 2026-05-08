@@ -1,6 +1,7 @@
 """Governance & Stage Gate integration tests — Karya #48."""
 
 import os
+
 import pytest
 from dotenv import load_dotenv
 from fastapi.testclient import TestClient
@@ -11,17 +12,21 @@ from app.main import app
 
 client = TestClient(app, raise_server_exceptions=True)
 
+
 def get_token(email: str = "admin@ishirock.dev") -> str:
     resp = client.post("/auth/login", json={"email": email, "password": "Transmuter2026!"})
     assert resp.status_code == 200
     return resp.json()["access_token"]
 
+
 @pytest.fixture(scope="module")
 def admin_token():
     return get_token("admin@ishirock.dev")
 
+
 def auth(token: str):
     return {"Authorization": f"Bearer {token}"}
+
 
 @pytest.fixture(scope="module")
 def init_id(admin_token):
@@ -29,29 +34,33 @@ def init_id(admin_token):
     resp = client.post(
         "/initiatives",
         json={"name": "Governance Test", "priority": "high", "country": "Singapore"},
-        headers=auth(admin_token)
+        headers=auth(admin_token),
     )
     iid = resp.json()["id"]
-    
+
     # Create a gate for it (Gate 1: Concept -> Business Case)
     # This usually happens via setup/seeding, but we'll do it manually here if needed or assume existence.
     # The stage_gates table needs an entry.
     # However, since we're using real DB, let's just insert it.
     from app.core.database import get_supabase_admin
+
     supabase = get_supabase_admin()
     user_resp = client.get("/auth/me", headers=auth(admin_token))
     tid = user_resp.json()["tenant_id"]
-    
-    supabase.table("stage_gates").insert({
-        "tenant_id": tid,
-        "initiative_id": iid,
-        "gate_number": 1,
-        "label": "Concept Approval",
-        "from_stage": "scoping",
-        "to_stage": "in_progress"
-    }).execute()
-    
+
+    supabase.table("stage_gates").insert(
+        {
+            "tenant_id": tid,
+            "initiative_id": iid,
+            "gate_number": 1,
+            "label": "Concept Approval",
+            "from_stage": "scoping",
+            "to_stage": "in_progress",
+        }
+    ).execute()
+
     return iid
+
 
 def test_governance_lifecycle(admin_token, init_id):
     # 1. Fetch Status
@@ -66,9 +75,9 @@ def test_governance_lifecycle(admin_token, init_id):
         f"/initiatives/{init_id}/gates/1/submit",
         json={
             "criteria_snapshot": [{"id": "c1", "label": "Concept Doc", "ticked": True}],
-            "commentary": "Ready for review"
+            "commentary": "Ready for review",
         },
-        headers=auth(admin_token)
+        headers=auth(admin_token),
     )
     assert resp.status_code == 201
     sub = resp.json()
@@ -80,7 +89,7 @@ def test_governance_lifecycle(admin_token, init_id):
     resp = client.patch(
         f"/governance/submissions/{sub_id}/decide",
         json={"decision": "approved", "commentary": "Good job"},
-        headers=auth(admin_token)
+        headers=auth(admin_token),
     )
     assert resp.status_code == 200
     assert resp.json()["decision"] == "approved"

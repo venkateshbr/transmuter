@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from typing import Annotated
 from uuid import UUID
 
@@ -23,15 +22,11 @@ async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer)],
 ) -> CurrentUser:
     token = credentials.credentials
-    
+
     try:
         # Decode and verify using our own secret
-        payload = jwt.decode(
-            token, 
-            settings.jwt_secret, 
-            algorithms=[settings.jwt_algorithm]
-        )
-        
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+
         user_id = payload.get("sub")
         tenant_id = payload.get("tenant_id")
         role = payload.get("role")
@@ -39,8 +34,7 @@ async def get_current_user(
 
         if not user_id or not tenant_id:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, 
-                detail="Invalid token payload"
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload"
             )
 
         return CurrentUser(
@@ -65,10 +59,12 @@ async def get_current_user(
 
 def require_role(*roles: str):
     """Factory: returns a dependency that enforces one of the given roles."""
+
     async def _check(user: Annotated[CurrentUser, Depends(get_current_user)]) -> CurrentUser:
         if user.role not in roles:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role")
         return user
+
     return _check
 
 

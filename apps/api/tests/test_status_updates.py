@@ -12,6 +12,7 @@ from app.main import app  # noqa: E402
 
 client = TestClient(app, raise_server_exceptions=True)
 
+
 def get_token(email: str = "admin@ishirock.dev", password: str = "Transmuter2026!") -> str:
     resp = client.post("/auth/login", json={"email": email, "password": password})
     assert resp.status_code == 200, resp.text
@@ -41,11 +42,7 @@ def test_status_update_crud_and_submission(admin_token: str, init_id: str) -> No
     # 1. Create a Draft Status Update
     resp = client.post(
         f"/initiatives/{init_id}/status-updates",
-        json={
-            "rag_status": "amber",
-            "summary": "Project is slightly delayed.",
-            "is_draft": True
-        },
+        json={"rag_status": "amber", "summary": "Project is slightly delayed.", "is_draft": True},
         headers=auth(admin_token),
     )
     assert resp.status_code == 201
@@ -53,15 +50,11 @@ def test_status_update_crud_and_submission(admin_token: str, init_id: str) -> No
     draft_id = draft["id"]
     assert draft["is_draft"] is True
     assert draft["submitted_at"] is None
-    
+
     # 2. Try to create another draft (should fail 409 Conflict)
     resp = client.post(
         f"/initiatives/{init_id}/status-updates",
-        json={
-            "rag_status": "green",
-            "summary": "Another draft",
-            "is_draft": True
-        },
+        json={"rag_status": "green", "summary": "Another draft", "is_draft": True},
         headers=auth(admin_token),
     )
     assert resp.status_code == 409
@@ -79,11 +72,7 @@ def test_status_update_crud_and_submission(admin_token: str, init_id: str) -> No
     # 5. Submit the Draft
     resp = client.put(
         f"/initiatives/{init_id}/status-updates/{draft_id}",
-        json={
-            "rag_status": "green",
-            "summary": "Project is back on track.",
-            "is_draft": False
-        },
+        json={"rag_status": "green", "summary": "Project is back on track.", "is_draft": False},
         headers=auth(admin_token),
     )
     assert resp.status_code == 200
@@ -106,11 +95,7 @@ def test_status_update_crud_and_submission(admin_token: str, init_id: str) -> No
     # 8. Create a new update directly as submitted
     resp = client.post(
         f"/initiatives/{init_id}/status-updates",
-        json={
-            "rag_status": "green",
-            "summary": "Everything is still fine.",
-            "is_draft": False
-        },
+        json={"rag_status": "green", "summary": "Everything is still fine.", "is_draft": False},
         headers=auth(admin_token),
     )
     assert resp.status_code == 201

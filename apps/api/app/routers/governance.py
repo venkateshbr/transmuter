@@ -29,9 +29,7 @@ router = APIRouter(tags=["governance"])
 def _svc(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> GovernanceService:
-    return GovernanceService(
-        get_supabase_admin(), current_user.tenant_id, current_user.id
-    )
+    return GovernanceService(get_supabase_admin(), current_user.tenant_id, current_user.id)
 
 
 @router.get(

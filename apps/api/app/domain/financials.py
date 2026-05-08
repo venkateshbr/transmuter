@@ -19,8 +19,10 @@ FinancialScenario = Literal["base", "high", "actual"]
 
 # ── Financial entries (revenue uplift, gross margin per quarter) ──────────────
 
+
 class FinancialEntryRow(BaseModel):
     """Single quarter/month/year row from the financial_entries table."""
+
     year: int
     quarter: int | None = None  # None = full-year aggregate
     month: int | None = None  # 1-12 for monthly granularity
@@ -52,6 +54,7 @@ class FinancialEntryRow(BaseModel):
 
 class FinancialEntryUpdate(BaseModel):
     """Upsert payload for a single quarter or month."""
+
     year: int = Field(..., ge=2020, le=2040)
     quarter: Quarter | None = None
     month: int | None = Field(None, ge=1, le=12)
@@ -83,12 +86,14 @@ class FinancialEntryUpdate(BaseModel):
 
 class FinancialGridUpdate(BaseModel):
     """Batch upsert for the entire financial grid."""
+
     entries: list[FinancialEntryUpdate]
     cost_lines: list[CostLineCreate] | None = None
 
 
 class FinancialGridResponse(BaseModel):
     """Full financial grid for an initiative."""
+
     initiative_id: str
     entries: list[FinancialEntryRow]
     summary: FinancialSummary
@@ -99,6 +104,7 @@ class FinancialSummary(BaseModel):
 
     Net Value = GM Uplift − Recurring Costs (one-off costs shown separately).
     """
+
     # Revenue uplift
     revenue_uplift_plan_base: str = "0"
     revenue_uplift_plan_high: str = "0"
@@ -139,6 +145,7 @@ FinancialGridResponse.model_rebuild()
 
 # ── Cost lines ────────────────────────────────────────────────────────────────
 
+
 class CostLineCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=300)
     year: int = Field(..., ge=2020, le=2040)
@@ -178,8 +185,10 @@ class CostLineListResponse(BaseModel):
 
 # ── Value Bridge ──────────────────────────────────────────────────────────────
 
+
 class ValueBridgeCase(BaseModel):
     """Single row: base, high, or actual."""
+
     revenue_uplift: str = "0"
     gross_margin: str = "0"
     gm_uplift: str = "0"
@@ -191,6 +200,7 @@ class ValueBridgeCase(BaseModel):
 
 class ValueBridgeResponse(BaseModel):
     """Three-column Value Bridge: Benefits / Costs / Net."""
+
     initiative_id: str | None = None  # None for portfolio-level
     base_case: ValueBridgeCase
     high_case: ValueBridgeCase

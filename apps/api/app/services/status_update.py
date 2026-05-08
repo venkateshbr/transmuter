@@ -15,8 +15,8 @@ from app.domain.status_updates import (
     StatusComplianceItem,
     StatusComplianceResponse,
     StatusComplianceSummary,
-    StatusUpdateDraftSuggestion,
     StatusUpdateCreate,
+    StatusUpdateDraftSuggestion,
     StatusUpdateItem,
     StatusUpdateListResponse,
     StatusUpdatePatch,
@@ -51,9 +51,7 @@ class StatusUpdateService:
 
     # ── CRUD ─────────────────────────────────────────────────────────
 
-    def create_update(
-        self, initiative_id: str, data: StatusUpdateCreate
-    ) -> StatusUpdateItem:
+    def create_update(self, initiative_id: str, data: StatusUpdateCreate) -> StatusUpdateItem:
         # Business logic: Cannot have more than one draft per initiative
         if data.is_draft:
             existing_draft = self._repo.get_draft(initiative_id)
@@ -74,6 +72,7 @@ class StatusUpdateService:
         # Transitioning from draft to submitted
         if existing.get("is_draft") and patch.get("is_draft") is False:
             from datetime import datetime
+
             patch["submitted_at"] = datetime.now(UTC).isoformat()
 
         row = self._repo.update(update_id, patch)
@@ -116,9 +115,7 @@ class StatusUpdateService:
         risks = row.get("risks") or []
         kpis = row.get("kpis") or []
         open_risks = [item for item in risks if item.get("status") != "closed"]
-        delayed_milestones = [
-            item for item in milestones if item.get("status") == "overdue"
-        ]
+        delayed_milestones = [item for item in milestones if item.get("status") == "overdue"]
 
         rag_status = row.get("rag_status") or "green"
         if delayed_milestones or any(item.get("impact") == "high" for item in open_risks):
@@ -160,31 +157,32 @@ class StatusUpdateService:
     def get_compliance_stats(self) -> StatusComplianceResponse:
         rows = self._repo.list_compliance()
         from datetime import UTC, datetime
+
         now = datetime.now(UTC)
         nudge_counts = self._repo.list_nudge_counts()
-        
+
         on_time = 0
         overdue = 0
         nuclear = 0
-        
+
         compliance_list: list[StatusComplianceItem] = []
-        
+
         for row in rows:
             updates = row.get("status_updates", [])
             # Sort by submitted_at
             submitted_updates = [u for u in updates if u.get("submitted_at")]
             submitted_updates.sort(key=lambda x: x["submitted_at"], reverse=True)
-            
+
             last_update = submitted_updates[0] if submitted_updates else None
             last_date_str = last_update["submitted_at"] if last_update else None
-            
+
             days_since = 999
             status = "nuclear"
-            
+
             if last_date_str:
-                last_date = datetime.fromisoformat(last_date_str.replace('Z', '+00:00'))
+                last_date = datetime.fromisoformat(last_date_str.replace("Z", "+00:00"))
                 days_since = (now - last_date).days
-                
+
                 if days_since <= 7:
                     status = "on_time"
                     on_time += 1
@@ -197,7 +195,7 @@ class StatusUpdateService:
             else:
                 status = "nuclear"
                 nuclear += 1
-            
+
             compliance_list.append(
                 StatusComplianceItem(
                     initiative_id=row["id"],
@@ -210,7 +208,7 @@ class StatusUpdateService:
                     nudge_count=nudge_counts.get(row["id"], 0),
                 )
             )
-            
+
         return StatusComplianceResponse(
             summary=StatusComplianceSummary(
                 total=len(rows),
@@ -222,7 +220,9 @@ class StatusUpdateService:
         )
 
     def nudge_owner(
-        self, initiative_id: str, data: NudgeCreate | None = None,
+        self,
+        initiative_id: str,
+        data: NudgeCreate | None = None,
     ) -> NudgeResponse:
         """Triggers a nudge for the initiative owner."""
         channel = (data or NudgeCreate()).channel
@@ -293,10 +293,7 @@ class StatusUpdateService:
             initiative_id=row["initiative_id"],
             initiative_name=initiative_name,
             author_id=row["author_id"],
-            author_name=(
-                author.get("display_name")
-                if isinstance(author, dict) else None
-            ),
+            author_name=(author.get("display_name") if isinstance(author, dict) else None),
             rag_status=row["rag_status"],
             summary=row["summary"],
             achievements=row.get("achievements"),

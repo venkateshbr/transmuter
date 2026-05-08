@@ -19,7 +19,8 @@ def _svc(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> MilestoneService:
     return MilestoneService(
-        get_supabase_admin(), current_user.tenant_id,
+        get_supabase_admin(),
+        current_user.tenant_id,
     )
 
 

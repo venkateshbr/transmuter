@@ -17,7 +17,6 @@ from fastapi import HTTPException, status
 
 from app.domain.financials import CostLineCreate, FinancialEntryUpdate, FinancialGridUpdate
 
-
 ENTRY_COLUMNS = [
     "year",
     "quarter",
@@ -62,10 +61,16 @@ _NS = {"main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 _REL_NS = {"rel": "http://schemas.openxmlformats.org/package/2006/relationships"}
 
 
-def build_financial_workbook(entries: list[dict[str, Any]], cost_lines: list[dict[str, Any]]) -> bytes:
+def build_financial_workbook(
+    entries: list[dict[str, Any]], cost_lines: list[dict[str, Any]]
+) -> bytes:
     """Build a two-sheet XLSX workbook as bytes."""
-    entry_rows = [ENTRY_COLUMNS] + [[_cell_value(row.get(col)) for col in ENTRY_COLUMNS] for row in entries]
-    cost_rows = [COST_COLUMNS] + [[_cell_value(row.get(col)) for col in COST_COLUMNS] for row in cost_lines]
+    entry_rows = [ENTRY_COLUMNS] + [
+        [_cell_value(row.get(col)) for col in ENTRY_COLUMNS] for row in entries
+    ]
+    cost_rows = [COST_COLUMNS] + [
+        [_cell_value(row.get(col)) for col in COST_COLUMNS] for row in cost_lines
+    ]
 
     output = BytesIO()
     with ZipFile(output, "w", compression=ZIP_DEFLATED) as zf:
@@ -158,7 +163,9 @@ def _cost_from_row(row: dict[str, str]) -> CostLineCreate:
 
 def _dict_rows(rows: list[list[str]], expected_headers: list[str]) -> Iterable[dict[str, str]]:
     if not rows:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Workbook sheet is empty")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Workbook sheet is empty"
+        )
     headers = [h.strip() for h in rows[0]]
     missing = [header for header in expected_headers if header not in headers]
     if missing:
@@ -167,7 +174,12 @@ def _dict_rows(rows: list[list[str]], expected_headers: list[str]) -> Iterable[d
             detail=f"Workbook sheet is missing columns: {', '.join(missing)}",
         )
     for values in rows[1:]:
-        row = {header: values[headers.index(header)].strip() if headers.index(header) < len(values) else "" for header in expected_headers}
+        row = {
+            header: values[headers.index(header)].strip()
+            if headers.index(header) < len(values)
+            else ""
+            for header in expected_headers
+        }
         if any(row.values()):
             yield row
 
@@ -183,7 +195,9 @@ def _int(row: dict[str, str], key: str) -> int:
     try:
         return int(Decimal(_required(row, key)))
     except (InvalidOperation, ValueError) as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid integer: {key}") from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid integer: {key}"
+        ) from exc
 
 
 def _int_or_none(row: dict[str, str], key: str) -> int | None:
@@ -193,7 +207,9 @@ def _int_or_none(row: dict[str, str], key: str) -> int | None:
     try:
         return int(Decimal(value))
     except (InvalidOperation, ValueError) as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid integer: {key}") from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid integer: {key}"
+        ) from exc
 
 
 def _decimal(row: dict[str, str], key: str, default: str) -> Decimal:
@@ -201,7 +217,9 @@ def _decimal(row: dict[str, str], key: str, default: str) -> Decimal:
     try:
         return Decimal(value)
     except InvalidOperation as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid decimal: {key}") from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid decimal: {key}"
+        ) from exc
 
 
 def _decimal_or_none(row: dict[str, str], key: str) -> Decimal | None:
@@ -211,7 +229,9 @@ def _decimal_or_none(row: dict[str, str], key: str) -> Decimal | None:
     try:
         return Decimal(value)
     except InvalidOperation as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid decimal: {key}") from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid decimal: {key}"
+        ) from exc
 
 
 def _bool(value: str) -> bool:
@@ -292,7 +312,7 @@ def _sheet(rows: list[list[str]]) -> str:
     return (
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-        f'<sheetData>{"".join(row_xml)}</sheetData></worksheet>'
+        f"<sheetData>{''.join(row_xml)}</sheetData></worksheet>"
     )
 
 
@@ -306,10 +326,7 @@ def _column_name(index: int) -> str:
 
 def _xml(value: str) -> str:
     return (
-        value.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
+        value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
     )
 
 

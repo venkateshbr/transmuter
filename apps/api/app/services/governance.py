@@ -22,6 +22,7 @@ from app.domain.governance import (
 )
 from app.repositories.governance import GovernanceRepository
 
+
 def _find_gates_path() -> Path:
     for parent in Path(__file__).resolve().parents:
         candidate = parent / "domain_packs/transmuter/gates.yaml"
@@ -42,14 +43,10 @@ class GovernanceService:
     def get_status(self, initiative_id: str) -> GovernanceStatusResponse:
         gates = self._get_gates(initiative_id)
         submissions = [self._to_submission(s) for s in self._repo.list_submissions(initiative_id)]
-        
+
         active = next((s for s in submissions if s.decision == "pending"), None)
-        
-        return GovernanceStatusResponse(
-            gates=gates,
-            active_submission=active,
-            history=submissions
-        )
+
+        return GovernanceStatusResponse(gates=gates, active_submission=active, history=submissions)
 
     def list_submissions(self) -> list[GateSubmissionItem]:
         rows = self._repo.list_all_submissions()
@@ -81,7 +78,8 @@ class GovernanceService:
         if initiative_id:
             active_submission = next(
                 (
-                    row for row in self._repo.list_submissions(initiative_id)
+                    row
+                    for row in self._repo.list_submissions(initiative_id)
                     if row["gate_number"] == gate_number and row["decision"] == "pending"
                 ),
                 None,
@@ -126,7 +124,7 @@ class GovernanceService:
         if any(s["gate_number"] == gate_number and s["decision"] == "pending" for s in history):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Gate {gate_number} already has a pending submission."
+                detail=f"Gate {gate_number} already has a pending submission.",
             )
 
         if not any(item.get("ticked") for item in data.criteria_snapshot):
@@ -159,7 +157,7 @@ class GovernanceService:
         payload["decided_at"] = datetime.now(UTC).isoformat()
 
         updated = self._repo.update_submission(submission_id, payload)
-        
+
         # Trigger stage transition
         if data.decision == "approved":
             gate = self._get_gate(sub["initiative_id"], sub["gate_number"])
@@ -245,7 +243,7 @@ class GovernanceService:
     def _to_submission(self, row: dict[str, Any]) -> GateSubmissionItem:
         submitter = row.get("submitter") or {}
         decider = row.get("decider") or {}
-        
+
         return GateSubmissionItem(
             id=row["id"],
             initiative_id=row["initiative_id"],
@@ -260,5 +258,5 @@ class GovernanceService:
             decided_by_name=decider.get("display_name") if isinstance(decider, dict) else None,
             decided_at=row.get("decided_at"),
             commentary=row.get("commentary"),
-            criteria_snapshot=row.get("criteria_snapshot")
+            criteria_snapshot=row.get("criteria_snapshot"),
         )

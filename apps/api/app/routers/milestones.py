@@ -36,11 +36,13 @@ def _svc(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> MilestoneService:
     return MilestoneService(
-        get_supabase_admin(), current_user.tenant_id,
+        get_supabase_admin(),
+        current_user.tenant_id,
     )
 
 
 # ── Milestone CRUD ───────────────────────────────────────────────────
+
 
 @router.get(
     "/milestones",
@@ -134,6 +136,7 @@ async def delete_milestone(
 
 # ── Checklist ────────────────────────────────────────────────────────
 
+
 @router.post(
     "/milestones/{milestone_id}/checklist",
     response_model=ChecklistItem,
@@ -162,7 +165,9 @@ async def toggle_checklist(
 ) -> ChecklistItem:
     assert_can_manage_initiatives(current_user)
     return svc.toggle_checklist(
-        milestone_id, item_id, body.completed,
+        milestone_id,
+        item_id,
+        body.completed,
     )
 
 
@@ -181,6 +186,7 @@ async def delete_checklist_item(
 
 
 # ── Dependencies ─────────────────────────────────────────────────────
+
 
 @router.post(
     "/milestones/{milestone_id}/dependencies",
@@ -212,6 +218,7 @@ async def delete_dependency(
 
 
 # ── Pressure ─────────────────────────────────────────────────────────
+
 
 @router.get(
     "/milestones/{milestone_id}/pressure",

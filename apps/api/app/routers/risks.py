@@ -29,11 +29,13 @@ def _svc(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> RiskService:
     return RiskService(
-        get_supabase_admin(), current_user.tenant_id,
+        get_supabase_admin(),
+        current_user.tenant_id,
     )
 
 
 # ── Portfolio Risks ──────────────────────────────────────────────────
+
 
 @router.get(
     "/portfolio/risks",
@@ -63,6 +65,7 @@ async def get_risk_heatmap(
 
 
 # ── Initiative Risks ─────────────────────────────────────────────────
+
 
 @router.get(
     "/initiatives/{initiative_id}/risks",

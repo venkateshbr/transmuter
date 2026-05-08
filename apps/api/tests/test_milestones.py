@@ -14,6 +14,7 @@ client = TestClient(app, raise_server_exceptions=True)
 
 # ── Auth helper ───────────────────────────────────────────────────────────────
 
+
 def get_token(email: str = "admin@ishirock.dev", password: str = "Transmuter2026!") -> str:
     resp = client.post("/auth/login", json={"email": email, "password": password})
     assert resp.status_code == 200, resp.text
@@ -42,6 +43,7 @@ def init_id(admin_token: str) -> str:
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
+
 def test_milestone_crud_and_pressure_recalc(admin_token: str, init_id: str) -> None:
     # End-to-end: save milestone -> pressure recalculated -> stored value correct
     resp = client.post(
@@ -49,7 +51,7 @@ def test_milestone_crud_and_pressure_recalc(admin_token: str, init_id: str) -> N
         json={
             "name": "Test Milestone",
             "status": "not_started",
-            "planned_end": "2030-01-01"  # future -> slack penalty 0
+            "planned_end": "2030-01-01",  # future -> slack penalty 0
         },
         headers=auth(admin_token),
     )
@@ -95,7 +97,7 @@ def test_circular_dependency(admin_token: str, init_id: str) -> None:
     # Attempt to link B -> A (A depends on B)
     resp = client.post(
         f"/milestones/{msA['id']}/dependencies",
-        json={"upstream_milestone_id": msB['id']},
+        json={"upstream_milestone_id": msB["id"]},
         headers=auth(admin_token),
     )
     assert resp.status_code == 400
@@ -137,7 +139,7 @@ def test_slack_penalty_recalc(admin_token: str, init_id: str) -> None:
         f"/initiatives/{init_id}/milestones",
         json={
             "name": "Overdue MS",
-            "planned_end": "2020-01-01" # Past date
+            "planned_end": "2020-01-01",  # Past date
         },
         headers=auth(admin_token),
     ).json()

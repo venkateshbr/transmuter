@@ -12,6 +12,7 @@ from app.main import app  # noqa: E402
 
 client = TestClient(app, raise_server_exceptions=True)
 
+
 def get_token(email: str = "admin@ishirock.dev", password: str = "Transmuter2026!") -> str:
     resp = client.post("/auth/login", json={"email": email, "password": password})
     assert resp.status_code == 200, resp.text
@@ -45,7 +46,7 @@ def test_risk_crud_and_auto_rating(admin_token: str, init_id: str) -> None:
             "description": "Server failure during peak",
             "type": "technology",
             "impact": "high",
-            "likelihood": "high"
+            "likelihood": "high",
         },
         headers=auth(admin_token),
     )
@@ -90,11 +91,11 @@ def test_risk_heatmap_and_portfolio_list(admin_token: str, init_id: str) -> None
             "description": "Vendor bankruptcy",
             "type": "financial",
             "impact": "high",
-            "likelihood": "medium" # HxM -> High
+            "likelihood": "medium",  # HxM -> High
         },
         headers=auth(admin_token),
     )
-    
+
     # Portfolio List filters
     resp = client.get("/portfolio/risks?rating=high", headers=auth(admin_token))
     assert resp.status_code == 200
@@ -103,19 +104,18 @@ def test_risk_heatmap_and_portfolio_list(admin_token: str, init_id: str) -> None
     assert data["total"] >= 1
     for r in data["items"]:
         assert r["rating"] == "high"
-        
+
     # Heatmap
     resp = client.get("/portfolio/risks/heatmap", headers=auth(admin_token))
     assert resp.status_code == 200
     heatmap = resp.json()
-    
+
     assert "cells" in heatmap
     assert "total_open_risks" in heatmap
-    assert len(heatmap["cells"]) == 9 # 3x3 matrix
-    
+    assert len(heatmap["cells"]) == 9  # 3x3 matrix
+
     # Check that HxM has count >= 1
     h_m_cell = next(
-        c for c in heatmap["cells"]
-        if c["impact"] == "high" and c["likelihood"] == "medium"
+        c for c in heatmap["cells"] if c["impact"] == "high" and c["likelihood"] == "medium"
     )
     assert h_m_cell["count"] >= 1

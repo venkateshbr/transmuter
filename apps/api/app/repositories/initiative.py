@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
+from datetime import UTC
 from uuid import UUID
 
 from supabase import Client
@@ -103,12 +104,24 @@ class InitiativeRepository:
 
         # Resolve owner display_name (maybe_single returns None directly on 0 rows)
         if row.get("owner_id"):
-            u = self._c.table("users").select("display_name").eq("id", row["owner_id"]).maybe_single().execute()
+            u = (
+                self._c.table("users")
+                .select("display_name")
+                .eq("id", row["owner_id"])
+                .maybe_single()
+                .execute()
+            )
             row["_owner_name"] = u.data["display_name"] if (u and u.data) else None
 
         # Resolve group_owner display_name
         if row.get("group_owner_id"):
-            g = self._c.table("users").select("display_name").eq("id", row["group_owner_id"]).maybe_single().execute()
+            g = (
+                self._c.table("users")
+                .select("display_name")
+                .eq("id", row["group_owner_id"])
+                .maybe_single()
+                .execute()
+            )
             row["_group_owner_name"] = g.data["display_name"] if (g and g.data) else None
 
         return row
@@ -216,27 +229,41 @@ class InitiativeRepository:
         return bool(result.data)
 
     def archive(self, initiative_id: str) -> dict:  # type: ignore[type-arg]
-        from datetime import datetime, timezone
-        return self.update(initiative_id, {"archived_at": datetime.now(timezone.utc).isoformat()})
+        from datetime import datetime
+
+        return self.update(initiative_id, {"archived_at": datetime.now(UTC).isoformat()})
 
     def delete(self, initiative_id: str) -> None:
-        self._c.table("initiatives").delete().eq("tenant_id", self._tid).eq("id", initiative_id).execute()
+        self._c.table("initiatives").delete().eq("tenant_id", self._tid).eq(
+            "id", initiative_id
+        ).execute()
 
     def export_csv(self, owner_user_id: str | None = None) -> str:
         """Return CSV string of all non-archived initiatives."""
         rows, _ = self.list(page_size=10000, include_archived=False, owner_user_id=owner_user_id)
         output = io.StringIO()
         fieldnames = [
-            "initiative_code", "name", "stage", "rag_status", "priority",
-            "workstream", "country", "type", "tag",
-            "planned_start", "planned_end", "pressure_score",
+            "initiative_code",
+            "name",
+            "stage",
+            "rag_status",
+            "priority",
+            "workstream",
+            "country",
+            "type",
+            "tag",
+            "planned_start",
+            "planned_end",
+            "pressure_score",
         ]
         writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
         writer.writeheader()
         for row in rows:
             ws = row.get("workstreams") or {}
-            writer.writerow({
-                **row,
-                "workstream": ws.get("name", "") if isinstance(ws, dict) else "",
-            })
+            writer.writerow(
+                {
+                    **row,
+                    "workstream": ws.get("name", "") if isinstance(ws, dict) else "",
+                }
+            )
         return output.getvalue()

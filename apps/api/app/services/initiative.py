@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
 from supabase import Client
 
+from app.core.auth import CurrentUser
+from app.core.rbac import can_view_all_initiatives
+from app.domain.financials import FinancialGridUpdate, FinancialSummary
+from app.domain.initiative_intake import (
+    InitiativeIntakeCreate,
+    InitiativeWorkbookPreview,
+)
 from app.domain.initiatives import (
     InitiativeCounts,
     InitiativeCreate,
@@ -20,13 +27,6 @@ from app.domain.initiatives import (
     InitiativeUpdate,
     PressureBreakdown,
 )
-from app.domain.financials import FinancialGridUpdate, FinancialSummary
-from app.core.auth import CurrentUser
-from app.core.rbac import can_view_all_initiatives
-from app.domain.initiative_intake import (
-    InitiativeIntakeCreate,
-    InitiativeWorkbookPreview,
-)
 from app.domain.kpis import KPICreate
 from app.domain.milestones import MilestoneCreate
 from app.domain.risks import RiskCreate
@@ -36,7 +36,6 @@ from app.repositories.initiative import InitiativeRepository
 from app.repositories.people import PeopleRepository
 from app.repositories.status_update import StatusUpdateRepository
 from app.repositories.workstream import WorkstreamRepository
-from app.services.kpi import KPIService
 from app.services.financial import FinancialService
 from app.services.initiative_workbook import (
     build_initiative_export,
@@ -46,6 +45,7 @@ from app.services.initiative_workbook import (
     parse_workbook_overview_metadata,
     parse_workbook_reference,
 )
+from app.services.kpi import KPIService
 from app.services.milestone import MilestoneService
 from app.services.risk import RiskService
 from app.services.status_update import StatusUpdateService
@@ -88,10 +88,7 @@ class InitiativeService:
             page_size=page_size,
             owner_user_id=owner_user_id,
         )
-        items = [
-            self._to_list_item(r, self._fin.get_financial_summary(str(r["id"])))
-            for r in rows
-        ]
+        items = [self._to_list_item(r, self._fin.get_financial_summary(str(r["id"]))) for r in rows]
         return InitiativeListResponse(items=items, total=total, page=page, page_size=page_size)
 
     def get_initiative(
@@ -101,16 +98,20 @@ class InitiativeService:
     ) -> InitiativeDetail:
         row = self._repo.get(initiative_id)
         if not row:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Initiative not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Initiative not found"
+            )
         if current_user and not can_view_all_initiatives(current_user.role):
             user_id = str(current_user.id)
             if row.get("owner_id") != user_id and row.get("group_owner_id") != user_id:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Initiative not found")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, detail="Initiative not found"
+                )
         counts = self._repo.get_counts(initiative_id)
         fin_summary = self._fin.get_financial_summary(initiative_id)
         team_members = self._get_team_members(initiative_id)
         kpi_indicators = self._get_kpi_indicators(initiative_id)
-        
+
         # Calculate dynamic pressure
         pressure_score, pressure_breakdown = self._calculate_pressure(row, counts, fin_summary)
         row["pressure_score"] = pressure_score
@@ -123,28 +124,32 @@ class InitiativeService:
         for _ in range(5):
             code = self._repo.next_code()
             try:
-                row = self._repo.create({
-                    "id": str(uuid4()),
-                    "tenant_id": str(self._tenant_id),
-                    "initiative_code": code,
-                    "name": data.name,
-                    "workstream_id": str(data.workstream_id) if data.workstream_id else None,
-                    "owner_id": str(data.owner_id) if data.owner_id else None,
-                    "group_owner_id": str(data.group_owner_id) if data.group_owner_id else None,
-                    "type": data.type,
-                    "impact_type": data.impact_type,
-                    "theme": data.theme,
-                    "country": data.country,
-                    "tag": data.tag,
-                    "priority": data.priority,
-                    "summary": data.summary,
-                    "value_logic": data.value_logic,
-                    "dependencies_text": data.dependencies_text,
-                    "planned_start": data.planned_start.isoformat() if data.planned_start else None,
-                    "planned_end": data.planned_end.isoformat() if data.planned_end else None,
-                    "rag_status": "green",
-                    "stage": "scoping",
-                })
+                row = self._repo.create(
+                    {
+                        "id": str(uuid4()),
+                        "tenant_id": str(self._tenant_id),
+                        "initiative_code": code,
+                        "name": data.name,
+                        "workstream_id": str(data.workstream_id) if data.workstream_id else None,
+                        "owner_id": str(data.owner_id) if data.owner_id else None,
+                        "group_owner_id": str(data.group_owner_id) if data.group_owner_id else None,
+                        "type": data.type,
+                        "impact_type": data.impact_type,
+                        "theme": data.theme,
+                        "country": data.country,
+                        "tag": data.tag,
+                        "priority": data.priority,
+                        "summary": data.summary,
+                        "value_logic": data.value_logic,
+                        "dependencies_text": data.dependencies_text,
+                        "planned_start": data.planned_start.isoformat()
+                        if data.planned_start
+                        else None,
+                        "planned_end": data.planned_end.isoformat() if data.planned_end else None,
+                        "rag_status": "green",
+                        "stage": "scoping",
+                    }
+                )
                 break
             except Exception as exc:
                 if "unique" in str(exc).lower() and "initiative_code" in str(exc).lower():
@@ -158,7 +163,9 @@ class InitiativeService:
     def update_initiative(self, initiative_id: str, data: InitiativeUpdate) -> InitiativeDetail:
         existing = self._repo.get(initiative_id)
         if not existing:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Initiative not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Initiative not found"
+            )
         patch = {k: v for k, v in data.model_dump(exclude_unset=True).items()}
         if "stage" in patch and patch["stage"] is not None:
             self._assert_stage_transition_allowed(
@@ -174,7 +181,7 @@ class InitiativeService:
         for uuid_field in ("workstream_id", "owner_id", "group_owner_id"):
             if uuid_field in patch and patch[uuid_field] is not None:
                 patch[uuid_field] = str(patch[uuid_field])
-        patch["updated_at"] = datetime.now(timezone.utc).isoformat()
+        patch["updated_at"] = datetime.now(UTC).isoformat()
         self._repo.update(initiative_id, patch)
         return self.get_initiative(initiative_id)
 
@@ -205,7 +212,9 @@ class InitiativeService:
         kpis = KPIService(self._client, self._tenant_id).list_kpis(initiative_id)
         risks = RiskService(self._client, self._tenant_id).list_risks(initiative_id)
         milestones = MilestoneService(self._client, self._tenant_id).list_milestones(initiative_id)
-        status_updates = StatusUpdateRepository(self._client, self._tenant_id).list_history(initiative_id)
+        status_updates = StatusUpdateRepository(self._client, self._tenant_id).list_history(
+            initiative_id
+        )
         meeting_notes = self._list_meeting_notes(initiative_id)
 
         return build_initiative_export(
@@ -319,7 +328,11 @@ class InitiativeService:
         created = self.create_initiative(overview, created_by)
         initiative_id = str(created.id)
         if parsed.financial_entries or parsed.cost_lines:
-            writer = self._fin.replace_financial_grid if parsed.metadata.get("format") == "alchemist" else self._fin.update_financial_grid
+            writer = (
+                self._fin.replace_financial_grid
+                if parsed.metadata.get("format") == "alchemist"
+                else self._fin.update_financial_grid
+            )
             writer(
                 initiative_id,
                 FinancialGridUpdate(
@@ -378,7 +391,11 @@ class InitiativeService:
         self.update_initiative(initiative_id, InitiativeUpdate(**overview_patch))
 
         if parsed.financial_entries or parsed.cost_lines:
-            writer = self._fin.replace_financial_grid if parsed.metadata.get("format") == "alchemist" else self._fin.update_financial_grid
+            writer = (
+                self._fin.replace_financial_grid
+                if parsed.metadata.get("format") == "alchemist"
+                else self._fin.update_financial_grid
+            )
             writer(
                 initiative_id,
                 FinancialGridUpdate(
@@ -424,7 +441,9 @@ class InitiativeService:
         if not name:
             return None
         repo = BusinessUnitRepository(self._client, self._tenant_id)
-        existing = next((row for row in repo.list() if row.get("name", "").lower() == name.lower()), None)
+        existing = next(
+            (row for row in repo.list() if row.get("name", "").lower() == name.lower()), None
+        )
         if existing:
             return existing["id"]
         created = repo.create({"name": name, "code": self._business_unit_code(name)})
@@ -439,7 +458,8 @@ class InitiativeService:
         if business_unit_id:
             scoped = next(
                 (
-                    row for row in workstreams
+                    row
+                    for row in workstreams
                     if row.get("name", "").lower() == name.lower()
                     and row.get("business_unit_id") == business_unit_id
                 ),
@@ -453,7 +473,9 @@ class InitiativeService:
                     return created["id"]
             except Exception:
                 pass
-        existing = next((row for row in workstreams if row.get("name", "").lower() == name.lower()), None)
+        existing = next(
+            (row for row in workstreams if row.get("name", "").lower() == name.lower()), None
+        )
         return existing["id"] if existing else None
 
     def _resolve_user_id(self, display_name: str | None) -> str | None:
@@ -461,7 +483,10 @@ class InitiativeService:
         if not name:
             return None
         users = PeopleRepository(self._client, self._tenant_id).list_users(status="active")
-        exact = next((row for row in users if str(row.get("display_name") or "").strip().lower() == name), None)
+        exact = next(
+            (row for row in users if str(row.get("display_name") or "").strip().lower() == name),
+            None,
+        )
         if exact:
             return exact["id"]
         tokens = {part for part in name.split() if part}
@@ -469,7 +494,8 @@ class InitiativeService:
             return None
         return next(
             (
-                row["id"] for row in users
+                row["id"]
+                for row in users
                 if tokens.issubset(set(str(row.get("display_name") or "").strip().lower().split()))
             ),
             None,
@@ -483,7 +509,9 @@ class InitiativeService:
     ) -> None:
         if not rows:
             return
-        existing = StatusUpdateService(self._client, self._tenant_id, author_id).list_history(initiative_id)
+        existing = StatusUpdateService(self._client, self._tenant_id, author_id).list_history(
+            initiative_id
+        )
         existing_summaries = {item.summary for item in existing.items}
         service = StatusUpdateService(self._client, self._tenant_id, author_id)
         for row in rows:
@@ -493,7 +521,7 @@ class InitiativeService:
 
     def _business_unit_code(self, name: str) -> str:
         code = "".join(ch for ch in name.upper() if ch.isalnum())
-        return (code[:8] or "BU")
+        return code[:8] or "BU"
 
     def _list_meeting_notes(self, initiative_id: str) -> list[dict]:  # type: ignore[type-arg]
         links = (
@@ -539,7 +567,9 @@ class InitiativeService:
         ]
 
     def create_from_intake(
-        self, data: InitiativeIntakeCreate, created_by: UUID,
+        self,
+        data: InitiativeIntakeCreate,
+        created_by: UUID,
     ) -> InitiativeDetail:
         created = self.create_initiative(data.initiative, created_by)
         initiative_id = str(created.id)
@@ -547,12 +577,8 @@ class InitiativeService:
         if not suggestions:
             return created
 
-        accepted_entries = [
-            item for item in suggestions.financial_entries if item.accepted
-        ]
-        accepted_costs = [
-            item for item in suggestions.cost_lines if item.accepted
-        ]
+        accepted_entries = [item for item in suggestions.financial_entries if item.accepted]
+        accepted_costs = [item for item in suggestions.cost_lines if item.accepted]
         if accepted_entries or accepted_costs:
             self._fin.update_financial_grid(
                 initiative_id,
@@ -578,7 +604,9 @@ class InitiativeService:
 
     def _assert_exists(self, initiative_id: str) -> None:
         if not self._repo.get(initiative_id):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Initiative not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Initiative not found"
+            )
 
     def _assert_stage_transition_allowed(
         self,
@@ -617,8 +645,14 @@ class InitiativeService:
     @staticmethod
     def _as_risk_create(data: object) -> RiskCreate:
         fields = {
-            "description", "type", "impact", "likelihood",
-            "status", "owner_id", "mitigation", "escalated",
+            "description",
+            "type",
+            "impact",
+            "likelihood",
+            "status",
+            "owner_id",
+            "mitigation",
+            "escalated",
         }
         raw = data.model_dump(include=fields) if hasattr(data, "model_dump") else data
         return RiskCreate.model_validate(raw)
@@ -626,8 +660,12 @@ class InitiativeService:
     @staticmethod
     def _as_milestone_create(data: object) -> MilestoneCreate:
         fields = {
-            "name", "description", "owner_id", "priority",
-            "planned_start", "planned_end",
+            "name",
+            "description",
+            "owner_id",
+            "priority",
+            "planned_start",
+            "planned_end",
         }
         raw = data.model_dump(include=fields) if hasattr(data, "model_dump") else data
         return MilestoneCreate.model_validate(raw)
@@ -669,17 +707,25 @@ class InitiativeService:
             planned_value_base=cls._net_value(
                 fin.gm_uplift_plan_base if fin else None,
                 fin.costs_plan if fin else None,
-            ) if fin else None,
+            )
+            if fin
+            else None,
             planned_value_high=cls._net_value(
                 fin.gm_uplift_plan_high if fin else None,
                 fin.costs_plan if fin else None,
-            ) if fin else None,
+            )
+            if fin
+            else None,
             actual_value=cls._net_value(
                 fin.gm_uplift_actual if fin else None,
                 fin.costs_actual if fin else None,
                 require_benefit=True,
-            ) if fin else None,
-            pressure_score=str(row["pressure_score"]) if row.get("pressure_score") is not None else None,
+            )
+            if fin
+            else None,
+            pressure_score=str(row["pressure_score"])
+            if row.get("pressure_score") is not None
+            else None,
             archived_at=row.get("archived_at"),
         )
 
@@ -722,7 +768,9 @@ class InitiativeService:
             actual_start=row.get("actual_start"),
             planned_end=row.get("planned_end"),
             actual_end=row.get("actual_end"),
-            pressure_score=str(row["pressure_score"]) if row.get("pressure_score") is not None else None,
+            pressure_score=str(row["pressure_score"])
+            if row.get("pressure_score") is not None
+            else None,
             pressure_breakdown=PressureBreakdown(**sub) if sub else None,
             counts=InitiativeCounts(**counts),
             team_members=team_members or [],
@@ -738,11 +786,11 @@ class InitiativeService:
     ) -> tuple[Decimal, PressureBreakdown]:
         """Dynamically calculate pressure score based on various health factors."""
         from decimal import Decimal
-        
+
         # 1. Schedule Pressure (0-10)
         # Higher if close to end date or overdue
-        schedule = Decimal("2.0") # Base
-        
+        schedule = Decimal("2.0")  # Base
+
         # 2. Milestone Health (0-10)
         # Higher if overdue milestones exist
         ms_total = counts.get("milestones_total", 0)
@@ -750,7 +798,7 @@ class InitiativeService:
         ms_health = Decimal("0")
         if ms_total > 0:
             ms_health = (Decimal(str(ms_overdue)) / Decimal(str(ms_total))) * 10
-        
+
         # 3. Risk Exposure (0-10)
         # Higher if high-rating risks exist
         risks_total = counts.get("risks_open", 0)
@@ -758,7 +806,7 @@ class InitiativeService:
         risk_exp = Decimal("0")
         if risks_total > 0:
             risk_exp = (Decimal(str(risks_high)) / Decimal(str(risks_total))) * 10
-        
+
         # 4. Financial Pressure (0-10)
         # Higher if actual cost > plan or actual benefit < plan
         fin_press = Decimal("0")
@@ -777,11 +825,11 @@ class InitiativeService:
             schedule=schedule.quantize(Decimal("0.1")),
             milestone_health=ms_health.quantize(Decimal("0.1")),
             risk_exposure=risk_exp.quantize(Decimal("0.1")),
-            kpi_performance=Decimal("0"), # Placeholder
+            kpi_performance=Decimal("0"),  # Placeholder
             financial=fin_press.quantize(Decimal("0.1")),
             self_reported=self_reported.quantize(Decimal("0.1")),
         )
-        
+
         # Weighted average
         weights = {
             "schedule": Decimal("0.2"),
@@ -790,15 +838,15 @@ class InitiativeService:
             "financial": Decimal("0.3"),
             "self_reported": Decimal("0.1"),
         }
-        
+
         total_score = (
-            breakdown.schedule * weights["schedule"] +
-            breakdown.milestone_health * weights["milestone_health"] +
-            breakdown.risk_exposure * weights["risk_exposure"] +
-            breakdown.financial * weights["financial"] +
-            breakdown.self_reported * weights["self_reported"]
+            breakdown.schedule * weights["schedule"]
+            + breakdown.milestone_health * weights["milestone_health"]
+            + breakdown.risk_exposure * weights["risk_exposure"]
+            + breakdown.financial * weights["financial"]
+            + breakdown.self_reported * weights["self_reported"]
         )
-        
+
         return total_score.quantize(Decimal("0.1")), breakdown
 
     def _get_team_members(self, initiative_id: str) -> list[InitiativeTeamMember]:
@@ -826,12 +874,18 @@ class InitiativeService:
         indicators: list[InitiativeKPIIndicator] = []
         for kpi in kpis[:6]:
             kpi_entries = entries_by_kpi.get(kpi["id"], [])
-            actual_entries = [entry for entry in kpi_entries if entry.get("value_actual") is not None]
-            latest = sorted(
-                actual_entries,
-                key=lambda entry: (entry["year"], entry.get("quarter") or 5),
-                reverse=True,
-            )[0] if actual_entries else None
+            actual_entries = [
+                entry for entry in kpi_entries if entry.get("value_actual") is not None
+            ]
+            latest = (
+                sorted(
+                    actual_entries,
+                    key=lambda entry: (entry["year"], entry.get("quarter") or 5),
+                    reverse=True,
+                )[0]
+                if actual_entries
+                else None
+            )
             latest_year = latest["year"] if latest else None
 
             def total_for(rows: list[dict], key: str) -> Decimal | None:
@@ -839,7 +893,8 @@ class InitiativeService:
                 return sum(values, Decimal("0")) if values else None
 
             this_year_rows = [
-                entry for entry in actual_entries
+                entry
+                for entry in actual_entries
                 if latest_year is not None and entry["year"] == latest_year
             ]
             actual_total = total_for(actual_entries, "value_actual")
@@ -867,7 +922,8 @@ class InitiativeService:
                     health_status=health,
                     this_quarter_actual=str(latest["value_actual"]) if latest else None,
                     this_year_actual=str(total_for(this_year_rows, "value_actual"))
-                    if this_year_rows else None,
+                    if this_year_rows
+                    else None,
                     all_time_actual=str(actual_total) if actual_total is not None else None,
                 )
             )

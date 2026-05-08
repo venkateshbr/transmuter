@@ -16,7 +16,8 @@ class MilestoneRepository:
     # ── Milestones ───────────────────────────────────────────────────
 
     def list(
-        self, initiative_id: str,
+        self,
+        initiative_id: str,
     ) -> list[dict]:  # type: ignore[type-arg]
         result = (
             self._c.table("milestones")
@@ -62,9 +63,12 @@ class MilestoneRepository:
         return result.data[0]
 
     def update(
-        self, milestone_id: str, data: dict,  # type: ignore[type-arg]
+        self,
+        milestone_id: str,
+        data: dict,  # type: ignore[type-arg]
     ) -> dict:  # type: ignore[type-arg]
         from datetime import datetime
+
         data["updated_at"] = datetime.now(UTC).isoformat()
         result = (
             self._c.table("milestones")
@@ -85,7 +89,9 @@ class MilestoneRepository:
         )
 
     def get_siblings(
-        self, initiative_id: str, exclude_id: str,
+        self,
+        initiative_id: str,
+        exclude_id: str,
     ) -> list[dict]:  # type: ignore[type-arg]
         result = (
             self._c.table("milestones")
@@ -100,7 +106,8 @@ class MilestoneRepository:
     # ── Checklist ────────────────────────────────────────────────────
 
     def get_checklist(
-        self, milestone_id: str,
+        self,
+        milestone_id: str,
     ) -> list[dict]:  # type: ignore[type-arg]
         result = (
             self._c.table("milestone_checklist")
@@ -113,7 +120,8 @@ class MilestoneRepository:
         return result.data or []
 
     def checklist_stats(
-        self, milestone_id: str,
+        self,
+        milestone_id: str,
     ) -> tuple[int, int]:
         rows = self.get_checklist(milestone_id)
         total = len(rows)
@@ -121,19 +129,20 @@ class MilestoneRepository:
         return total, done
 
     def create_checklist_item(
-        self, milestone_id: str, data: dict,  # type: ignore[type-arg]
+        self,
+        milestone_id: str,
+        data: dict,  # type: ignore[type-arg]
     ) -> dict:  # type: ignore[type-arg]
         data["id"] = str(uuid4())
         data["tenant_id"] = self._tid
         data["milestone_id"] = milestone_id
-        result = (
-            self._c.table("milestone_checklist")
-            .insert(data).execute()
-        )
+        result = self._c.table("milestone_checklist").insert(data).execute()
         return result.data[0]
 
     def toggle_checklist_item(
-        self, item_id: str, completed: bool,
+        self,
+        item_id: str,
+        completed: bool,
     ) -> dict:  # type: ignore[type-arg]
         result = (
             self._c.table("milestone_checklist")
@@ -156,7 +165,8 @@ class MilestoneRepository:
     # ── Dependencies ─────────────────────────────────────────────────
 
     def get_dependencies(
-        self, milestone_id: str,
+        self,
+        milestone_id: str,
     ) -> list[dict]:  # type: ignore[type-arg]
         """Get dependencies where this milestone is downstream."""
         result = (
@@ -173,7 +183,8 @@ class MilestoneRepository:
         return result.data or []
 
     def get_downstream(
-        self, milestone_id: str,
+        self,
+        milestone_id: str,
     ) -> list[dict]:  # type: ignore[type-arg]
         """Get milestones that depend on this one (direct)."""
         dep_result = (
@@ -196,7 +207,8 @@ class MilestoneRepository:
         return ms_result.data or []
 
     def get_transitive_downstream_count(
-        self, milestone_id: str,
+        self,
+        milestone_id: str,
     ) -> int:
         """Count transitive downstream (depth > 1)."""
         visited: set[str] = set()
@@ -229,7 +241,9 @@ class MilestoneRepository:
         return max(total_reachable - len(direct_ids), 0)
 
     def create_dependency(
-        self, downstream_id: str, upstream_id: str,
+        self,
+        downstream_id: str,
+        upstream_id: str,
     ) -> dict:  # type: ignore[type-arg]
         data = {
             "id": str(uuid4()),
@@ -237,14 +251,13 @@ class MilestoneRepository:
             "upstream_milestone_id": upstream_id,
             "downstream_milestone_id": downstream_id,
         }
-        result = (
-            self._c.table("milestone_dependencies")
-            .insert(data).execute()
-        )
+        result = self._c.table("milestone_dependencies").insert(data).execute()
         return result.data[0]
 
     def would_create_cycle(
-        self, downstream_id: str, upstream_id: str,
+        self,
+        downstream_id: str,
+        upstream_id: str,
     ) -> bool:
         """Check if adding upstream→downstream creates a cycle."""
         # A cycle exists if downstream can already reach upstream

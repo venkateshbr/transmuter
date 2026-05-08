@@ -44,7 +44,7 @@ class RiskRepository:
             query = query.eq("type", type)
         if rating:
             query = query.eq("rating", rating)
-            
+
         result = query.order("created_at", desc=True).execute()
         return result.data or []
 
@@ -71,6 +71,7 @@ class RiskRepository:
 
     def update(self, risk_id: str, data: dict[str, Any]) -> dict[str, Any]:
         from datetime import datetime
+
         data["updated_at"] = datetime.now(UTC).isoformat()
         result = (
             self._c.table("risks")
@@ -84,13 +85,7 @@ class RiskRepository:
         return {}
 
     def delete(self, risk_id: str) -> None:
-        (
-            self._c.table("risks")
-            .delete()
-            .eq("tenant_id", self._tid)
-            .eq("id", risk_id)
-            .execute()
-        )
+        (self._c.table("risks").delete().eq("tenant_id", self._tid).eq("id", risk_id).execute())
 
     # ── Heatmap ──────────────────────────────────────────────────────
 

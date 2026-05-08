@@ -1,22 +1,22 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from jose import jwt
 from pydantic import BaseModel, EmailStr
-
 from supabase import create_client
 
 from app.core.auth import CurrentUser, get_current_user
 from app.core.config import settings
 from app.core.database import get_supabase_admin
-from jose import jwt
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 PLATFORM_TENANT_ID = UUID("00000000-0000-0000-0000-000000000000")
 
 
 # ── Request / Response Models ─────────────────────────────────────────────────
+
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -45,8 +45,9 @@ class UserProfile(BaseModel):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _mint_token(user_id: str, tenant_id: str, role: str, email: str) -> str:
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     payload = {
         "sub": user_id,
         "tenant_id": tenant_id,
@@ -60,13 +61,12 @@ def _mint_token(user_id: str, tenant_id: str, role: str, email: str) -> str:
 
 def _platform_admin_emails() -> set[str]:
     return {
-        item.strip().lower()
-        for item in settings.platform_admin_emails.split(",")
-        if item.strip()
+        item.strip().lower() for item in settings.platform_admin_emails.split(",") if item.strip()
     }
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
 
 @router.post("/login", response_model=TokenResponse)
 async def login(body: LoginRequest) -> TokenResponse:
@@ -74,9 +74,13 @@ async def login(body: LoginRequest) -> TokenResponse:
     # Use a FRESH anon client for sign-in — never mutate the cached admin client's session.
     anon_client = create_client(settings.supabase_url, settings.supabase_anon_key)
     try:
-        resp = anon_client.auth.sign_in_with_password({"email": body.email, "password": body.password})
+        resp = anon_client.auth.sign_in_with_password(
+            {"email": body.email, "password": body.password}
+        )
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials") from exc
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
+        ) from exc
 
     supabase_user = resp.user
     if not supabase_user:
@@ -168,31 +172,26 @@ async def me(current_user: Annotated[CurrentUser, Depends(get_current_user)]) ->
         onboarding_completed=d.get("onboarding_completed", False),
     )
 
+
 @router.patch("/me", response_model=UserProfile)
 async def patch_me(
-    body: dict,
-    current_user: Annotated[CurrentUser, Depends(get_current_user)]
+    body: dict, current_user: Annotated[CurrentUser, Depends(get_current_user)]
 ) -> UserProfile:
     """Update the logged-in user's profile."""
     client = get_supabase_admin()
-    
+
     # Only allow updating certain fields
     allowed_fields = {"display_name", "title", "onboarding_completed"}
     patch = {k: v for k, v in body.items() if k in allowed_fields}
-    
+
     if not patch:
         return await me(current_user)
-        
-    patch["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
-    
-    row = (
-        client.table("users")
-        .update(patch)
-        .eq("id", str(current_user.id))
-        .execute()
-    )
-    
+
+    patch["updated_at"] = datetime.now(tz=UTC).isoformat()
+
+    row = client.table("users").update(patch).eq("id", str(current_user.id)).execute()
+
     if not row.data:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-        
+
     return await me(current_user)

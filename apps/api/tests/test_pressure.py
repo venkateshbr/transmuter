@@ -1,10 +1,9 @@
 """Unit tests for the deterministic pressure score engine."""
 
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 
 from app.domain.pressure import (
-    MilestonePressureEngine,
     _blast_radius,
     _checklist_score,
     _cluster_bonus,
@@ -87,7 +86,7 @@ def test_cluster_bonus():
     sib3 = [
         {"status": "overdue"},
         {"status": "in_progress", "planned_end": "2026-04-30"},
-        {"pressure_score": "7.5"}, # high pressure sibling
+        {"pressure_score": "7.5"},  # high pressure sibling
         {"status": "overdue"},
     ]
     assert _cluster_bonus(sib3, today) == Decimal("1.5")

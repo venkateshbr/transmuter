@@ -30,7 +30,6 @@ from app.domain.initiative_intake import (
 )
 from app.domain.kpis import KPIEntryUpsert
 
-
 initiative_intake_agent: Agent[None, InitiativeIntakeSuggestions] | None = None
 langfuse_client: Langfuse | None = None
 INTAKE_AGENT_TIMEOUT_SECONDS = 8
@@ -59,11 +58,7 @@ def _get_agent() -> Agent[None, InitiativeIntakeSuggestions]:
 
 def _get_langfuse() -> Langfuse | None:
     global langfuse_client
-    if not (
-        settings.ai_enabled
-        and settings.langfuse_public_key
-        and settings.langfuse_secret_key
-    ):
+    if not (settings.ai_enabled and settings.langfuse_public_key and settings.langfuse_secret_key):
         return None
     if langfuse_client is None:
         langfuse_client = Langfuse(
@@ -287,7 +282,5 @@ def _with_trace(
     langfuse: Langfuse | None,
 ) -> InitiativeIntakeSuggestions:
     suggestions.trace_id = trace_id
-    suggestions.trace_url = (
-        langfuse.get_trace_url(trace_id=trace_id) if langfuse else None
-    )
+    suggestions.trace_url = langfuse.get_trace_url(trace_id=trace_id) if langfuse else None
     return suggestions

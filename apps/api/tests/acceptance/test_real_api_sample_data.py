@@ -42,10 +42,7 @@ def _auth_headers(client: httpx.Client) -> dict[str, str]:
 def _workbook_sheet_names(content: bytes) -> list[str]:
     with ZipFile(BytesIO(content)) as zf:
         workbook = ET.fromstring(zf.read("xl/workbook.xml"))
-    return [
-        sheet.attrib["name"]
-        for sheet in workbook.findall("main:sheets/main:sheet", SHEET_NS)
-    ]
+    return [sheet.attrib["name"] for sheet in workbook.findall("main:sheets/main:sheet", SHEET_NS)]
 
 
 def test_real_api_seeded_dashboard_and_meetings() -> None:
@@ -279,7 +276,8 @@ def test_real_api_initiative_template_import_flow() -> None:
             )
             financials.raise_for_status()
             row = next(
-                item for item in financials.json()["entries"]
+                item
+                for item in financials.json()["entries"]
                 if item["year"] == 2030 and item["quarter"] == 1
             )
             assert Decimal(row["revenue_uplift_base"]) == Decimal("100000.0000")
@@ -307,10 +305,7 @@ def test_real_api_initiative_template_import_flow() -> None:
 
             risks = client.get(f"/initiatives/{initiative_id}/risks", headers=headers)
             risks.raise_for_status()
-            assert any(
-                "Adoption may lag" in item["description"]
-                for item in risks.json()["items"]
-            )
+            assert any("Adoption may lag" in item["description"] for item in risks.json()["items"])
 
             milestones = client.get(
                 f"/initiatives/{initiative_id}/milestones",
@@ -318,8 +313,7 @@ def test_real_api_initiative_template_import_flow() -> None:
             )
             milestones.raise_for_status()
             assert any(
-                item["name"] == "Pilot launch complete"
-                for item in milestones.json()["items"]
+                item["name"] == "Pilot launch complete" for item in milestones.json()["items"]
             )
 
             exported = client.get(f"/initiatives/{initiative_id}/export", headers=headers)
@@ -374,7 +368,8 @@ def test_real_api_initiative_template_import_flow() -> None:
             )
             updated_financials.raise_for_status()
             updated_row = next(
-                item for item in updated_financials.json()["entries"]
+                item
+                for item in updated_financials.json()["entries"]
                 if item["year"] == 2030 and item["month"] == 1
             )
             assert Decimal(updated_row["revenue_uplift_base"]) == Decimal("33333.0")
@@ -671,7 +666,8 @@ def test_real_api_status_update_compliance_and_nudge_flow() -> None:
             )
             compliance_after.raise_for_status()
             silent_after = next(
-                item for item in compliance_after.json()["initiatives"]
+                item
+                for item in compliance_after.json()["initiatives"]
                 if item["initiative_id"] == silent_id
             )
             assert silent_after["nudge_count"] >= 1
@@ -683,9 +679,7 @@ def test_real_api_status_update_compliance_and_nudge_flow() -> None:
 
             nudges = client.get("/status-updates/nudges", headers=headers)
             nudges.raise_for_status()
-            nudge_log = next(
-                item for item in nudges.json() if item["id"] == nudge_data["nudge_id"]
-            )
+            nudge_log = next(item for item in nudges.json() if item["id"] == nudge_data["nudge_id"])
             assert nudge_log["channel"] == "both"
             assert nudge_log["initiatives"]["name"] == silent.json()["name"]
 
@@ -700,7 +694,8 @@ def test_real_api_status_update_compliance_and_nudge_flow() -> None:
             )
             compliance_after_daily.raise_for_status()
             auto_after = next(
-                item for item in compliance_after_daily.json()["initiatives"]
+                item
+                for item in compliance_after_daily.json()["initiatives"]
                 if item["initiative_id"] == auto_id
             )
             assert auto_after["nudge_count"] >= 1
@@ -879,8 +874,7 @@ def test_real_api_people_directory_profile_invite_and_pressure() -> None:
                 )
                 assigned.raise_for_status()
                 assert (
-                    assigned.json()["workstreams"][0]["workstream_id"]
-                    == workstream_rows[0]["id"]
+                    assigned.json()["workstreams"][0]["workstream_id"] == workstream_rows[0]["id"]
                 )
 
             invited = client.post(
@@ -1066,8 +1060,7 @@ def test_real_api_milestone_crud_pressure_dependencies_and_checklist() -> None:
             portfolio_dependencies.raise_for_status()
             portfolio_dep_data = portfolio_dependencies.json()
             dependency_row = next(
-                item for item in portfolio_dep_data["items"]
-                if item["id"] == dependency_id
+                item for item in portfolio_dep_data["items"] if item["id"] == dependency_id
             )
             assert dependency_row["status"] == "on_track"
             assert portfolio_dep_data["stats"]["total"] >= 1
@@ -1085,8 +1078,7 @@ def test_real_api_milestone_crud_pressure_dependencies_and_checklist() -> None:
             blocking_dependencies.raise_for_status()
             blocking_dep_data = blocking_dependencies.json()
             blocking_row = next(
-                item for item in blocking_dep_data["items"]
-                if item["id"] == dependency_id
+                item for item in blocking_dep_data["items"] if item["id"] == dependency_id
             )
             assert blocking_row["status"] == "blocking"
             assert blocking_row["upstream_status"] == "overdue"
@@ -1380,11 +1372,7 @@ def test_real_api_financial_grid_save_reload_and_value_bridge() -> None:
                     f"/initiatives/{initiative_id}/financials/assumptions/{assumption_id}",
                     headers=headers,
                 )
-            restore = {
-                key: original[key]
-                for key in update_entry
-                if key in original
-            }
+            restore = {key: original[key] for key in update_entry if key in original}
             client.put(
                 f"/initiatives/{initiative_id}/financials",
                 headers=headers,

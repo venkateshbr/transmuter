@@ -42,9 +42,7 @@ async def update_user_profile(
     user_id: str,
     body: UserUpdate,
     svc: Annotated[PeopleService, Depends(_svc)],
-    _current_user: Annotated[
-        CurrentUser, Depends(require_role("transformation_office"))
-    ],
+    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
 ) -> dict[str, Any]:
     return svc.update_profile(user_id, body)
 
@@ -53,9 +51,7 @@ async def update_user_profile(
 async def ghost_user(
     user_id: str,
     svc: Annotated[PeopleService, Depends(_svc)],
-    _current_user: Annotated[
-        CurrentUser, Depends(require_role("transformation_office"))
-    ],
+    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
 ) -> dict[str, Any]:
     return svc.ghost_user(user_id)
 
@@ -64,9 +60,7 @@ async def ghost_user(
 async def deactivate_user(
     user_id: str,
     svc: Annotated[PeopleService, Depends(_svc)],
-    _current_user: Annotated[
-        CurrentUser, Depends(require_role("transformation_office"))
-    ],
+    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
 ) -> dict[str, Any]:
     return svc.deactivate_user(user_id)
 
@@ -84,9 +78,7 @@ async def assign_user_workstreams(
     user_id: str,
     body: WorkstreamAssignment,
     svc: Annotated[PeopleService, Depends(_svc)],
-    _current_user: Annotated[
-        CurrentUser, Depends(require_role("transformation_office"))
-    ],
+    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
 ) -> dict[str, Any]:
     return svc.assign_workstreams(user_id, body)
 
@@ -95,9 +87,7 @@ async def assign_user_workstreams(
 async def create_invite(
     body: InviteCreate,
     svc: Annotated[PeopleService, Depends(_svc)],
-    _current_user: Annotated[
-        CurrentUser, Depends(require_role("transformation_office"))
-    ],
+    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
 ) -> dict[str, Any]:
     return svc.invite_user(body)
 

@@ -44,12 +44,14 @@ class MilestoneService:
     # ── List / Detail ────────────────────────────────────────────────
 
     def list_milestones(
-        self, initiative_id: str,
+        self,
+        initiative_id: str,
     ) -> MilestoneListResponse:
         rows = self._repo.list(initiative_id)
         items = [self._to_item(r) for r in rows]
         return MilestoneListResponse(
-            items=items, total=len(items),
+            items=items,
+            total=len(items),
         )
 
     def list_all_milestones(self) -> MilestoneListResponse:
@@ -57,7 +59,8 @@ class MilestoneService:
         rows = self._repo.list_all()
         items = [self._to_item(r) for r in rows]
         return MilestoneListResponse(
-            items=items, total=len(items),
+            items=items,
+            total=len(items),
         )
 
     def list_portfolio_milestones(self) -> PortfolioMilestoneResponse:
@@ -87,28 +90,31 @@ class MilestoneService:
     # ── CRUD ─────────────────────────────────────────────────────────
 
     def create_milestone(
-        self, initiative_id: str, data: MilestoneCreate,
+        self,
+        initiative_id: str,
+        data: MilestoneCreate,
     ) -> MilestoneDetail:
-        row = self._repo.create(initiative_id, {
-            "name": data.name,
-            "description": data.description,
-            "owner_id": data.owner_id,
-            "priority": data.priority,
-            "planned_start": data.planned_start,
-            "planned_end": data.planned_end,
-        })
+        row = self._repo.create(
+            initiative_id,
+            {
+                "name": data.name,
+                "description": data.description,
+                "owner_id": data.owner_id,
+                "priority": data.priority,
+                "planned_start": data.planned_start,
+                "planned_end": data.planned_end,
+            },
+        )
         self._recalc_pressure(row["id"], initiative_id)
         return self.get_milestone(row["id"])
 
     def update_milestone(self, milestone_id: str, data: MilestoneUpdate) -> MilestoneDetail:
         existing = self._assert_exists(milestone_id)
-        patch = {
-            k: v
-            for k, v in data.model_dump(exclude_none=True).items()
-        }
+        patch = {k: v for k, v in data.model_dump(exclude_none=True).items()}
         self._repo.update(milestone_id, patch)
         self._recalc_pressure(
-            milestone_id, existing["initiative_id"],
+            milestone_id,
+            existing["initiative_id"],
         )
         return self.get_milestone(milestone_id)
 
@@ -119,13 +125,18 @@ class MilestoneService:
     # ── Checklist ────────────────────────────────────────────────────
 
     def add_checklist_item(
-        self, milestone_id: str, data: ChecklistItemCreate,
+        self,
+        milestone_id: str,
+        data: ChecklistItemCreate,
     ) -> ChecklistItem:
         ms = self._assert_exists(milestone_id)
-        row = self._repo.create_checklist_item(milestone_id, {
-            "text": data.text,
-            "sort_order": data.sort_order,
-        })
+        row = self._repo.create_checklist_item(
+            milestone_id,
+            {
+                "text": data.text,
+                "sort_order": data.sort_order,
+            },
+        )
         self._recalc_pressure(milestone_id, ms["initiative_id"])
         return ChecklistItem(
             id=row["id"],
@@ -136,7 +147,10 @@ class MilestoneService:
         )
 
     def toggle_checklist(
-        self, milestone_id: str, item_id: str, completed: bool,
+        self,
+        milestone_id: str,
+        item_id: str,
+        completed: bool,
     ) -> ChecklistItem:
         ms = self._assert_exists(milestone_id)
         row = self._repo.toggle_checklist_item(item_id, completed)
@@ -150,7 +164,9 @@ class MilestoneService:
         )
 
     def delete_checklist_item(
-        self, milestone_id: str, item_id: str,
+        self,
+        milestone_id: str,
+        item_id: str,
     ) -> None:
         ms = self._assert_exists(milestone_id)
         self._repo.delete_checklist_item(item_id)
@@ -159,18 +175,22 @@ class MilestoneService:
     # ── Dependencies ─────────────────────────────────────────────────
 
     def add_dependency(
-        self, milestone_id: str, data: DependencyCreate,
+        self,
+        milestone_id: str,
+        data: DependencyCreate,
     ) -> DependencyItem:
         ms = self._assert_exists(milestone_id)
         if self._repo.would_create_cycle(
-            milestone_id, data.upstream_milestone_id,
+            milestone_id,
+            data.upstream_milestone_id,
         ):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Adding this dependency would create a cycle",
             )
         row = self._repo.create_dependency(
-            milestone_id, data.upstream_milestone_id,
+            milestone_id,
+            data.upstream_milestone_id,
         )
         self._recalc_pressure(milestone_id, ms["initiative_id"])
         self._recalc_pressure(data.upstream_milestone_id, ms["initiative_id"])
@@ -181,12 +201,14 @@ class MilestoneService:
         )
 
     def delete_dependency(
-        self, milestone_id: str, dependency_id: str,
+        self,
+        milestone_id: str,
+        dependency_id: str,
     ) -> None:
         ms = self._assert_exists(milestone_id)
         deps = self._repo.get_dependencies(milestone_id)
         target_dep = next((d for d in deps if d["id"] == dependency_id), None)
-        
+
         self._repo.delete_dependency(dependency_id)
         self._recalc_pressure(milestone_id, ms["initiative_id"])
         if target_dep:
@@ -272,7 +294,8 @@ class MilestoneService:
     # ── Pressure ─────────────────────────────────────────────────────
 
     def get_pressure(
-        self, milestone_id: str,
+        self,
+        milestone_id: str,
     ) -> MilestonePressureResult:
         ms = self._assert_exists(milestone_id)
         return self._calc_pressure(ms)
@@ -289,7 +312,8 @@ class MilestoneService:
         return row
 
     def _calc_pressure(
-        self, milestone: dict,  # type: ignore[type-arg]
+        self,
+        milestone: dict,  # type: ignore[type-arg]
     ) -> MilestonePressureResult:
         mid = milestone["id"]
         iid = milestone["initiative_id"]
@@ -298,26 +322,35 @@ class MilestoneService:
         siblings = self._repo.get_siblings(iid, mid)
         stats = self._repo.checklist_stats(mid)
         return MilestonePressureEngine.calculate(
-            milestone, downstream, transitive, siblings, stats,
+            milestone,
+            downstream,
+            transitive,
+            siblings,
+            stats,
         )
 
     def _recalc_pressure(
-        self, milestone_id: str, initiative_id: str,
+        self,
+        milestone_id: str,
+        initiative_id: str,
     ) -> None:
         """Recalculate and persist pressure score."""
         ms = self._repo.get(milestone_id)
         if not ms:
             return
         result = self._calc_pressure(ms)
-        self._repo.update(milestone_id, {
-            "pressure_score": result.pressure_score,
-            "pressure_blast_radius": result.blast_radius,
-            "pressure_dep_urgency": result.dep_urgency,
-            "pressure_cluster": result.cluster,
-            "pressure_slack": result.slack,
-            "pressure_checklist": result.checklist,
-            "pressure_self_status": result.self_status,
-        })
+        self._repo.update(
+            milestone_id,
+            {
+                "pressure_score": result.pressure_score,
+                "pressure_blast_radius": result.blast_radius,
+                "pressure_dep_urgency": result.dep_urgency,
+                "pressure_cluster": result.cluster,
+                "pressure_slack": result.slack,
+                "pressure_checklist": result.checklist,
+                "pressure_self_status": result.self_status,
+            },
+        )
 
     @staticmethod
     def _score(value: object) -> Decimal:
@@ -368,7 +401,8 @@ class MilestoneService:
             planned_end=upstream.get("planned_end"),
             pressure_score=(
                 str(upstream["pressure_score"])
-                if upstream.get("pressure_score") is not None else None
+                if upstream.get("pressure_score") is not None
+                else None
             ),
         )
         if self._is_overdue(upstream_item) and downstream_status != "complete":
@@ -386,17 +420,11 @@ class MilestoneService:
         return MilestoneItem(
             id=row["id"],
             initiative_id=row["initiative_id"],
-            initiative_name=(
-                initiative.get("name")
-                if isinstance(initiative, dict) else None
-            ),
+            initiative_name=(initiative.get("name") if isinstance(initiative, dict) else None),
             name=row["name"],
             description=row.get("description"),
             owner_id=row.get("owner_id"),
-            owner_name=(
-                owner.get("display_name")
-                if isinstance(owner, dict) else None
-            ),
+            owner_name=(owner.get("display_name") if isinstance(owner, dict) else None),
             priority=row["priority"],
             status=row["status"],
             sort_order=row.get("sort_order", 0),
@@ -405,9 +433,7 @@ class MilestoneService:
             planned_end=row.get("planned_end"),
             actual_end=row.get("actual_end"),
             pressure_score=str(ps) if ps is not None else None,
-            pressure_level=(
-                pressure_level(ps) if ps is not None else None
-            ),
+            pressure_level=(pressure_level(ps) if ps is not None else None),
             checklist_total=chk_total,
             checklist_done=chk_done,
             dependency_count=len(deps),
@@ -436,16 +462,19 @@ class MilestoneService:
                 upstream_milestone_id=d["upstream_milestone_id"],
                 upstream_name=(
                     d.get("upstream", {}).get("name")
-                    if isinstance(d.get("upstream"), dict) else None
+                    if isinstance(d.get("upstream"), dict)
+                    else None
                 ),
                 downstream_milestone_id=d["downstream_milestone_id"],
                 downstream_name=(
                     d.get("downstream", {}).get("name")
-                    if isinstance(d.get("downstream"), dict) else None
+                    if isinstance(d.get("downstream"), dict)
+                    else None
                 ),
             )
             for d in dep_rows
         ]
+
         def _str(v: object) -> str | None:
             return str(v) if v is not None else None
 

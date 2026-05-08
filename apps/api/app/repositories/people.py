@@ -31,7 +31,8 @@ class PeopleRepository:
             return rows
         needle = search.lower()
         return [
-            row for row in rows
+            row
+            for row in rows
             if needle in str(row.get("display_name") or "").lower()
             or needle in str(row.get("email") or "").lower()
             or needle in str(row.get("title") or "").lower()
@@ -88,8 +89,7 @@ class PeopleRepository:
         result = (
             self._c.table("milestones")
             .select(
-                "id, name, status, planned_end, pressure_score, "
-                "initiatives(name, initiative_code)"
+                "id, name, status, planned_end, pressure_score, initiatives(name, initiative_code)"
             )
             .eq("tenant_id", self._tid)
             .eq("owner_id", user_id)

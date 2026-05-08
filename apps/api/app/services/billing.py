@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from secrets import token_urlsafe
 from typing import Any
 from uuid import uuid4
@@ -30,9 +30,14 @@ class BillingPlan:
 
 def select_billing_plan(planned_user_count: int, billing_interval: str = "month") -> BillingPlan:
     if billing_interval not in {"month", "year"}:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Unsupported billing interval")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Unsupported billing interval"
+        )
     if planned_user_count <= 0:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Planned users must be greater than zero")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Planned users must be greater than zero",
+        )
     if planned_user_count <= 50:
         return BillingPlan(
             code="team",
@@ -42,7 +47,9 @@ def select_billing_plan(planned_user_count: int, billing_interval: str = "month"
             amount_cents=99900 if billing_interval == "month" else 999000,
             currency="usd",
             billing_interval=billing_interval,
-            stripe_price_id=settings.stripe_price_team_monthly if billing_interval == "month" else settings.stripe_price_team_annual,
+            stripe_price_id=settings.stripe_price_team_monthly
+            if billing_interval == "month"
+            else settings.stripe_price_team_annual,
         )
     if planned_user_count <= 100:
         return BillingPlan(
@@ -53,7 +60,9 @@ def select_billing_plan(planned_user_count: int, billing_interval: str = "month"
             amount_cents=199900 if billing_interval == "month" else 1999000,
             currency="usd",
             billing_interval=billing_interval,
-            stripe_price_id=settings.stripe_price_business_monthly if billing_interval == "month" else settings.stripe_price_business_annual,
+            stripe_price_id=settings.stripe_price_business_monthly
+            if billing_interval == "month"
+            else settings.stripe_price_business_annual,
         )
     raise HTTPException(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -208,11 +217,22 @@ class BillingProvisioningService:
         metadata = session.get("metadata") or {}
         signup_intent_id = str(metadata.get("signup_intent_id") or "").strip()
         intent = self._get_signup_intent(signup_intent_id) if signup_intent_id else None
-        organization_name = (intent or {}).get("organization_name") or self._require_metadata(metadata, "organization_name")
-        organization_slug = (intent or {}).get("organization_slug") or self._require_metadata(metadata, "organization_slug")
-        admin_display_name = (intent or {}).get("admin_display_name") or self._require_metadata(metadata, "admin_display_name")
-        admin_email = self._email((intent or {}).get("admin_email") or self._require_metadata(metadata, "admin_email"))
-        planned_user_count = int((intent or {}).get("planned_user_count") or self._int_metadata(metadata, "planned_user_count", default=1))
+        organization_name = (intent or {}).get("organization_name") or self._require_metadata(
+            metadata, "organization_name"
+        )
+        organization_slug = (intent or {}).get("organization_slug") or self._require_metadata(
+            metadata, "organization_slug"
+        )
+        admin_display_name = (intent or {}).get("admin_display_name") or self._require_metadata(
+            metadata, "admin_display_name"
+        )
+        admin_email = self._email(
+            (intent or {}).get("admin_email") or self._require_metadata(metadata, "admin_email")
+        )
+        planned_user_count = int(
+            (intent or {}).get("planned_user_count")
+            or self._int_metadata(metadata, "planned_user_count", default=1)
+        )
 
         org = self._ensure_organization(
             name=organization_name,
@@ -278,7 +298,10 @@ class BillingProvisioningService:
             "stripe_customer_id": customer_id or existing.get("stripe_customer_id"),
             "current_period_end": self._stripe_timestamp(subscription.get("current_period_end")),
             "cancel_at_period_end": bool(subscription.get("cancel_at_period_end") or False),
-            "metadata": {**(existing.get("metadata") or {}), "last_subscription_event": subscription},
+            "metadata": {
+                **(existing.get("metadata") or {}),
+                "last_subscription_event": subscription,
+            },
             "updated_at": datetime.now(UTC).isoformat(),
         }
         result = (
@@ -330,8 +353,15 @@ class BillingProvisioningService:
                 .maybe_single()
                 .execute()
             )
-            if (users.count or 0) > 0 or (subscription and subscription.data and subscription.data.get("status") not in {"not_configured", "pending_checkout"}):
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Organization slug is already in use")
+            if (users.count or 0) > 0 or (
+                subscription
+                and subscription.data
+                and subscription.data.get("status") not in {"not_configured", "pending_checkout"}
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Organization slug is already in use",
+                )
             settings = org.get("settings") or {}
             settings["billing"] = {**settings.get("billing", {}), **billing_settings}
             result = (
@@ -417,7 +447,11 @@ class BillingProvisioningService:
         tenant_id: str | None = None,
     ) -> dict[str, Any]:
         query = self._client.table("organizations").select("*")
-        existing = query.eq("id", tenant_id).maybe_single().execute() if tenant_id else query.eq("slug", slug).maybe_single().execute()
+        existing = (
+            query.eq("id", tenant_id).maybe_single().execute()
+            if tenant_id
+            else query.eq("slug", slug).maybe_single().execute()
+        )
         now = datetime.now(UTC).isoformat()
         billing_settings = self._billing_settings(
             session=session,

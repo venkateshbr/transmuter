@@ -227,11 +227,15 @@ async def stripe_webhook(
     provisioning_status = "ignored"
     if event_type == "checkout.session.completed":
         session = (event.get("data") or {}).get("object") or {}
-        provisioning = BillingProvisioningService(get_supabase_admin()).provision_checkout_session(session)
+        provisioning = BillingProvisioningService(get_supabase_admin()).provision_checkout_session(
+            session
+        )
         provisioning_status = provisioning["provisioning_status"]
     elif event_type in {"customer.subscription.updated", "customer.subscription.deleted"}:
         subscription = (event.get("data") or {}).get("object") or {}
-        provisioning = BillingProvisioningService(get_supabase_admin()).sync_subscription_event(subscription)
+        provisioning = BillingProvisioningService(get_supabase_admin()).sync_subscription_event(
+            subscription
+        )
         provisioning_status = provisioning["provisioning_status"]
 
     return WebhookResponse(
@@ -246,7 +250,9 @@ async def stripe_webhook(
 
 def _verify_stripe_signature(payload: bytes, header: str | None) -> None:
     if not header:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing Stripe signature")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Missing Stripe signature"
+        )
 
     parts = {}
     for item in header.split(","):
@@ -258,16 +264,22 @@ def _verify_stripe_signature(payload: bytes, header: str | None) -> None:
     timestamps = parts.get("t") or []
     signatures = parts.get("v1") or []
     if not timestamps or not signatures:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Stripe signature")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Stripe signature"
+        )
 
     timestamp = timestamps[0]
     try:
         timestamp_int = int(timestamp)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid timestamp") from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid timestamp"
+        ) from exc
 
     if abs(time.time() - timestamp_int) > 300:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Stale Stripe signature")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Stale Stripe signature"
+        )
 
     signed_payload = timestamp.encode() + b"." + payload
     expected = hmac.new(
@@ -276,4 +288,6 @@ def _verify_stripe_signature(payload: bytes, header: str | None) -> None:
         hashlib.sha256,
     ).hexdigest()
     if not any(hmac.compare_digest(expected, sig) for sig in signatures):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Stripe signature")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Stripe signature"
+        )

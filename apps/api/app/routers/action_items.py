@@ -10,8 +10,10 @@ from app.services.meeting import MeetingService
 
 router = APIRouter(tags=["action-items"])
 
+
 def _svc(current_user: Annotated[CurrentUser, Depends(get_current_user)]) -> MeetingService:
     return MeetingService(get_supabase_admin(), current_user.tenant_id)
+
 
 @router.get("/action-items", response_model=ActionItemListResponse)
 async def list_action_items(

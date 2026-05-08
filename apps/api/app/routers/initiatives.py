@@ -8,22 +8,22 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import Response, StreamingResponse
 
+from app.agents.initiative_intake_agent import generate_intake_suggestions
 from app.core.auth import CurrentUser, RequireAdmin, get_current_user
 from app.core.database import get_supabase_admin
 from app.core.rbac import assert_can_manage_initiatives
-from app.domain.initiatives import (
-    InitiativeCreate,
-    InitiativeDetail,
-    InitiativeListResponse,
-    InitiativeUpdate,
-)
 from app.domain.initiative_intake import (
     InitiativeIntakeCreate,
     InitiativeIntakeRequest,
     InitiativeIntakeSuggestions,
     InitiativeWorkbookPreview,
 )
-from app.agents.initiative_intake_agent import generate_intake_suggestions
+from app.domain.initiatives import (
+    InitiativeCreate,
+    InitiativeDetail,
+    InitiativeListResponse,
+    InitiativeUpdate,
+)
 from app.services.initiative import InitiativeService
 
 router = APIRouter(prefix="/initiatives", tags=["initiatives"])
@@ -34,6 +34,7 @@ def _svc(current_user: Annotated[CurrentUser, Depends(get_current_user)]) -> Ini
 
 
 # ── List ──────────────────────────────────────────────────────────────────────
+
 
 @router.get("", response_model=InitiativeListResponse)
 async def list_initiatives(
@@ -65,6 +66,7 @@ async def list_initiatives(
 
 # ── Export ────────────────────────────────────────────────────────────────────
 
+
 @router.get("/export", response_class=StreamingResponse)
 async def export_csv(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
@@ -84,7 +86,9 @@ async def export_template(svc: Annotated[InitiativeService, Depends(_svc)]) -> R
     return Response(
         content=workbook,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": 'attachment; filename="transmuter-initiative-template.xlsx"'},
+        headers={
+            "Content-Disposition": 'attachment; filename="transmuter-initiative-template.xlsx"'
+        },
     )
 
 
@@ -126,6 +130,7 @@ async def create_initiative_from_intake(
 
 # ── Create ────────────────────────────────────────────────────────────────────
 
+
 @router.post("", response_model=InitiativeDetail, status_code=201)
 async def create_initiative(
     body: InitiativeCreate,
@@ -137,6 +142,7 @@ async def create_initiative(
 
 
 # ── Get one ───────────────────────────────────────────────────────────────────
+
 
 @router.get("/{initiative_id}", response_model=InitiativeDetail)
 async def get_initiative(
@@ -175,6 +181,7 @@ async def import_into_existing_initiative(
 
 # ── Update ────────────────────────────────────────────────────────────────────
 
+
 @router.put("/{initiative_id}", response_model=InitiativeDetail)
 async def update_initiative(
     initiative_id: str,
@@ -187,6 +194,7 @@ async def update_initiative(
 
 
 # ── Archive ───────────────────────────────────────────────────────────────────
+
 
 @router.post("/{initiative_id}/archive", response_model=InitiativeDetail)
 async def archive_initiative(
@@ -221,6 +229,7 @@ async def get_initiative_summary(
         "completion_date": init.actual_end or init.planned_end,
     }
 
+
 @router.patch("/{initiative_id}/summary")
 async def update_initiative_summary(
     initiative_id: str,
@@ -237,12 +246,14 @@ async def update_initiative_summary(
         update_data["summary"] = body["executive_summary"]
     if "lessons_learned" in body:
         update_data["lessons_learned"] = body["lessons_learned"]
-    
+
     if update_data:
         svc.update_initiative(initiative_id, InitiativeUpdate(**update_data))
     return await get_initiative_summary(initiative_id, current_user, svc)
 
+
 # ── Delete (TO only) ──────────────────────────────────────────────────────────
+
 
 @router.delete("/{initiative_id}", status_code=204, dependencies=[RequireAdmin])
 async def delete_initiative(

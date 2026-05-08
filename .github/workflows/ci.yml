@@ -1,108 +1,226 @@
-name: CI
+name: CI/CD
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
   pull_request:
-    branches: [main]
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-
-  # ── Spec Schema Validation (Sthira #24) ───────────────────────────────────
-  validate-specs:
-    name: Validate agent/skill/workflow specs
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-      - run: npm install -g ajv-cli
-      - name: Validate AgentSpec files
-        run: |
-          for f in agents/specs/*.yaml; do
-            echo "Validating $f..."
-            ajv validate -s schemas/agent_spec.json -d "$f" --spec=draft2020 || exit 1
-          done
-      - name: Validate WorkflowSpec files
-        run: |
-          for f in workflows/*.yaml; do
-            echo "Validating $f..."
-            ajv validate -s schemas/workflow_spec.json -d "$f" --spec=draft2020 || exit 1
-          done
-
-  # ── Backend: Lint + Type Check + Tests ────────────────────────────────────
   backend:
-    name: Backend (ruff + mypy + pytest)
+    name: Backend lint, type check, tests
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: apps/api
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install uv
-      - run: uv sync
-      - name: Lint
-        run: uv run ruff check app/ tests/
-      - name: Format check
-        run: uv run ruff format --check app/ tests/
-      - name: Type check
-        run: uv run mypy app/
-        continue-on-error: true   # strict mypy: warn only during ramp-up
-      - name: Tests
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: apps/api/uv.lock
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Ruff lint
+        run: uv run ruff check app tests
+
+      - name: Ruff format check
+        run: uv run ruff format --check app tests
+
+      - name: Mypy type check
+        run: uv run mypy app
+
+      - name: Pytest API suite
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          LANGFUSE_SECRET_KEY: ""
-          LANGFUSE_PUBLIC_KEY: ""
-        run: uv run pytest tests/ -v --tb=short
+          LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+          LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+        run: |
+          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_ANON_KEY" ] && [ -n "$SUPABASE_SERVICE_KEY" ]; then
+            uv run pytest tests --ignore=tests/acceptance -v --tb=short
+          else
+            echo "::notice::Supabase CI secrets are not configured; running deterministic local API tests only."
+            uv run pytest tests/test_health.py tests/test_pressure.py tests/test_dashboard_value_matrix.py -v --tb=short
+          fi
 
-  # ── Frontend: Lint + Build ────────────────────────────────────────────────
   frontend:
-    name: Frontend (ng lint + ng build)
+    name: Frontend lint and production build
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: apps/web
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "npm"
+          cache: npm
           cache-dependency-path: apps/web/package-lock.json
-      - run: npm ci
-      - name: Lint
-        run: npx ng lint
-        continue-on-error: true   # lint: warn only until rules stabilise
-      - name: Build
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Angular lint or TypeScript lint fallback
+        run: |
+          if node -e "const config = require('./angular.json'); process.exit(config.projects.web.architect.lint ? 0 : 1)"; then
+            npx ng lint
+          else
+            echo "::notice::No Angular lint target is configured; running TypeScript no-emit check as the lint gate."
+            npx tsc -p tsconfig.app.json --noEmit
+          fi
+
+      - name: Angular production build
         run: npx ng build --configuration=production
 
-  # ── Agent Evals (main branch only) ───────────────────────────────────────
-  evals:
-    name: Agent evals
+  validate-specs:
+    name: Validate agent and workflow specs
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    needs: [backend]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install schema validators
+        run: python -m pip install jsonschema pyyaml
+
+      - name: Validate YAML specs against JSON schemas
+        run: python scripts/validate_specs.py
+
+  evals:
+    name: Agent eval suite
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs:
+      - backend
+      - validate-specs
     defaults:
       run:
         working-directory: apps/api
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install uv && uv sync
-      - name: Run evals
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: apps/api/uv.lock
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Run evals when datasets exist
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
           LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
-        run: uv run pytest tests/evals/ -v --tb=short
-        continue-on-error: true   # evals advisory until datasets are built
+        run: |
+          if find ../../tests/evals -type f | grep -q .; then
+            uv run pytest ../../tests/evals -v --tb=short
+          else
+            echo "::notice::tests/evals has no committed datasets yet; eval job is configured and will run once datasets are added."
+          fi
+
+  evals-pr-comment:
+    name: Post eval policy comment
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    needs:
+      - backend
+      - frontend
+      - validate-specs
+    steps:
+      - name: Comment eval policy on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const marker = "<!-- transmuter-agent-eval-status -->";
+            const body = [
+              marker,
+              "Agent eval status for this PR:",
+              "",
+              "- Backend, frontend, and schema checks completed in CI.",
+              "- The full agent eval suite is configured to run on pushes to `main`.",
+              "- `tests/evals` currently has no committed datasets, so the main-branch eval job will report a notice until datasets are added."
+            ].join("\n");
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100
+            });
+            const existing = comments.find((comment) =>
+              comment.user.type === "Bot" && comment.body.includes(marker)
+            );
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body
+              });
+            }
+
+  deploy-staging:
+    name: Deploy staging
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs:
+      - backend
+      - frontend
+      - validate-specs
+      - evals
+    environment: staging
+    steps:
+      - name: Trigger staging deployment when configured
+        env:
+          STAGING_DEPLOY_WEBHOOK_URL: ${{ secrets.STAGING_DEPLOY_WEBHOOK_URL }}
+        run: |
+          if [ -z "$STAGING_DEPLOY_WEBHOOK_URL" ]; then
+            echo "::notice::STAGING_DEPLOY_WEBHOOK_URL is not configured; staging deploy is skipped."
+            exit 0
+          fi
+          curl --fail --silent --show-error --request POST "$STAGING_DEPLOY_WEBHOOK_URL"

@@ -44,7 +44,10 @@ def assert_can_manage_initiatives(user: CurrentUser) -> None:
 
 def assert_can_view_portfolio(user: CurrentUser) -> None:
     if not can_view_all_initiatives(user.role):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Portfolio access requires viewer or transformation office")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Portfolio access requires viewer or transformation office",
+        )
 
 
 def assert_can_view_meeting(

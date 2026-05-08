@@ -1,12 +1,17 @@
-from typing import Any, Protocol, TypeVar, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
+
 from langfuse import Langfuse
+
 from app.core.config import settings
+
 
 @runtime_checkable
 class Traceable(Protocol):
     def flush(self) -> None: ...
 
+
 _langfuse_client: Langfuse | None = None
+
 
 def get_langfuse() -> Langfuse | None:
     global _langfuse_client
@@ -18,6 +23,7 @@ def get_langfuse() -> Langfuse | None:
                 host=settings.langfuse_host,
             )
     return _langfuse_client
+
 
 def start_trace(name: str, user_id: str | None = None, tags: list[str] | None = None) -> Any:
     client = get_langfuse()

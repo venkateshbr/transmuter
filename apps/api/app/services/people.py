@@ -84,19 +84,21 @@ class PeopleService:
             return self.get_profile(existing["id"])
 
         auth_user_id = self._ensure_auth_invite_user(data)
-        row = self._repo.upsert_user({
-            "id": auth_user_id,
-            "tenant_id": self._tenant_id,
-            "email": str(data.email),
-            "display_name": data.display_name,
-            "role": data.role,
-            "title": data.title,
-            "department": data.department,
-            "market": data.market,
-            "status": "ghost",
-            "onboarding_completed": False,
-            "updated_at": datetime.now(UTC).isoformat(),
-        })
+        row = self._repo.upsert_user(
+            {
+                "id": auth_user_id,
+                "tenant_id": self._tenant_id,
+                "email": str(data.email),
+                "display_name": data.display_name,
+                "role": data.role,
+                "title": data.title,
+                "department": data.department,
+                "market": data.market,
+                "status": "ghost",
+                "onboarding_completed": False,
+                "updated_at": datetime.now(UTC).isoformat(),
+            }
+        )
         if data.workstream_ids:
             self._repo.replace_user_workstreams(row["id"], data.workstream_ids)
         return self.get_profile(row["id"])

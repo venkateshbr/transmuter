@@ -31,11 +31,13 @@ def _svc(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> KPIService:
     return KPIService(
-        get_supabase_admin(), current_user.tenant_id,
+        get_supabase_admin(),
+        current_user.tenant_id,
     )
 
 
 # ── Pulse ────────────────────────────────────────────────────────────
+
 
 @router.get(
     "/portfolio/kpi-pulse",
@@ -62,6 +64,7 @@ async def list_all_kpis(
 
 
 # ── KPI CRUD ─────────────────────────────────────────────────────────
+
 
 @router.get(
     "/initiatives/{initiative_id}/kpis",
@@ -121,6 +124,7 @@ async def delete_kpi(
 
 
 # ── Entries ──────────────────────────────────────────────────────────
+
 
 @router.put(
     "/initiatives/{initiative_id}/kpis/{kpi_id}/entries",

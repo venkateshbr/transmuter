@@ -6,7 +6,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-
 MeetingScope = Literal["workstream", "all"]
 MeetingRecurrence = Literal["weekly", "biweekly", "monthly", "ad_hoc"]
 SessionStatus = Literal["scheduled", "in_progress", "completed"]

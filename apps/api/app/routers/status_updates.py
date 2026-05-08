@@ -18,8 +18,8 @@ from app.domain.status_updates import (
     NudgeItem,
     NudgeResponse,
     StatusComplianceResponse,
-    StatusUpdateDraftSuggestion,
     StatusUpdateCreate,
+    StatusUpdateDraftSuggestion,
     StatusUpdateItem,
     StatusUpdateListResponse,
     StatusUpdatePatch,
@@ -32,9 +32,7 @@ router = APIRouter(tags=["status_updates"])
 def _svc(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> StatusUpdateService:
-    return StatusUpdateService(
-        get_supabase_admin(), current_user.tenant_id, current_user.id
-    )
+    return StatusUpdateService(get_supabase_admin(), current_user.tenant_id, current_user.id)
 
 
 @router.get(
@@ -104,9 +102,7 @@ async def list_nudges(
     response_model=list[NudgeResponse],
 )
 async def run_daily_nudges(
-    _current_user: Annotated[
-        CurrentUser, Depends(require_role("transformation_office"))
-    ],
+    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
     svc: Annotated[StatusUpdateService, Depends(_svc)],
 ) -> list[NudgeResponse]:
     return svc.nudge_non_compliant_initiatives()

@@ -54,21 +54,24 @@ class RiskService:
         return self._to_item(row)
 
     def update_risk(
-        self, initiative_id: str, risk_id: str, data: RiskUpdate,
+        self,
+        initiative_id: str,
+        risk_id: str,
+        data: RiskUpdate,
     ) -> RiskItem:
         existing = self._assert_belongs_to_initiative(risk_id, initiative_id)
         patch = data.model_dump(exclude_unset=True)
-        
+
         # Determine new impact/likelihood combining patch + existing
         impact = patch.get("impact", existing.get("impact"))
         likelihood = patch.get("likelihood", existing.get("likelihood"))
-        
+
         if impact or likelihood:
             # We recalculate rating if impact or likelihood is known
             calc_payload = {"impact": impact, "likelihood": likelihood}
             self._calc_rating(calc_payload)
             patch["rating"] = calc_payload.get("rating")
-            
+
         row = self._repo.update(risk_id, patch)
         return self._to_item(row)
 
@@ -80,7 +83,7 @@ class RiskService:
 
     def get_heatmap(self) -> RiskHeatmapResponse:
         data = self._repo.get_heatmap_data()
-        
+
         levels = ["high", "medium", "low"]
         counts: dict[tuple[str, str], int] = {}
         for row in data:
@@ -88,7 +91,7 @@ class RiskService:
             lik = row.get("likelihood")
             if imp and lik:
                 counts[(imp, lik)] = counts.get((imp, lik), 0) + 1
-                
+
         cells = []
         for imp in levels:
             for lik in levels:
@@ -99,7 +102,7 @@ class RiskService:
                         count=counts.get((imp, lik), 0),
                     )
                 )
-                
+
         return RiskHeatmapResponse(
             cells=cells,
             total_open_risks=sum(counts.values()),
@@ -117,7 +120,9 @@ class RiskService:
         return row
 
     def _assert_belongs_to_initiative(
-        self, risk_id: str, initiative_id: str,
+        self,
+        risk_id: str,
+        initiative_id: str,
     ) -> dict[str, Any]:
         row = self._assert_exists(risk_id)
         if row.get("initiative_id") != initiative_id:
@@ -130,25 +135,23 @@ class RiskService:
     def _calc_rating(self, payload: dict[str, Any]) -> None:
         imp = payload.get("impact")
         lik = payload.get("likelihood")
-        
+
         if not imp or not lik:
             payload["rating"] = None
             return
-            
+
         matrix = {
             ("high", "high"): "high",
             ("high", "medium"): "high",
             ("high", "low"): "medium",
-            
             ("medium", "high"): "high",
             ("medium", "medium"): "medium",
             ("medium", "low"): "low",
-            
             ("low", "high"): "medium",
             ("low", "medium"): "low",
             ("low", "low"): "low",
         }
-        
+
         payload["rating"] = matrix.get((imp, lik))
 
     def _to_item(self, row: dict[str, Any]) -> RiskItem:
@@ -163,10 +166,7 @@ class RiskService:
             rating=row.get("rating"),
             status=row["status"],
             owner_id=row.get("owner_id"),
-            owner_name=(
-                owner.get("display_name")
-                if isinstance(owner, dict) else None
-            ),
+            owner_name=(owner.get("display_name") if isinstance(owner, dict) else None),
             mitigation=row.get("mitigation"),
             escalated=row.get("escalated", False),
             created_at=row.get("created_at"),
