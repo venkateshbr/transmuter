@@ -142,6 +142,9 @@ class InitiativeService:
                         "summary": data.summary,
                         "value_logic": data.value_logic,
                         "dependencies_text": data.dependencies_text,
+                        "benefit_confidence": str(data.benefit_confidence),
+                        "realization_status": data.realization_status,
+                        "variance_explanation": data.variance_explanation,
                         "planned_start": data.planned_start.isoformat()
                         if data.planned_start
                         else None,
@@ -181,6 +184,8 @@ class InitiativeService:
         for uuid_field in ("workstream_id", "owner_id", "group_owner_id"):
             if uuid_field in patch and patch[uuid_field] is not None:
                 patch[uuid_field] = str(patch[uuid_field])
+        if "benefit_confidence" in patch and patch["benefit_confidence"] is not None:
+            patch["benefit_confidence"] = str(patch["benefit_confidence"])
         patch["updated_at"] = datetime.now(UTC).isoformat()
         self._repo.update(initiative_id, patch)
         return self.get_initiative(initiative_id)
@@ -764,6 +769,9 @@ class InitiativeService:
             lessons_learned=row.get("lessons_learned"),
             value_logic=row.get("value_logic"),
             dependencies_text=row.get("dependencies_text"),
+            benefit_confidence=str(row.get("benefit_confidence") or "50.00"),
+            realization_status=row.get("realization_status") or "not_started",
+            variance_explanation=row.get("variance_explanation"),
             planned_start=row.get("planned_start"),
             actual_start=row.get("actual_start"),
             planned_end=row.get("planned_end"),

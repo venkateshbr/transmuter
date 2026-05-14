@@ -11,6 +11,7 @@ from app.routers import (
     business_units,
     dashboard,
     dependencies,
+    executive_control,
     financials,
     governance,
     health,
@@ -64,6 +65,7 @@ app.include_router(admin.router)
 app.include_router(ai.router)
 app.include_router(action_items.router)
 app.include_router(dependencies.router)
+app.include_router(executive_control.router)
 app.include_router(initiatives.router)
 app.include_router(financials.router)
 app.include_router(milestones.router)

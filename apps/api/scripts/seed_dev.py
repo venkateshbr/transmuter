@@ -815,11 +815,11 @@ def seed_financials(c: Client, org_id: str, init_ids: dict[str, str]) -> None:
     # Cost lines for TRN-002
     cost_lines = [
         {"initiative": "cost_erp", "name": "ERP Licence & Implementation", "year": 2026, "quarter": 1,
-         "amount_plan": 250000, "amount_actual": 260000, "is_recurring": False},
+         "amount_plan": 250000, "amount_actual": 260000, "is_recurring": False, "category_key": "implementation"},
         {"initiative": "cost_erp", "name": "Data Migration Consultancy", "year": 2026, "quarter": 2,
-         "amount_plan": 180000, "is_recurring": False},
+         "amount_plan": 180000, "is_recurring": False, "category_key": "vendor"},
         {"initiative": "cost_erp", "name": "Annual SaaS Licence", "year": 2026, "quarter": 3,
-         "amount_plan": 120000, "is_recurring": True},
+         "amount_plan": 120000, "is_recurring": True, "category_key": "software"},
     ]
     for cl in cost_lines:
         iid = init_ids.get(cl["initiative"])
@@ -829,6 +829,7 @@ def seed_financials(c: Client, org_id: str, init_ids: dict[str, str]) -> None:
             "tenant_id": org_id,
             "initiative_id": iid,
             "name": cl["name"],
+            "category_key": cl["category_key"],
             "year": cl["year"],
             "quarter": cl["quarter"],
             "amount_plan": dec(cl["amount_plan"]),
@@ -837,6 +838,226 @@ def seed_financials(c: Client, org_id: str, init_ids: dict[str, str]) -> None:
         }).execute()
 
     print(f"  Created {len(entries)} financial entries + {len(cost_lines)} cost lines")
+
+
+def seed_executive_control_tower(
+    c: Client,
+    org_id: str,
+    init_ids: dict[str, str],
+    user_ids: dict[str, str],
+) -> None:
+    """Seed deterministic Phase 2A control-tower fixtures."""
+    value_fields = [
+        ("rev_asia", "82.50", "committed", "Revenue uplift is tracking above base case."),
+        ("cost_erp", "68.00", "forecasted", "ERP benefits depend on migration cutover timing."),
+        ("cost_offshoring", "42.00", "at_risk", "Delayed knowledge transfer is pressuring savings timing."),
+        ("compliance_data", "75.00", "partially_realized", "Regulatory risk reduction is partly complete."),
+    ]
+    for label, confidence, status, explanation in value_fields:
+        iid = init_ids.get(label)
+        if not iid:
+            continue
+        c.table("initiatives").update({
+            "benefit_confidence": confidence,
+            "realization_status": status,
+            "variance_explanation": explanation,
+        }).eq("tenant_id", org_id).eq("id", iid).execute()
+
+    deps = [
+        {
+            "upstream": "cost_erp",
+            "downstream": "rev_asia",
+            "dependency_type": "enables",
+            "status": "active",
+            "severity": "medium",
+            "owner": "owner3",
+            "due_date": d(45),
+            "resolution_notes": "ERP customer master cleanup enables pricing analytics.",
+        },
+        {
+            "upstream": "cost_offshoring",
+            "downstream": "cost_erp",
+            "dependency_type": "blocks",
+            "status": "blocking",
+            "severity": "high",
+            "owner": "owner4",
+            "due_date": d(-7),
+            "resolution_notes": "Finance knowledge transfer must stabilise before ERP cutover.",
+        },
+        {
+            "upstream": "compliance_data",
+            "downstream": "prod_gp",
+            "dependency_type": "requires_decision",
+            "status": "at_risk",
+            "severity": "high",
+            "owner": "owner5",
+            "due_date": d(14),
+            "resolution_notes": "Data residency decision needed for collaboration tooling.",
+        },
+    ]
+    dep_count = 0
+    for dep in deps:
+        upstream = init_ids.get(dep["upstream"])
+        downstream = init_ids.get(dep["downstream"])
+        if not upstream or not downstream:
+            continue
+        existing = (
+            c.table("initiative_dependencies")
+            .select("id")
+            .eq("tenant_id", org_id)
+            .eq("upstream_initiative_id", upstream)
+            .eq("downstream_initiative_id", downstream)
+            .eq("dependency_type", dep["dependency_type"])
+            .execute()
+        )
+        payload = {
+            "tenant_id": org_id,
+            "upstream_initiative_id": upstream,
+            "downstream_initiative_id": downstream,
+            "dependency_type": dep["dependency_type"],
+            "status": dep["status"],
+            "severity": dep["severity"],
+            "owner_id": user_ids.get(dep["owner"]),
+            "due_date": dep["due_date"],
+            "resolution_notes": dep["resolution_notes"],
+        }
+        if existing.data:
+            c.table("initiative_dependencies").update(payload).eq("id", existing.data[0]["id"]).execute()
+        else:
+            c.table("initiative_dependencies").insert({"id": str(uuid4()), **payload}).execute()
+            dep_count += 1
+
+    pool_existing = (
+        c.table("shared_cost_pools")
+        .select("id")
+        .eq("tenant_id", org_id)
+        .eq("name", "Group technology platform allocation")
+        .eq("year", 2026)
+        .execute()
+    )
+    if pool_existing.data:
+        pool_id = pool_existing.data[0]["id"]
+        c.table("shared_cost_pools").update({
+            "category_key": "software",
+            "amount_plan": dec(600000),
+            "amount_actual": dec(540000),
+            "is_recurring": True,
+            "status": "active",
+        }).eq("id", pool_id).execute()
+    else:
+        pool_id = str(uuid4())
+        c.table("shared_cost_pools").insert({
+            "id": pool_id,
+            "tenant_id": org_id,
+            "name": "Group technology platform allocation",
+            "description": "Shared cloud, AI, and integration platform costs for transformation initiatives.",
+            "category_key": "software",
+            "year": 2026,
+            "amount_plan": dec(600000),
+            "amount_actual": dec(540000),
+            "is_recurring": True,
+            "status": "active",
+        }).execute()
+
+    rule_existing = (
+        c.table("shared_cost_allocation_rules")
+        .select("id")
+        .eq("tenant_id", org_id)
+        .eq("pool_id", pool_id)
+        .eq("name", "Benefit-weighted allocation")
+        .execute()
+    )
+    if rule_existing.data:
+        rule_id = rule_existing.data[0]["id"]
+        c.table("shared_cost_allocation_rules").update({
+            "allocation_method": "benefit_weighted",
+            "filters": {},
+            "weights": {},
+            "is_active": True,
+        }).eq("id", rule_id).execute()
+    else:
+        rule_id = str(uuid4())
+        c.table("shared_cost_allocation_rules").insert({
+            "id": rule_id,
+            "tenant_id": org_id,
+            "pool_id": pool_id,
+            "name": "Benefit-weighted allocation",
+            "allocation_method": "benefit_weighted",
+            "filters": {},
+            "weights": {},
+            "is_active": True,
+        }).execute()
+
+    run_existing = (
+        c.table("shared_cost_allocation_runs")
+        .select("id")
+        .eq("tenant_id", org_id)
+        .eq("pool_id", pool_id)
+        .eq("rule_id", rule_id)
+        .eq("scenario", "plan")
+        .execute()
+    )
+    if run_existing.data:
+        run_id = run_existing.data[0]["id"]
+        c.table("shared_cost_allocations").delete().eq("tenant_id", org_id).eq("run_id", run_id).execute()
+    else:
+        run_id = str(uuid4())
+        c.table("shared_cost_allocation_runs").insert({
+            "id": run_id,
+            "tenant_id": org_id,
+            "pool_id": pool_id,
+            "rule_id": rule_id,
+            "scenario": "plan",
+            "status": "completed",
+            "total_amount_plan": dec(600000),
+            "total_amount_actual": dec(540000),
+            "created_by": user_ids.get("admin"),
+        }).execute()
+
+    allocation_rows = [
+        ("rev_asia", 0.38, 228000, 205200),
+        ("cost_erp", 0.42, 252000, 226800),
+        ("cost_offshoring", 0.20, 120000, 108000),
+    ]
+    for label, basis, plan, actual in allocation_rows:
+        iid = init_ids.get(label)
+        if not iid:
+            continue
+        c.table("shared_cost_allocations").insert({
+            "id": str(uuid4()),
+            "tenant_id": org_id,
+            "run_id": run_id,
+            "pool_id": pool_id,
+            "rule_id": rule_id,
+            "initiative_id": iid,
+            "allocation_basis": "benefit_weighted",
+            "basis_value": dec(basis),
+            "allocated_plan": dec(plan),
+            "allocated_actual": dec(actual),
+        }).execute()
+
+    note_existing = (
+        c.table("initiative_value_realization_notes")
+        .select("id")
+        .eq("tenant_id", org_id)
+        .eq("initiative_id", init_ids.get("cost_offshoring", ""))
+        .eq("note_type", "variance")
+        .execute()
+    )
+    if not note_existing.data and init_ids.get("cost_offshoring"):
+        c.table("initiative_value_realization_notes").insert({
+            "id": str(uuid4()),
+            "tenant_id": org_id,
+            "initiative_id": init_ids["cost_offshoring"],
+            "author_id": user_ids.get("admin"),
+            "note_type": "variance",
+            "period_label": "2026",
+            "planned_value": dec(3200000),
+            "actual_value": dec(2400000),
+            "explanation": "Knowledge transfer delays are reducing first-year savings realization.",
+        }).execute()
+
+    print(f"  Created/updated Executive Control Tower fixtures ({dep_count} new dependencies)")
 
 
 def seed_meetings(
@@ -1105,7 +1326,10 @@ def main() -> None:
     print("\n11. Financials...")
     seed_financials(c, org_id, init_ids)
 
-    print("\n12. Meetings...")
+    print("\n12. Executive Control Tower...")
+    seed_executive_control_tower(c, org_id, init_ids, user_ids)
+
+    print("\n13. Meetings...")
     seed_meetings(c, org_id, ws_ids, init_ids, user_ids)
 
     print("\n=== Seed complete ===")

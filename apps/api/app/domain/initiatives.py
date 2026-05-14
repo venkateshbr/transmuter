@@ -21,6 +21,9 @@ Priority = Literal["high", "medium", "low"]
 RAGStatus = Literal["red", "amber", "green"]
 Stage = Literal["scoping", "in_progress", "complete"]
 InitiativeTag = str
+RealizationStatus = Literal[
+    "not_started", "forecasted", "committed", "partially_realized", "realized", "at_risk"
+]
 
 
 # ── Write models (request bodies) ─────────────────────────────────────────────
@@ -40,6 +43,9 @@ class InitiativeCreate(BaseModel):
     summary: str | None = None
     value_logic: str | None = None
     dependencies_text: str | None = None
+    benefit_confidence: Decimal = Field(Decimal("50.00"), ge=0, le=100)
+    realization_status: RealizationStatus = "not_started"
+    variance_explanation: str | None = None
     planned_start: date | None = None
     planned_end: date | None = None
 
@@ -61,6 +67,9 @@ class InitiativeUpdate(BaseModel):
     lessons_learned: str | None = None
     value_logic: str | None = None
     dependencies_text: str | None = None
+    benefit_confidence: Decimal | None = Field(None, ge=0, le=100)
+    realization_status: RealizationStatus | None = None
+    variance_explanation: str | None = None
     planned_start: date | None = None
     actual_start: date | None = None
     planned_end: date | None = None
@@ -156,6 +165,9 @@ class InitiativeDetail(BaseModel):
     lessons_learned: str | None = None
     value_logic: str | None
     dependencies_text: str | None
+    benefit_confidence: str = "50.00"
+    realization_status: str = "not_started"
+    variance_explanation: str | None = None
     planned_start: date | None
     actual_start: date | None
     planned_end: date | None

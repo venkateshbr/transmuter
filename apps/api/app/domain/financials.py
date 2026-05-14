@@ -15,6 +15,60 @@ from pydantic import BaseModel, Field
 
 Quarter = Literal[1, 2, 3, 4]
 FinancialScenario = Literal["base", "high", "actual"]
+FinancialConfigGroupKind = Literal["calculation", "metric", "cost_category"]
+FinancialConfigItemType = Literal["metric", "cost_category"]
+FinancialRollupType = Literal[
+    "benefit",
+    "recurring_cost",
+    "one_off_cost",
+    "total_cost",
+    "net_value",
+]
+PortfolioGranularity = Literal["monthly", "quarterly", "yearly"]
+
+
+class FinancialConfigGroup(BaseModel):
+    id: str | None = None
+    key: str = Field(..., min_length=1, max_length=120)
+    label: str = Field(..., min_length=1, max_length=200)
+    kind: FinancialConfigGroupKind
+    rollup_type: FinancialRollupType | None = None
+    display_order: int = 0
+    is_system: bool = False
+    is_active: bool = True
+
+
+class FinancialConfigItem(BaseModel):
+    id: str | None = None
+    group_id: str | None = None
+    group_key: str | None = None
+    key: str = Field(..., min_length=1, max_length=120)
+    label: str = Field(..., min_length=1, max_length=200)
+    item_type: FinancialConfigItemType
+    system_metric_key: str | None = Field(None, max_length=120)
+    rollup_type: FinancialRollupType | None = None
+    display_order: int = 0
+    is_system: bool = False
+    is_active: bool = True
+
+
+class FinancialConfigurationResponse(BaseModel):
+    groups: list[FinancialConfigGroup]
+    items: list[FinancialConfigItem]
+
+
+class FinancialConfigurationUpdate(BaseModel):
+    groups: list[FinancialConfigGroup]
+    items: list[FinancialConfigItem]
+
+
+class FinancialCategoryDeleteRequest(BaseModel):
+    category_key: str = Field(..., min_length=1, max_length=120)
+    replacement_key: str = Field(..., min_length=1, max_length=120)
+
+
+class FinancialMetricDeactivateRequest(BaseModel):
+    metric_key: str = Field(..., min_length=1, max_length=120)
 
 
 # ── Financial entries (revenue uplift, gross margin per quarter) ──────────────
@@ -148,6 +202,7 @@ FinancialGridResponse.model_rebuild()
 
 class CostLineCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=300)
+    category_key: str = Field("other", min_length=1, max_length=120)
     year: int = Field(..., ge=2020, le=2040)
     quarter: Quarter | None = None
     month: int | None = Field(None, ge=1, le=12)
@@ -158,6 +213,7 @@ class CostLineCreate(BaseModel):
 
 class CostLineUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=300)
+    category_key: str | None = Field(None, min_length=1, max_length=120)
     year: int | None = Field(None, ge=2020, le=2040)
     quarter: Quarter | None = None
     month: int | None = Field(None, ge=1, le=12)
@@ -170,12 +226,92 @@ class CostLineItem(BaseModel):
     id: str
     initiative_id: str
     name: str
+    category_key: str = "other"
     year: int
     quarter: int | None = None
     month: int | None = None
     amount_plan: str = "0"
     amount_actual: str | None = None
     is_recurring: bool = False
+
+
+class PortfolioFinancialSummaryCard(BaseModel):
+    key: str
+    label: str
+    plan: str = "0"
+    actual: str = "0"
+    variance: str = "0"
+
+
+class PortfolioFinancialPeriod(BaseModel):
+    period: str
+    year: int
+    quarter: int | None = None
+    month: int | None = None
+    benefits_plan: str = "0"
+    benefits_actual: str = "0"
+    recurring_costs_plan: str = "0"
+    recurring_costs_actual: str = "0"
+    one_off_costs_plan: str = "0"
+    one_off_costs_actual: str = "0"
+    total_costs_plan: str = "0"
+    total_costs_actual: str = "0"
+    net_value_plan: str = "0"
+    net_value_actual: str = "0"
+
+
+class PortfolioFinancialBreakdown(BaseModel):
+    key: str
+    label: str
+    group_key: str | None = None
+    group_label: str | None = None
+    plan: str = "0"
+    actual: str = "0"
+    variance: str = "0"
+
+
+class PortfolioFinancialCostLineContribution(BaseModel):
+    id: str
+    name: str
+    category_key: str = "other"
+    category_label: str | None = None
+    is_recurring: bool = False
+    plan: str = "0"
+    actual: str = "0"
+
+
+class PortfolioFinancialInitiativeContribution(BaseModel):
+    initiative_id: str
+    initiative_name: str
+    benefits_plan: str = "0"
+    benefits_actual: str = "0"
+    recurring_costs_plan: str = "0"
+    recurring_costs_actual: str = "0"
+    one_off_costs_plan: str = "0"
+    one_off_costs_actual: str = "0"
+    total_costs_plan: str = "0"
+    total_costs_actual: str = "0"
+    net_value_plan: str = "0"
+    net_value_actual: str = "0"
+    cost_lines: list[PortfolioFinancialCostLineContribution] = Field(default_factory=list)
+
+
+class PortfolioFinancialContributorsResponse(BaseModel):
+    granularity: PortfolioGranularity
+    period: str
+    year: int
+    quarter: int | None = None
+    month: int | None = None
+    contributors: list[PortfolioFinancialInitiativeContribution]
+
+
+class PortfolioFinancialsResponse(BaseModel):
+    granularity: PortfolioGranularity
+    summary: list[PortfolioFinancialSummaryCard]
+    periods: list[PortfolioFinancialPeriod]
+    broader_period_totals: list[PortfolioFinancialPeriod]
+    cost_breakdown: list[PortfolioFinancialBreakdown]
+    metric_breakdown: list[PortfolioFinancialBreakdown]
 
 
 class CostLineListResponse(BaseModel):

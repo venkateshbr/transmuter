@@ -40,6 +40,21 @@ export const routes: Routes = [
           import('./features/dashboard/dashboard.component').then(m => m.DashboardComponent),
       },
       {
+        path: 'financials',
+        loadComponent: () =>
+          import('./features/financials/portfolio-financials.component').then(m => m.PortfolioFinancialsComponent),
+      },
+      {
+        path: 'shared-costs',
+        loadComponent: () =>
+          import('./features/financials/shared-costs.component').then(m => m.SharedCostsComponent),
+      },
+      {
+        path: 'reports/control-tower',
+        loadComponent: () =>
+          import('./features/reports/executive-control-tower.component').then(m => m.ExecutiveControlTowerComponent),
+      },
+      {
         path: 'initiatives',
         children: [
           {

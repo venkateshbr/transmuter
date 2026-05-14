@@ -49,6 +49,7 @@ ENTRY_COLUMNS = [
 
 COST_COLUMNS = [
     "name",
+    "category_key",
     "year",
     "quarter",
     "month",
@@ -152,6 +153,7 @@ def _entry_from_row(row: dict[str, str]) -> FinancialEntryUpdate:
 def _cost_from_row(row: dict[str, str]) -> CostLineCreate:
     return CostLineCreate(
         name=_required(row, "name"),
+        category_key=row.get("category_key", "").strip() or "other",
         year=_int(row, "year"),
         quarter=_int_or_none(row, "quarter"),
         month=_int_or_none(row, "month"),

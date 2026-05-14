@@ -206,6 +206,9 @@ export class App {
     }
     return [
     { label: 'Dashboard',        path: '/dashboard',          icon: 'grid' },
+    { label: 'Control Tower',    path: '/reports/control-tower', icon: 'monitoring' },
+    { label: 'Financials',       path: '/financials',         icon: 'payments' },
+    { label: 'Shared Costs',     path: '/shared-costs',       icon: 'account_balance' },
     { label: 'Initiatives',      path: '/initiatives/pipeline', icon: 'list' },
     { label: 'Progress Monitor', path: '/progress',           icon: 'bar-chart' },
     { label: 'Roadmap Explorer', path: '/progress/roadmap',   icon: 'map' },

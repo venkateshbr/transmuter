@@ -51,6 +51,7 @@ interface CostLine {
   id: string;
   initiative_id: string;
   name: string;
+  category_key: string;
   year: number;
   quarter: number | null;
   month: number | null;
@@ -103,6 +104,36 @@ interface CellAssumption {
 interface CellAssumptionListResponse {
   items: CellAssumption[];
   total: number;
+}
+
+interface FinancialConfigGroup {
+  id?: string;
+  key: string;
+  label: string;
+  kind: 'calculation' | 'metric' | 'cost_category';
+  rollup_type?: string | null;
+  display_order: number;
+  is_system: boolean;
+  is_active: boolean;
+}
+
+interface FinancialConfigItem {
+  id?: string;
+  group_id?: string | null;
+  group_key?: string | null;
+  key: string;
+  label: string;
+  item_type: 'metric' | 'cost_category';
+  system_metric_key?: string | null;
+  rollup_type?: string | null;
+  display_order: number;
+  is_system: boolean;
+  is_active: boolean;
+}
+
+interface FinancialConfiguration {
+  groups: FinancialConfigGroup[];
+  items: FinancialConfigItem[];
 }
 
 @Component({
@@ -346,6 +377,7 @@ export class FinancialsTabComponent implements OnInit {
   valueBridge = signal<any | null>(null);
   breakEven = signal<BreakEvenResponse | null>(null);
   assumptions = signal<CellAssumption[]>([]);
+  configuration = signal<FinancialConfiguration | null>(null);
   assumptionEditor = signal<(Partial<CellAssumption> & { row_key: string; column_key: string }) | null>(null);
   assumptionDraft = signal('');
   initiative = signal<any | null>(null);
@@ -373,6 +405,35 @@ export class FinancialsTabComponent implements OnInit {
     { category: 'Costs', label: 'One-off (Plan)', key: 'costs_one_off_plan' },
     { category: 'Costs', label: 'One-off (Actual)', key: 'costs_one_off_actual' },
   ];
+
+  configuredMetrics = computed(() => {
+    const config = this.configuration();
+    if (!config) return this.METRICS;
+    const groups = new Map(config.groups.map(group => [group.key, group]));
+    const configured = config.items
+      .filter(item => item.item_type === 'metric' && item.is_active && item.system_metric_key)
+      .sort((a, b) => {
+        const groupA = groups.get(a.group_key || '')?.display_order || 0;
+        const groupB = groups.get(b.group_key || '')?.display_order || 0;
+        return groupA - groupB || a.display_order - b.display_order || a.label.localeCompare(b.label);
+      })
+      .map(item => ({
+        category: groups.get(item.group_key || '')?.label || 'Financials',
+        label: item.label,
+        key: item.system_metric_key || item.key,
+      }));
+    return configured.length ? configured : this.METRICS;
+  });
+
+  defaultCategoryKey(recurring: boolean): string {
+    const items = this.configuration()?.items || [];
+    const match = items.find(item =>
+      item.item_type === 'cost_category'
+      && item.is_active
+      && item.rollup_type === (recurring ? 'recurring_cost' : 'one_off_cost')
+    );
+    return match?.key || 'other';
+  }
 
   summaryCards = computed(() => {
     const s = this.selectedScenarioCase();
@@ -479,7 +540,7 @@ export class FinancialsTabComponent implements OnInit {
     const costs = this.costLines();
     const years = this.dynamicYears();
     
-    return this.METRICS.map(m => {
+    return this.configuredMetrics().map(m => {
       const row: any = { category: m.category, metric: m.label, key: m.key };
       for (const year of years) {
         if (this.isEditing()) {
@@ -591,6 +652,7 @@ export class FinancialsTabComponent implements OnInit {
             if (!costMap.has(key)) {
               costMap.set(key, {
                 name: isRecurring ? 'Recurring Costs (Grid)' : 'One-off Costs (Grid)',
+                category_key: this.defaultCategoryKey(isRecurring),
                 year, month: m, quarter: null, amount_plan: '0', amount_actual: null, is_recurring: isRecurring
               });
             }
@@ -612,6 +674,7 @@ export class FinancialsTabComponent implements OnInit {
             if (!costMap.has(key)) {
               costMap.set(key, {
                 name: isRecurring ? 'Recurring Costs (Grid)' : 'One-off Costs (Grid)',
+                category_key: this.defaultCategoryKey(isRecurring),
                 year, month: null, quarter: q, amount_plan: '0', amount_actual: null, is_recurring: isRecurring
               });
             }
@@ -806,6 +869,10 @@ export class FinancialsTabComponent implements OnInit {
   private _loadData(): void {
     const base = `/initiatives/${this.initiativeId}/financials`;
     this.api.get<any>(`/initiatives/${this.initiativeId}`).subscribe(i => this.initiative.set(i));
+    this.api.get<FinancialConfiguration>('/financial-configuration').subscribe({
+      next: config => this.configuration.set(config),
+      error: () => this.configuration.set(null),
+    });
     this.api.get<FinancialGrid>(base).subscribe(g => this.grid.set(g));
     this.api.get<any>(`${base}/value-bridge`).subscribe(v => this.valueBridge.set(v));
     this._loadBreakEven();

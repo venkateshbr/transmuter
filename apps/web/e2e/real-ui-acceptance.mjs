@@ -209,7 +209,7 @@ async function main() {
     `);
 
     await waitFor(
-      () => evalJs(page, "location.pathname === '/' && !!localStorage.getItem('access_token')"),
+      () => evalJs(page, "['/', '/dashboard', '/platform'].includes(location.pathname) && !!localStorage.getItem('access_token')"),
       'authenticated dashboard',
       20_000,
     );
@@ -268,9 +268,9 @@ async function main() {
     };
 
     const navigateToDashboard = async label => {
-      await page.send('Page.navigate', { url: `${uiBaseUrl}/` });
+      await page.send('Page.navigate', { url: `${uiBaseUrl}/dashboard` });
       await waitFor(
-        () => evalJs(page, "location.pathname === '/' && !!document.querySelector('[data-testid=\"dashboard-total-initiatives\"]')"),
+        () => evalJs(page, "location.pathname === '/dashboard' && !!document.querySelector('[data-testid=\"dashboard-total-initiatives\"]')"),
         label,
         30_000,
       );
@@ -347,6 +347,119 @@ async function main() {
         ...(init.headers ?? {}),
       },
     });
+
+    const dependencies = await api('/initiative-dependencies');
+    assert(dependencies.rollups && dependencies.rollups.total >= 1, 'Phase 2A dependencies should be seeded');
+    assert(dependencies.rollups.critical_path_risk >= 1, 'Phase 2A dependency rollups should expose critical path risk');
+    const sharedPools = await api('/shared-cost-pools');
+    assert(sharedPools.items.length >= 1, 'Phase 2A shared cost pools should be seeded');
+    const controlTower = await api('/reports/executive-control-tower?target_year=2026');
+    assert(controlTower.value_bridge?.allocated_costs_plan !== undefined, 'Control Tower report should expose allocated costs');
+    assert(controlTower.dependency_risk?.total >= 1, 'Control Tower report should expose dependency risk');
+    const investorSummary = await api('/reports/investor-summary?target_year=2026');
+    assert(investorSummary.summary?.initiative_count >= 1, 'Investor summary should expose portfolio initiatives');
+
+    const originalFinancialConfig = await api('/admin/financial-configuration');
+    const acceptanceCategoryLabel = `UI Acceptance Category ${Date.now()}`;
+    let acceptanceCategoryKey = null;
+    let acceptanceCostLineId = null;
+    try {
+      await page.send('Page.navigate', { url: `${uiBaseUrl}/admin` });
+      await waitFor(
+        () => evalJs(page, "location.pathname === '/admin' && !!document.body && document.querySelectorAll('button').length > 0"),
+        'admin financial configuration tab',
+        20_000,
+      );
+      await clickTab(page, 'Financial Configuration');
+      await waitFor(
+        () => evalJs(page, "document.body.innerText.includes('Cost Categories') && !!document.querySelector('input[aria-label=\"New cost category name\"]')"),
+        'admin cost category configuration',
+      );
+      await setField(page, 'input[aria-label="New cost category name"]', acceptanceCategoryLabel);
+      await evalJs(page, `
+        (() => {
+          const button = document.querySelector('button[aria-label="Create cost category"]');
+          if (!button) throw new Error('Missing create cost category button');
+          button.click();
+          return true;
+        })()
+      `);
+      await waitFor(async () => {
+        const config = await api('/admin/financial-configuration');
+        const category = config.items.find(item => item.label === acceptanceCategoryLabel && item.is_active !== false);
+        if (category) acceptanceCategoryKey = category.key;
+        return !!category;
+      }, 'admin-created financial category persisted', 20_000);
+      assert(acceptanceCategoryKey, 'Created financial category key was not found');
+
+      const categoryInitiativeId = (await api('/initiatives')).items[0].id;
+      const categoryCost = await api(`/initiatives/${categoryInitiativeId}/financials/cost-lines`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: `UI Acceptance Categorized Cost ${Date.now()}`,
+          year: 2026,
+          quarter: 1,
+          month: null,
+          amount_plan: '2468.0000',
+          amount_actual: '1357.0000',
+          is_recurring: false,
+          category_key: acceptanceCategoryKey,
+        }),
+      });
+      acceptanceCostLineId = categoryCost.id;
+
+      await page.send('Page.navigate', { url: `${uiBaseUrl}/financials` });
+      await waitFor(
+        () => evalJs(page, "location.pathname === '/financials' && document.body.innerText.includes('Financials') && document.body.innerText.includes('Cost Breakdown')"),
+        'portfolio financials page',
+        20_000,
+      );
+      await clickText(page, 'Quarterly');
+      await evalJs(page, `
+        (() => {
+          const category = document.querySelector('select[aria-label="Filter cost category"]');
+          if (!category) throw new Error('Missing cost category filter');
+          category.value = ${JSON.stringify(acceptanceCategoryKey)};
+          category.dispatchEvent(new Event('change', { bubbles: true }));
+          return true;
+        })()
+      `);
+      await waitFor(
+        () => evalJs(page, `document.body.innerText.includes(${JSON.stringify(acceptanceCategoryLabel)}) && document.body.innerText.includes('$2,468')`),
+        'portfolio financials category rollup',
+        20_000,
+      );
+    } finally {
+      if (acceptanceCostLineId) {
+        const categoryInitiatives = await api('/initiatives').catch(() => ({ items: [] }));
+        await Promise.all((categoryInitiatives.items || []).map(item =>
+          api(`/initiatives/${item.id}/financials/cost-lines/${acceptanceCostLineId}`, { method: 'DELETE' }).catch(() => null)
+        ));
+      }
+      await api('/admin/financial-configuration', {
+        method: 'PUT',
+        body: JSON.stringify(originalFinancialConfig),
+      }).catch(() => null);
+    }
+
+    await page.send('Page.navigate', { url: `${uiBaseUrl}/reports/control-tower` });
+    await waitFor(
+      () => evalJs(page, "location.pathname === '/reports/control-tower' && document.body.innerText.includes('Executive Control Tower') && document.body.innerText.includes('Burdened Value Bridge')"),
+      'control tower page',
+      20_000,
+    );
+    await clickText(page, 'Investor');
+    await waitFor(
+      () => evalJs(page, "document.body.innerText.includes('Dependency Risk') && document.body.innerText.includes('Initiative Burdening')"),
+      'investor report mode',
+      20_000,
+    );
+    await page.send('Page.navigate', { url: `${uiBaseUrl}/shared-costs` });
+    await waitFor(
+      () => evalJs(page, "location.pathname === '/shared-costs' && document.body.innerText.includes('Shared Cost Pools') && document.body.innerText.includes('Allocation Rules')"),
+      'shared cost page',
+      20_000,
+    );
 
     await evalJs(page, `
       (() => {
@@ -530,9 +643,15 @@ async function main() {
 
       await clickVisibleText(page, 'Create with Transmuter');
       await waitFor(() => evalJs(page, "document.querySelector('#init-name') !== null"), 'guided initiative form');
+      const selectedTheme = await evalJs(page, `
+        (() => {
+          const select = document.querySelector('#init-theme');
+          return [...select.options].find(option => option.value)?.value || '';
+        })()
+      `);
       await setField(page, '#init-name', manualInitiativeName);
       await setField(page, '#init-country', 'Singapore');
-      await setField(page, '#init-theme', 'Acceptance operations');
+      if (selectedTheme) await setField(page, '#init-theme', selectedTheme);
       await evalJs(page, `
         (() => {
           document.querySelector('#init-type').value = 'cost_reduction';
@@ -590,7 +709,7 @@ async function main() {
       manualInitiativeId = await evalJs(page, "location.pathname.split('/').pop()");
       const manualInitiative = await api(`/initiatives/${manualInitiativeId}`);
       assert(manualInitiative.name === manualInitiativeName, 'Guided initiative was not persisted');
-      assert(manualInitiative.theme === 'Acceptance operations', 'Guided initiative theme was not persisted');
+      if (selectedTheme) assert(manualInitiative.theme === selectedTheme, 'Guided initiative theme was not persisted');
       assert(manualInitiative.counts.kpis_total >= 3, 'Guided HITL KPIs were not persisted');
       assert(manualInitiative.counts.risks_open >= 2, 'Guided HITL risk selection was not persisted');
       assert(manualInitiative.counts.milestones_total >= 3, 'Guided HITL milestones were not persisted');
@@ -787,9 +906,19 @@ async function main() {
         const team = await api(`/initiatives/${manualInitiativeId}/team`);
         return team.data.some(member => member.user_id === teamUserId && member.role === 'reviewer');
       }, 'team member add persistence');
+      const addedTeamMember = (await api(`/initiatives/${manualInitiativeId}/team`)).data
+        .find(member => member.user_id === teamUserId && member.role === 'reviewer');
+      const teamCardLabel = addedTeamMember?.display_name || teamUserLabel;
+      await waitFor(
+        () => evalJs(page, `
+          [...document.querySelectorAll('.card')]
+            .some(node => node.textContent.includes(${JSON.stringify(teamCardLabel)}) && node.textContent.toLowerCase().includes('reviewer'))
+        `),
+        'added team member card',
+      );
       await evalJs(page, `
         (async () => {
-          const label = ${JSON.stringify(teamUserLabel)};
+          const label = ${JSON.stringify(teamCardLabel)};
           const card = [...document.querySelectorAll('.card')]
             .find(node => node.textContent.includes(label) && node.textContent.toLowerCase().includes('reviewer'));
           if (!card) throw new Error('Missing added team member card: ' + label);

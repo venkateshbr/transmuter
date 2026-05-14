@@ -10,7 +10,7 @@ Install these tools before building from a fresh checkout:
 
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/) for the FastAPI backend
-- Node.js 22+ and npm 11+
+- Node.js 22 LTS and npm 11+
 - Docker 28+ with Docker Compose v2 for production images
 - Access to a configured Supabase project and the required environment variables
 

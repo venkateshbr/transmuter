@@ -83,12 +83,18 @@ class FinancialRepository:
         result = self._c.table("financial_cost_lines").insert(data).execute()
         return result.data[0]
 
-    def update_cost_line(self, cost_line_id: str, data: dict) -> dict:  # type: ignore[type-arg]
+    def update_cost_line(
+        self,
+        initiative_id: str,
+        cost_line_id: str,
+        data: dict,  # type: ignore[type-arg]
+    ) -> dict:  # type: ignore[type-arg]
         data["updated_at"] = datetime.now(UTC).isoformat()
         result = (
             self._c.table("financial_cost_lines")
             .update(data)
             .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
             .eq("id", cost_line_id)
             .execute()
         )
@@ -96,14 +102,163 @@ class FinancialRepository:
             return {}
         return result.data[0]
 
-    def delete_cost_line(self, cost_line_id: str) -> None:
+    def delete_cost_line(self, initiative_id: str, cost_line_id: str) -> None:
         (
             self._c.table("financial_cost_lines")
             .delete()
             .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
             .eq("id", cost_line_id)
             .execute()
         )
+
+    # ── Tenant configuration ─────────────────────────────────────────────────
+
+    def list_config_groups(self) -> list[dict]:  # type: ignore[type-arg]
+        result = (
+            self._c.table("financial_config_groups")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .order("kind")
+            .order("display_order")
+            .execute()
+        )
+        return result.data or []
+
+    def list_config_items(self) -> list[dict]:  # type: ignore[type-arg]
+        result = (
+            self._c.table("financial_config_items")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .order("item_type")
+            .order("display_order")
+            .execute()
+        )
+        return result.data or []
+
+    def upsert_config_group(self, data: dict) -> dict:  # type: ignore[type-arg]
+        payload = {**data, "tenant_id": self._tid, "updated_at": datetime.now(UTC).isoformat()}
+        existing = (
+            self._c.table("financial_config_groups")
+            .select("id")
+            .eq("tenant_id", self._tid)
+            .eq("key", payload["key"])
+            .execute()
+        )
+        if existing.data:
+            result = (
+                self._c.table("financial_config_groups")
+                .update(payload)
+                .eq("tenant_id", self._tid)
+                .eq("id", existing.data[0]["id"])
+                .execute()
+            )
+        else:
+            payload["id"] = str(uuid4())
+            result = self._c.table("financial_config_groups").insert(payload).execute()
+        return result.data[0]
+
+    def upsert_config_item(self, data: dict) -> dict:  # type: ignore[type-arg]
+        payload = {**data, "tenant_id": self._tid, "updated_at": datetime.now(UTC).isoformat()}
+        existing = (
+            self._c.table("financial_config_items")
+            .select("id")
+            .eq("tenant_id", self._tid)
+            .eq("key", payload["key"])
+            .execute()
+        )
+        if existing.data:
+            result = (
+                self._c.table("financial_config_items")
+                .update(payload)
+                .eq("tenant_id", self._tid)
+                .eq("id", existing.data[0]["id"])
+                .execute()
+            )
+        else:
+            payload["id"] = str(uuid4())
+            result = self._c.table("financial_config_items").insert(payload).execute()
+        return result.data[0]
+
+    def deactivate_config_groups_except(self, active_keys: set[str]) -> None:
+        """Deactivate tenant config groups omitted from a full configuration save."""
+        existing = (
+            self._c.table("financial_config_groups")
+            .select("id,key,is_active")
+            .eq("tenant_id", self._tid)
+            .execute()
+        )
+        for row in existing.data or []:
+            if row["key"] in active_keys or row.get("is_active") is False:
+                continue
+            (
+                self._c.table("financial_config_groups")
+                .update({"is_active": False, "updated_at": datetime.now(UTC).isoformat()})
+                .eq("tenant_id", self._tid)
+                .eq("id", row["id"])
+                .execute()
+            )
+
+    def deactivate_config_items_except(self, active_keys: set[str]) -> None:
+        """Deactivate tenant config items omitted from a full configuration save."""
+        existing = (
+            self._c.table("financial_config_items")
+            .select("id,key,is_active")
+            .eq("tenant_id", self._tid)
+            .execute()
+        )
+        for row in existing.data or []:
+            if row["key"] in active_keys or row.get("is_active") is False:
+                continue
+            (
+                self._c.table("financial_config_items")
+                .update({"is_active": False, "updated_at": datetime.now(UTC).isoformat()})
+                .eq("tenant_id", self._tid)
+                .eq("id", row["id"])
+                .execute()
+            )
+
+    def reassign_cost_category(self, category_key: str, replacement_key: str) -> int:
+        result = (
+            self._c.table("financial_cost_lines")
+            .update(
+                {
+                    "category_key": replacement_key,
+                    "updated_at": datetime.now(UTC).isoformat(),
+                }
+            )
+            .eq("tenant_id", self._tid)
+            .eq("category_key", category_key)
+            .execute()
+        )
+        (
+            self._c.table("financial_config_items")
+            .update({"is_active": False, "updated_at": datetime.now(UTC).isoformat()})
+            .eq("tenant_id", self._tid)
+            .eq("key", category_key)
+            .eq("item_type", "cost_category")
+            .execute()
+        )
+        return len(result.data or [])
+
+    def deactivate_metric(self, metric_key: str) -> None:
+        (
+            self._c.table("financial_config_items")
+            .update({"is_active": False, "updated_at": datetime.now(UTC).isoformat()})
+            .eq("tenant_id", self._tid)
+            .eq("key", metric_key)
+            .eq("item_type", "metric")
+            .execute()
+        )
+
+    def get_portfolio_initiatives(self) -> list[dict]:  # type: ignore[type-arg]
+        result = (
+            self._c.table("initiatives")
+            .select("id,name,workstream_id,tag")
+            .eq("tenant_id", self._tid)
+            .execute()
+        )
+        return result.data or []
 
     def delete_grid(self, initiative_id: str) -> None:
         (
@@ -120,6 +275,17 @@ class FinancialRepository:
             .eq("initiative_id", initiative_id)
             .execute()
         )
+
+    def initiative_exists(self, initiative_id: str) -> bool:
+        result = (
+            self._c.table("initiatives")
+            .select("id")
+            .eq("tenant_id", self._tid)
+            .eq("id", initiative_id)
+            .maybe_single()
+            .execute()
+        )
+        return bool(result and result.data)
 
     def upsert_cost_lines_batch(self, initiative_id: str, rows: list[dict]) -> list[dict]:
         """Upsert multiple cost lines at once."""
@@ -215,6 +381,7 @@ class FinancialRepository:
 
     def update_cell_assumption(
         self,
+        initiative_id: str,
         assumption_id: str,
         comment: str,
         user_id: str,
@@ -229,16 +396,18 @@ class FinancialRepository:
                 }
             )
             .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
             .eq("id", assumption_id)
             .execute()
         )
         return result.data[0] if result.data else {}
 
-    def delete_cell_assumption(self, assumption_id: str) -> None:
+    def delete_cell_assumption(self, initiative_id: str, assumption_id: str) -> None:
         (
             self._c.table("financial_cell_assumptions")
             .delete()
             .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
             .eq("id", assumption_id)
             .execute()
         )

@@ -73,7 +73,13 @@ gates:
 
       - id: g1-09
         label: "Dependencies identified"
-        guidance: "Known cross-initiative or external dependencies have been documented (or explicitly noted as none)."
+        guidance: "Known cross-initiative or external dependencies have been documented in the dependency network (or explicitly noted as none)."
+        configurable: true
+        default: true
+
+      - id: g1-11
+        label: "Shared-cost applicability reviewed"
+        guidance: "Technology, group PMO, vendor, cloud, shared team, or corporate overhead costs have been assessed for allocation."
         configurable: true
         default: true
 
@@ -131,6 +137,12 @@ gates:
       - id: g2-07
         label: "Value realised vs. planned reviewed"
         guidance: "Planned value vs. actual value has been reviewed and the delta explained."
+        configurable: true
+        default: true
+
+      - id: g2-09
+        label: "Allocation reconciliation complete"
+        guidance: "Allocated shared costs are reconciled against direct initiative costs and the final burdened net value is reviewed."
         configurable: true
         default: true
 

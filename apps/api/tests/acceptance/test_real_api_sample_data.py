@@ -74,6 +74,89 @@ def test_real_api_seeded_dashboard_and_meetings() -> None:
         assert "North Asia Workstream Review" in meeting_names
 
 
+def test_real_api_executive_control_tower_phase_2a() -> None:
+    with _client() as client:
+        headers = _auth_headers(client)
+
+        dependencies = client.get("/initiative-dependencies", headers=headers)
+        dependencies.raise_for_status()
+        dependency_data = dependencies.json()
+        assert dependency_data["rollups"]["total"] >= 1
+        assert dependency_data["rollups"]["critical_path_risk"] >= 1
+        assert any(
+            item["upstream"]["id"] != item["downstream"]["id"] for item in dependency_data["items"]
+        )
+
+        pools = client.get("/shared-cost-pools", headers=headers)
+        pools.raise_for_status()
+        pool_items = pools.json()["items"]
+        assert pool_items
+        pool = next(item for item in pool_items if item["year"] == 2026)
+        assert Decimal(pool["amount_plan"]) > Decimal("0")
+        assert Decimal(pool["allocated_plan"]) == Decimal(pool["amount_plan"])
+
+        rules = client.get(
+            f"/shared-cost-pools/{pool['id']}/allocation-rules",
+            headers=headers,
+        )
+        rules.raise_for_status()
+        rule_items = rules.json()
+        assert any(item["allocation_method"] == "benefit_weighted" for item in rule_items)
+
+        runs = client.get(
+            f"/shared-cost-pools/{pool['id']}/allocation-runs",
+            headers=headers,
+        )
+        runs.raise_for_status()
+        run_items = runs.json()
+        assert run_items
+        run = run_items[0]
+        assert Decimal(run["total_amount_plan"]) == Decimal(pool["amount_plan"])
+        assert sum(Decimal(item["allocated_plan"]) for item in run["allocations"]) == Decimal(
+            run["total_amount_plan"]
+        )
+
+        control_tower = client.get(
+            "/reports/executive-control-tower?target_year=2026",
+            headers=headers,
+        )
+        control_tower.raise_for_status()
+        control_data = control_tower.json()
+        assert control_data["persona"] == "management"
+        assert Decimal(control_data["value_bridge"]["allocated_costs_plan"]) > Decimal("0")
+        assert control_data["dependency_risk"]["total"] == dependency_data["rollups"]["total"]
+
+        investor_summary = client.get(
+            "/reports/investor-summary?target_year=2026",
+            headers=headers,
+        )
+        investor_summary.raise_for_status()
+        investor_data = investor_summary.json()
+        assert investor_data["persona"] == "investor"
+        assert investor_data["summary"]["initiative_count"] >= 1
+
+        owner_cockpit = client.get(
+            "/reports/owner-cockpit?target_year=2026",
+            headers=headers,
+        )
+        owner_cockpit.raise_for_status()
+        assert owner_cockpit.json()["persona"] == "owner"
+
+        initiatives = client.get("/initiatives", headers=headers)
+        initiatives.raise_for_status()
+        initiatives_data = initiatives.json()["items"]
+        assert initiatives_data
+        note_counts = []
+        for item in initiatives_data:
+            notes = client.get(
+                f"/initiatives/{item['id']}/value-realization-notes",
+                headers=headers,
+            )
+            notes.raise_for_status()
+            note_counts.append(len(notes.json()))
+        assert any(count > 0 for count in note_counts)
+
+
 def test_real_api_meeting_crud_session_and_action_flow() -> None:
     with _client() as client:
         headers = _auth_headers(client)
@@ -1383,6 +1466,138 @@ def test_real_api_financial_grid_save_reload_and_value_bridge() -> None:
                     f"/initiatives/{initiative_id}/financials/cost-lines/{cost_line_id}",
                     headers=headers,
                 )
+
+
+def test_real_api_financial_configuration_category_reassignment_and_portfolio_rollup() -> None:
+    with _client() as client:
+        headers = _auth_headers(client)
+
+        initiatives = client.get("/initiatives", headers=headers)
+        initiatives.raise_for_status()
+        initiative_id = initiatives.json()["items"][0]["id"]
+
+        configuration = client.get("/admin/financial-configuration", headers=headers)
+        configuration.raise_for_status()
+        original_config = configuration.json()
+        groups = original_config["groups"]
+        items = original_config["items"]
+        assert any(group["kind"] == "cost_category" for group in groups)
+        assert any(item["key"] == "software" for item in items)
+
+        group = next(group for group in groups if group["kind"] == "cost_category")
+        replacement = next(
+            item
+            for item in items
+            if item["item_type"] == "cost_category"
+            and item["key"] != "other"
+            and item.get("is_active", True)
+        )
+        category_key = f"acceptance_{uuid4().hex[:12]}"
+        category_label = "Acceptance Reassign Category"
+        cost_line_id: str | None = None
+        amount_plan = Decimal("4321.0000")
+        amount_actual = Decimal("3210.0000")
+        year = 2026
+
+        try:
+            updated_config = client.put(
+                "/admin/financial-configuration",
+                headers=headers,
+                json={
+                    "groups": groups,
+                    "items": [
+                        *items,
+                        {
+                            "group_key": group["key"],
+                            "key": category_key,
+                            "label": category_label,
+                            "item_type": "cost_category",
+                            "system_metric_key": None,
+                            "rollup_type": "one_off_cost",
+                            "display_order": 999,
+                            "is_system": False,
+                            "is_active": True,
+                        },
+                    ],
+                },
+            )
+            updated_config.raise_for_status()
+            assert any(item["key"] == category_key for item in updated_config.json()["items"])
+
+            created_cost = client.post(
+                f"/initiatives/{initiative_id}/financials/cost-lines",
+                headers=headers,
+                json={
+                    "name": f"Acceptance category reassignment {uuid4()}",
+                    "year": year,
+                    "quarter": 1,
+                    "month": None,
+                    "amount_plan": str(amount_plan),
+                    "amount_actual": str(amount_actual),
+                    "is_recurring": False,
+                    "category_key": category_key,
+                },
+            )
+            created_cost.raise_for_status()
+            cost_line_id = created_cost.json()["id"]
+            assert created_cost.json()["category_key"] == category_key
+
+            portfolio = client.get(
+                f"/portfolio/financials?granularity=quarterly&year={year}&category_key={category_key}",
+                headers=headers,
+            )
+            portfolio.raise_for_status()
+            portfolio_data = portfolio.json()
+            category = next(
+                row for row in portfolio_data["cost_breakdown"] if row["key"] == category_key
+            )
+            assert category["label"] == category_label
+            assert Decimal(category["plan"]) >= amount_plan
+            assert Decimal(category["actual"]) >= amount_actual
+            assert any(
+                row["period"] == f"{year}-Q1" and Decimal(row["one_off_costs_plan"]) >= amount_plan
+                for row in portfolio_data["periods"]
+            )
+
+            contributors = client.get(
+                (
+                    "/portfolio/financials/contributors"
+                    f"?granularity=quarterly&period={year}-Q1&year={year}"
+                    f"&category_key={category_key}"
+                ),
+                headers=headers,
+            )
+            contributors.raise_for_status()
+            assert any(
+                line["category_key"] == category_key
+                for contributor in contributors.json()["contributors"]
+                for line in contributor["cost_lines"]
+            )
+
+            reassignment = client.post(
+                "/admin/financial-configuration/cost-categories/delete",
+                headers=headers,
+                json={"category_key": category_key, "replacement_key": replacement["key"]},
+            )
+            reassignment.raise_for_status()
+            assert reassignment.json()["reassigned"] >= 1
+
+            cost_lines = client.get(
+                f"/initiatives/{initiative_id}/financials/cost-lines",
+                headers=headers,
+            )
+            cost_lines.raise_for_status()
+            reassigned = next(
+                item for item in cost_lines.json()["items"] if item["id"] == cost_line_id
+            )
+            assert reassigned["category_key"] == replacement["key"]
+        finally:
+            if cost_line_id:
+                client.delete(
+                    f"/initiatives/{initiative_id}/financials/cost-lines/{cost_line_id}",
+                    headers=headers,
+                )
+            client.put("/admin/financial-configuration", headers=headers, json=original_config)
 
 
 def test_real_api_financial_excel_export_import_roundtrip() -> None:
