@@ -52,10 +52,13 @@ def test_list_initiatives_returns_seeded_data(admin_token: str) -> None:
 
 
 def test_list_filter_by_rag(admin_token: str) -> None:
-    resp = client.get("/initiatives?rag_status=red", headers=auth(admin_token))
+    seeded = client.get("/initiatives", headers=auth(admin_token)).json()["items"]
+    assert seeded
+    rag_status = seeded[0]["rag_status"]
+    resp = client.get(f"/initiatives?rag_status={rag_status}", headers=auth(admin_token))
     assert resp.status_code == 200
     data = resp.json()
-    assert all(i["rag_status"] == "red" for i in data["items"])
+    assert all(i["rag_status"] == rag_status for i in data["items"])
     assert data["total"] >= 1
 
 
@@ -67,11 +70,14 @@ def test_list_filter_by_stage(admin_token: str) -> None:
 
 
 def test_list_search(admin_token: str) -> None:
-    resp = client.get("/initiatives?search=ERP", headers=auth(admin_token))
+    seeded = client.get("/initiatives", headers=auth(admin_token)).json()["items"]
+    assert seeded
+    search_term = seeded[0]["name"].split()[0]
+    resp = client.get(f"/initiatives?search={search_term}", headers=auth(admin_token))
     assert resp.status_code == 200
     data = resp.json()
     assert data["total"] >= 1
-    assert any("ERP" in i["name"] for i in data["items"])
+    assert any(search_term.lower() in i["name"].lower() for i in data["items"])
 
 
 def test_list_requires_auth() -> None:

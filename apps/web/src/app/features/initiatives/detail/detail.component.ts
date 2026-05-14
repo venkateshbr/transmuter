@@ -11,11 +11,12 @@ import { OverviewTabComponent } from './overview/overview-tab.component';
 import { FinancialsTabComponent } from './financials/financials-tab.component';
 import { TeamTabComponent } from './team/team-tab.component';
 import { SummaryTabComponent } from './summary/summary-tab.component';
+import { DependenciesTabComponent } from './dependencies/dependencies-tab.component';
 
 @Component({
   selector: 'app-initiative-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink, MilestonesTabComponent, KpisTabComponent, RisksTabComponent, StatusUpdatesTabComponent, GovernanceTabComponent, OverviewTabComponent, FinancialsTabComponent, TeamTabComponent, SummaryTabComponent],
+  imports: [CommonModule, RouterLink, MilestonesTabComponent, KpisTabComponent, RisksTabComponent, StatusUpdatesTabComponent, GovernanceTabComponent, OverviewTabComponent, FinancialsTabComponent, TeamTabComponent, SummaryTabComponent, DependenciesTabComponent],
   template: `
     <div class="p-8 max-w-7xl mx-auto space-y-6">
       <div class="flex items-center gap-4 mb-4">
@@ -76,6 +77,7 @@ import { SummaryTabComponent } from './summary/summary-tab.component';
           <app-milestones-tab *ngIf="activeTab === 'milestones'" [initiativeId]="id"></app-milestones-tab>
           <app-kpis-tab *ngIf="activeTab === 'kpis'" [initiativeId]="id"></app-kpis-tab>
           <app-risks-tab *ngIf="activeTab === 'risks'" [initiativeId]="id"></app-risks-tab>
+          <app-dependencies-tab *ngIf="activeTab === 'dependencies'" [initiativeId]="id"></app-dependencies-tab>
           <app-status-updates-tab *ngIf="activeTab === 'status-updates'" [initiativeId]="id"></app-status-updates-tab>
           <app-governance-tab *ngIf="activeTab === 'governance'" [initiativeId]="id"></app-governance-tab>
           <app-team-tab *ngIf="activeTab === 'team'" [initiativeId]="id"></app-team-tab>
@@ -116,6 +118,7 @@ export class InitiativeDetailComponent implements OnInit {
     { id: 'milestones', label: 'Milestones' },
     { id: 'kpis', label: 'KPIs' },
     { id: 'risks', label: 'Risks' },
+    { id: 'dependencies', label: 'Dependencies' },
     { id: 'status-updates', label: 'Status' },
     { id: 'governance', label: 'Governance' },
     { id: 'team', label: 'Team' },

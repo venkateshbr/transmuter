@@ -20,13 +20,20 @@ from app.domain.financials import (
     CostLineItem,
     CostLineListResponse,
     CostLineUpdate,
+    FinancialCategoryDeleteRequest,
     FinancialCellAssumption,
     FinancialCellAssumptionCreate,
     FinancialCellAssumptionListResponse,
     FinancialCellAssumptionUpdate,
+    FinancialConfigurationResponse,
+    FinancialConfigurationUpdate,
     FinancialGridResponse,
     FinancialGridUpdate,
+    FinancialMetricDeactivateRequest,
     FinancialScenario,
+    PortfolioFinancialContributorsResponse,
+    PortfolioFinancialsResponse,
+    PortfolioGranularity,
     ScenarioFinancialSummary,
     ValueBridgeResponse,
 )
@@ -143,7 +150,7 @@ async def update_cost_line(
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> CostLineItem:
     assert_can_manage_initiatives(current_user)
-    return svc.update_cost_line(cost_line_id, body)
+    return svc.update_cost_line(initiative_id, cost_line_id, body)
 
 
 @router.delete(
@@ -157,7 +164,64 @@ async def delete_cost_line(
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> None:
     assert_can_manage_initiatives(current_user)
-    svc.delete_cost_line(cost_line_id)
+    svc.delete_cost_line(initiative_id, cost_line_id)
+
+
+@router.get(
+    "/admin/financial-configuration",
+    response_model=FinancialConfigurationResponse,
+)
+async def get_financial_configuration(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> FinancialConfigurationResponse:
+    assert_can_manage_initiatives(current_user)
+    return svc.get_configuration()
+
+
+@router.get(
+    "/financial-configuration",
+    response_model=FinancialConfigurationResponse,
+)
+async def get_readonly_financial_configuration(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> FinancialConfigurationResponse:
+    assert_can_view_portfolio(current_user)
+    return svc.get_configuration()
+
+
+@router.put(
+    "/admin/financial-configuration",
+    response_model=FinancialConfigurationResponse,
+)
+async def update_financial_configuration(
+    body: FinancialConfigurationUpdate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> FinancialConfigurationResponse:
+    assert_can_manage_initiatives(current_user)
+    return svc.update_configuration(body)
+
+
+@router.post("/admin/financial-configuration/cost-categories/delete")
+async def delete_financial_cost_category(
+    body: FinancialCategoryDeleteRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> dict[str, object]:
+    assert_can_manage_initiatives(current_user)
+    return svc.delete_cost_category(body)
+
+
+@router.post("/admin/financial-configuration/metrics/deactivate")
+async def deactivate_financial_metric(
+    body: FinancialMetricDeactivateRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> dict[str, object]:
+    assert_can_manage_initiatives(current_user)
+    return svc.deactivate_metric(body)
 
 
 # ── Value Bridge ──────────────────────────────────────────────────────────────
@@ -245,7 +309,7 @@ async def update_cell_assumption(
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> FinancialCellAssumption:
     assert_can_manage_initiatives(current_user)
-    return svc.update_cell_assumption(assumption_id, body, current_user.id)
+    return svc.update_cell_assumption(initiative_id, assumption_id, body, current_user.id)
 
 
 @router.delete(
@@ -259,7 +323,7 @@ async def delete_cell_assumption(
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> None:
     assert_can_manage_initiatives(current_user)
-    svc.delete_cell_assumption(assumption_id)
+    svc.delete_cell_assumption(initiative_id, assumption_id)
 
 
 @router.get("/portfolio/value-bridge", response_model=ValueBridgeResponse)
@@ -270,3 +334,56 @@ async def get_portfolio_value_bridge(
     """Portfolio-level Value Bridge across all initiatives."""
     assert_can_view_portfolio(current_user)
     return svc.get_portfolio_value_bridge()
+
+
+@router.get("/portfolio/financials", response_model=PortfolioFinancialsResponse)
+async def get_portfolio_financials(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+    granularity: PortfolioGranularity = Query("monthly"),
+    year: int | None = Query(None),
+    initiative_id: str | None = Query(None),
+    workstream_id: str | None = Query(None),
+    business_unit_id: str | None = Query(None),
+    tag: str | None = Query(None),
+    category_key: str | None = Query(None),
+) -> PortfolioFinancialsResponse:
+    assert_can_view_portfolio(current_user)
+    return svc.get_portfolio_financials(
+        granularity=granularity,
+        year=year,
+        initiative_id=initiative_id,
+        workstream_id=workstream_id,
+        business_unit_id=business_unit_id,
+        tag=tag,
+        category_key=category_key,
+    )
+
+
+@router.get(
+    "/portfolio/financials/contributors",
+    response_model=PortfolioFinancialContributorsResponse,
+)
+async def get_portfolio_financial_contributors(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+    period: str = Query(..., min_length=4),
+    granularity: PortfolioGranularity = Query("monthly"),
+    year: int | None = Query(None),
+    initiative_id: str | None = Query(None),
+    workstream_id: str | None = Query(None),
+    business_unit_id: str | None = Query(None),
+    tag: str | None = Query(None),
+    category_key: str | None = Query(None),
+) -> PortfolioFinancialContributorsResponse:
+    assert_can_view_portfolio(current_user)
+    return svc.get_portfolio_financial_contributors(
+        granularity=granularity,
+        period=period,
+        year=year,
+        initiative_id=initiative_id,
+        workstream_id=workstream_id,
+        business_unit_id=business_unit_id,
+        tag=tag,
+        category_key=category_key,
+    )
