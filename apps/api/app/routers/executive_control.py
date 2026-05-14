@@ -146,7 +146,9 @@ async def update_shared_cost_pool(
     return svc.update_pool(pool_id, body)
 
 
-@router.get("/shared-cost-pools/{pool_id}/allocation-rules", response_model=list[AllocationRuleItem])
+@router.get(
+    "/shared-cost-pools/{pool_id}/allocation-rules", response_model=list[AllocationRuleItem]
+)
 async def list_allocation_rules(
     pool_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
@@ -171,7 +173,9 @@ async def create_allocation_rule(
     return svc.create_rule(pool_id, body)
 
 
-@router.patch("/shared-cost-pools/{pool_id}/allocation-rules/{rule_id}", response_model=AllocationRuleItem)
+@router.patch(
+    "/shared-cost-pools/{pool_id}/allocation-rules/{rule_id}", response_model=AllocationRuleItem
+)
 async def update_allocation_rule(
     pool_id: str,
     rule_id: str,

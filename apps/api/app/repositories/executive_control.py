@@ -28,20 +28,12 @@ class ExecutiveControlRepository:
         return result.data or []
 
     def list_financial_entries(self) -> list[dict]:
-        result = (
-            self._c.table("financial_entries")
-            .select("*")
-            .eq("tenant_id", self._tid)
-            .execute()
-        )
+        result = self._c.table("financial_entries").select("*").eq("tenant_id", self._tid).execute()
         return result.data or []
 
     def list_direct_cost_lines(self) -> list[dict]:
         result = (
-            self._c.table("financial_cost_lines")
-            .select("*")
-            .eq("tenant_id", self._tid)
-            .execute()
+            self._c.table("financial_cost_lines").select("*").eq("tenant_id", self._tid).execute()
         )
         return result.data or []
 

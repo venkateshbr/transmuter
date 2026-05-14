@@ -12,7 +12,11 @@ from fastapi import HTTPException
 from supabase import Client
 
 from app.core.auth import CurrentUser
-from app.core.rbac import ROLE_INITIATIVE_OWNER, ROLE_TRANSFORMATION_OFFICE, can_view_all_initiatives
+from app.core.rbac import (
+    ROLE_INITIATIVE_OWNER,
+    ROLE_TRANSFORMATION_OFFICE,
+    can_view_all_initiatives,
+)
 from app.domain.executive_control import (
     AllocationRuleCreate,
     AllocationRuleItem,
@@ -107,7 +111,9 @@ class ExecutiveControlService:
                 raise HTTPException(status_code=404, detail="Dependency not found")
             allowed = {"status", "resolution_notes"}
             if any(key not in allowed for key in patch):
-                raise HTTPException(status_code=403, detail="Owners can update status and notes only")
+                raise HTTPException(
+                    status_code=403, detail="Owners can update status and notes only"
+                )
         else:
             raise HTTPException(status_code=403, detail="Insufficient role")
         row = self._repo.update_dependency(dependency_id, patch)
@@ -133,7 +139,9 @@ class ExecutiveControlService:
         return self._pool_item(row)
 
     def update_pool(self, pool_id: str, data: SharedCostPoolUpdate) -> SharedCostPoolItem:
-        row = self._repo.update_pool(pool_id, self._pool_payload(data.model_dump(exclude_unset=True)))
+        row = self._repo.update_pool(
+            pool_id, self._pool_payload(data.model_dump(exclude_unset=True))
+        )
         return self._pool_item(row)
 
     def list_rules(self, pool_id: str) -> list[AllocationRuleItem]:
@@ -145,7 +153,9 @@ class ExecutiveControlService:
         row = self._repo.create_rule(pool_id, data.model_dump())
         return self._rule_item(row)
 
-    def update_rule(self, pool_id: str, rule_id: str, data: AllocationRuleUpdate) -> AllocationRuleItem:
+    def update_rule(
+        self, pool_id: str, rule_id: str, data: AllocationRuleUpdate
+    ) -> AllocationRuleItem:
         rule = self._repo.get_rule(rule_id)
         if not rule or rule.get("pool_id") != pool_id:
             raise HTTPException(status_code=404, detail="Allocation rule not found")
@@ -172,7 +182,9 @@ class ExecutiveControlService:
                 "scenario": data.scenario,
                 "status": "completed",
                 "total_amount_plan": _money(amount_plan),
-                "total_amount_actual": _money(amount_actual) if pool.get("amount_actual") is not None else None,
+                "total_amount_actual": _money(amount_actual)
+                if pool.get("amount_actual") is not None
+                else None,
                 "created_by": str(current_user.id),
             },
             allocations,
@@ -205,11 +217,16 @@ class ExecutiveControlService:
         initiative_id: str,
         current_user: CurrentUser,
     ) -> list[ValueRealizationNoteItem]:
-        if current_user.role == ROLE_INITIATIVE_OWNER and initiative_id not in self._owned_initiative_ids(current_user):
+        if (
+            current_user.role == ROLE_INITIATIVE_OWNER
+            and initiative_id not in self._owned_initiative_ids(current_user)
+        ):
             raise HTTPException(status_code=404, detail="Initiative not found")
         return [self._note_item(row) for row in self._repo.list_value_notes(initiative_id)]
 
-    def owner_cockpit(self, current_user: CurrentUser, filters: ReportFilterParams) -> ReportResponse:
+    def owner_cockpit(
+        self, current_user: CurrentUser, filters: ReportFilterParams
+    ) -> ReportResponse:
         filters.owner_id = str(current_user.id)
         return self._report("owner", current_user, filters)
 
@@ -235,10 +252,20 @@ class ExecutiveControlService:
     ) -> ReportResponse:
         initiative_ids = self._filtered_initiative_ids(filters, current_user)
         initiatives = [row for row in self._repo.list_initiatives() if row["id"] in initiative_ids]
-        entries = [row for row in self._repo.list_financial_entries() if row.get("initiative_id") in initiative_ids]
-        costs = [row for row in self._repo.list_direct_cost_lines() if row.get("initiative_id") in initiative_ids]
+        entries = [
+            row
+            for row in self._repo.list_financial_entries()
+            if row.get("initiative_id") in initiative_ids
+        ]
+        costs = [
+            row
+            for row in self._repo.list_direct_cost_lines()
+            if row.get("initiative_id") in initiative_ids
+        ]
         allocations = [
-            row for row in self._repo.list_allocations() if row.get("initiative_id") in initiative_ids
+            row
+            for row in self._repo.list_allocations()
+            if row.get("initiative_id") in initiative_ids
         ]
         if filters.target_year:
             entries = [row for row in entries if row.get("year") == filters.target_year]
@@ -256,7 +283,9 @@ class ExecutiveControlService:
             "initiative_count": len(initiatives),
             "red": sum(1 for row in initiatives if row.get("rag_status") == "red"),
             "amber": sum(1 for row in initiatives if row.get("rag_status") == "amber"),
-            "realized": sum(1 for row in initiatives if row.get("realization_status") == "realized"),
+            "realized": sum(
+                1 for row in initiatives if row.get("realization_status") == "realized"
+            ),
             "needs_attention": len(attention),
         }
         return ReportResponse(
@@ -264,8 +293,12 @@ class ExecutiveControlService:
             summary=summary,
             value_bridge=value_bridge,
             cost_allocation={
-                "allocated_plan": _money(sum((_dec(row.get("allocated_plan")) for row in allocations), Decimal("0"))),
-                "allocated_actual": _money(sum((_dec(row.get("allocated_actual")) for row in allocations), Decimal("0"))),
+                "allocated_plan": _money(
+                    sum((_dec(row.get("allocated_plan")) for row in allocations), Decimal("0"))
+                ),
+                "allocated_actual": _money(
+                    sum((_dec(row.get("allocated_actual")) for row in allocations), Decimal("0"))
+                ),
             },
             dependency_risk=dependencies,
             needs_attention=attention[:20],
@@ -315,7 +348,9 @@ class ExecutiveControlService:
         initiatives = self._repo.list_initiatives()
         return [row for row in initiatives if self._matches_filters(row, filters)]
 
-    def _basis_values(self, candidates: list[dict], entries: list[dict], rule: dict) -> dict[str, Decimal]:
+    def _basis_values(
+        self, candidates: list[dict], entries: list[dict], rule: dict
+    ) -> dict[str, Decimal]:
         method = rule["allocation_method"]
         weights = rule.get("weights") or {}
         values: dict[str, Decimal] = {}
@@ -325,12 +360,20 @@ class ExecutiveControlService:
                 values[initiative_id] = _dec(weights.get(initiative_id))
             elif method == "benefit_weighted":
                 values[initiative_id] = sum(
-                    (_dec(entry.get("gm_uplift_base")) for entry in entries if entry.get("initiative_id") == initiative_id),
+                    (
+                        _dec(entry.get("gm_uplift_base"))
+                        for entry in entries
+                        if entry.get("initiative_id") == initiative_id
+                    ),
                     Decimal("0"),
                 )
             elif method == "revenue_weighted":
                 values[initiative_id] = sum(
-                    (_dec(entry.get("revenue_uplift_base")) for entry in entries if entry.get("initiative_id") == initiative_id),
+                    (
+                        _dec(entry.get("revenue_uplift_base"))
+                        for entry in entries
+                        if entry.get("initiative_id") == initiative_id
+                    ),
                     Decimal("0"),
                 )
             elif method == "headcount_weighted":
@@ -365,7 +408,9 @@ class ExecutiveControlService:
             resolution_notes=row.get("resolution_notes"),
             linked_milestone_id=row.get("linked_milestone_id"),
             linked_action_item_id=row.get("linked_action_item_id"),
-            is_overdue=bool(due and due < date.today() and status_value not in {"resolved", "cancelled"}),
+            is_overdue=bool(
+                due and due < date.today() and status_value not in {"resolved", "cancelled"}
+            ),
             blast_radius=self._blast_radius(row.get("upstream_initiative_id") or upstream.id),
             created_at=row.get("created_at"),
             updated_at=row.get("updated_at"),
@@ -377,7 +422,9 @@ class ExecutiveControlService:
                 return candidate
         return row
 
-    def _dependency_rollups(self, items: list[InitiativeDependencyItem]) -> InitiativeDependencyRollups:
+    def _dependency_rollups(
+        self, items: list[InitiativeDependencyItem]
+    ) -> InitiativeDependencyRollups:
         active = [item for item in items if item.status not in {"resolved", "cancelled"}]
         blocked = [
             item.downstream
@@ -445,9 +492,13 @@ class ExecutiveControlService:
             queue.extend(graph.get(current, []))
         return False
 
-    def _filtered_initiative_ids(self, filters: ReportFilterParams, current_user: CurrentUser) -> set[str]:
+    def _filtered_initiative_ids(
+        self, filters: ReportFilterParams, current_user: CurrentUser
+    ) -> set[str]:
         rows = self._repo.list_initiatives()
-        filtered = [row for row in rows if self._matches_filters(row, filters.model_dump(exclude_none=True))]
+        filtered = [
+            row for row in rows if self._matches_filters(row, filters.model_dump(exclude_none=True))
+        ]
         if current_user.role == ROLE_INITIATIVE_OWNER:
             owned = self._owned_initiative_ids(current_user)
             filtered = [row for row in filtered if row["id"] in owned]
@@ -463,18 +514,25 @@ class ExecutiveControlService:
 
     def _matches_filters(self, row: dict, filters: dict[str, Any]) -> bool:
         ws = row.get("workstreams") or {}
-        if filters.get("business_unit_id") and ws.get("business_unit_id") != filters["business_unit_id"]:
+        if (
+            filters.get("business_unit_id")
+            and ws.get("business_unit_id") != filters["business_unit_id"]
+        ):
             return False
         for key in ("workstream_id", "tag", "country", "rag_status", "stage", "owner_id"):
             if filters.get(key) and row.get(key) != filters[key]:
                 return False
         return True
 
-    def _can_view_dependency(self, current_user: CurrentUser, item: InitiativeDependencyItem) -> bool:
+    def _can_view_dependency(
+        self, current_user: CurrentUser, item: InitiativeDependencyItem
+    ) -> bool:
         if can_view_all_initiatives(current_user.role):
             return True
         uid = str(current_user.id)
-        return item.upstream.owner_id == uid or item.downstream.owner_id == uid or item.owner_id == uid
+        return (
+            item.upstream.owner_id == uid or item.downstream.owner_id == uid or item.owner_id == uid
+        )
 
     @staticmethod
     def _touches_initiative(item: InitiativeDependencyItem, initiative_id: str) -> bool:
@@ -505,11 +563,17 @@ class ExecutiveControlService:
             quarter=row.get("quarter"),
             month=row.get("month"),
             amount_plan=_money(row.get("amount_plan")),
-            amount_actual=_money(row.get("amount_actual")) if row.get("amount_actual") is not None else None,
+            amount_actual=_money(row.get("amount_actual"))
+            if row.get("amount_actual") is not None
+            else None,
             is_recurring=bool(row.get("is_recurring")),
             status=row.get("status", "draft"),
-            allocated_plan=_money(sum((_dec(a.get("allocated_plan")) for a in allocations), Decimal("0"))),
-            allocated_actual=_money(sum((_dec(a.get("allocated_actual")) for a in allocations), Decimal("0"))),
+            allocated_plan=_money(
+                sum((_dec(a.get("allocated_plan")) for a in allocations), Decimal("0"))
+            ),
+            allocated_actual=_money(
+                sum((_dec(a.get("allocated_actual")) for a in allocations), Decimal("0"))
+            ),
             created_at=row.get("created_at"),
         )
 
@@ -535,7 +599,9 @@ class ExecutiveControlService:
             scenario=row.get("scenario", "plan"),
             status=row.get("status", "completed"),
             total_amount_plan=_money(row.get("total_amount_plan")),
-            total_amount_actual=_money(row.get("total_amount_actual")) if row.get("total_amount_actual") is not None else None,
+            total_amount_actual=_money(row.get("total_amount_actual"))
+            if row.get("total_amount_actual") is not None
+            else None,
             created_by=row.get("created_by"),
             created_at=row["created_at"],
             allocations=[
@@ -582,8 +648,12 @@ class ExecutiveControlService:
             author_id=row.get("author_id"),
             note_type=row["note_type"],
             period_label=row.get("period_label"),
-            planned_value=_money(row.get("planned_value")) if row.get("planned_value") is not None else None,
-            actual_value=_money(row.get("actual_value")) if row.get("actual_value") is not None else None,
+            planned_value=_money(row.get("planned_value"))
+            if row.get("planned_value") is not None
+            else None,
+            actual_value=_money(row.get("actual_value"))
+            if row.get("actual_value") is not None
+            else None,
             explanation=row["explanation"],
             created_at=row["created_at"],
         )
@@ -607,7 +677,9 @@ class ExecutiveControlService:
         direct_plan = sum((_dec(row.get("amount_plan")) for row in costs), Decimal("0"))
         direct_actual = sum((_dec(row.get("amount_actual")) for row in costs), Decimal("0"))
         allocated_plan = sum((_dec(row.get("allocated_plan")) for row in allocations), Decimal("0"))
-        allocated_actual = sum((_dec(row.get("allocated_actual")) for row in allocations), Decimal("0"))
+        allocated_actual = sum(
+            (_dec(row.get("allocated_actual")) for row in allocations), Decimal("0")
+        )
         return {
             "benefits_plan": _money(benefits_plan),
             "benefits_actual": _money(benefits_actual),
@@ -619,7 +691,9 @@ class ExecutiveControlService:
             "total_burdened_costs_actual": _money(direct_actual + allocated_actual),
             "net_before_allocation_plan": _money(benefits_plan - direct_plan),
             "net_after_allocation_plan": _money(benefits_plan - direct_plan - allocated_plan),
-            "net_after_allocation_actual": _money(benefits_actual - direct_actual - allocated_actual),
+            "net_after_allocation_actual": _money(
+                benefits_actual - direct_actual - allocated_actual
+            ),
         }
 
     def _needs_attention(
@@ -633,7 +707,8 @@ class ExecutiveControlService:
         actual_ids = {
             row["initiative_id"]
             for row in entries
-            if row.get("gm_uplift_actual") is not None or row.get("revenue_uplift_actual") is not None
+            if row.get("gm_uplift_actual") is not None
+            or row.get("revenue_uplift_actual") is not None
         }
         by_init_alloc = defaultdict(Decimal)
         for row in allocations:
@@ -644,8 +719,14 @@ class ExecutiveControlService:
                 attention.append({"initiative_id": iid, "reason": "Missing actuals"})
             if row.get("realization_status") == "at_risk":
                 attention.append({"initiative_id": iid, "reason": "Value realization at risk"})
-            if by_init_alloc[iid] > Decimal("0") and row.get("benefit_confidence") and _dec(row["benefit_confidence"]) < Decimal("50"):
-                attention.append({"initiative_id": iid, "reason": "Low confidence with allocated shared cost"})
+            if (
+                by_init_alloc[iid] > Decimal("0")
+                and row.get("benefit_confidence")
+                and _dec(row["benefit_confidence"]) < Decimal("50")
+            ):
+                attention.append(
+                    {"initiative_id": iid, "reason": "Low confidence with allocated shared cost"}
+                )
         for item in dependencies.blocked_initiatives:
             attention.append({"initiative_id": item.id, "reason": "Blocked by active dependency"})
         return attention

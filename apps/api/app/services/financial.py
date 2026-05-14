@@ -1125,7 +1125,12 @@ class FinancialService:
                 total_period.one_off_costs_plan,
                 total_period.one_off_costs_actual,
             ),
-            ("total_costs", "Total Costs", total_period.total_costs_plan, total_period.total_costs_actual),
+            (
+                "total_costs",
+                "Total Costs",
+                total_period.total_costs_plan,
+                total_period.total_costs_actual,
+            ),
             ("net_value", "Net Value", total_period.net_value_plan, total_period.net_value_actual),
         ]
 

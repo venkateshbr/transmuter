@@ -124,10 +124,7 @@ class _Repo:
         return [{"initiative_id": "i1", "year": 2026, "amount_plan": "10.0000"}]
 
     def list_allocations(self) -> list[dict]:
-        return [
-            {**row, "shared_cost_pools": {"year": 2026}}
-            for row in self.created_allocations
-        ]
+        return [{**row, "shared_cost_pools": {"year": 2026}} for row in self.created_allocations]
 
     def get_pool(self, pool_id: str) -> dict | None:
         if pool_id != "p1":

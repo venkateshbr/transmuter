@@ -196,9 +196,9 @@ class AllocationRunItem(BaseModel):
 
 
 class ValueRealizationNoteCreate(BaseModel):
-    note_type: Literal["variance", "benefit_confidence", "allocation", "realization", "board_note"] = (
-        "variance"
-    )
+    note_type: Literal[
+        "variance", "benefit_confidence", "allocation", "realization", "board_note"
+    ] = "variance"
     period_label: str | None = None
     planned_value: Decimal | None = None
     actual_value: Decimal | None = None

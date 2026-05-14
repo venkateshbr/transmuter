@@ -83,7 +83,9 @@ def test_real_api_executive_control_tower_phase_2a() -> None:
         dependency_data = dependencies.json()
         assert dependency_data["rollups"]["total"] >= 1
         assert dependency_data["rollups"]["critical_path_risk"] >= 1
-        assert any(item["upstream"]["id"] != item["downstream"]["id"] for item in dependency_data["items"])
+        assert any(
+            item["upstream"]["id"] != item["downstream"]["id"] for item in dependency_data["items"]
+        )
 
         pools = client.get("/shared-cost-pools", headers=headers)
         pools.raise_for_status()
@@ -1585,7 +1587,9 @@ def test_real_api_financial_configuration_category_reassignment_and_portfolio_ro
                 headers=headers,
             )
             cost_lines.raise_for_status()
-            reassigned = next(item for item in cost_lines.json()["items"] if item["id"] == cost_line_id)
+            reassigned = next(
+                item for item in cost_lines.json()["items"] if item["id"] == cost_line_id
+            )
             assert reassigned["category_key"] == replacement["key"]
         finally:
             if cost_line_id:
