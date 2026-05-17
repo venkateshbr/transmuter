@@ -2,6 +2,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ApiService } from '../../../core/services/api.service';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 
 @Component({
   selector: 'app-risks',
@@ -173,25 +174,38 @@ import { FormsModule } from '@angular/forms';
 })
 export class RisksComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly route = inject(ActivatedRoute);
   
   risks = signal<any[]>([]);
   filteredRisks = signal<any[]>([]);
   heatmap = signal<any[]>([]);
   
   statusFilter = 'open';
+  impactFilter = '';
+  likelihoodFilter = '';
   riskTypes = ['operational', 'people', 'financial', 'technology'];
   impactLevels = ['high', 'medium', 'low'];
   likelihoodLevels = ['low', 'medium', 'high'];
 
   ngOnInit() {
-    this.loadRisks();
-    this.loadHeatmap();
+    this.route.queryParamMap.subscribe(params => {
+      this.impactFilter = params.get('impact') || '';
+      this.likelihoodFilter = params.get('likelihood') || '';
+      this.loadRisks();
+      this.loadHeatmap();
+    });
   }
 
   loadRisks() {
     this.api.get<any>('/portfolio/risks', { status: this.statusFilter }).subscribe(res => {
-      this.risks.set(res.items || []);
-      this.filteredRisks.set(res.items || []);
+      const items = res.items || [];
+      this.risks.set(items);
+      this.filteredRisks.set(
+        items.filter((risk: any) =>
+          (!this.impactFilter || risk.impact === this.impactFilter)
+          && (!this.likelihoodFilter || risk.likelihood === this.likelihoodFilter)
+        )
+      );
     });
   }
 

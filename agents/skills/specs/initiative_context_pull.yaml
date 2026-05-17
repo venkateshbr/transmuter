@@ -1,0 +1,48 @@
+skill: initiative_context_pull
+version: 1
+owner: dhruva
+description: Pull non-PII initiative operating context for AI drafting and RAG skills.
+inputs:
+  initiative_id:
+    type: uuid
+    required: true
+  period_start:
+    type: date
+    required: false
+  period_end:
+    type: date
+    required: false
+outputs:
+  milestones_summary:
+    total: int
+    complete: int
+    overdue: int
+    at_risk: int
+    completed_this_period:
+      - name: string
+        completed_at: date
+  kpis_summary:
+    kpis:
+      - name: string
+        target_base: decimal_string
+        latest_actual: decimal_string
+        on_track: boolean
+  risks_summary:
+    open_high: int
+    open_medium: int
+    new_this_period:
+      - description: string
+  financials_summary:
+    revenue_plan: decimal_string
+    revenue_actual: decimal_string
+    costs_plan: decimal_string
+    costs_actual: decimal_string
+  last_update:
+    rag_status: string
+    submitted_at: datetime
+    summary: string
+guards:
+  - Tenant scoped queries only.
+  - PII fields such as email, phone, and display_name are not selected.
+  - Monetary values are emitted as strings.
+  - period_start and period_end define completed_this_period and new_this_period.

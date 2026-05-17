@@ -1,0 +1,27 @@
+skill: status_update_drafting
+version: 1
+owner: netra
+description: Draft a grounded initiative status update from initiative_context_pull output.
+inputs:
+  initiative_context:
+    type: object
+    required: true
+outputs:
+  rag_status:
+    type: enum
+    values: [red, amber, green]
+  summary:
+    type: string
+  achievements:
+    type: string
+  issues:
+    type: string
+  next_steps:
+    type: string
+  confidence:
+    type: number
+guards:
+  - RAG status is derived from overdue milestones, open risk severity, and KPI track status.
+  - Achievements only reference milestones supplied in completed_this_period.
+  - Draft text must not introduce facts absent from initiative_context.
+  - Confidence reflects available milestone, KPI, risk, financial, and last-update evidence.

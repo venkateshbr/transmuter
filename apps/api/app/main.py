@@ -22,8 +22,10 @@ from app.routers import (
     people,
     platform,
     risks,
+    search,
     status_updates,
     team,
+    workflows,
     workstreams,
 )
 
@@ -45,6 +47,8 @@ app.add_middleware(
         "http://127.0.0.1:4302",
         "http://localhost:4303",
         "http://127.0.0.1:4303",
+        "http://localhost:4304",
+        "http://127.0.0.1:4304",
         "https://transmuter.ishirock.com",
     ],
     allow_credentials=True,
@@ -71,6 +75,8 @@ app.include_router(financials.router)
 app.include_router(milestones.router)
 app.include_router(kpis.router)
 app.include_router(risks.router)
+app.include_router(search.router)
 app.include_router(status_updates.router)
 app.include_router(governance.router)
 app.include_router(team.router)
+app.include_router(workflows.router)

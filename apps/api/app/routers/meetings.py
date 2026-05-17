@@ -10,6 +10,7 @@ from app.core.rbac import (
     assert_can_view_portfolio,
     assert_can_view_session,
 )
+from app.domain.meeting_notes import MeetingTranscriptUpload
 from app.domain.meetings import (
     ActionItemCreate,
     AgendaItemCreate,
@@ -22,12 +23,19 @@ from app.domain.meetings import (
     SessionUpdate,
 )
 from app.services.meeting import MeetingService
+from app.services.workflow import WorkflowService
 
 router = APIRouter(prefix="/meetings", tags=["meetings"])
 
 
 def _svc(current_user: Annotated[CurrentUser, Depends(get_current_user)]) -> MeetingService:
     return MeetingService(get_supabase_admin(), current_user.tenant_id)
+
+
+def _workflow_svc(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> WorkflowService:
+    return WorkflowService(get_supabase_admin(), current_user.tenant_id)
 
 
 @router.get("")
@@ -137,6 +145,24 @@ async def start_session(
     """Start a new live session or resume an active one."""
     assert_can_manage_initiatives(current_user)
     return svc.start_session(meeting_id)
+
+
+@router.post("/{meeting_id}/sessions/{session_id}/transcript", status_code=202)
+def upload_session_transcript(
+    meeting_id: str,
+    session_id: str,
+    body: MeetingTranscriptUpload,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    workflow_svc: Annotated[WorkflowService, Depends(_workflow_svc)],
+):
+    """Upload transcript text and trigger meeting-notes extraction."""
+    assert_can_manage_initiatives(current_user)
+    return workflow_svc.start_meeting_notes_extraction(
+        meeting_id=meeting_id,
+        session_id=session_id,
+        body=body,
+        submitter_user_id=current_user.id,
+    )
 
 
 @router.post("/{meeting_id}/agenda", status_code=201)

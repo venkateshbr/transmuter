@@ -22,6 +22,8 @@ TENANT_DELETE_TABLES = [
     "agent_corrections",
     "agent_metrics",
     "agent_audit_log",
+    "initiative_intake_workflow_runs",
+    "meeting_notes_workflow_runs",
     "action_items",
     "agenda_items",
     "meeting_sessions",
@@ -296,7 +298,14 @@ def _object_counts(table_counts: dict[str, int]) -> dict[str, int]:
         "governance": ["gate_criteria", "gate_submissions", "stage_gates"],
         "billing": ["tenant_subscriptions", "signup_intents", "subscription_plans"],
         "status_updates": ["status_updates", "nudge_log"],
-        "audit_and_ai": ["audit_log", "agent_audit_log", "agent_corrections", "agent_metrics"],
+        "audit_and_ai": [
+            "audit_log",
+            "agent_audit_log",
+            "agent_corrections",
+            "agent_metrics",
+            "initiative_intake_workflow_runs",
+            "meeting_notes_workflow_runs",
+        ],
         "master_data": ["business_units", "workstreams", "user_workstreams"],
     }
     return {

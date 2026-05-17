@@ -145,17 +145,13 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra dev
 
-      - name: Run evals when datasets exist
+      - name: Run agent eval thresholds
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
           LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
-        run: |
-          if find ../../tests/evals -type f | grep -q .; then
-            uv run pytest ../../tests/evals -v --tb=short
-          else
-            echo "::notice::tests/evals has no committed datasets yet; eval job is configured and will run once datasets are added."
-          fi
+          TRANSMUTER_EVAL_JUDGE_MODEL: anthropic/claude-sonnet-4-6
+        run: uv run pytest ../../tests/evals -v --tb=short
 
   evals-pr-comment:
     name: Post eval policy comment
@@ -176,8 +172,9 @@ jobs:
               "Agent eval status for this PR:",
               "",
               "- Backend, frontend, and schema checks completed in CI.",
-              "- The full agent eval suite is configured to run on pushes to `main`.",
-              "- `tests/evals` currently has no committed datasets, so the main-branch eval job will report a notice until datasets are added."
+              "- The full agent eval suite runs on pushes to `main` with committed JSONL datasets.",
+              "- Current thresholds: extraction accuracy >= 0.85, narrative quality >= 0.80, correction rate <= 0.10.",
+              "- Judge model configuration: `anthropic/claude-sonnet-4-6`."
             ].join("\n");
             const comments = await github.paginate(github.rest.issues.listComments, {
               owner: context.repo.owner,

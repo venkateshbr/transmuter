@@ -1,0 +1,10 @@
+{"id":"risk-001","input":{"name":"AP automation","type":"cost_reduction","dependencies":"ERP integration"},"expected_types":["financial","operational","people"]}
+{"id":"risk-002","input":{"name":"Pricing uplift","type":"revenue_growth","value_logic":"increase margin"},"expected_descriptions":["Pipeline quality may not support forecast revenue for Pricing uplift","Sales adoption may lag the new commercial motion for Pricing uplift"]}
+{"id":"risk-003","input":{"name":"Cloud rightsizing","type":"cost_avoidance","value_logic":"avoid overspend"},"expected_types":["financial","operational"]}
+{"id":"risk-004","input":{"name":"Reporting remediation","type":"compliance","planned_end":"2027-03-31"},"expected_types":["operational","technology","financial"]}
+{"id":"risk-005","input":{"name":"Procurement academy","type":"capability_building"},"expected_types":["people","operational","financial"]}
+{"id":"risk-006","input":{"name":"Shared service consolidation","type":"cost_reduction"},"expected_likelihoods":["medium"]}
+{"id":"risk-007","input":{"name":"Partner sales motion","type":"revenue_growth"},"expected_impacts":["high","medium"]}
+{"id":"risk-008","input":{"name":"Data retention remediation","type":"compliance"},"expected_descriptions":["Control evidence may be incomplete for Data retention remediation"]}
+{"id":"risk-009","input":{"name":"Finance close excellence","type":"capability_building","dependencies":"new close calendar"},"expected_types":["people","operational"]}
+{"id":"risk-010","input":{"name":"Ambiguous improvement","type":null},"expected_types":["financial","people"]}

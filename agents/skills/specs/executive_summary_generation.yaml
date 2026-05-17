@@ -1,0 +1,30 @@
+skill: executive_summary_generation
+version: 1
+owner: netra
+description: Generate a grounded portfolio executive summary from tenant-scoped dashboard context.
+inputs:
+  dashboard_context:
+    type: object
+    required: true
+  filters:
+    type: object
+    required: false
+outputs:
+  portfolio_health:
+    type: object
+  top_initiatives:
+    type: array
+  at_risk_items:
+    type: array
+  financial_overview:
+    type: object
+  key_risks:
+    type: array
+  recommended_actions:
+    type: array
+guards:
+  - All counts and money values must be copied or derived from dashboard_context only.
+  - Top initiatives and at-risk items must cite concrete initiative ids or codes.
+  - Financial values must preserve Decimal string precision from API aggregates.
+  - Recommendations must be derived from visible at-risk initiatives, risks, approvals, or KPI misses.
+  - Langfuse trace metadata must avoid raw PII.

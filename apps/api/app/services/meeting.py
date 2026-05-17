@@ -119,6 +119,14 @@ class MeetingService:
 
         return {**session, "agenda": agenda, "action_items": action_items}
 
+    def get_session_for_meeting(self, meeting_id: str, session_id: str) -> dict:
+        session = self._repo.get_session_with_meeting(meeting_id, session_id)
+        if not session:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+        session["attendees"] = self._repo.get_session_attendees(session_id)
+        session["initiatives"] = self._repo.get_session_initiatives(session_id)
+        return session
+
     def update_session(self, session_id: str, data: SessionUpdate) -> dict:
         return self._repo.update_session(session_id, data.model_dump(exclude_none=True))
 

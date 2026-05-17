@@ -1,0 +1,17 @@
+apiVersion: agentic/v1
+kind: SkillSpec
+metadata:
+  name: transcript_chunking
+  domain_pack: transmuter
+spec:
+  description: Split a meeting transcript into typed speaker/topic chunks for downstream extraction.
+  inputs:
+    transcript: string
+  outputs:
+    chunks:
+      type: array
+      items:
+        index: integer
+        speaker: string|null
+        text: string
+        topic_hint: string|null

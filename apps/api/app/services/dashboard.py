@@ -1,4 +1,5 @@
 from decimal import Decimal
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -126,6 +127,162 @@ class DashboardService:
             },
         }
 
+    def get_dashboard_slice(
+        self,
+        key: str,
+        user_id: UUID,
+        role: str,
+        business_unit_id: str | None = None,
+        workstream_id: str | None = None,
+        rag_status: str | None = None,
+        target_year: int | None = None,
+    ) -> Any:
+        data = self.get_dashboard_data(
+            user_id=user_id,
+            role=role,
+            business_unit_id=business_unit_id,
+            workstream_id=workstream_id,
+            rag_status=rag_status,
+            target_year=target_year,
+        )
+        return data[key]
+
+    def get_pipeline_by_stage_detail(
+        self,
+        user_id: UUID,
+        role: str,
+        business_unit_id: str | None = None,
+        workstream_id: str | None = None,
+        rag_status: str | None = None,
+    ) -> dict[str, Any]:
+        owner_user_id = str(user_id) if role == "initiative_owner" else None
+        initiatives = [
+            i
+            for i in self.repo.get_initiatives_for_dashboard(owner_user_id=owner_user_id)
+            if self._matches_filters(i, business_unit_id, workstream_id, rag_status)
+        ]
+        entries, costs = self.repo.get_financial_summary_data()
+        return self._calculate_pipeline_by_stage_detail(initiatives, entries, costs)
+
+    def generate_executive_summary_pdf(
+        self,
+        user_id: UUID,
+        role: str,
+        business_unit_id: str | None = None,
+        workstream_id: str | None = None,
+        rag_status: str | None = None,
+        target_year: int | None = None,
+    ) -> bytes:
+        summary = self.generate_executive_summary(
+            user_id=user_id,
+            role=role,
+            business_unit_id=business_unit_id,
+            workstream_id=workstream_id,
+            rag_status=rag_status,
+            target_year=target_year,
+        )
+        self._trace_executive_summary(summary)
+        return _render_summary_pdf(summary)
+
+    def generate_executive_summary(
+        self,
+        user_id: UUID,
+        role: str,
+        business_unit_id: str | None = None,
+        workstream_id: str | None = None,
+        rag_status: str | None = None,
+        target_year: int | None = None,
+    ) -> dict[str, Any]:
+        data = self.get_dashboard_data(
+            user_id=user_id,
+            role=role,
+            business_unit_id=business_unit_id,
+            workstream_id=workstream_id,
+            rag_status=rag_status,
+            target_year=target_year,
+        )
+        owner_user_id = str(user_id) if role == "initiative_owner" else None
+        initiatives = [
+            item
+            for item in self.repo.get_initiatives_for_dashboard(owner_user_id=owner_user_id)
+            if self._matches_filters(item, business_unit_id, workstream_id, rag_status)
+        ]
+        initiative_ids = {item["id"] for item in initiatives}
+        risks = [
+            item
+            for item in self.repo.get_open_risks_detail()
+            if not initiative_ids or item.get("initiative_id") in initiative_ids
+        ]
+
+        top_initiatives = sorted(
+            initiatives,
+            key=lambda item: Decimal(str(item.get("pressure_score") or "0")),
+            reverse=True,
+        )[:5]
+        at_risk = [
+            item for item in initiatives if item.get("rag_status") in {"red", "amber"}
+        ][:5]
+
+        return {
+            "generated_at": datetime.now(UTC).isoformat(),
+            "filters": {
+                "business_unit_id": business_unit_id,
+                "workstream_id": workstream_id,
+                "rag_status": rag_status,
+                "target_year": target_year,
+            },
+            "portfolio_health": {
+                "total_initiatives": data["summary"]["total_initiatives"],
+                "at_risk": data["summary"]["at_risk"],
+                "pending_approvals": data["summary"]["pending_approvals"],
+                "pressure_score": round(float(data["portfolio_pressure"]["score"]), 1),
+                "pressure_label": data["portfolio_pressure"]["label"],
+                "rag_breakdown": data["rag_breakdown"],
+                "pipeline_by_stage": data["pipeline_by_stage"],
+            },
+            "top_initiatives": [_initiative_summary(item) for item in top_initiatives],
+            "at_risk_items": [_initiative_summary(item) for item in at_risk],
+            "financial_overview": data["value_bridge"],
+            "kpi_pulse": {
+                key: data["kpi_pulse"].get(key)
+                for key in ("total_kpis", "hitting_base", "missing_base", "no_actuals", "health_score")
+            },
+            "key_risks": [_risk_summary(item) for item in risks[:5]],
+            "recommended_actions": _recommended_actions(data, at_risk, risks),
+        }
+
+    def _trace_executive_summary(self, summary: dict[str, Any]) -> None:
+        try:
+            from app.core.observability import get_langfuse
+
+            langfuse = get_langfuse()
+            if not langfuse:
+                return
+            health = summary["portfolio_health"]
+            with langfuse.start_as_current_observation(
+                name="executive-summary-generation",
+                input={
+                    "filters": summary["filters"],
+                    "total_initiatives": health["total_initiatives"],
+                    "at_risk": health["at_risk"],
+                },
+                tags=["executive-summary", "dashboard"],
+            ) as observation:
+                observation.update(
+                    output={
+                        "sections": [
+                            "portfolio_health",
+                            "top_initiatives",
+                            "at_risk_items",
+                            "financial_overview",
+                            "key_risks",
+                            "recommended_actions",
+                        ],
+                    }
+                )
+        except Exception:
+            return
+
     def _matches_filters(
         self,
         row: dict[str, Any],
@@ -245,6 +402,51 @@ class DashboardService:
             "net_high": _money(benefits_high - costs_plan),
             "net_actual": _money(benefits_actual - costs_actual),
         }
+
+    def _calculate_pipeline_by_stage_detail(
+        self,
+        initiatives: list[dict[str, Any]],
+        entries: list[dict[str, Any]],
+        costs: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        def _dec(value: object) -> Decimal:
+            return Decimal(str(value)) if value is not None else Decimal("0")
+
+        def _money(value: Decimal) -> str:
+            return str(value.quantize(Decimal("0.0001")))
+
+        initiative_ids_by_stage: dict[str, set[str]] = {
+            "scoping": set(),
+            "in_progress": set(),
+            "complete": set(),
+        }
+        for initiative in initiatives:
+            stage = initiative.get("stage") or "scoping"
+            initiative_ids_by_stage.setdefault(stage, set()).add(initiative["id"])
+
+        result: dict[str, Any] = {}
+        for stage, ids in initiative_ids_by_stage.items():
+            scoped_entries = [e for e in entries if e.get("initiative_id") in ids]
+            scoped_costs = [c for c in costs if c.get("initiative_id") in ids]
+            benefits_base = sum((_dec(e.get("gm_uplift_base")) for e in scoped_entries), Decimal("0"))
+            benefits_high = sum((_dec(e.get("gm_uplift_high")) for e in scoped_entries), Decimal("0"))
+            benefits_actual = sum(
+                (_dec(e.get("gm_uplift_actual")) for e in scoped_entries), Decimal("0")
+            )
+            costs_plan = sum((_dec(c.get("amount_plan")) for c in scoped_costs), Decimal("0"))
+            costs_actual = sum((_dec(c.get("amount_actual")) for c in scoped_costs), Decimal("0"))
+            result[stage] = {
+                "count": len(ids),
+                "benefits_base": _money(benefits_base),
+                "benefits_high": _money(benefits_high),
+                "benefits_actual": _money(benefits_actual),
+                "costs_plan": _money(costs_plan),
+                "costs_actual": _money(costs_actual),
+                "net_base": _money(benefits_base - costs_plan),
+                "net_high": _money(benefits_high - costs_plan),
+                "net_actual": _money(benefits_actual - costs_actual),
+            }
+        return result
 
     def _calculate_value_matrix(
         self,
@@ -489,3 +691,220 @@ class DashboardService:
                 "net_value_actual",
             ):
                 initiative[field] = money_formatter(Decimal(str(initiative[field])))
+
+
+def _initiative_summary(item: dict[str, Any]) -> dict[str, Any]:
+    workstream = item.get("workstreams") or {}
+    return {
+        "id": item.get("id"),
+        "code": item.get("initiative_code"),
+        "name": item.get("name"),
+        "stage": item.get("stage"),
+        "rag_status": item.get("rag_status"),
+        "pressure_score": item.get("pressure_score"),
+        "workstream": workstream.get("name"),
+        "business_unit": (workstream.get("business_units") or {}).get("name"),
+    }
+
+
+def _risk_summary(item: dict[str, Any]) -> dict[str, Any]:
+    initiative = item.get("initiatives") or {}
+    return {
+        "id": item.get("id"),
+        "description": item.get("description"),
+        "type": item.get("type"),
+        "impact": item.get("impact"),
+        "likelihood": item.get("likelihood"),
+        "rating": item.get("rating"),
+        "initiative": initiative.get("name"),
+        "initiative_code": initiative.get("initiative_code"),
+    }
+
+
+def _recommended_actions(
+    data: dict[str, Any],
+    at_risk: list[dict[str, Any]],
+    risks: list[dict[str, Any]],
+) -> list[str]:
+    actions: list[str] = []
+    if at_risk:
+        actions.append(
+            f"Run executive intervention on {len(at_risk)} red/amber initiatives this week."
+        )
+    if risks:
+        actions.append(f"Review top {min(len(risks), 5)} open risks and confirm mitigation owners.")
+    if int(data["summary"].get("pending_approvals") or 0) > 0:
+        actions.append("Clear pending gate approvals to unblock delivery decisions.")
+    kpi_pulse = data.get("kpi_pulse") or {}
+    if int(kpi_pulse.get("missing_base") or 0) > 0:
+        actions.append("Ask initiative owners to recover KPIs currently missing base.")
+    if not actions:
+        actions.append("Maintain current cadence and monitor for emerging delivery pressure.")
+    return actions
+
+
+def _render_summary_pdf(summary: dict[str, Any]) -> bytes:
+    lines = _summary_lines(summary)
+    pages = [lines[index : index + 48] for index in range(0, len(lines), 48)] or [[]]
+    objects: list[bytes] = []
+
+    def add_object(value: bytes) -> int:
+        objects.append(value)
+        return len(objects)
+
+    catalog_id = add_object(b"")
+    pages_id = add_object(b"")
+    page_ids: list[int] = []
+    for page_lines in pages:
+        content = _page_content(page_lines)
+        content_id = add_object(
+            b"<< /Length "
+            + str(len(content)).encode("ascii")
+            + b" >>\nstream\n"
+            + content
+            + b"\nendstream"
+        )
+        page_id = add_object(
+            (
+                f"<< /Type /Page /Parent {pages_id} 0 R /MediaBox [0 0 612 792] "
+                f"/Resources << /Font << /F1 << /Type /Font /Subtype /Type1 "
+                f"/BaseFont /Helvetica >> >> >> /Contents {content_id} 0 R >>"
+            ).encode("ascii")
+        )
+        page_ids.append(page_id)
+
+    objects[catalog_id - 1] = f"<< /Type /Catalog /Pages {pages_id} 0 R >>".encode("ascii")
+    kids = " ".join(f"{page_id} 0 R" for page_id in page_ids)
+    objects[pages_id - 1] = (
+        f"<< /Type /Pages /Kids [{kids}] /Count {len(page_ids)} >>"
+    ).encode("ascii")
+
+    output = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for index, obj in enumerate(objects, start=1):
+        offsets.append(len(output))
+        output.extend(f"{index} 0 obj\n".encode("ascii"))
+        output.extend(obj)
+        output.extend(b"\nendobj\n")
+    xref_start = len(output)
+    output.extend(f"xref\n0 {len(objects) + 1}\n".encode("ascii"))
+    output.extend(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        output.extend(f"{offset:010d} 00000 n \n".encode("ascii"))
+    output.extend(
+        (
+            f"trailer\n<< /Size {len(objects) + 1} /Root {catalog_id} 0 R >>\n"
+            f"startxref\n{xref_start}\n%%EOF\n"
+        ).encode("ascii")
+    )
+    return bytes(output)
+
+
+def _summary_lines(summary: dict[str, Any]) -> list[str]:
+    health = summary["portfolio_health"]
+    financials = summary["financial_overview"]
+    kpis = summary["kpi_pulse"]
+    lines = [
+        "Transmuter Executive Summary",
+        f"Generated: {summary['generated_at']}",
+        "",
+        "Portfolio Health",
+        f"- Total initiatives: {health['total_initiatives']}",
+        f"- Red initiatives: {health['at_risk']}",
+        f"- Pending approvals: {health['pending_approvals']}",
+        f"- Pressure: {health['pressure_score']} ({health['pressure_label']})",
+        f"- RAG mix: {health['rag_breakdown']}",
+        f"- Pipeline: {health['pipeline_by_stage']}",
+        "",
+        "Financial Overview",
+        f"- Benefits base: {financials.get('benefits_base', '0.0000')}",
+        f"- Benefits actual: {financials.get('benefits_actual', '0.0000')}",
+        f"- Costs plan: {financials.get('costs_plan', '0.0000')}",
+        f"- Costs actual: {financials.get('costs_actual', '0.0000')}",
+        f"- Net base: {financials.get('net_base', '0.0000')}",
+        f"- Net actual: {financials.get('net_actual', '0.0000')}",
+        "",
+        "KPI Pulse",
+        f"- Total KPIs: {kpis.get('total_kpis', 0)}",
+        f"- Hitting base: {kpis.get('hitting_base', 0)}",
+        f"- Missing base: {kpis.get('missing_base', 0)}",
+        f"- Health score: {kpis.get('health_score', '0.0')}%",
+        "",
+        "Top Initiatives",
+        *_bullet_initiatives(summary["top_initiatives"]),
+        "",
+        "At-Risk Items",
+        *_bullet_initiatives(summary["at_risk_items"]),
+        "",
+        "Key Risks",
+        *_bullet_risks(summary["key_risks"]),
+        "",
+        "Recommended Actions",
+        *[f"- {action}" for action in summary["recommended_actions"]],
+    ]
+    wrapped: list[str] = []
+    for line in lines:
+        wrapped.extend(_wrap_line(line, 90))
+    return wrapped
+
+
+def _bullet_initiatives(items: list[dict[str, Any]]) -> list[str]:
+    if not items:
+        return ["- None in current filter scope."]
+    return [
+        "- {code} {name}: {rag_status}, {stage}, pressure {pressure_score}".format(
+            code=item.get("code") or "",
+            name=item.get("name") or "Untitled",
+            rag_status=item.get("rag_status") or "unknown",
+            stage=item.get("stage") or "unknown",
+            pressure_score=item.get("pressure_score") or "n/a",
+        ).strip()
+        for item in items
+    ]
+
+
+def _bullet_risks(items: list[dict[str, Any]]) -> list[str]:
+    if not items:
+        return ["- No open risks in current filter scope."]
+    return [
+        "- {description} ({impact}/{likelihood}) [{initiative}]".format(
+            description=item.get("description") or "Open risk",
+            impact=item.get("impact") or "unknown",
+            likelihood=item.get("likelihood") or "unknown",
+            initiative=item.get("initiative") or "Portfolio",
+        )
+        for item in items
+    ]
+
+
+def _wrap_line(line: str, width: int) -> list[str]:
+    text = line.encode("latin-1", errors="replace").decode("latin-1")
+    if len(text) <= width:
+        return [text]
+    words = text.split()
+    rows: list[str] = []
+    current = ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if len(candidate) > width and current:
+            rows.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        rows.append(current)
+    return rows
+
+
+def _page_content(lines: list[str]) -> bytes:
+    commands = ["BT", "/F1 11 Tf", "54 748 Td", "15 TL"]
+    for index, line in enumerate(lines):
+        if index:
+            commands.append("T*")
+        commands.append(f"({_pdf_escape(line)}) Tj")
+    commands.append("ET")
+    return "\n".join(commands).encode("latin-1", errors="replace")
+
+
+def _pdf_escape(text: str) -> str:
+    return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")

@@ -48,6 +48,19 @@ class DashboardRepository:
         )
         return res.data or []
 
+    def get_open_risks_detail(self) -> list[dict[str, Any]]:
+        res = (
+            self.client.table("risks")
+            .select(
+                "id, initiative_id, description, type, impact, likelihood, rating, "
+                "initiatives(name, initiative_code)"
+            )
+            .eq("tenant_id", self.tenant_id)
+            .eq("status", "open")
+            .execute()
+        )
+        return res.data or []
+
     def get_pending_approvals_count(self) -> int:
         res = (
             self.client.table("gate_submissions")

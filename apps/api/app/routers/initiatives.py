@@ -8,15 +8,26 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import Response, StreamingResponse
 
-from app.agents.initiative_intake_agent import generate_intake_suggestions
+from app.agents.initiative_intake_agent import (
+    extract_initiative_fields,
+    generate_intake_suggestions,
+    scan_risk_patterns,
+    suggest_kpis,
+)
 from app.core.auth import CurrentUser, RequireAdmin, get_current_user
 from app.core.database import get_supabase_admin
 from app.core.rbac import assert_can_manage_initiatives
 from app.domain.initiative_intake import (
+    InitiativeFieldExtractionRequest,
+    InitiativeFieldExtractionResult,
     InitiativeIntakeCreate,
     InitiativeIntakeRequest,
     InitiativeIntakeSuggestions,
     InitiativeWorkbookPreview,
+    KPISuggestionRequest,
+    KPISuggestionResult,
+    RiskPatternScanRequest,
+    RiskPatternScanResult,
 )
 from app.domain.initiatives import (
     InitiativeCreate,
@@ -24,6 +35,7 @@ from app.domain.initiatives import (
     InitiativeListResponse,
     InitiativeUpdate,
 )
+from app.jobs.portfolio_rag import enqueue_portfolio_rag_rebuild
 from app.services.initiative import InitiativeService
 
 router = APIRouter(prefix="/initiatives", tags=["initiatives"])
@@ -118,6 +130,34 @@ async def create_intake_suggestions(
     return await generate_intake_suggestions(body)
 
 
+@router.post("/intake/extract-fields", response_model=InitiativeFieldExtractionResult)
+async def extract_intake_fields(
+    body: InitiativeFieldExtractionRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> InitiativeFieldExtractionResult:
+    return await extract_initiative_fields(body.text)
+
+
+@router.post("/intake/suggest-kpis", response_model=KPISuggestionResult)
+async def create_kpi_suggestions(
+    body: KPISuggestionRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> KPISuggestionResult:
+    return suggest_kpis(
+        initiative_type=body.initiative_type,
+        initiative_name=body.initiative_name,
+        value_logic=body.value_logic,
+    )
+
+
+@router.post("/intake/scan-risks", response_model=RiskPatternScanResult)
+async def create_risk_pattern_scan(
+    body: RiskPatternScanRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> RiskPatternScanResult:
+    return scan_risk_patterns(body.initiative_draft)
+
+
 @router.post("/intake/create", response_model=InitiativeDetail, status_code=201)
 async def create_initiative_from_intake(
     body: InitiativeIntakeCreate,
@@ -125,7 +165,9 @@ async def create_initiative_from_intake(
     svc: Annotated[InitiativeService, Depends(_svc)],
 ) -> InitiativeDetail:
     assert_can_manage_initiatives(current_user)
-    return svc.create_from_intake(body, current_user.id)
+    result = svc.create_from_intake(body, current_user.id)
+    enqueue_portfolio_rag_rebuild(current_user.tenant_id)
+    return result
 
 
 # ── Create ────────────────────────────────────────────────────────────────────
@@ -138,7 +180,9 @@ async def create_initiative(
     svc: Annotated[InitiativeService, Depends(_svc)],
 ) -> InitiativeDetail:
     assert_can_manage_initiatives(current_user)
-    return svc.create_initiative(body, current_user.id)
+    result = svc.create_initiative(body, current_user.id)
+    enqueue_portfolio_rag_rebuild(current_user.tenant_id)
+    return result
 
 
 # ── Get one ───────────────────────────────────────────────────────────────────
@@ -176,7 +220,9 @@ async def import_into_existing_initiative(
     file: UploadFile = File(...),
 ) -> InitiativeDetail:
     assert_can_manage_initiatives(current_user)
-    return svc.import_into_existing_initiative(initiative_id, await file.read(), current_user.id)
+    result = svc.import_into_existing_initiative(initiative_id, await file.read(), current_user.id)
+    enqueue_portfolio_rag_rebuild(current_user.tenant_id)
+    return result
 
 
 # ── Update ────────────────────────────────────────────────────────────────────
@@ -190,7 +236,9 @@ async def update_initiative(
     svc: Annotated[InitiativeService, Depends(_svc)],
 ) -> InitiativeDetail:
     assert_can_manage_initiatives(current_user)
-    return svc.update_initiative(initiative_id, body)
+    result = svc.update_initiative(initiative_id, body)
+    enqueue_portfolio_rag_rebuild(current_user.tenant_id)
+    return result
 
 
 # ── Archive ───────────────────────────────────────────────────────────────────
@@ -203,7 +251,9 @@ async def archive_initiative(
     svc: Annotated[InitiativeService, Depends(_svc)],
 ) -> InitiativeDetail:
     assert_can_manage_initiatives(current_user)
-    return svc.archive_initiative(initiative_id)
+    result = svc.archive_initiative(initiative_id)
+    enqueue_portfolio_rag_rebuild(current_user.tenant_id)
+    return result
 
 
 # ── Summary & Lessons Learned ────────────────────────────────────────────────

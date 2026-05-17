@@ -222,6 +222,18 @@ class MeetingRepository:
         )
         return result.data if result else None
 
+    def get_session_with_meeting(self, meeting_id: str, session_id: str) -> dict | None:
+        result = (
+            self._c.table("meeting_sessions")
+            .select("*, meetings(*)")
+            .eq("tenant_id", self._tid)
+            .eq("meeting_id", meeting_id)
+            .eq("id", session_id)
+            .maybe_single()
+            .execute()
+        )
+        return result.data if result else None
+
     def update_session(self, session_id: str, data: dict) -> dict:
         result = (
             self._c.table("meeting_sessions")
@@ -239,6 +251,18 @@ class MeetingRepository:
             .execute()
         )
         return result.data[0] if result.data else {}
+
+    def get_session_attendees(self, session_id: str) -> list[dict]:
+        session = self.get_session(session_id)
+        if not session:
+            return []
+        return self.get_attendees(session["meeting_id"])
+
+    def get_session_initiatives(self, session_id: str) -> list[dict]:
+        session = self.get_session(session_id)
+        if not session:
+            return []
+        return self.get_initiatives(session["meeting_id"])
 
     def get_session_action_items(self, session_id: str) -> list[dict]:
         result = (

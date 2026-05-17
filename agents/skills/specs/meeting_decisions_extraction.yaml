@@ -1,0 +1,25 @@
+apiVersion: agentic/v1
+kind: SkillSpec
+metadata:
+  name: meeting_decisions_extraction
+  domain_pack: transmuter
+spec:
+  description: Extract meeting decisions and linked initiative status update signals.
+  inputs:
+    chunks: TranscriptChunk[]
+    linked_initiatives: LinkedInitiativeContext[]
+  outputs:
+    decisions:
+      type: array
+      items:
+        text: string
+        accepted: boolean
+        rationale: string|null
+    initiative_updates:
+      type: array
+      items:
+        initiative_id: uuid|null
+        initiative_name: string|null
+        summary: string
+        rag_status: red|amber|green
+        accepted: boolean

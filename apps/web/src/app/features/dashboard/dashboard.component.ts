@@ -40,9 +40,9 @@ import { RouterLink } from '@angular/router';
                   (click)="generateReport()"
                   data-testid="dashboard-executive-summary"
                   aria-label="Generate executive summary"
-                  class="border border-white/20 bg-white/10 px-6 py-3 text-xs font-black uppercase tracking-widest transition-all hover:bg-white/20"
+                  class="executive-summary-cta px-6 py-3 text-xs font-black uppercase tracking-widest transition-all"
                 >
-                  {{ reporting() ? 'Generating...' : 'Executive Summary' }}
+                  {{ reporting() ? 'Generating...' : '+ Executive Summary' }}
                 </button>
                 <button routerLink="/initiatives/new" class="executive-action-button bg-white px-6 py-3 text-xs font-black uppercase tracking-widest shadow-lg transition-all hover:shadow-[inset_0_-4px_0_var(--t-blue-light)]">
                   + Executive Action
@@ -128,7 +128,10 @@ import { RouterLink } from '@angular/router';
           class="card block p-6 border-l-4 border-[var(--t-accent)] cursor-pointer hover:-translate-y-0.5 hover:border-[var(--t-accent)] hover:shadow-xl transition-all"
           aria-label="Open all initiatives"
         >
-          <p class="text-xs font-bold uppercase tracking-widest text-[var(--t-text-tertiary)] mb-1">Total Initiatives</p>
+          <div class="flex items-center justify-between gap-3">
+            <p class="text-xs font-bold uppercase tracking-widest text-[var(--t-text-tertiary)] mb-1">Total Initiatives</p>
+            <span class="methodology-tip" title="Count of active, non-archived initiatives in the current dashboard filter scope." aria-label="Total initiatives methodology">?</span>
+          </div>
           <p class="text-3xl font-bold text-[var(--t-text-primary)]">{{ data()?.summary?.total_initiatives || 0 }}</p>
           <p class="text-xs text-[var(--t-text-secondary)] mt-2 flex items-center gap-1">
             <span class="text-green-500">↑ 2</span> from last week
@@ -141,7 +144,10 @@ import { RouterLink } from '@angular/router';
           class="card block p-6 border-l-4 border-red-500 cursor-pointer hover:-translate-y-0.5 hover:border-red-500 hover:shadow-xl transition-all"
           aria-label="Open red at-risk initiatives"
         >
-          <p class="text-xs font-bold uppercase tracking-widest text-[var(--t-text-tertiary)] mb-1">At Risk</p>
+          <div class="flex items-center justify-between gap-3">
+            <p class="text-xs font-bold uppercase tracking-widest text-[var(--t-text-tertiary)] mb-1">At Risk</p>
+            <span class="methodology-tip" title="Count of red RAG initiatives in the current dashboard filter scope." aria-label="At risk methodology">?</span>
+          </div>
           <p class="text-3xl font-bold text-red-500">{{ data()?.summary?.at_risk || 0 }}</p>
           <p class="text-xs text-[var(--t-text-secondary)] mt-2 flex items-center gap-1">
             Requires immediate attention
@@ -154,7 +160,10 @@ import { RouterLink } from '@angular/router';
           class="card block p-6 border-l-4 border-amber-500 cursor-pointer hover:-translate-y-0.5 hover:border-amber-500 hover:shadow-xl transition-all"
           aria-label="Open pending governance approvals"
         >
-          <p class="text-xs font-bold uppercase tracking-widest text-[var(--t-text-tertiary)] mb-1">Pending Approvals</p>
+          <div class="flex items-center justify-between gap-3">
+            <p class="text-xs font-bold uppercase tracking-widest text-[var(--t-text-tertiary)] mb-1">Pending Approvals</p>
+            <span class="methodology-tip" title="Gate submissions with pending decisions for the current tenant." aria-label="Pending approvals methodology">?</span>
+          </div>
           <p class="text-3xl font-bold text-amber-500">{{ data()?.summary?.pending_approvals || 0 }}</p>
           <p class="text-xs text-[var(--t-text-secondary)] mt-2">Gate submissions awaiting review</p>
         </a>
@@ -169,6 +178,7 @@ import { RouterLink } from '@angular/router';
               <span class="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Gross Margin Uplift</span>
             </div>
             <h2 class="text-2xl font-black tracking-tight">Workstreams x Value Tags</h2>
+            <span class="methodology-tip methodology-tip-dark" title="Gross margin uplift grouped by workstream and initiative tag for the selected fiscal year." aria-label="Value matrix methodology">?</span>
             <p class="mt-2 max-w-2xl text-xs font-medium leading-relaxed text-white/70">
               Planned gross margin uplift ranges by operating workstream and initiative tag. Select a year and open any cell to inspect the initiatives behind the number.
             </p>
@@ -290,7 +300,10 @@ import { RouterLink } from '@angular/router';
           
           <!-- Pipeline by Stage -->
           <div class="card p-6">
-            <h3 class="text-lg font-bold text-[var(--t-text-primary)] mb-6">Pipeline by Stage</h3>
+            <div class="mb-6 flex items-start justify-between gap-3">
+              <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Pipeline by Stage</h3>
+              <span class="methodology-tip" title="Active initiatives grouped by current stage, updated by initiative owners and transformation office users." aria-label="Pipeline by stage methodology">?</span>
+            </div>
             <div class="flex items-end gap-2 h-40">
               @for (stage of stages; track stage.id) {
                 <a
@@ -317,7 +330,10 @@ import { RouterLink } from '@angular/router';
 
           <!-- RAG Breakdown -->
           <div class="card p-6">
-            <h3 class="text-lg font-bold text-[var(--t-text-primary)] mb-6">Health Breakdown (RAG)</h3>
+            <div class="mb-6 flex items-start justify-between gap-3">
+              <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Health Breakdown (RAG)</h3>
+              <span class="methodology-tip" title="Distribution of initiative self-reported red, amber, and green health statuses." aria-label="RAG breakdown methodology">?</span>
+            </div>
             <div class="flex items-center gap-8">
               <div class="flex-1 space-y-4">
                 @for (rag of ['green', 'amber', 'red']; track rag) {
@@ -362,7 +378,10 @@ import { RouterLink } from '@angular/router';
             class="card block p-6 bg-gradient-to-br from-[var(--t-surface)] to-[var(--t-accent-soft)]/10 cursor-pointer hover:-translate-y-0.5 hover:border-[var(--t-accent)] hover:shadow-xl transition-all"
             aria-label="Open milestone tracker"
           >
-            <h3 class="text-lg font-bold text-[var(--t-text-primary)] mb-6">Portfolio Pressure</h3>
+            <div class="mb-6 flex items-start justify-between gap-3">
+              <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Portfolio Pressure</h3>
+              <span class="methodology-tip" title="Average pressure score across scoped active initiatives on a 0 to 10 scale." aria-label="Portfolio pressure methodology">?</span>
+            </div>
             <div class="relative pt-10 flex flex-col items-center">
                <div class="w-48 h-24 overflow-hidden relative">
                   <div class="w-48 h-48 rounded-full border-[16px] border-[var(--t-border)] absolute top-0 left-0"></div>
@@ -385,7 +404,11 @@ import { RouterLink } from '@angular/router';
           <!-- My Milestones -->
           <div class="card p-6">
             <div class="flex justify-between items-center mb-6">
-              <h3 class="text-lg font-bold text-[var(--t-text-primary)]">My Milestones</h3>
+              <div class="flex items-center gap-2">
+                <h3 class="text-lg font-bold text-[var(--t-text-primary)]">My Milestones</h3>
+                <span class="methodology-tip" title="Open milestones assigned to the current user, ordered by planned end date." aria-label="My milestones methodology">?</span>
+                <span class="dashboard-count-badge" data-testid="dashboard-my-milestones-count">{{ data()?.my_milestones?.length || 0 }}</span>
+              </div>
               <a routerLink="/progress" class="text-xs text-[var(--t-accent)] font-semibold">View all →</a>
             </div>
             <div class="space-y-4">
@@ -419,11 +442,34 @@ import { RouterLink } from '@angular/router';
       </div>
 
       <!-- Extended Widgets -->
-      <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
+        <section class="card p-6" data-testid="dashboard-pipeline-value">
+          <div class="flex items-start justify-between gap-3 mb-5">
+            <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Pipeline Value</h3>
+            <span class="methodology-tip" title="Plan shows base to high net value range; actual shows realized net value from financial entries and cost lines." aria-label="Pipeline value methodology">?</span>
+          </div>
+          <div class="space-y-4">
+            <div class="border-l-4 border-[var(--t-accent)] pl-4">
+              <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Plan Range</p>
+              <p class="mt-1 text-xl font-black text-[var(--t-text-primary)]">
+                {{ formatMoney(data()?.value_bridge?.net_base) }} - {{ formatMoney(data()?.value_bridge?.net_high) }}
+              </p>
+            </div>
+            <div class="border-l-4 border-[var(--t-amber)] pl-4">
+              <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Actual Net</p>
+              <p class="mt-1 text-xl font-black text-[var(--t-accent)]">{{ formatMoney(data()?.value_bridge?.net_actual) }}</p>
+            </div>
+          </div>
+          <a routerLink="/initiatives/pipeline" class="mt-5 inline-flex text-xs font-bold text-[var(--t-accent)]">Open pipeline value</a>
+        </section>
+
         <section class="card p-6" data-testid="dashboard-my-actions">
           <div class="flex items-start justify-between gap-3 mb-5">
-            <h3 class="text-lg font-bold text-[var(--t-text-primary)]">My Actions</h3>
-            <span class="material-icons text-[var(--t-text-tertiary)]" title="Assigned open meeting action items">help_outline</span>
+            <div class="flex items-center gap-2">
+              <h3 class="text-lg font-bold text-[var(--t-text-primary)]">My Actions</h3>
+              <span class="dashboard-count-badge" data-testid="dashboard-my-actions-count">{{ data()?.my_actions?.length || 0 }}</span>
+            </div>
+            <span class="methodology-tip" title="Assigned open meeting action items for the current user." aria-label="My actions methodology">?</span>
           </div>
           <div class="space-y-3">
             @for (action of data()?.my_actions || []; track action.id) {
@@ -441,7 +487,7 @@ import { RouterLink } from '@angular/router';
         <section class="card p-6" data-testid="dashboard-kpi-pulse">
           <div class="flex items-start justify-between gap-3 mb-5">
             <h3 class="text-lg font-bold text-[var(--t-text-primary)]">KPI Pulse</h3>
-            <span class="material-icons text-[var(--t-text-tertiary)]" title="Latest actuals compared with base targets">help_outline</span>
+            <span class="methodology-tip" title="Latest KPI actuals compared with base targets across scoped initiatives." aria-label="KPI pulse methodology">?</span>
           </div>
           <div class="flex items-end justify-between mb-4">
             <p class="text-4xl font-black text-[var(--t-accent)]">{{ data()?.kpi_pulse?.health_score || '0.0' }}%</p>
@@ -460,7 +506,7 @@ import { RouterLink } from '@angular/router';
         <section class="card p-6" data-testid="dashboard-value-bridge">
           <div class="flex items-start justify-between gap-3 mb-5">
             <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Value Bridge</h3>
-            <span class="material-icons text-[var(--t-text-tertiary)]" title="Portfolio benefits, costs, and net value">help_outline</span>
+            <span class="methodology-tip" title="Benefits minus planned and actual cost lines, shown as base, high, and actual net values." aria-label="Value bridge methodology">?</span>
           </div>
           <div class="grid grid-cols-3 gap-3 text-center">
             <div class="rounded-lg bg-[var(--t-surface-raised)] p-3">
@@ -484,7 +530,7 @@ import { RouterLink } from '@angular/router';
         <section class="card p-6" data-testid="dashboard-risk-heatmap">
           <div class="flex items-start justify-between gap-3 mb-5">
             <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Risk Heatmap</h3>
-            <span class="material-icons text-[var(--t-text-tertiary)]" title="Open risks by impact and likelihood">help_outline</span>
+            <span class="methodology-tip" title="Open risks grouped by impact and likelihood. Select a cell to open the filtered risk register." aria-label="Risk heatmap methodology">?</span>
           </div>
           <div class="grid grid-cols-3 gap-2">
             @for (impact of heatmapLevels; track impact) {
@@ -508,7 +554,7 @@ import { RouterLink } from '@angular/router';
         <section class="card p-6" data-testid="dashboard-recent-activity">
           <div class="flex items-start justify-between gap-3 mb-5">
             <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Recent Activity</h3>
-            <span class="material-icons text-[var(--t-text-tertiary)]" title="Latest submitted status updates">help_outline</span>
+            <span class="methodology-tip" title="Latest submitted status updates for scoped initiatives." aria-label="Recent activity methodology">?</span>
           </div>
           <div class="space-y-3">
             @for (activity of data()?.recent_activity || []; track activity.id) {
@@ -531,43 +577,91 @@ import { RouterLink } from '@angular/router';
 
     <!-- Onboarding / Welcome Modal -->
     @if (showWelcome()) {
-      <div class="overlay flex items-center justify-center p-6 bg-black/40 backdrop-blur-md">
-        <div class="card max-w-2xl w-full p-0 overflow-hidden shadow-2xl animate-scale-in">
-           <div class="executive-surface h-48 p-10 relative overflow-hidden">
+      <div class="overlay flex items-center justify-center p-4 bg-black/40 backdrop-blur-md">
+        <div class="card w-full max-w-3xl overflow-hidden p-0 shadow-2xl animate-scale-in" data-testid="onboarding-tour">
+           <div class="executive-surface min-h-44 p-6 sm:p-10 relative overflow-hidden">
               <div class="absolute inset-y-0 right-0 w-1/3 border-l border-white/15 bg-white/5"></div>
               <div class="absolute right-8 top-8 h-20 w-20 border-t-4 border-r-4 border-[var(--t-blue-light)]/70"></div>
               <div class="relative z-10">
-                 <h2 class="text-3xl font-black text-white leading-tight">Welcome to <br/>Transmuter Platform<span class="text-[var(--t-blue-light)]">.</span></h2>
-                 <p class="text-white/70 text-xs font-bold uppercase tracking-widest mt-2">Executive Onboarding (May 2026 Release)</p>
+                 <p class="text-white/60 text-[10px] font-black uppercase tracking-[0.2em] mb-3">Step {{ tourIndex() + 1 }} of {{ tourSlides.length }}</p>
+                 <h2 class="text-2xl sm:text-3xl font-black text-white leading-tight">{{ currentTourSlide().title }}<span class="text-[var(--t-blue-light)]">.</span></h2>
+                 <p class="text-white/70 text-xs font-bold uppercase tracking-widest mt-2">Executive Onboarding</p>
               </div>
            </div>
-           <div class="p-10 space-y-8 bg-[var(--t-surface)]">
-              <div class="grid grid-cols-2 gap-6">
-                 <div class="flex gap-4">
-                    <div class="w-10 h-10 rounded-xl bg-[var(--t-accent-soft)] flex items-center justify-center text-[var(--t-accent)] shrink-0">
-                       <span class="material-icons">dashboard</span>
-                    </div>
-                    <div>
-                       <p class="text-sm font-black text-[var(--t-text-primary)]">Strategic Dashboard</p>
-                       <p class="text-[10px] text-[var(--t-text-secondary)] mt-0.5">Real-time health & pressure scores.</p>
-                    </div>
-                 </div>
-                 <div class="flex gap-4">
-                    <div class="w-10 h-10 rounded-xl bg-[var(--t-accent-soft)] flex items-center justify-center text-[var(--t-accent)] shrink-0">
-                       <span class="material-icons">psychology</span>
-                    </div>
-                    <div>
-                       <p class="text-sm font-black text-[var(--t-text-primary)]">AI Assistant</p>
-                       <p class="text-[10px] text-[var(--t-text-secondary)] mt-0.5">Natural language portfolio queries.</p>
-                    </div>
-                 </div>
+           <div class="space-y-6 bg-[var(--t-surface)] p-6 sm:p-8">
+              <div class="grid gap-5 sm:grid-cols-[4rem_1fr] sm:items-start">
+                <div class="flex h-16 w-16 items-center justify-center border border-[var(--t-border)] bg-[var(--t-surface-raised)] text-[var(--t-accent)]">
+                  <span class="material-icons text-3xl">{{ currentTourSlide().icon }}</span>
+                </div>
+                <div>
+                  <p class="text-base font-black text-[var(--t-text-primary)]">{{ currentTourSlide().headline }}</p>
+                  <p class="mt-3 text-sm leading-6 text-[var(--t-text-secondary)]">{{ currentTourSlide().body }}</p>
+                  <ul class="mt-5 grid gap-2 sm:grid-cols-2">
+                    @for (point of currentTourSlide().points; track point) {
+                      <li class="border-l-2 border-[var(--t-accent)] bg-[var(--t-surface-raised)] px-3 py-2 text-xs font-semibold text-[var(--t-text-secondary)]">
+                        {{ point }}
+                      </li>
+                    }
+                  </ul>
+                </div>
               </div>
-              <p class="text-sm text-[var(--t-text-secondary)] leading-relaxed">
-                 You are logged in as the **Transformation Office Administrator**. You have full visibility across 4 workstreams and 24 strategic initiatives. 
-              </p>
-              <div class="flex gap-4 pt-4">
-                 <button (click)="completeOnboarding()" class="flex-1 btn-primary py-4 font-black uppercase text-[10px] tracking-widest">Enter Command Center</button>
-                 <button (click)="completeOnboarding()" class="px-8 py-4 border border-[var(--t-border)] font-black uppercase text-[10px] tracking-widest hover:bg-[var(--t-surface-raised)] transition-all">Quick Tour</button>
+
+              <div class="flex items-center gap-2" aria-label="Onboarding progress">
+                @for (slide of tourSlides; track slide.title; let index = $index) {
+                  <button
+                    type="button"
+                    class="h-2 flex-1 border border-[var(--t-border)]"
+                    [style.background]="index <= tourIndex() ? 'var(--t-accent)' : 'var(--t-surface-raised)'"
+                    [attr.aria-label]="'Go to onboarding slide ' + (index + 1)"
+                    (click)="tourIndex.set(index)"
+                  ></button>
+                }
+              </div>
+
+              @if (isLastTourSlide()) {
+                <label class="flex items-center gap-3 border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-3 text-xs font-bold text-[var(--t-text-secondary)]">
+                  <input
+                    type="checkbox"
+                    class="h-4 w-4 accent-[var(--t-accent)]"
+                    [checked]="dontShowTourAgain()"
+                    (change)="onDontShowTourAgainChange($event)"
+                    aria-label="Don't show this tour again"
+                  />
+                  Don't show this again
+                </label>
+              }
+
+              <div class="flex flex-col-reverse gap-3 border-t border-[var(--t-border)] pt-5 sm:flex-row sm:items-center sm:justify-between">
+                <button
+                  type="button"
+                  class="btn-secondary px-5 py-3 text-xs font-black uppercase tracking-widest"
+                  data-testid="onboarding-skip"
+                  aria-label="Skip onboarding tour"
+                  (click)="skipOnboarding()"
+                >
+                  Skip
+                </button>
+                <div class="flex gap-3">
+                  <button
+                    type="button"
+                    class="btn-secondary px-5 py-3 text-xs font-black uppercase tracking-widest"
+                    data-testid="onboarding-back"
+                    aria-label="Previous onboarding slide"
+                    [disabled]="tourIndex() === 0"
+                    (click)="previousTourSlide()"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    class="btn-primary px-6 py-3 text-xs font-black uppercase tracking-widest"
+                    data-testid="onboarding-next"
+                    aria-label="Next onboarding slide"
+                    (click)="nextTourSlide()"
+                  >
+                    {{ isLastTourSlide() ? "Let's Get Started" : 'Next' }}
+                  </button>
+                </div>
               </div>
            </div>
         </div>
@@ -664,6 +758,49 @@ import { RouterLink } from '@angular/router';
     .executive-select {
       color: var(--t-executive, #071f3c) !important;
     }
+    .executive-summary-cta {
+      border: 1px solid rgba(255,255,255,0.28);
+      background: var(--t-amber);
+      color: white;
+      box-shadow: inset 0 -4px 0 rgba(7,31,60,0.22);
+    }
+    .executive-summary-cta:hover {
+      background: color-mix(in srgb, var(--t-amber) 88%, white);
+      transform: translateY(-1px);
+    }
+    .methodology-tip {
+      align-items: center;
+      background: var(--t-surface-raised);
+      border: 1px solid var(--t-border);
+      color: var(--t-accent);
+      display: inline-flex;
+      flex: none;
+      font-size: 0.68rem;
+      font-weight: 900;
+      height: 1.35rem;
+      justify-content: center;
+      line-height: 1;
+      width: 1.35rem;
+    }
+    .methodology-tip-dark {
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(255,255,255,0.22);
+      color: var(--t-blue-light);
+      margin-left: 0.5rem;
+    }
+    .dashboard-count-badge {
+      align-items: center;
+      background: var(--t-accent-soft);
+      border: 1px solid color-mix(in srgb, var(--t-accent) 22%, transparent);
+      color: var(--t-accent);
+      display: inline-flex;
+      font-size: 0.62rem;
+      font-weight: 900;
+      height: 1.25rem;
+      justify-content: center;
+      min-width: 1.25rem;
+      padding: 0 0.35rem;
+    }
     .matrix-cell {
       min-height: 4.25rem;
       width: 100%;
@@ -745,6 +882,8 @@ export class DashboardComponent implements OnInit {
   reporting = signal(false);
   reportReady = signal(false);
   showWelcome = signal(false);
+  tourIndex = signal(0);
+  dontShowTourAgain = signal(true);
   selectedMatrixCell = signal<any>(null);
   filters = signal({ business_unit_id: '', workstream_id: '', rag_status: '', target_year: '' });
   heatmapLevels = ['high', 'medium', 'low'];
@@ -752,6 +891,43 @@ export class DashboardComponent implements OnInit {
     { id: 'scoping', label: 'Scoping' },
     { id: 'in_progress', label: 'In-Progress' },
     { id: 'complete', label: 'Complete' }
+  ];
+  tourSlides = [
+    {
+      title: 'Welcome to Transmuter',
+      headline: 'Run the transformation office from one operating picture',
+      body: 'Transmuter brings initiatives, value, risks, meetings, and AI assistance into the dashboard your team uses every day.',
+      icon: 'dashboard',
+      points: ['Portfolio health', 'Governance context', 'Executive rhythm', 'Tenant-safe data']
+    },
+    {
+      title: 'Your Initiative Pipeline',
+      headline: 'Move from intake to delivery without losing the thread',
+      body: 'Track stage, RAG, workstream, ownership, milestones, dependencies, and financial context from the initiative pipeline.',
+      icon: 'account_tree',
+      points: ['Pipeline filters', 'Stage visibility', 'Owner accountability', 'Drill-down records']
+    },
+    {
+      title: 'Real-Time Value Creation Health',
+      headline: 'See value, pressure, and KPI movement together',
+      body: 'Use value bridge, KPI pulse, pressure gauge, and risk heatmap views to focus leadership attention where it matters.',
+      icon: 'monitoring',
+      points: ['Value bridge', 'KPI pulse', 'Risk heatmap', 'Pressure score']
+    },
+    {
+      title: 'AI-Powered Intelligence',
+      headline: 'Generate grounded drafts and answers from portfolio data',
+      body: 'AI workflows help normalize intake, extract meeting actions, draft status updates, and answer portfolio questions with citations.',
+      icon: 'psychology',
+      points: ['Intake suggestions', 'Meeting extraction', 'Status drafting', 'Cited AI chat']
+    },
+    {
+      title: "Let's Get Started",
+      headline: 'Choose a dashboard filter, open an initiative, or ask the assistant',
+      body: 'You can return to the dashboard at any time. This tour can be skipped now and hidden for future sessions.',
+      icon: 'rocket_launch',
+      points: ['Start in dashboard', 'Open pipeline', 'Download summaries', 'Ask AI']
+    }
   ];
 
   ngOnInit() {
@@ -772,6 +948,38 @@ export class DashboardComponent implements OnInit {
     this.api.patch('/auth/me', { onboarding_completed: true }).subscribe(() => {
       this.auth.loadProfile().subscribe();
     });
+  }
+
+  currentTourSlide() {
+    return this.tourSlides[this.tourIndex()];
+  }
+
+  isLastTourSlide(): boolean {
+    return this.tourIndex() === this.tourSlides.length - 1;
+  }
+
+  previousTourSlide() {
+    this.tourIndex.update(index => Math.max(0, index - 1));
+  }
+
+  nextTourSlide() {
+    if (this.isLastTourSlide()) {
+      this.completeOnboarding();
+      return;
+    }
+    this.tourIndex.update(index => Math.min(this.tourSlides.length - 1, index + 1));
+  }
+
+  skipOnboarding() {
+    if (this.dontShowTourAgain()) {
+      this.completeOnboarding();
+      return;
+    }
+    this.showWelcome.set(false);
+  }
+
+  onDontShowTourAgainChange(event: Event) {
+    this.dontShowTourAgain.set((event.target as HTMLInputElement).checked);
   }
 
   loadDashboard() {
@@ -884,10 +1092,25 @@ export class DashboardComponent implements OnInit {
     if (this.reporting()) return;
     this.reporting.set(true);
     this.reportReady.set(false);
-    
-    setTimeout(() => {
-      this.reporting.set(false);
-      this.reportReady.set(true);
-    }, 500);
+    const params = Object.fromEntries(
+      Object.entries(this.filters()).filter(([, value]) => !!value)
+    );
+    this.api.getBlob('/dashboard/executive-summary.pdf', params).subscribe({
+      next: blob => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'transmuter-executive-summary.pdf';
+        link.click();
+        URL.revokeObjectURL(url);
+        this.reporting.set(false);
+        this.reportReady.set(true);
+      },
+      error: () => {
+        this.reporting.set(false);
+        this.reportReady.set(false);
+        alert('Failed to generate executive summary.');
+      }
+    });
   }
 }

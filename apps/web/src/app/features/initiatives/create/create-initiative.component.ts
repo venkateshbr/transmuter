@@ -115,6 +115,23 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
       border-color: var(--t-accent);
       background: var(--t-accent-soft);
     }
+
+    .confidence-badge {
+      display: inline-flex;
+      align-items: center;
+      height: 18px;
+      border: 1px solid var(--t-border);
+      padding: 0 6px;
+      font-size: 0.625rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      background: var(--t-surface-raised);
+      color: var(--t-text-secondary);
+    }
+    .confidence-high { border-color: rgba(16,185,129,0.35); color: var(--t-green); }
+    .confidence-medium { border-color: rgba(59,130,246,0.35); color: var(--t-accent); }
+    .confidence-low { border-color: rgba(245,158,11,0.35); color: var(--t-amber); }
   `],
   template: `
 <div class="min-h-screen" style="background:var(--t-bg)">
@@ -220,17 +237,27 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
       </div>
 
       <div class="card p-6">
-        <div class="mb-5 rounded-xl border p-4 flex items-start gap-3"
+        <div class="mb-5 rounded-xl border p-4 flex items-start justify-between gap-4"
              style="background:var(--t-accent-soft);border-color:var(--t-border)">
-          <span class="material-icons text-base mt-0.5" style="color:var(--t-accent)">auto_awesome</span>
-          <div>
-            <p class="text-xs font-bold uppercase tracking-wider mb-1" style="color:var(--t-text-primary)">{{ editId ? 'Edit mode' : 'Transmuter intake' }}</p>
-            <p class="text-sm" style="color:var(--t-text-secondary)">
-              {{ editId
-                ? 'Update core initiative fields. Financials, KPIs, risks, and milestones stay managed from their dedicated tabs.'
-                : 'Capture the case, then review AI-assisted financial, KPI, risk, and milestone suggestions before creation.' }}
-            </p>
+          <div class="flex items-start gap-3">
+            <span class="material-icons text-base mt-0.5" style="color:var(--t-accent)">auto_awesome</span>
+            <div>
+              <p class="text-xs font-bold uppercase tracking-wider mb-1" style="color:var(--t-text-primary)">{{ editId ? 'Edit mode' : 'Transmuter intake' }}</p>
+              <p class="text-sm" style="color:var(--t-text-secondary)">
+                {{ editId
+                  ? 'Update core initiative fields. Financials, KPIs, risks, and milestones stay managed from their dedicated tabs.'
+                  : 'Capture the case, then review AI-assisted financial, KPI, risk, and milestone suggestions before creation.' }}
+              </p>
+            </div>
           </div>
+          <button *ngIf="!editId"
+                  class="btn-secondary text-xs whitespace-nowrap"
+                  (click)="generateSuggestions()"
+                  [disabled]="generating() || submitting() || !form.name.trim()"
+                  aria-label="Start AI-assisted initiative review">
+            <span *ngIf="!generating()">AI Assist</span>
+            <span *ngIf="generating()">Working...</span>
+          </button>
         </div>
 
         <!-- STEP 1: Basic Details -->
@@ -380,9 +407,9 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
             <div class="flex items-start justify-between gap-4">
               <div>
                 <p class="text-[10px] font-bold uppercase tracking-wider mb-1" style="color:var(--t-text-secondary)">HITL Review</p>
-                <h3 class="text-lg font-bold" style="color:var(--t-text-primary)">Transmuter suggestions</h3>
+                <h3 class="text-lg font-bold" style="color:var(--t-text-primary)">Transmuter extracted the following — review and edit before saving</h3>
                 <p class="text-sm mt-1" style="color:var(--t-text-secondary)">
-                  Accept, reject, or edit each suggestion before committing to the database.
+                  Field confidence is shown beside extracted fields. Accept, reject, or edit KPIs and risks before committing to the database.
                 </p>
               </div>
               <span class="text-[10px] font-bold uppercase rounded-full px-2 py-1"
@@ -393,6 +420,89 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
           </div>
 
           <div *ngIf="suggestions() as suggestionSet" class="grid grid-cols-1 gap-4">
+            <section class="card p-4">
+              <h4 class="text-sm font-bold mb-3" style="color:var(--t-text-primary)">Extracted Initiative Fields</h4>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <div class="flex items-center justify-between gap-2 mb-1">
+                    <label for="review-name" class="field-label mb-0">Name</label>
+                    <span class="confidence-badge" [ngClass]="'confidence-' + confidenceFor('name')">{{ confidenceFor('name') }}</span>
+                  </div>
+                  <input id="review-name" class="input-field text-xs" [(ngModel)]="form.name" aria-label="Review extracted initiative name">
+                </div>
+                <div>
+                  <div class="flex items-center justify-between gap-2 mb-1">
+                    <label for="review-type" class="field-label mb-0">Type</label>
+                    <span class="confidence-badge" [ngClass]="'confidence-' + confidenceFor('type')">{{ confidenceFor('type') }}</span>
+                  </div>
+                  <select id="review-type" class="input-field text-xs" [(ngModel)]="form.type" aria-label="Review extracted initiative type">
+                    <option value="">Select type</option>
+                    <option value="revenue_growth">Revenue Growth</option>
+                    <option value="cost_reduction">Cost Reduction</option>
+                    <option value="cost_avoidance">Cost Avoidance</option>
+                    <option value="compliance">Compliance</option>
+                    <option value="capability_building">Capability Building</option>
+                  </select>
+                </div>
+                <div>
+                  <div class="flex items-center justify-between gap-2 mb-1">
+                    <label for="review-workstream" class="field-label mb-0">Workstream</label>
+                    <span class="confidence-badge" [ngClass]="'confidence-' + confidenceFor('workstream')">{{ confidenceFor('workstream') }}</span>
+                  </div>
+                  <select id="review-workstream" class="input-field text-xs" [(ngModel)]="form.workstream_id" (ngModelChange)="onWorkstreamChange($event)" aria-label="Review extracted workstream">
+                    <option value="">Select workstream</option>
+                    <option *ngFor="let ws of filteredWorkstreams()" [value]="ws.id">{{ ws.name }}</option>
+                  </select>
+                </div>
+                <div>
+                  <div class="flex items-center justify-between gap-2 mb-1">
+                    <label for="review-priority" class="field-label mb-0">Priority</label>
+                    <span class="confidence-badge" [ngClass]="'confidence-' + confidenceFor('priority')">{{ confidenceFor('priority') }}</span>
+                  </div>
+                  <select id="review-priority" class="input-field text-xs" [(ngModel)]="form.priority" aria-label="Review extracted priority">
+                    <option value="high">High</option>
+                    <option value="medium">Medium</option>
+                    <option value="low">Low</option>
+                  </select>
+                </div>
+                <div>
+                  <div class="flex items-center justify-between gap-2 mb-1">
+                    <label for="review-country" class="field-label mb-0">Market</label>
+                    <span class="confidence-badge" [ngClass]="'confidence-' + confidenceFor('country')">{{ confidenceFor('country') }}</span>
+                  </div>
+                  <input id="review-country" class="input-field text-xs" [(ngModel)]="form.country" aria-label="Review extracted market">
+                </div>
+                <div class="md:col-span-2">
+                  <div class="flex items-center justify-between gap-2 mb-1">
+                    <label for="review-summary" class="field-label mb-0">Summary</label>
+                    <span class="confidence-badge" [ngClass]="'confidence-' + confidenceFor('summary')">{{ confidenceFor('summary') }}</span>
+                  </div>
+                  <textarea id="review-summary" class="input-field text-xs" rows="2" [(ngModel)]="form.summary" aria-label="Review extracted summary"></textarea>
+                </div>
+                <div class="md:col-span-2">
+                  <div class="flex items-center justify-between gap-2 mb-1">
+                    <label for="review-value-logic" class="field-label mb-0">Value Logic</label>
+                    <span class="confidence-badge" [ngClass]="'confidence-' + confidenceFor('value_logic')">{{ confidenceFor('value_logic') }}</span>
+                  </div>
+                  <textarea id="review-value-logic" class="input-field text-xs" rows="2" [(ngModel)]="form.value_logic" aria-label="Review extracted value logic"></textarea>
+                </div>
+                <div>
+                  <div class="flex items-center justify-between gap-2 mb-1">
+                    <label for="review-planned-end" class="field-label mb-0">Planned Completion</label>
+                    <span class="confidence-badge" [ngClass]="'confidence-' + confidenceFor('planned_end')">{{ confidenceFor('planned_end') }}</span>
+                  </div>
+                  <input id="review-planned-end" type="date" class="input-field text-xs" [(ngModel)]="form.planned_end" aria-label="Review extracted completion date">
+                </div>
+                <div>
+                  <div class="flex items-center justify-between gap-2 mb-1">
+                    <label for="review-dependencies" class="field-label mb-0">Dependencies</label>
+                    <span class="confidence-badge" [ngClass]="'confidence-' + confidenceFor('dependencies')">{{ confidenceFor('dependencies') }}</span>
+                  </div>
+                  <input id="review-dependencies" class="input-field text-xs" [(ngModel)]="form.dependencies_text" aria-label="Review extracted dependencies">
+                </div>
+              </div>
+            </section>
+
             <section class="card p-4">
               <h4 class="text-sm font-bold mb-3" style="color:var(--t-text-primary)">Financials</h4>
               <label *ngFor="let item of suggestionSet.financial_entries; let i = index"
@@ -493,8 +603,14 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
                     (click)="submitForm()"
                     [disabled]="submitting()"
                     aria-label="Create initiative">
-              <span *ngIf="!submitting()">Create Initiative</span>
+              <span *ngIf="!submitting()">Save Initiative</span>
               <span *ngIf="submitting()">Creating…</span>
+            </button>
+            <button *ngIf="formStep === 4" class="btn-secondary text-sm"
+                    (click)="cancelWorkflow()"
+                    [disabled]="submitting()"
+                    aria-label="Cancel initiative intake review">
+              Cancel
             </button>
           </div>
         </div>
@@ -635,6 +751,8 @@ export class CreateInitiativeComponent {
   readonly uploadedFileName = signal<string | null>(null);
   readonly uploadPreview = signal<any | null>(null);
   readonly suggestions = signal<any | null>(null);
+  readonly workflowRunId = signal<string | null>(null);
+  readonly fieldConfidence = signal<Record<string, 'high' | 'medium' | 'low'>>({});
   readonly workbookCountKeys = ['financials', 'costs', 'kpis', 'risks', 'milestones'];
   private readonly defaultTags = ['automation', 'offshoring', 'commercial', 'other'];
 
@@ -817,18 +935,60 @@ export class CreateInitiativeComponent {
 
     this.generating.set(true);
     this.error.set(null);
-    this.api.post<any>('/initiatives/intake/suggestions', {
-      initiative: this.buildPayload(),
-      conversation: [],
+    this.workflowRunId.set(null);
+    this.api.post<any>('/workflows/initiative-intake', {
+      raw_text: this.buildIntakeText(),
     }).subscribe({
       next: result => {
-        this.generating.set(false);
-        this.formStep = 4;
-        this.suggestions.set(result);
+        this.workflowRunId.set(result.workflow_run_id);
+        this.loadWorkflowReview(result.workflow_run_id);
       },
       error: err => {
         this.generating.set(false);
-        this.error.set(this.errorText(err, 'Failed to generate initiative suggestions.'));
+        this.fallbackToBlankReview(this.errorText(err, 'AI extraction failed. Continue from the blank review form.'));
+      },
+    });
+  }
+
+  private loadWorkflowReview(workflowRunId: string): void {
+    this.api.get<any>(`/workflows/${workflowRunId}/review`).subscribe({
+      next: review => {
+        this.applyExtractedDraft(review.extracted_draft ?? {});
+        this.fieldConfidence.set(review.field_confidence ?? {});
+        this.api.post<any>('/initiatives/intake/suggestions', {
+          initiative: this.buildPayload(),
+          conversation: [],
+        }).subscribe({
+          next: generated => {
+            this.generating.set(false);
+            this.suggestions.set({
+              ...generated,
+              trace_id: `workflow-${workflowRunId}`,
+              agent_status: 'deterministic_fallback',
+              kpis: this.mergeSuggestions(review.kpi_suggestions, generated.kpis, 'name'),
+              risks: this.mergeSuggestions(review.risk_suggestions, generated.risks, 'description'),
+            });
+            this.formStep = 4;
+          },
+          error: () => {
+            this.generating.set(false);
+            this.suggestions.set({
+              trace_id: `workflow-${workflowRunId}`,
+              agent_status: 'deterministic_fallback',
+              financial_entries: [],
+              cost_lines: [],
+              kpis: review.kpi_suggestions ?? [],
+              risks: review.risk_suggestions ?? [],
+              milestones: [],
+            });
+            this.formStep = 4;
+          },
+        });
+      },
+      error: err => {
+        this.generating.set(false);
+        this.workflowRunId.set(null);
+        this.fallbackToBlankReview(this.errorText(err, 'AI extraction failed. Continue from the blank review form.'));
       },
     });
   }
@@ -841,25 +1001,44 @@ export class CreateInitiativeComponent {
     this.error.set(null);
 
     const payload = this.buildPayload();
-    const request = this.editId
+    const runId = this.workflowRunId();
+    const request: any = this.editId
       ? this.api.put<{ id: string }>(`/initiatives/${this.editId}`, payload)
-      : this.api.post<{ id: string }>('/initiatives/intake/create', {
-          initiative: payload,
-          suggestions: this.suggestions(),
-        });
+      : runId
+        ? this.api.post<{ initiative: { id: string } }>(`/workflows/${runId}/approve`, {
+            initiative: payload,
+            suggestions: this.suggestions(),
+          })
+        : this.api.post<{ id: string }>('/initiatives/intake/create', {
+            initiative: payload,
+            suggestions: this.suggestions(),
+          });
 
     request.subscribe({
-      next: result => {
+      next: (result: any) => {
         this.submitting.set(false);
-        this.router.navigate(['/initiatives', result.id]);
+        const initiativeId = 'initiative' in result ? result.initiative.id : result.id;
+        this.router.navigate(['/initiatives', initiativeId]);
       },
-      error: err => {
+      error: (err: any) => {
         this.submitting.set(false);
         this.error.set(this.errorText(err, this.editId
           ? 'Failed to save initiative. Please try again.'
           : 'Failed to create initiative. Please try again.'));
       },
     });
+  }
+
+  cancelWorkflow(): void {
+    const runId = this.workflowRunId();
+    if (runId) {
+      this.api.post<any>(`/workflows/${runId}/reject`, { reason: 'Cancelled from review panel.' }).subscribe({
+        next: () => this.resetReview(),
+        error: () => this.resetReview(),
+      });
+      return;
+    }
+    this.resetReview();
   }
 
   /** File upload handlers */
@@ -956,5 +1135,75 @@ export class CreateInitiativeComponent {
         .join('\n');
     }
     return detail ?? fallback;
+  }
+
+  confidenceFor(field: string): 'high' | 'medium' | 'low' {
+    return this.fieldConfidence()[field] ?? 'low';
+  }
+
+  private buildIntakeText(): string {
+    return [
+      `Name: ${this.form.name}`,
+      `Type: ${this.form.type}`,
+      `Priority: ${this.form.priority}`,
+      `Market: ${this.form.country}`,
+      `Theme: ${this.form.theme}`,
+      `Value logic: ${this.form.value_logic}`,
+      `Summary: ${this.form.summary}`,
+      `Dependencies: ${this.form.dependencies_text}`,
+      `Planned end: ${this.form.planned_end}`,
+    ].filter(line => !line.endsWith(': ')).join('\n');
+  }
+
+  private applyExtractedDraft(draft: Record<string, string | null>): void {
+    if (draft['name'] && !this.form.name) this.form.name = draft['name'];
+    if (draft['type'] && !this.form.type) this.form.type = draft['type'];
+    if (draft['priority'] && !this.form.priority) this.form.priority = draft['priority'];
+    if (draft['workstream'] && !this.form.workstream_id) {
+      const normalized = draft['workstream'].toLowerCase();
+      const match = this.workstreams().find(ws => ws.name.toLowerCase() === normalized);
+      if (match) this.onWorkstreamChange(match.id);
+    }
+    if (draft['country'] && !this.form.country) this.form.country = draft['country'];
+    if (draft['summary'] && !this.form.summary) this.form.summary = draft['summary'];
+    if (draft['value_logic'] && !this.form.value_logic) this.form.value_logic = draft['value_logic'];
+    if (draft['planned_end'] && !this.form.planned_end) this.form.planned_end = draft['planned_end'];
+    if (draft['dependencies'] && !this.form.dependencies_text) {
+      this.form.dependencies_text = draft['dependencies'];
+    }
+  }
+
+  private fallbackToBlankReview(message: string): void {
+    this.error.set(message);
+    this.fieldConfidence.set({});
+    this.suggestions.set({
+      trace_id: 'manual-fallback',
+      agent_status: 'deterministic_fallback',
+      financial_entries: [],
+      cost_lines: [],
+      kpis: [],
+      risks: [],
+      milestones: [],
+    });
+    this.formStep = 4;
+  }
+
+  private resetReview(): void {
+    this.workflowRunId.set(null);
+    this.fieldConfidence.set({});
+    this.suggestions.set(null);
+    this.formStep = 3;
+  }
+
+  private mergeSuggestions(primary: any[] | null | undefined, fallback: any[] | null | undefined, key: string): any[] {
+    const merged = [...(primary ?? [])];
+    const existing = new Set(merged.map(item => String(item?.[key] ?? '').toLowerCase()).filter(Boolean));
+    for (const item of fallback ?? []) {
+      const value = String(item?.[key] ?? '').toLowerCase();
+      if (value && existing.has(value)) continue;
+      merged.push(item);
+      if (value) existing.add(value);
+    }
+    return merged;
   }
 }

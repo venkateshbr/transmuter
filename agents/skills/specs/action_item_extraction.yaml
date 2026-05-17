@@ -1,0 +1,21 @@
+apiVersion: agentic/v1
+kind: SkillSpec
+metadata:
+  name: action_item_extraction
+  domain_pack: transmuter
+spec:
+  description: Extract reviewable meeting action items and fuzzy-match assignees to attendee user IDs.
+  inputs:
+    chunks: TranscriptChunk[]
+    attendees: MeetingAttendeeContext[]
+  outputs:
+    action_items:
+      type: array
+      items:
+        description: string
+        suggested_assignee_id: uuid|null
+        suggested_assignee_name: string|null
+        due_date: string|null
+        priority: high|medium|low
+        accepted: boolean
+        rationale: string|null

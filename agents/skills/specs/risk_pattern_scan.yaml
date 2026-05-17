@@ -1,0 +1,83 @@
+apiVersion: agentic/v1
+kind: SkillSpec
+metadata:
+  name: risk_pattern_scan
+  version: 0.1.0
+  owner_agent: netra
+  description: Suggest pre-populated risk patterns for an initiative intake draft.
+contract:
+  input_schema:
+    type: object
+    required:
+      - initiative_draft
+    properties:
+      initiative_draft:
+        type: object
+  output_schema:
+    type: object
+    required:
+      - risks
+    properties:
+      risks:
+        type: array
+        minItems: 2
+        maxItems: 4
+        items:
+          type: object
+          required:
+            - description
+            - impact
+            - likelihood
+            - mitigation
+            - rationale
+          properties:
+            description:
+              type: string
+            type:
+              type:
+                - string
+                - "null"
+              enum:
+                - operational
+                - people
+                - financial
+                - technology
+                - null
+            impact:
+              type: string
+              enum:
+                - high
+                - medium
+                - low
+            likelihood:
+              type: string
+              enum:
+                - high
+                - medium
+                - low
+            mitigation:
+              type: string
+            rationale:
+              type: string
+            accepted:
+              type: boolean
+behavior:
+  deterministic: true
+  idempotent: true
+  side_effects:
+    - none
+  retries:
+    max: 0
+    backoff: none
+  timeout_ms: 1000
+security:
+  scopes_required:
+    - initiatives:read
+  pii_sensitivity: low
+  audit_required: true
+telemetry:
+  trace_provider: langfuse
+  metric_name: risk_pattern_scan
+implementation:
+  handler: apps/api/app/agents/initiative_intake_agent.py::scan_risk_patterns
+  fallback: Deterministic risk archetype library.

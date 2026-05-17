@@ -20,6 +20,7 @@ from app.domain.risks import (
     RiskListResponse,
     RiskUpdate,
 )
+from app.jobs.portfolio_rag import enqueue_portfolio_rag_rebuild
 from app.services.risk import RiskService
 
 router = APIRouter(tags=["risks"])
@@ -92,7 +93,9 @@ async def create_risk(
     svc: Annotated[RiskService, Depends(_svc)],
 ) -> RiskItem:
     assert_can_manage_initiatives(current_user)
-    return svc.create_risk(initiative_id, body)
+    result = svc.create_risk(initiative_id, body)
+    enqueue_portfolio_rag_rebuild(current_user.tenant_id)
+    return result
 
 
 @router.put(
@@ -107,7 +110,9 @@ async def update_risk(
     svc: Annotated[RiskService, Depends(_svc)],
 ) -> RiskItem:
     assert_can_manage_initiatives(current_user)
-    return svc.update_risk(initiative_id, risk_id, body)
+    result = svc.update_risk(initiative_id, risk_id, body)
+    enqueue_portfolio_rag_rebuild(current_user.tenant_id)
+    return result
 
 
 @router.delete(
@@ -122,3 +127,4 @@ async def delete_risk(
 ) -> None:
     assert_can_manage_initiatives(current_user)
     svc.delete_risk(initiative_id, risk_id)
+    enqueue_portfolio_rag_rebuild(current_user.tenant_id)

@@ -57,6 +57,45 @@ def test_real_api_seeded_dashboard_and_meetings() -> None:
         dashboard_data = dashboard.json()
         assert dashboard_data["summary"]["total_initiatives"] >= 5
 
+        dashboard_slices = {
+            "/dashboard/summary": "total_initiatives",
+            "/dashboard/pressure-gauge": "score",
+            "/dashboard/rag-breakdown": "green",
+            "/dashboard/pipeline-by-stage": "scoping",
+            "/dashboard/pipeline-value": "net_base",
+            "/dashboard/risk-heatmap": None,
+            "/dashboard/kpi-pulse": "total_kpis",
+            "/dashboard/value-bridge": "net_actual",
+            "/dashboard/recent-activity": None,
+            "/dashboard/my-milestones": None,
+            "/dashboard/my-actions": None,
+        }
+        for path, expected_key in dashboard_slices.items():
+            response = client.get(path, headers=headers)
+            response.raise_for_status()
+            payload = response.json()
+            assert payload is not None
+            if expected_key:
+                assert expected_key in payload
+
+        executive_summary = client.get("/dashboard/executive-summary.pdf", headers=headers)
+        executive_summary.raise_for_status()
+        assert executive_summary.headers["content-type"] == "application/pdf"
+        assert executive_summary.content.startswith(b"%PDF-1.4")
+        assert b"Transmuter Executive Summary" in executive_summary.content
+
+        initiatives_for_search = client.get("/initiatives", headers=headers)
+        initiatives_for_search.raise_for_status()
+        first_initiative = initiatives_for_search.json()["items"][0]
+        search_term = (first_initiative.get("initiative_code") or first_initiative["name"])[:4]
+        search = client.get("/search", headers=headers, params={"q": search_term})
+        search.raise_for_status()
+        search_data = search.json()
+        assert search_data["total"] >= 1
+        assert {"name", "initiative_code", "rag_status", "stage", "workstream"}.issubset(
+            search_data["items"][0].keys()
+        )
+
         chat = client.post(
             "/ai/chat",
             headers=headers,
@@ -65,7 +104,8 @@ def test_real_api_seeded_dashboard_and_meetings() -> None:
         chat.raise_for_status()
         chat_data = chat.json()
         assert chat_data["response"]
-        assert any(item["source_type"] == "initiatives" for item in chat_data["sources"])
+        assert any(item["source_type"] == "initiative" for item in chat_data["sources"])
+        assert any(item.get("source_id") for item in chat_data["sources"])
 
         meetings = client.get("/meetings", headers=headers)
         meetings.raise_for_status()
@@ -163,11 +203,15 @@ def test_real_api_meeting_crud_session_and_action_flow() -> None:
 
         users = client.get("/users", headers=headers)
         users.raise_for_status()
-        user_id = users.json()["data"][0]["id"]
+        user = users.json()["data"][0]
+        user_id = user["id"]
+        user_display_name = user.get("display_name") or "Acceptance Owner"
 
         initiatives = client.get("/initiatives", headers=headers)
         initiatives.raise_for_status()
-        initiative_id = initiatives.json()["items"][0]["id"]
+        initiative = initiatives.json()["items"][0]
+        initiative_id = initiative["id"]
+        initiative_name = initiative["name"]
 
         name = f"Acceptance Meeting {uuid4()}"
         created = client.post(
@@ -183,6 +227,7 @@ def test_real_api_meeting_crud_session_and_action_flow() -> None:
         )
         created.raise_for_status()
         meeting_id = created.json()["id"]
+        extracted_status_update_id = None
 
         try:
             updated = client.put(
@@ -277,6 +322,79 @@ def test_real_api_meeting_crud_session_and_action_flow() -> None:
             assert portfolio_item["users"]["display_name"]
             assert portfolio_data["stats"]["in_progress"] >= 1
 
+            transcript = (
+                f"{user_display_name}: I will prepare the benefit validation pack by 2030-12-31.\n\n"
+                f"Decision: Approved weekly steering follow-up for {initiative_name}.\n\n"
+                f"{user_display_name}: Status for {initiative_name} is amber because "
+                "finance validation is delayed."
+            )
+            transcript_upload = client.post(
+                f"/meetings/{meeting_id}/sessions/{session_id}/transcript",
+                headers=headers,
+                json={"transcript_text": transcript},
+            )
+            transcript_upload.raise_for_status()
+            workflow_run_id = transcript_upload.json()["workflow_run_id"]
+            assert transcript_upload.json()["status"] == "awaiting_review"
+
+            workflow_review = client.get(f"/workflows/{workflow_run_id}/review", headers=headers)
+            workflow_review.raise_for_status()
+            review_data = workflow_review.json()
+            assert review_data["workflow_type"] == "meeting_notes_extraction"
+            assert review_data["session_id"] == session_id
+            assert any(
+                item["suggested_assignee_id"] == user_id
+                and "benefit validation pack" in item["description"]
+                for item in review_data["action_items"]
+            )
+            assert any("weekly steering follow-up" in item["text"] for item in review_data["decisions"])
+            assert any(
+                item["initiative_id"] == initiative_id and item["rag_status"] == "amber"
+                for item in review_data["initiative_updates"]
+            )
+
+            workflow_approval = client.post(
+                f"/workflows/{workflow_run_id}/approve",
+                headers=headers,
+                json={
+                    "action_items": review_data["action_items"],
+                    "decisions": review_data["decisions"],
+                    "initiative_updates": review_data["initiative_updates"],
+                },
+            )
+            workflow_approval.raise_for_status()
+            assert workflow_approval.json()["status"] == "approved"
+
+            status_updates = client.get(
+                f"/initiatives/{initiative_id}/status-updates",
+                headers=headers,
+            )
+            status_updates.raise_for_status()
+            extracted_status_update = next(
+                (
+                    item
+                    for item in status_updates.json()["items"]
+                    if "finance validation is delayed" in item["summary"]
+                ),
+                None,
+            )
+            if extracted_status_update:
+                extracted_status_update_id = extracted_status_update["id"]
+                assert extracted_status_update["is_draft"] is True
+
+            session_detail = client.get(f"/meetings/sessions/{session_id}", headers=headers)
+            session_detail.raise_for_status()
+            session_data = session_detail.json()
+            assert session_data["has_transcript"] is True
+            assert session_data["ai_optimised"] is True
+            assert session_data["transcript_text"] == transcript
+            assert "AI extracted decisions:" in session_data["notes"]
+            assert any(
+                item["assignee_id"] == user_id
+                and "benefit validation pack" in item["description"]
+                for item in session_data["action_items"]
+            )
+
             completed_action = client.put(
                 f"/action-items/{action_id}",
                 headers=headers,
@@ -303,6 +421,11 @@ def test_real_api_meeting_crud_session_and_action_flow() -> None:
                 headers=headers,
             ).raise_for_status()
         finally:
+            if extracted_status_update_id:
+                client.delete(
+                    f"/initiatives/{initiative_id}/status-updates/{extracted_status_update_id}",
+                    headers=headers,
+                ).raise_for_status()
             client.delete(f"/meetings/{meeting_id}", headers=headers)
 
 
@@ -467,7 +590,6 @@ def test_real_api_initiative_template_import_flow() -> None:
         finally:
             client.delete(f"/initiatives/{initiative_id}", headers=headers)
 
-
 def test_real_api_initiative_intake_hitl_create_flow() -> None:
     with _client() as client:
         headers = _auth_headers(client)
@@ -486,6 +608,58 @@ def test_real_api_initiative_intake_hitl_create_flow() -> None:
             "planned_start": "2026-06-01",
             "planned_end": "2026-09-30",
         }
+
+        extraction_response = client.post(
+            "/initiatives/intake/extract-fields",
+            headers=headers,
+            json={
+                "text": (
+                    "Initiative: acceptance intake automation. Type: cost reduction. "
+                    "Priority: high. Workstream: Group Productivity. Country: Singapore. "
+                    "Value logic: reduce manual coordination cost. "
+                    "Dependencies: seeded tenant data. Planned end: 2026-09-30. "
+                    "Contact sponsor@example.com should be masked before external AI."
+                )
+            },
+        )
+        extraction_response.raise_for_status()
+        extraction = extraction_response.json()
+        assert extraction["trace_id"]
+        assert extraction["agent_status"] in {"generated", "deterministic_fallback"}
+        assert 0 <= extraction["confidence"] <= 1
+        assert extraction["input_tokens"] > 0
+        assert extraction["output_tokens"] > 0
+        assert extraction["draft"]["type"] == "cost_reduction"
+        assert extraction["draft"]["priority"] == "high"
+        assert extraction["draft"]["planned_end"] == "2026-09-30"
+
+        kpi_suggestions_response = client.post(
+            "/initiatives/intake/suggest-kpis",
+            headers=headers,
+            json={
+                "initiative_type": "cost_reduction",
+                "initiative_name": "Acceptance intake automation",
+                "value_logic": "reduce manual coordination cost",
+            },
+        )
+        kpi_suggestions_response.raise_for_status()
+        kpi_suggestions = kpi_suggestions_response.json()["suggestions"]
+        assert 3 <= len(kpi_suggestions) <= 5
+        assert any(item["name"] == "Run-rate savings realized" for item in kpi_suggestions)
+        assert all(item["accepted"] is True for item in kpi_suggestions)
+        assert all(item["rationale"] for item in kpi_suggestions)
+
+        risk_scan_response = client.post(
+            "/initiatives/intake/scan-risks",
+            headers=headers,
+            json={"initiative_draft": extraction["draft"]},
+        )
+        risk_scan_response.raise_for_status()
+        risk_scan = risk_scan_response.json()["risks"]
+        assert 2 <= len(risk_scan) <= 4
+        assert any(item["type"] == "financial" for item in risk_scan)
+        assert all(item["accepted"] is True for item in risk_scan)
+        assert all(item["mitigation"] for item in risk_scan)
 
         suggestions_response = client.post(
             "/initiatives/intake/suggestions",
@@ -541,6 +715,76 @@ def test_real_api_initiative_intake_hitl_create_flow() -> None:
             )
         finally:
             client.delete(f"/initiatives/{initiative_id}", headers=headers)
+
+        workflow_initiative = {
+            **initiative,
+            "name": f"Acceptance Workflow Initiative {uuid4()}",
+            "summary": "Created by real API workflow acceptance.",
+        }
+        workflow_start = client.post(
+            "/workflows/initiative-intake",
+            headers=headers,
+            json={
+                "raw_text": (
+                    "Name: Acceptance workflow automation. Type: cost reduction. "
+                    "Priority: high. Country: Singapore. Value logic: reduce cycle time. "
+                    "Dependencies: seeded tenant data. Planned end: 2026-09-30."
+                )
+            },
+        )
+        workflow_start.raise_for_status()
+        workflow_run_id = workflow_start.json()["workflow_run_id"]
+
+        workflow_status = client.get(f"/workflows/{workflow_run_id}/status", headers=headers)
+        workflow_status.raise_for_status()
+        assert workflow_status.json()["status"] == "awaiting_review"
+
+        workflow_review = client.get(f"/workflows/{workflow_run_id}/review", headers=headers)
+        workflow_review.raise_for_status()
+        review = workflow_review.json()
+        assert review["extracted_draft"]["type"] == "cost_reduction"
+        assert review["field_confidence"]["type"] in {"high", "medium", "low"}
+        assert len(review["kpi_suggestions"]) >= 1
+        assert len(review["risk_suggestions"]) >= 1
+
+        review["kpi_suggestions"][0]["name"] = "Workflow modified KPI"
+        workflow_suggestions = {
+            "trace_id": f"workflow-{workflow_run_id}",
+            "agent_status": "deterministic_fallback",
+            "financial_entries": [],
+            "cost_lines": [],
+            "kpis": review["kpi_suggestions"],
+            "risks": review["risk_suggestions"],
+            "milestones": [],
+        }
+        workflow_approval = client.post(
+            f"/workflows/{workflow_run_id}/approve",
+            headers=headers,
+            json={"initiative": workflow_initiative, "suggestions": workflow_suggestions},
+        )
+        workflow_approval.raise_for_status()
+        workflow_created = workflow_approval.json()["initiative"]
+        workflow_initiative_id = workflow_created["id"]
+
+        try:
+            assert workflow_created["counts"]["kpis_total"] >= 1
+            assert workflow_created["counts"]["risks_open"] >= 1
+            workflow_kpis = client.get(
+                f"/initiatives/{workflow_initiative_id}/kpis",
+                headers=headers,
+            )
+            workflow_kpis.raise_for_status()
+            assert any(
+                item["name"] == "Workflow modified KPI"
+                for item in workflow_kpis.json()["items"]
+            )
+
+            approved_status = client.get(f"/workflows/{workflow_run_id}/status", headers=headers)
+            approved_status.raise_for_status()
+            assert approved_status.json()["status"] == "approved"
+            assert approved_status.json()["created_initiative_id"] == workflow_initiative_id
+        finally:
+            client.delete(f"/initiatives/{workflow_initiative_id}", headers=headers)
 
 
 def test_real_api_initiative_team_and_summary_persistence() -> None:

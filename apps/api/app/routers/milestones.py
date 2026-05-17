@@ -27,6 +27,7 @@ from app.domain.milestones import (
     PortfolioMilestoneResponse,
 )
 from app.domain.pressure import MilestonePressureResult
+from app.jobs.portfolio_rag import enqueue_portfolio_rag_rebuild
 from app.services.milestone import MilestoneService
 
 router = APIRouter(tags=["milestones"])
@@ -107,7 +108,9 @@ async def create_milestone(
     svc: Annotated[MilestoneService, Depends(_svc)],
 ) -> MilestoneDetail:
     assert_can_manage_initiatives(current_user)
-    return svc.create_milestone(initiative_id, body)
+    result = svc.create_milestone(initiative_id, body)
+    enqueue_portfolio_rag_rebuild(current_user.tenant_id)
+    return result
 
 
 @router.put(
@@ -121,7 +124,9 @@ async def update_milestone(
     svc: Annotated[MilestoneService, Depends(_svc)],
 ) -> MilestoneDetail:
     assert_can_manage_initiatives(current_user)
-    return svc.update_milestone(milestone_id, body)
+    result = svc.update_milestone(milestone_id, body)
+    enqueue_portfolio_rag_rebuild(current_user.tenant_id)
+    return result
 
 
 @router.delete("/milestones/{milestone_id}", status_code=204)
@@ -132,6 +137,7 @@ async def delete_milestone(
 ) -> None:
     assert_can_manage_initiatives(current_user)
     svc.delete_milestone(milestone_id)
+    enqueue_portfolio_rag_rebuild(current_user.tenant_id)
 
 
 # ── Checklist ────────────────────────────────────────────────────────

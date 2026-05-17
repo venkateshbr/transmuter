@@ -214,15 +214,40 @@ async function main() {
       20_000,
     );
 
+    await evalJs(page, `
+      fetch(${JSON.stringify(`${apiBaseUrl}/auth/me`)}, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer ' + localStorage.getItem('access_token'),
+        },
+        body: JSON.stringify({ onboarding_completed: false }),
+      }).then(response => {
+        if (!response.ok) throw new Error('Failed to reset onboarding');
+      })
+    `);
+    await page.send('Page.navigate', { url: `${uiBaseUrl}/dashboard` });
+
     await waitFor(
       () => evalJs(page, "document.body.innerText.toLowerCase().includes('transmuter')"),
       'dashboard content',
     );
+    await waitFor(
+      () => evalJs(page, "document.querySelector('[data-testid=\"onboarding-tour\"]') !== null && document.body.innerText.includes('Welcome to Transmuter')"),
+      'onboarding tour',
+    );
     await evalJs(page, `
-      (() => {
-        const onboarding = [...document.querySelectorAll('button')]
-          .find(node => node.textContent.trim().includes('Enter Command Center'));
-        if (onboarding) onboarding.click();
+      (async () => {
+        for (let i = 0; i < 4; i += 1) {
+          const next = document.querySelector('[data-testid="onboarding-next"]');
+          if (!next) throw new Error('Missing onboarding next');
+          next.click();
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        if (!document.body.innerText.includes("Let's Get Started")) {
+          throw new Error('Missing final onboarding slide');
+        }
+        document.querySelector('[data-testid="onboarding-next"]').click();
         return true;
       })()
     `);
@@ -230,6 +255,9 @@ async function main() {
       () => evalJs(page, `
         [
           'dashboard-my-actions',
+          'dashboard-my-actions-count',
+          'dashboard-my-milestones-count',
+          'dashboard-pipeline-value',
           'dashboard-kpi-pulse',
           'dashboard-value-bridge',
           'dashboard-risk-heatmap',
@@ -475,7 +503,7 @@ async function main() {
     );
     await clickText(page, 'Show me at-risk initiatives');
     await waitFor(
-      () => evalJs(page, "document.body.innerText.toLowerCase().includes('portfolio initiatives') && document.body.innerText.toLowerCase().includes('milestones and risks')"),
+      () => evalJs(page, "document.body.innerText.toLowerCase().includes('based on the matching portfolio records') || document.body.innerText.toLowerCase().includes('initiatives are currently at risk')"),
       'assistant response citations',
       20_000,
     );
@@ -675,7 +703,7 @@ async function main() {
       await clickText(page, 'Generate Suggestions');
       try {
         await waitFor(
-          () => evalJs(page, "document.body.innerText.includes('HITL REVIEW') && document.body.innerText.includes('Transmuter suggestions')"),
+          () => evalJs(page, "document.body.innerText.includes('HITL REVIEW') && document.body.innerText.includes('Transmuter extracted the following')"),
           'guided initiative suggestions',
           20_000,
         );
@@ -696,7 +724,7 @@ async function main() {
           return true;
         })()
       `);
-      await clickText(page, 'Create Initiative');
+      await clickText(page, 'Save Initiative');
       await waitFor(
         () => evalJs(page, `
           location.pathname.startsWith('/initiatives/')
