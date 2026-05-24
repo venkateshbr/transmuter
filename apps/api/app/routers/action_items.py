@@ -1,9 +1,10 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
+from supabase import Client
 
 from app.core.auth import CurrentUser, get_current_user
-from app.core.database import get_supabase_admin
+from app.core.database import get_supabase_request_client
 from app.core.rbac import assert_can_manage_initiatives, assert_can_view_portfolio
 from app.domain.meetings import ActionItemListResponse, ActionItemUpdate
 from app.services.meeting import MeetingService
@@ -11,8 +12,11 @@ from app.services.meeting import MeetingService
 router = APIRouter(tags=["action-items"])
 
 
-def _svc(current_user: Annotated[CurrentUser, Depends(get_current_user)]) -> MeetingService:
-    return MeetingService(get_supabase_admin(), current_user.tenant_id)
+def _svc(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
+) -> MeetingService:
+    return MeetingService(client, current_user.tenant_id)
 
 
 @router.get("/action-items", response_model=ActionItemListResponse)

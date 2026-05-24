@@ -2,6 +2,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.core.config import settings
+from app.core.observability import metrics_snapshot
 
 router = APIRouter(tags=["health"])
 
@@ -19,3 +20,8 @@ async def health() -> HealthResponse:
         version=settings.version,
         ai_enabled=settings.ai_enabled,
     )
+
+
+@router.get("/metrics")
+async def metrics() -> dict:
+    return metrics_snapshot()

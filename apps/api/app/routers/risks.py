@@ -5,9 +5,10 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
+from supabase import Client
 
 from app.core.auth import CurrentUser, get_current_user
-from app.core.database import get_supabase_admin
+from app.core.database import get_supabase_request_client
 from app.core.rbac import (
     assert_can_manage_initiatives,
     assert_can_view_initiative,
@@ -27,10 +28,12 @@ router = APIRouter(tags=["risks"])
 
 def _svc(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> RiskService:
     return RiskService(
-        get_supabase_admin(),
+        client,
         current_user.tenant_id,
+        current_user.id,
     )
 
 
@@ -75,8 +78,9 @@ async def list_initiative_risks(
     initiative_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[RiskService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> RiskListResponse:
-    assert_can_view_initiative(get_supabase_admin(), current_user, initiative_id)
+    assert_can_view_initiative(client, current_user, initiative_id)
     return svc.list_risks(initiative_id)
 
 

@@ -6,6 +6,7 @@ import { ApiService } from '../../../../core/services/api.service';
 interface MilestoneItem {
   id: string;
   initiative_id: string;
+  initiative_name?: string | null;
   name: string;
   description: string | null;
   owner_id: string | null;
@@ -47,6 +48,11 @@ interface DependencyItem {
   upstream_milestone_id: string;
   upstream_name: string | null;
   downstream_milestone_id: string;
+}
+
+interface DependencyCandidateGroup {
+  initiativeName: string;
+  milestones: MilestoneItem[];
 }
 
 @Component({
@@ -264,8 +270,12 @@ interface DependencyItem {
                                   [(ngModel)]="dependencyDraft"
                                   aria-label="Select upstream dependency">
                             <option value="">Select upstream milestone</option>
-                            @for (candidate of dependencyCandidates(ms.id); track candidate.id) {
-                              <option [value]="candidate.id">{{ candidate.name }}</option>
+                            @for (group of dependencyCandidateGroups(ms.id); track group.initiativeName) {
+                              <optgroup [label]="group.initiativeName">
+                                @for (candidate of group.milestones; track candidate.id) {
+                                  <option [value]="candidate.id">{{ dependencyCandidateLabel(candidate) }}</option>
+                                }
+                              </optgroup>
                             }
                           </select>
                           <button class="btn-secondary px-3"
@@ -438,6 +448,7 @@ export class MilestonesTabComponent implements OnInit {
 
   loading = signal(true);
   milestones = signal<MilestoneItem[]>([]);
+  portfolioMilestones = signal<MilestoneItem[]>([]);
   expandedId = signal<string | null>(null);
   expandedDetail = signal<MilestoneDetail | null>(null);
   query = '';
@@ -472,6 +483,7 @@ export class MilestonesTabComponent implements OnInit {
   ngOnInit(): void {
     (globalThis as any).__transmuterMilestones = this;
     if (!this.initiativeId) { this.loading.set(false); return; }
+    this.loadPortfolioMilestones();
     this.loadMilestones();
   }
 
@@ -527,7 +539,32 @@ export class MilestonesTabComponent implements OnInit {
 
   dependencyCandidates(currentId: string): MilestoneItem[] {
     const currentDeps = new Set((this.expandedDetail()?.dependencies || []).map((dep) => dep.upstream_milestone_id));
-    return this.milestones().filter((ms) => ms.id !== currentId && !currentDeps.has(ms.id));
+    const source = this.portfolioMilestones().length > 0 ? this.portfolioMilestones() : this.milestones();
+    return source
+      .filter((ms) => ms.id !== currentId && !currentDeps.has(ms.id))
+      .sort((a, b) => {
+        const initCompare = this.initiativeLabel(a).localeCompare(this.initiativeLabel(b));
+        if (initCompare !== 0) return initCompare;
+        return (a.planned_end || '9999-12-31').localeCompare(b.planned_end || '9999-12-31')
+          || a.name.localeCompare(b.name);
+      });
+  }
+
+  dependencyCandidateGroups(currentId: string): DependencyCandidateGroup[] {
+    const groups = new Map<string, MilestoneItem[]>();
+    for (const milestone of this.dependencyCandidates(currentId)) {
+      const label = this.initiativeLabel(milestone);
+      groups.set(label, [...(groups.get(label) || []), milestone]);
+    }
+    return Array.from(groups.entries()).map(([initiativeName, milestones]) => ({
+      initiativeName,
+      milestones,
+    }));
+  }
+
+  dependencyCandidateLabel(candidate: MilestoneItem): string {
+    const date = candidate.planned_end ? ` · ${candidate.planned_end}` : '';
+    return `${candidate.name}${date}`;
   }
 
   // --- Modal Logic ---
@@ -677,6 +714,15 @@ export class MilestonesTabComponent implements OnInit {
     });
   }
 
+  private loadPortfolioMilestones(): void {
+    this.api.get<{ items: MilestoneItem[]; total: number }>('/milestones').subscribe({
+      next: (r: { items: MilestoneItem[] }) => {
+        this.portfolioMilestones.set(r.items || []);
+      },
+      error: () => this.portfolioMilestones.set([]),
+    });
+  }
+
   private loadDetail(id: string): void {
     this.api.get<MilestoneDetail>(`/milestones/${id}`).subscribe({
       next: (d: MilestoneDetail) => this.expandedDetail.set(d),
@@ -686,6 +732,13 @@ export class MilestonesTabComponent implements OnInit {
 
   private refreshExpanded(milestoneId: string): void {
     this.loadMilestones();
+    this.loadPortfolioMilestones();
     this.loadDetail(milestoneId);
+  }
+
+  private initiativeLabel(milestone: MilestoneItem): string {
+    return milestone.initiative_name || (
+      milestone.initiative_id === this.initiativeId ? 'This Initiative' : 'Unassigned Initiative'
+    );
   }
 }

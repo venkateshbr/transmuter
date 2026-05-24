@@ -11,6 +11,17 @@ MeetingRecurrence = Literal["weekly", "biweekly", "monthly", "ad_hoc"]
 SessionStatus = Literal["scheduled", "in_progress", "completed"]
 ActionPriority = Literal["high", "medium", "low"]
 ActionStatus = Literal["open", "in_progress", "completed", "cancelled"]
+MeetingArtifactType = Literal["action", "decision", "risk", "assumption", "issue"]
+MeetingArtifactStatus = Literal[
+    "open",
+    "in_progress",
+    "completed",
+    "cancelled",
+    "accepted",
+    "rejected",
+    "noted",
+]
+MinutesStatus = Literal["not_generated", "draft", "sent"]
 
 
 class MeetingCreate(BaseModel):
@@ -54,9 +65,12 @@ class MeetingInitiativeCreate(BaseModel):
 class SessionUpdate(BaseModel):
     notes: str | None = None
     transcript_text: str | None = None
+    transcript_source: str | None = None
     has_transcript: bool | None = None
     ai_optimised: bool | None = None
     status: SessionStatus | None = None
+    minutes_markdown: str | None = None
+    minutes_status: MinutesStatus | None = None
 
 
 class ActionItemCreate(BaseModel):
@@ -75,6 +89,60 @@ class ActionItemUpdate(BaseModel):
     priority: ActionPriority | None = None
     status: ActionStatus | None = None
     due_date: str | None = None
+
+
+class MeetingArtifactCreate(BaseModel):
+    artifact_type: MeetingArtifactType
+    title: str = Field(..., min_length=1, max_length=500)
+    description: str | None = None
+    agenda_item_id: str | None = None
+    initiative_id: str | None = None
+    status: MeetingArtifactStatus = "open"
+    priority: ActionPriority = "medium"
+    owner_id: str | None = None
+    assignee_id: str | None = None
+    due_date: str | None = None
+
+
+class MeetingArtifactUpdate(BaseModel):
+    title: str | None = Field(None, min_length=1, max_length=500)
+    description: str | None = None
+    agenda_item_id: str | None = None
+    initiative_id: str | None = None
+    status: MeetingArtifactStatus | None = None
+    priority: ActionPriority | None = None
+    owner_id: str | None = None
+    assignee_id: str | None = None
+    due_date: str | None = None
+
+
+class MeetingTranscriptImport(BaseModel):
+    transcript_text: str | None = None
+    transcript_source: str = "manual"
+
+
+class MeetingMinutesGenerateRequest(BaseModel):
+    force: bool = False
+
+
+class MeetingExternalEventCreate(BaseModel):
+    organizer_email: str | None = None
+    start_date_time: str | None = None
+    end_date_time: str | None = None
+    time_zone: str = "UTC"
+
+
+class MeetingExternalEventResponse(BaseModel):
+    id: str
+    provider: str
+    meeting_id: str
+    external_event_id: str | None = None
+    online_meeting_id: str | None = None
+    join_url: str | None = None
+    organizer_email: str | None = None
+    sync_status: str
+    sync_error: str | None = None
+    last_synced_at: str | None = None
 
 
 class MeetingListResponse(BaseModel):

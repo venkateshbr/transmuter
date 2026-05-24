@@ -1,9 +1,10 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
+from supabase import Client
 
 from app.core.auth import CurrentUser, get_current_user
-from app.core.database import get_supabase_admin
+from app.core.database import get_supabase_request_client
 from app.core.rbac import (
     assert_can_manage_initiatives,
     assert_can_view_meeting,
@@ -15,9 +16,14 @@ from app.domain.meetings import (
     AgendaItemCreate,
     AgendaItemUpdate,
     AttendeeCreate,
+    MeetingArtifactCreate,
+    MeetingArtifactUpdate,
     MeetingCreate,
+    MeetingExternalEventCreate,
     MeetingInitiativeCreate,
     MeetingListResponse,
+    MeetingMinutesGenerateRequest,
+    MeetingTranscriptImport,
     MeetingUpdate,
     SessionUpdate,
 )
@@ -26,8 +32,11 @@ from app.services.meeting import MeetingService
 router = APIRouter(prefix="/meetings", tags=["meetings"])
 
 
-def _svc(current_user: Annotated[CurrentUser, Depends(get_current_user)]) -> MeetingService:
-    return MeetingService(get_supabase_admin(), current_user.tenant_id)
+def _svc(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
+) -> MeetingService:
+    return MeetingService(client, current_user.tenant_id)
 
 
 @router.get("")
@@ -55,9 +64,10 @@ async def get_session(
     session_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> dict:
     """Get detail for a specific session."""
-    assert_can_view_session(get_supabase_admin(), current_user, session_id)
+    assert_can_view_session(client, current_user, session_id)
     return svc.get_session_detail(session_id)
 
 
@@ -96,14 +106,90 @@ async def create_action_item(
     return svc.create_action_item(session_id, data)
 
 
+@router.get("/sessions/{session_id}/artifacts")
+async def list_session_artifacts(
+    session_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[MeetingService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
+) -> dict:
+    assert_can_view_session(client, current_user, session_id)
+    return {"items": svc.list_session_artifacts(session_id)}
+
+
+@router.post("/sessions/{session_id}/artifacts", status_code=201)
+async def create_session_artifact(
+    session_id: str,
+    body: MeetingArtifactCreate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[MeetingService, Depends(_svc)],
+) -> dict:
+    assert_can_manage_initiatives(current_user)
+    return svc.create_artifact(session_id, body)
+
+
+@router.post("/sessions/{session_id}/transcript/import")
+async def import_session_transcript(
+    session_id: str,
+    body: MeetingTranscriptImport,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[MeetingService, Depends(_svc)],
+) -> dict:
+    assert_can_manage_initiatives(current_user)
+    return svc.import_transcript(session_id, body)
+
+
+@router.post("/sessions/{session_id}/minutes/generate")
+async def generate_session_minutes(
+    session_id: str,
+    body: MeetingMinutesGenerateRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[MeetingService, Depends(_svc)],
+) -> dict:
+    assert_can_manage_initiatives(current_user)
+    return svc.generate_minutes(session_id, body)
+
+
+@router.post("/sessions/{session_id}/minutes/send")
+async def send_session_minutes(
+    session_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[MeetingService, Depends(_svc)],
+) -> dict:
+    assert_can_manage_initiatives(current_user)
+    return svc.send_minutes(session_id)
+
+
+@router.put("/artifacts/{artifact_id}")
+async def update_meeting_artifact(
+    artifact_id: str,
+    body: MeetingArtifactUpdate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[MeetingService, Depends(_svc)],
+) -> dict:
+    assert_can_manage_initiatives(current_user)
+    return svc.update_artifact(artifact_id, body)
+
+
+@router.delete("/artifacts/{artifact_id}", status_code=204)
+async def delete_meeting_artifact(
+    artifact_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[MeetingService, Depends(_svc)],
+) -> None:
+    assert_can_manage_initiatives(current_user)
+    svc.delete_artifact(artifact_id)
+
+
 @router.get("/{meeting_id}")
 async def get_meeting(
     meeting_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> dict:
     """Get full detail for a specific meeting series."""
-    assert_can_view_meeting(get_supabase_admin(), current_user, meeting_id)
+    assert_can_view_meeting(client, current_user, meeting_id)
     return svc.get_meeting_detail(meeting_id)
 
 
@@ -137,6 +223,17 @@ async def start_session(
     """Start a new live session or resume an active one."""
     assert_can_manage_initiatives(current_user)
     return svc.start_session(meeting_id)
+
+
+@router.post("/{meeting_id}/external-events/microsoft")
+async def create_microsoft_external_event(
+    meeting_id: str,
+    body: MeetingExternalEventCreate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[MeetingService, Depends(_svc)],
+) -> dict:
+    assert_can_manage_initiatives(current_user)
+    return svc.create_microsoft_event(meeting_id, body)
 
 
 @router.post("/{meeting_id}/agenda", status_code=201)

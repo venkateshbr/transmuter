@@ -16,13 +16,16 @@ from app.domain.risks import (
     RiskListResponse,
     RiskUpdate,
 )
+from app.repositories.audit import AuditRepository
 from app.repositories.risk import RiskRepository
 
 
 class RiskService:
-    def __init__(self, client: Client, tenant_id: UUID) -> None:
+    def __init__(self, client: Client, tenant_id: UUID, user_id: UUID | None = None) -> None:
         self._repo = RiskRepository(client, tenant_id)
+        self._audit = AuditRepository(client, tenant_id)
         self._tenant_id = tenant_id
+        self._user_id = str(user_id) if user_id else None
 
     # ── List / Detail ────────────────────────────────────────────────
 
@@ -51,7 +54,9 @@ class RiskService:
         payload = data.model_dump(exclude_none=True)
         self._calc_rating(payload)
         row = self._repo.create(initiative_id, payload)
-        return self._to_item(row)
+        item = self._to_item(row)
+        self._audit_change("create", "risk", row["id"], after_data=item.model_dump(mode="json"))
+        return item
 
     def update_risk(
         self,
@@ -73,11 +78,20 @@ class RiskService:
             patch["rating"] = calc_payload.get("rating")
 
         row = self._repo.update(risk_id, patch)
-        return self._to_item(row)
+        item = self._to_item(row)
+        self._audit_change(
+            "update",
+            "risk",
+            risk_id,
+            before_data=existing,
+            after_data=item.model_dump(mode="json"),
+        )
+        return item
 
     def delete_risk(self, initiative_id: str, risk_id: str) -> None:
-        self._assert_belongs_to_initiative(risk_id, initiative_id)
+        existing = self._assert_belongs_to_initiative(risk_id, initiative_id)
         self._repo.delete(risk_id)
+        self._audit_change("delete", "risk", risk_id, before_data=existing)
 
     # ── Heatmap ──────────────────────────────────────────────────────
 
@@ -131,6 +145,26 @@ class RiskService:
                 detail="Risk not found",
             )
         return row
+
+    def _audit_change(
+        self,
+        action: str,
+        entity_type: str,
+        entity_id: str,
+        *,
+        before_data: dict[str, Any] | None = None,
+        after_data: dict[str, Any] | None = None,
+    ) -> None:
+        if not self._user_id:
+            return
+        self._audit.log_change(
+            action=action,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            actor_id=self._user_id,
+            before_data=before_data,
+            after_data=after_data,
+        )
 
     def _calc_rating(self, payload: dict[str, Any]) -> None:
         imp = payload.get("impact")

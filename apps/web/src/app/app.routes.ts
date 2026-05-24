@@ -82,6 +82,13 @@ export const routes: Routes = [
               import('./features/initiatives/create/create-initiative.component').then(m => m.CreateInitiativeComponent),
           },
           {
+            path: ':id/financial-scope',
+            canActivate: [authGuard],
+            data: { roles: ['transformation_office'] },
+            loadComponent: () =>
+              import('./features/initiatives/financial-scope/financial-scope.component').then(m => m.FinancialScopeComponent),
+          },
+          {
             path: ':id',
             loadComponent: () =>
               import('./features/initiatives/detail/detail.component').then(m => m.InitiativeDetailComponent),
@@ -114,8 +121,8 @@ export const routes: Routes = [
           },
           {
             path: 'dependencies',
-            loadComponent: () =>
-              import('./features/progress/dependencies/dependencies.component').then(m => m.DependenciesComponent),
+            redirectTo: 'roadmap',
+            pathMatch: 'full',
           },
         ],
       },
@@ -143,6 +150,11 @@ export const routes: Routes = [
         path: 'people',
         loadComponent: () =>
           import('./features/people/people.component').then(m => m.PeopleComponent),
+      },
+      {
+        path: 'profile',
+        loadComponent: () =>
+          import('./features/profile/profile.component').then(m => m.ProfileComponent),
       },
       {
         path: 'pmo',

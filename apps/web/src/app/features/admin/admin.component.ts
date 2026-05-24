@@ -262,6 +262,93 @@ import { FormsModule } from '@angular/forms';
                 </div>
               </section>
             </div>
+
+            <div class="card overflow-hidden">
+              <section class="border-b border-red-500/30 bg-red-500/10 p-8">
+                <p class="text-[10px] font-black uppercase tracking-widest text-red-500">Destructive initiative operation</p>
+                <h3 class="mt-2 text-2xl font-black text-[var(--t-text-primary)]">Delete one initiative</h3>
+                <p class="mt-2 max-w-2xl text-sm leading-6 text-[var(--t-text-secondary)]">
+                  Removes the selected initiative and its dependent financials, KPIs, risks, milestones,
+                  status updates, governance submissions, team assignments, meeting links, agenda items, and action items.
+                </p>
+              </section>
+
+              <section class="grid gap-6 p-8 lg:grid-cols-[1fr_0.8fr]">
+                <div class="space-y-3">
+                  @for (initiative of initiativeDeleteCandidates(); track initiative.id) {
+                    <button
+                      type="button"
+                      class="w-full border p-4 text-left transition-colors"
+                      [class.border-red-500]="selectedInitiativeDeleteId() === initiative.id"
+                      [class.bg-red-500/10]="selectedInitiativeDeleteId() === initiative.id"
+                      [class.border-[var(--t-border)]]="selectedInitiativeDeleteId() !== initiative.id"
+                      [class.bg-[var(--t-surface-raised)]]="selectedInitiativeDeleteId() !== initiative.id"
+                      (click)="selectInitiativeForDelete(initiative.id)"
+                      [attr.aria-label]="'Select ' + initiative.name + ' for deletion'">
+                      <div class="flex items-start justify-between gap-4">
+                        <div class="min-w-0">
+                          <p class="font-mono text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">{{ initiative.initiative_code }}</p>
+                          <p class="mt-1 truncate text-sm font-black text-[var(--t-text-primary)]">{{ initiative.name }}</p>
+                        </div>
+                        <span class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">{{ labelize(initiative.stage || '') }}</span>
+                      </div>
+                    </button>
+                  }
+                  @if (!initiativeDeleteCandidates().length) {
+                    <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4 text-sm font-bold text-[var(--t-text-secondary)]">
+                      No initiatives available.
+                    </div>
+                  }
+                </div>
+
+                <div class="border border-red-500/30 bg-[var(--t-surface-raised)] p-5">
+                  <p class="text-sm font-black text-[var(--t-text-primary)]">
+                    {{ selectedInitiativeForDelete()?.name || 'Select an initiative' }}
+                  </p>
+                  <p class="mt-1 font-mono text-xs text-[var(--t-text-tertiary)]">
+                    {{ selectedInitiativeForDelete()?.initiative_code || 'No initiative selected' }}
+                  </p>
+
+                  <label class="mt-5 block">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-red-500">
+                      Type initiative code to confirm
+                    </span>
+                    <input
+                      class="input-field mt-2 w-full font-mono"
+                      [ngModel]="initiativeDeleteConfirmation()"
+                      (ngModelChange)="initiativeDeleteConfirmation.set($event)"
+                      [placeholder]="selectedInitiativeForDelete()?.initiative_code || ''"
+                      aria-label="Initiative delete confirmation code">
+                  </label>
+
+                  @if (initiativeDeleteError()) {
+                    <div class="mt-4 border border-red-500/30 bg-red-500/10 p-3 text-sm font-bold text-red-500">
+                      {{ initiativeDeleteError() }}
+                    </div>
+                  }
+
+                  @if (initiativeDeleteResult()) {
+                    <div class="mt-4 border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm font-bold text-emerald-600">
+                      Deleted {{ initiativeDeleteResult().initiative_code }}.
+                    </div>
+                  }
+
+                  <div class="mt-5 flex justify-end gap-3">
+                    <button type="button" class="btn-ghost border border-[var(--t-border)] px-4 py-2 text-xs font-black uppercase" (click)="loadInitiativeDeleteCandidates()" aria-label="Refresh initiative delete list">
+                      Refresh
+                    </button>
+                    <button
+                      type="button"
+                      class="border border-red-500 bg-red-500 px-4 py-2 text-xs font-black uppercase text-white disabled:cursor-not-allowed disabled:opacity-40"
+                      [disabled]="!canDeleteSelectedInitiative() || initiativeDeleting()"
+                      (click)="deleteSelectedInitiative()"
+                      aria-label="Delete selected initiative">
+                      {{ initiativeDeleting() ? 'Deleting...' : 'Delete initiative' }}
+                    </button>
+                  </div>
+                </div>
+              </section>
+            </div>
           }
 
           @if (activeTab === 'Strategic Parameters') {
@@ -492,24 +579,37 @@ import { FormsModule } from '@angular/forms';
                     <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Metric Rows</h3>
                     <p class="mt-1 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Rename or hide system metrics without deleting values</p>
                   </div>
+                  <button type="button" class="btn-secondary px-4 py-2 text-[10px]" (click)="addMetricGroup()" aria-label="Add metric category">Add Category</button>
                 </div>
                 <div class="space-y-5">
                   @for (group of financialGroupsByKind('metric'); track group.key) {
                     <section class="border border-[var(--t-border)]">
-                      <div class="flex items-center justify-between border-b border-[var(--t-border)] bg-[var(--t-surface-raised)] px-4 py-3">
-                        <input class="bg-transparent text-xs font-black uppercase tracking-widest text-[var(--t-accent)] outline-none" [ngModel]="group.label" (ngModelChange)="group.label = $event" aria-label="Metric group label">
-                        <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Group</span>
+                      <div class="flex items-center justify-between gap-3 border-b border-[var(--t-border)] bg-[var(--t-surface-raised)] px-4 py-3">
+                        <input class="min-w-0 flex-1 bg-transparent text-xs font-black uppercase tracking-widest text-[var(--t-accent)] outline-none" [ngModel]="group.label" (ngModelChange)="group.label = $event" aria-label="Metric group label">
+                        <div class="flex items-center gap-2">
+                          <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="saveFinancialConfiguration()" aria-label="Save metric category">Save</button>
+                          @if (!group.is_system) {
+                            <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="deleteFinancialGroup(group)" aria-label="Delete metric category">Delete</button>
+                          }
+                        </div>
                       </div>
                       <div class="divide-y divide-[var(--t-border)]">
                         @for (item of financialItemsForGroup(group.key, 'metric'); track item.key) {
-                          <div class="grid gap-3 px-4 py-3 sm:grid-cols-[1fr_130px_auto] sm:items-center">
+                          <div class="grid gap-3 px-4 py-3 sm:grid-cols-[1fr_130px_auto_auto] sm:items-center">
                             <input class="input-field py-2 text-xs font-bold" [ngModel]="item.label" (ngModelChange)="item.label = $event" aria-label="Metric label">
                             <span class="font-mono text-[10px] text-[var(--t-text-tertiary)]">{{ item.system_metric_key || item.key }}</span>
                             <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="item.is_active = !item.is_active" [attr.aria-label]="'Toggle ' + item.label">
                               {{ item.is_active ? 'Active' : 'Hidden' }}
                             </button>
+                            @if (!item.is_system) {
+                              <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="deleteFinancialItem(item)" aria-label="Delete metric">Delete</button>
+                            }
                           </div>
                         }
+                        <div class="grid gap-3 px-4 py-3 sm:grid-cols-[1fr_auto]">
+                          <input class="input-field py-2 text-xs" [ngModel]="newMetricNameForGroup(group.key)" (ngModelChange)="setNewMetricName(group.key, $event)" placeholder="New custom metric" aria-label="New custom metric name">
+                          <button type="button" class="btn-primary py-2 text-[10px]" [disabled]="!newMetricNameForGroup(group.key).trim()" (click)="addMetric(group.key)" aria-label="Create custom metric">Create Metric</button>
+                        </div>
                       </div>
                     </section>
                   }
@@ -527,8 +627,14 @@ import { FormsModule } from '@angular/forms';
                 <div class="grid gap-5 lg:grid-cols-3">
                   @for (group of financialGroupsByKind('cost_category'); track group.key) {
                     <section class="border border-[var(--t-border)] bg-[var(--t-surface)]">
-                      <div class="border-b border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4">
-                        <input class="w-full bg-transparent text-sm font-black text-[var(--t-text-primary)] outline-none" [ngModel]="group.label" (ngModelChange)="group.label = $event" aria-label="Cost category group label">
+                      <div class="flex items-center justify-between gap-3 border-b border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4">
+                        <input class="min-w-0 flex-1 bg-transparent text-sm font-black text-[var(--t-text-primary)] outline-none" [ngModel]="group.label" (ngModelChange)="group.label = $event" aria-label="Cost category group label">
+                        <div class="flex items-center gap-2">
+                          <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="saveFinancialConfiguration()" aria-label="Save cost group">Save</button>
+                          @if (!group.is_system) {
+                            <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="deleteFinancialGroup(group)" aria-label="Delete cost group">Delete</button>
+                          }
+                        </div>
                       </div>
                       <div class="divide-y divide-[var(--t-border)]">
                         @for (item of financialItemsForGroup(group.key, 'cost_category'); track item.key) {
@@ -545,8 +651,8 @@ import { FormsModule } from '@angular/forms';
                           </div>
                         }
                         <div class="grid gap-3 p-4">
-                          <input class="input-field py-2 text-xs" [ngModel]="newCostCategoryName()" (ngModelChange)="newCostCategoryName.set($event)" placeholder="New category name" aria-label="New cost category name">
-                          <button type="button" class="btn-primary py-2 text-[10px]" [disabled]="!newCostCategoryName().trim()" (click)="addCostCategory(group.key)" aria-label="Create cost category">Create Category</button>
+                          <input class="input-field py-2 text-xs" [ngModel]="newCostCategoryNameForGroup(group.key)" (ngModelChange)="setNewCostCategoryName(group.key, $event)" placeholder="New category name" aria-label="New cost category name">
+                          <button type="button" class="btn-primary py-2 text-[10px]" [disabled]="!newCostCategoryNameForGroup(group.key).trim()" (click)="addCostCategory(group.key)" aria-label="Create cost category">Create Category</button>
                         </div>
                       </div>
                     </section>
@@ -727,6 +833,12 @@ export class AdminComponent implements OnInit {
   cleanupError = signal<string | null>(null);
   cleanupDeleting = signal(false);
   cleanupConfirmation = signal('');
+  initiativeDeleteCandidates = signal<any[]>([]);
+  selectedInitiativeDeleteId = signal('');
+  initiativeDeleteConfirmation = signal('');
+  initiativeDeleting = signal(false);
+  initiativeDeleteError = signal<string | null>(null);
+  initiativeDeleteResult = signal<any | null>(null);
   gateCriteria = signal<any[]>([]);
   auditLogs = signal<any[]>([]);
   financialGroups = signal<any[]>([]);
@@ -741,7 +853,8 @@ export class AdminComponent implements OnInit {
   newTagName = signal('');
   newCriterionG1 = signal('');
   newCriterionG2 = signal('');
-  newCostCategoryName = signal('');
+  newMetricNames = signal<Record<string, string>>({});
+  newCostCategoryNames = signal<Record<string, string>>({});
 
   private readonly defaultTags = ['automation', 'offshoring', 'commercial', 'other'];
 
@@ -756,6 +869,7 @@ export class AdminComponent implements OnInit {
     this.loadSettings();
     this.loadBilling();
     this.loadCleanupPreview();
+    this.loadInitiativeDeleteCandidates();
     this.loadGateCriteria();
     this.loadAuditLogs();
     this.loadFinancialConfiguration();
@@ -808,6 +922,14 @@ export class AdminComponent implements OnInit {
     this.api.get<any>('/admin/portfolio-cleanup-preview').subscribe({
       next: res => this.cleanupPreview.set(res),
       error: err => this.cleanupError.set(err.error?.detail || 'Could not load portfolio cleanup preview'),
+    });
+  }
+
+  loadInitiativeDeleteCandidates() {
+    this.initiativeDeleteError.set(null);
+    this.api.get<any>('/initiatives?page_size=200&sort_by=initiative_code').subscribe({
+      next: res => this.initiativeDeleteCandidates.set(res.items || []),
+      error: err => this.initiativeDeleteError.set(err.error?.detail || 'Could not load initiatives'),
     });
   }
 
@@ -1004,6 +1126,96 @@ export class AdminComponent implements OnInit {
     });
   }
 
+  addMetricGroup() {
+    const index = this.financialGroupsByKind('metric').length + 1;
+    this.financialGroups.update(groups => [
+      ...groups,
+      {
+        key: `metric_group_${Date.now()}`,
+        label: `Metric Category ${index}`,
+        kind: 'metric',
+        rollup_type: null,
+        display_order: 100 + index,
+        is_system: false,
+        is_active: true,
+      },
+    ]);
+  }
+
+  addMetric(groupKey: string) {
+    const label = this.newMetricNameForGroup(groupKey).trim();
+    if (!label) return;
+    const key = this.uniqueFinancialKey(label, 'metric');
+    this.financialItems.update(items => [
+      ...items,
+      {
+        key,
+        label,
+        item_type: 'metric',
+        group_key: groupKey,
+        system_metric_key: null,
+        rollup_type: 'benefit',
+        display_order: items.length + 10,
+        is_system: false,
+        is_active: true,
+      },
+    ]);
+    this.setNewMetricName(groupKey, '');
+    this.saveFinancialConfiguration();
+  }
+
+  newMetricNameForGroup(groupKey: string): string {
+    return this.newMetricNames()[groupKey] || '';
+  }
+
+  setNewMetricName(groupKey: string, value: string) {
+    this.newMetricNames.update(names => ({ ...names, [groupKey]: value }));
+  }
+
+  deleteFinancialItem(item: any) {
+    if (item.is_system) item.is_active = false;
+    else this.financialItems.update(items => items.filter(candidate => candidate !== item));
+    this.saveFinancialConfiguration();
+  }
+
+  deleteFinancialGroup(group: any) {
+    if (group.is_system) return;
+    const childItems = this.financialItems().filter(item => item.group_key === group.key);
+    const activeCostItems = childItems.filter(item => item.item_type === 'cost_category' && item.is_active !== false);
+    const replacement = this.financialItems().find(item =>
+      item.item_type === 'cost_category'
+      && item.group_key !== group.key
+      && item.is_active !== false
+    );
+
+    const removeGroup = () => {
+      this.financialGroups.update(groups => groups.filter(candidate => candidate !== group));
+      this.financialItems.update(items => items.filter(item => item.group_key !== group.key));
+      this.saveFinancialConfiguration();
+    };
+
+    if (!activeCostItems.length || !replacement) {
+      removeGroup();
+      return;
+    }
+
+    const resetNext = (index: number) => {
+      const item = activeCostItems[index];
+      if (!item) {
+        removeGroup();
+        return;
+      }
+      this.api.post('/admin/financial-configuration/cost-categories/delete', {
+        category_key: item.key,
+        replacement_key: replacement.key,
+      }).subscribe({
+        next: () => resetNext(index + 1),
+        error: () => resetNext(index + 1),
+      });
+    };
+    resetNext(0);
+  }
+
   addCostCategoryGroup() {
     const index = this.financialGroupsByKind('cost_category').length + 1;
     this.financialGroups.update(groups => [
@@ -1021,9 +1233,10 @@ export class AdminComponent implements OnInit {
   }
 
   addCostCategory(groupKey: string) {
-    const label = this.newCostCategoryName().trim();
+    const label = this.newCostCategoryNameForGroup(groupKey).trim();
     if (!label) return;
-    const key = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || `category_${Date.now()}`;
+    const key = this.uniqueFinancialKey(label, 'category');
+    const rollup = groupKey === 'operating' ? 'recurring_cost' : 'one_off_cost';
     this.financialItems.update(items => [
       ...items,
       {
@@ -1032,14 +1245,22 @@ export class AdminComponent implements OnInit {
         item_type: 'cost_category',
         group_key: groupKey,
         system_metric_key: null,
-        rollup_type: null,
+        rollup_type: rollup,
         display_order: items.length + 10,
         is_system: false,
         is_active: true,
       },
     ]);
-    this.newCostCategoryName.set('');
+    this.setNewCostCategoryName(groupKey, '');
     this.saveFinancialConfiguration();
+  }
+
+  newCostCategoryNameForGroup(groupKey: string): string {
+    return this.newCostCategoryNames()[groupKey] || '';
+  }
+
+  setNewCostCategoryName(groupKey: string, value: string) {
+    this.newCostCategoryNames.update(names => ({ ...names, [groupKey]: value }));
   }
 
   deleteCostCategory(item: any) {
@@ -1056,6 +1277,15 @@ export class AdminComponent implements OnInit {
       item.is_active = false;
       this.saveFinancialConfiguration();
     });
+  }
+
+  private uniqueFinancialKey(label: string, fallbackPrefix: string): string {
+    const base = label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || `${fallbackPrefix}_${Date.now()}`;
+    const existing = new Set(this.financialItems().map(item => item.key));
+    if (!existing.has(base)) return base;
+    let index = 2;
+    while (existing.has(`${base}_${index}`)) index += 1;
+    return `${base}_${index}`;
   }
 
   private normalizeConfigList(values: unknown): string[] {
@@ -1131,6 +1361,48 @@ export class AdminComponent implements OnInit {
     });
   }
 
+  selectInitiativeForDelete(initiativeId: string) {
+    this.selectedInitiativeDeleteId.set(initiativeId);
+    this.initiativeDeleteConfirmation.set('');
+    this.initiativeDeleteError.set(null);
+    this.initiativeDeleteResult.set(null);
+  }
+
+  selectedInitiativeForDelete(): any | null {
+    return this.initiativeDeleteCandidates().find(item => item.id === this.selectedInitiativeDeleteId()) || null;
+  }
+
+  canDeleteSelectedInitiative(): boolean {
+    const selected = this.selectedInitiativeForDelete();
+    return Boolean(
+      selected
+      && this.initiativeDeleteConfirmation().trim() === selected.initiative_code,
+    );
+  }
+
+  deleteSelectedInitiative() {
+    const selected = this.selectedInitiativeForDelete();
+    if (!selected || !this.canDeleteSelectedInitiative() || this.initiativeDeleting()) return;
+
+    this.initiativeDeleting.set(true);
+    this.initiativeDeleteError.set(null);
+    this.api.delete(`/initiatives/${selected.id}`).subscribe({
+      next: () => {
+        this.initiativeDeleteResult.set(selected);
+        this.initiativeDeleting.set(false);
+        this.selectedInitiativeDeleteId.set('');
+        this.initiativeDeleteConfirmation.set('');
+        this.loadInitiativeDeleteCandidates();
+        this.loadCleanupPreview();
+        this.loadAuditLogs();
+      },
+      error: err => {
+        this.initiativeDeleteError.set(err.error?.detail || 'Could not delete initiative');
+        this.initiativeDeleting.set(false);
+      },
+    });
+  }
+
   getAuditIcon(action: string): string {
     switch(action) {
       case 'create': return 'add_circle';
@@ -1179,6 +1451,10 @@ export class AdminComponent implements OnInit {
 
   normalizedCleanupConfirmation(): string {
     return this.cleanupConfirmation().trim();
+  }
+
+  labelize(value: string): string {
+    return value.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   }
 
   formatCents(cents: number | undefined, currency: string | undefined): string {

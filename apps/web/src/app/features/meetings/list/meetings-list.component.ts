@@ -3,11 +3,14 @@ import { CommonModule } from '@angular/common';
 import { ApiService } from '../../../core/services/api.service';
 import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { CompactFilterToolbarComponent, type CompactFilterGroup } from '../../../shared/components/compact-filter-toolbar/compact-filter-toolbar.component';
+
+const MEETINGS_FILTER_STATE_KEY = 'transmuter.filters.meetings.list';
 
 @Component({
   selector: 'app-meetings-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, CompactFilterToolbarComponent],
   template: `
     <div class="p-8 space-y-8 animate-fade-in" style="background:var(--t-bg)">
       <div class="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
@@ -19,26 +22,20 @@ import { FormsModule } from '@angular/forms';
         </div>
 
         <div class="flex flex-wrap items-center gap-3">
-          <div class="relative">
-            <span class="material-icons text-sm absolute left-3 top-1/2 -translate-y-1/2 text-[var(--t-text-tertiary)]">search</span>
-            <input
-              [(ngModel)]="search"
-              aria-label="Search meetings"
-              placeholder="Search meetings"
-              class="input-field h-10 pl-9 text-sm w-56"
-            />
-          </div>
-          <select [(ngModel)]="scopeFilter" aria-label="Filter meetings by scope" class="input-field h-10 text-sm w-36">
-            <option value="">All scopes</option>
-            <option value="all">All</option>
-            <option value="workstream">Workstream</option>
-            <option value="initiative">Initiative</option>
-          </select>
           <button (click)="showCreate.set(true)" class="btn-primary text-sm flex items-center gap-2" aria-label="Create meeting series">
           <span>+</span> New Series
         </button>
         </div>
       </div>
+
+      <app-compact-filter-toolbar
+        [searchValue]="search"
+        searchPlaceholder="Search meetings"
+        [groups]="meetingFilterGroups()"
+        [hasFilters]="hasMeetingFilters()"
+        (searchValueChange)="onSearchChange($event)"
+        (groupSelectionChange)="onFilterGroupChange($event)"
+        (clearFilters)="clearMeetingFilters()" />
 
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         @for (m of filteredMeetings(); track m.id) {
@@ -197,6 +194,7 @@ export class MeetingsListComponent implements OnInit {
   }
 
   ngOnInit() {
+    this.restoreMeetingFilters();
     this.loadMeetings();
     this.api.get<any>('/users').subscribe(res => {
       const users = res.data || [];
@@ -208,9 +206,65 @@ export class MeetingsListComponent implements OnInit {
   }
 
   loadMeetings() {
+    this.persistMeetingFilters();
     this.api.get<any>('/meetings').subscribe(res => {
       this.meetings.set(res.items || []);
     });
+  }
+
+  meetingFilterGroups(): CompactFilterGroup[] {
+    return [
+      {
+        key: 'scope',
+        label: 'Scope',
+        mode: 'single',
+        selected: this.scopeFilter ? [this.scopeFilter] : [],
+        options: [
+          { id: 'all', name: 'All' },
+          { id: 'workstream', name: 'Workstream' },
+          { id: 'initiative', name: 'Initiative' },
+        ],
+      },
+    ];
+  }
+
+  onSearchChange(value: string): void {
+    this.search = value;
+    this.persistMeetingFilters();
+  }
+
+  onFilterGroupChange(change: { key: string; selected: string[] }): void {
+    if (change.key === 'scope') this.scopeFilter = change.selected[0] || '';
+    this.persistMeetingFilters();
+  }
+
+  clearMeetingFilters(): void {
+    this.search = '';
+    this.scopeFilter = '';
+    this.persistMeetingFilters();
+  }
+
+  hasMeetingFilters(): boolean {
+    return Boolean(this.search.trim() || this.scopeFilter);
+  }
+
+  private persistMeetingFilters(): void {
+    localStorage.setItem(MEETINGS_FILTER_STATE_KEY, JSON.stringify({
+      search: this.search,
+      scopeFilter: this.scopeFilter,
+    }));
+  }
+
+  private restoreMeetingFilters(): void {
+    try {
+      const raw = localStorage.getItem(MEETINGS_FILTER_STATE_KEY);
+      if (!raw) return;
+      const state = JSON.parse(raw) as Record<string, string>;
+      this.search = typeof state['search'] === 'string' ? state['search'] : '';
+      this.scopeFilter = typeof state['scopeFilter'] === 'string' ? state['scopeFilter'] : '';
+    } catch {
+      localStorage.removeItem(MEETINGS_FILTER_STATE_KEY);
+    }
   }
 
   createMeeting() {

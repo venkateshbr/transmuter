@@ -1,7 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 
 @Component({
@@ -55,6 +55,12 @@ import { AuthService } from '../../../core/services/auth.service';
               </div>
             }
 
+            @if (sessionExpired()) {
+              <div class="p-3 rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-600 text-sm">
+                Your session expired. Please sign in again.
+              </div>
+            }
+
             <button 
               type="submit" 
               [disabled]="loading()"
@@ -88,15 +94,22 @@ import { AuthService } from '../../../core/services/auth.service';
 export class LoginComponent {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
 
   email = '';
   password = '';
   loading = signal(false);
   error = signal<string | null>(null);
+  sessionExpired = signal(false);
+
+  constructor() {
+    this.sessionExpired.set(this.route.snapshot.queryParamMap.get('session') === 'expired');
+  }
 
   onSubmit() {
     this.loading.set(true);
     this.error.set(null);
+    this.sessionExpired.set(false);
 
     this.auth.login(this.email, this.password).subscribe({
       next: () => {

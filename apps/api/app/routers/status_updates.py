@@ -5,9 +5,10 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
+from supabase import Client
 
 from app.core.auth import CurrentUser, get_current_user, require_role
-from app.core.database import get_supabase_admin
+from app.core.database import get_supabase_request_client
 from app.core.rbac import (
     assert_can_manage_initiatives,
     assert_can_view_initiative,
@@ -31,8 +32,9 @@ router = APIRouter(tags=["status_updates"])
 
 def _svc(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> StatusUpdateService:
-    return StatusUpdateService(get_supabase_admin(), current_user.tenant_id, current_user.id)
+    return StatusUpdateService(client, current_user.tenant_id, current_user.id)
 
 
 @router.get(
@@ -116,8 +118,9 @@ async def list_status_updates(
     initiative_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[StatusUpdateService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> StatusUpdateListResponse:
-    assert_can_view_initiative(get_supabase_admin(), current_user, initiative_id)
+    assert_can_view_initiative(client, current_user, initiative_id)
     return svc.list_history(initiative_id)
 
 
@@ -129,8 +132,9 @@ async def get_status_update_draft(
     initiative_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[StatusUpdateService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> StatusUpdateItem | None:
-    assert_can_view_initiative(get_supabase_admin(), current_user, initiative_id)
+    assert_can_view_initiative(client, current_user, initiative_id)
     return svc.get_draft(initiative_id)
 
 

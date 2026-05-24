@@ -3,11 +3,15 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { CompactFilterToolbarComponent, type CompactFilterGroup } from '../../../shared/components/compact-filter-toolbar/compact-filter-toolbar.component';
 
 interface InitiativeItem {
   id: string;
   initiative_code: string;
   name: string;
+  business_unit_id: string | null;
+  business_unit_name: string | null;
+  workstream_id: string | null;
   workstream_name: string | null;
   owner_name: string | null;
   type: string | null;
@@ -22,17 +26,26 @@ interface InitiativeItem {
   archived_at: string | null;
 }
 
+type PipelineMultiFilterKey = 'business_unit_id' | 'workstream_id' | 'priority' | 'tag';
+
+interface FilterOption {
+  id: string;
+  name: string;
+  business_unit_id?: string | null;
+}
+
 const STAGE_ORDER = ['scoping', 'in_progress', 'complete'] as const;
 const STAGE_LABELS: Record<string, string> = {
   scoping: 'Scoping',
   in_progress: 'In-Progress',
   complete: 'Complete',
 };
+const FILTER_STATE_KEY = 'transmuter.filters.initiatives.pipeline';
 
 @Component({
   selector: 'app-pipeline',
   standalone: true,
-  imports: [RouterLink, FormsModule],
+  imports: [RouterLink, FormsModule, CompactFilterToolbarComponent],
   styles: [`
     :host { display: block; }
 
@@ -59,6 +72,47 @@ const STAGE_LABELS: Record<string, string> = {
     .row-enter { animation: fadeUp 0.25s ease both; }
 
     .rag-dot-red { box-shadow: 0 0 0 3px rgba(239,68,68,0.2); }
+
+    .filter-panel {
+      min-width: 150px;
+      border: 1px solid var(--t-border);
+      background: var(--t-surface-raised);
+      padding: 8px;
+    }
+    .filter-label {
+      margin-bottom: 6px;
+      color: var(--t-text-tertiary);
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .filter-options {
+      display: grid;
+      gap: 4px;
+      max-height: 76px;
+      overflow-y: auto;
+    }
+    .filter-option {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 24px;
+      border: 1px solid var(--t-border);
+      background: var(--t-surface);
+      padding: 3px 6px;
+      color: var(--t-text-secondary);
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .filter-option input {
+      accent-color: var(--t-accent);
+    }
+    .filter-option:has(input:checked) {
+      border-color: var(--t-accent);
+      background: var(--t-accent-soft);
+      color: var(--t-text-primary);
+    }
 
     .expand-area {
       display: grid;
@@ -123,49 +177,15 @@ const STAGE_LABELS: Record<string, string> = {
       </div>
     </div>
 
-    <!-- Filter bar -->
-    <div class="flex items-center gap-2 flex-wrap">
-      <div class="relative">
-        <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
-             width="13" height="13" viewBox="0 0 24 24" fill="none"
-             stroke="var(--t-text-secondary)" stroke-width="2">
-          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-        </svg>
-        <input [(ngModel)]="searchValue" (ngModelChange)="scheduleReload()"
-               placeholder="Search initiatives…"
-               class="input-field text-xs pl-8" style="height:32px;width:210px" />
-      </div>
-
-      <select [(ngModel)]="ragFilter" (ngModelChange)="reload()"
-              class="input-field text-xs" style="height:32px;width:110px">
-        <option value="">All RAG</option>
-        <option value="green">Green</option>
-        <option value="amber">Amber</option>
-        <option value="red">Red</option>
-      </select>
-
-      <select [(ngModel)]="stageFilter" (ngModelChange)="reload()"
-              class="input-field text-xs" style="height:32px;width:130px">
-        <option value="">All Stages</option>
-        <option value="scoping">Scoping</option>
-        <option value="in_progress">In-Progress</option>
-        <option value="complete">Complete</option>
-      </select>
-
-      <select [(ngModel)]="priorityFilter" (ngModelChange)="reload()"
-              class="input-field text-xs" style="height:32px;width:110px">
-        <option value="">All Priority</option>
-        <option value="high">High</option>
-        <option value="medium">Medium</option>
-        <option value="low">Low</option>
-      </select>
-
-      @if (hasFilters()) {
-        <button (click)="clearFilters()" class="btn-ghost text-xs" style="height:32px">
-          Clear ×
-        </button>
-      }
-    </div>
+    <app-compact-filter-toolbar
+      [searchValue]="searchValue"
+      searchPlaceholder="Search initiatives..."
+      [groups]="filterGroups()"
+      [hasFilters]="hasFilters()"
+      clearTestId="initiatives-clear-filters"
+      (searchValueChange)="onSearchChange($event)"
+      (groupSelectionChange)="onFilterGroupChange($event)"
+      (clearFilters)="clearFilters()" />
   </div>
 
   <!-- PIPELINE -->
@@ -431,11 +451,25 @@ export class PipelineComponent {
   readonly total = signal(0);
   readonly initiatives = signal<InitiativeItem[]>([]);
   readonly expandedRows = signal(new Set<string>());
+  readonly availableFilters = signal<{
+    business_units: FilterOption[];
+    workstreams: FilterOption[];
+    priorities: FilterOption[];
+    tags: FilterOption[];
+  }>({
+    business_units: [],
+    workstreams: [],
+    priorities: [],
+    tags: [],
+  });
 
   searchValue = '';
   ragFilter = '';
+  businessUnitFilter: string[] = [];
+  workstreamFilter: string[] = [];
   stageFilter = '';
-  priorityFilter = '';
+  priorityFilter: string[] = [];
+  tagFilter: string[] = [];
 
   readonly skeletons = Array.from({ length: 7 }, (_, i) => i);
   readonly stageOrder = STAGE_ORDER;
@@ -457,12 +491,21 @@ export class PipelineComponent {
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
+    this.loadFilterOptions();
     this.route.queryParamMap.subscribe(params => {
-      this.searchValue = params.get('search') ?? '';
-      this.ragFilter = params.get('rag_status') ?? '';
-      this.stageFilter = params.get('stage') ?? '';
-      this.priorityFilter = params.get('priority') ?? '';
-      this.reload();
+      const hasQueryFilters = this.hasQueryFilters(params);
+      if (hasQueryFilters) {
+        this.searchValue = params.get('search') ?? '';
+        this.ragFilter = params.get('rag_status') ?? '';
+        this.businessUnitFilter = this.parseFilterParam(params.get('business_unit_id'));
+        this.workstreamFilter = this.parseFilterParam(params.get('workstream_id'));
+        this.stageFilter = params.get('stage') ?? '';
+        this.priorityFilter = this.parseFilterParam(params.get('priority'));
+        this.tagFilter = this.parseFilterParam(params.get('tag'));
+      } else {
+        this.restoreFilters();
+      }
+      this.reload(false);
     });
   }
 
@@ -475,12 +518,16 @@ export class PipelineComponent {
     return this.auth.getRole() === 'transformation_office';
   }
 
-  reload(): void {
+  reload(syncState = true): void {
+    if (syncState) this.persistFilters();
     const params: Record<string, string | number> = { page_size: 200 };
     if (this.searchValue.trim()) params['search'] = this.searchValue.trim();
     if (this.ragFilter) params['rag_status'] = this.ragFilter;
+    if (this.businessUnitFilter.length) params['business_unit_id'] = this.businessUnitFilter.join(',');
+    if (this.workstreamFilter.length) params['workstream_id'] = this.workstreamFilter.join(',');
     if (this.stageFilter) params['stage'] = this.stageFilter;
-    if (this.priorityFilter) params['priority'] = this.priorityFilter;
+    if (this.priorityFilter.length) params['priority'] = this.priorityFilter.join(',');
+    if (this.tagFilter.length) params['tag'] = this.tagFilter.join(',');
 
     this.loading.set(true);
     this.api
@@ -496,16 +543,204 @@ export class PipelineComponent {
     this.searchTimer = setTimeout(() => this.reload(), 300);
   }
 
+  onSearchChange(value: string): void {
+    this.searchValue = value;
+    this.scheduleReload();
+  }
+
+  filterGroups(): CompactFilterGroup[] {
+    return [
+      {
+        key: 'business_unit_id',
+        label: 'Business Unit',
+        options: this.availableFilters().business_units,
+        selected: this.businessUnitFilter,
+        testId: 'initiatives-filter-business-unit',
+      },
+      {
+        key: 'workstream_id',
+        label: 'Workstream',
+        options: this.availableWorkstreams(),
+        selected: this.workstreamFilter,
+        testId: 'initiatives-filter-workstream',
+      },
+      {
+        key: 'stage',
+        label: 'Stage',
+        mode: 'single',
+        options: [
+          { id: 'scoping', name: 'Scoping' },
+          { id: 'in_progress', name: 'In-Progress' },
+          { id: 'complete', name: 'Complete' },
+        ],
+        selected: this.stageFilter ? [this.stageFilter] : [],
+      },
+      {
+        key: 'priority',
+        label: 'Priority',
+        options: this.availableFilters().priorities,
+        selected: this.priorityFilter,
+        testId: 'initiatives-filter-priority',
+      },
+      {
+        key: 'tag',
+        label: 'Tag',
+        options: this.availableFilters().tags,
+        selected: this.tagFilter,
+        testId: 'initiatives-filter-tag',
+      },
+    ];
+  }
+
+  loadFilterOptions(): void {
+    this.api.get<any>('/dashboard').subscribe({
+      next: response => {
+        const filters = response?.available_filters || {};
+        this.availableFilters.set({
+          business_units: filters.business_units || [],
+          workstreams: filters.workstreams || [],
+          priorities: filters.priorities || [
+            { id: 'high', name: 'High' },
+            { id: 'medium', name: 'Medium' },
+            { id: 'low', name: 'Low' },
+          ],
+          tags: filters.tags || [],
+        });
+      },
+      error: () => undefined,
+    });
+  }
+
+  isFilterSelected(key: PipelineMultiFilterKey, value: string): boolean {
+    return this.filterValues(key).includes(value);
+  }
+
+  onFilterGroupChange(change: { key: string; selected: string[] }): void {
+    if (change.key === 'stage') {
+      this.stageFilter = change.selected[0] || '';
+      this.reload();
+      return;
+    }
+    const key = change.key as PipelineMultiFilterKey;
+    this.setFilterValues(key, change.selected);
+    if (key === 'business_unit_id') {
+      const visibleWorkstreamIds = new Set(this.availableWorkstreams().map(ws => ws.id));
+      this.workstreamFilter = this.workstreamFilter.filter(wsId => visibleWorkstreamIds.has(wsId));
+    }
+    this.reload();
+  }
+
+  toggleFilter(key: PipelineMultiFilterKey, value: string, event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    const current = this.filterValues(key);
+    this.onFilterGroupChange({
+      key,
+      selected: checked
+        ? Array.from(new Set([...current, value]))
+        : current.filter(item => item !== value),
+    });
+  }
+
+  availableWorkstreams(): FilterOption[] {
+    const workstreams = this.availableFilters().workstreams;
+    if (!this.businessUnitFilter.length) return workstreams;
+    const selectedBusinessUnits = new Set(this.businessUnitFilter);
+    return workstreams.filter(ws => selectedBusinessUnits.has(ws.business_unit_id || ''));
+  }
+
   hasFilters(): boolean {
-    return !!(this.searchValue || this.ragFilter || this.stageFilter || this.priorityFilter);
+    return !!(
+      this.searchValue ||
+      this.ragFilter ||
+      this.businessUnitFilter.length ||
+      this.workstreamFilter.length ||
+      this.stageFilter ||
+      this.priorityFilter.length ||
+      this.tagFilter.length
+    );
   }
 
   clearFilters(): void {
     this.searchValue = '';
     this.ragFilter = '';
+    this.businessUnitFilter = [];
+    this.workstreamFilter = [];
     this.stageFilter = '';
-    this.priorityFilter = '';
+    this.priorityFilter = [];
+    this.tagFilter = [];
     this.reload();
+  }
+
+  private persistFilters(): void {
+    const state = this.currentFilterState();
+    localStorage.setItem(FILTER_STATE_KEY, JSON.stringify(state));
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: this.queryParamsFromState(state),
+      replaceUrl: true,
+    });
+  }
+
+  private restoreFilters(): void {
+    try {
+      const raw = localStorage.getItem(FILTER_STATE_KEY);
+      if (!raw) return;
+      const state = JSON.parse(raw) as Record<string, string | string[]>;
+      this.searchValue = typeof state['search'] === 'string' ? state['search'] : '';
+      this.ragFilter = typeof state['rag_status'] === 'string' ? state['rag_status'] : '';
+      this.businessUnitFilter = Array.isArray(state['business_unit_id']) ? state['business_unit_id'] : [];
+      this.workstreamFilter = Array.isArray(state['workstream_id']) ? state['workstream_id'] : [];
+      this.stageFilter = typeof state['stage'] === 'string' ? state['stage'] : '';
+      this.priorityFilter = Array.isArray(state['priority']) ? state['priority'] : [];
+      this.tagFilter = Array.isArray(state['tag']) ? state['tag'] : [];
+    } catch {
+      localStorage.removeItem(FILTER_STATE_KEY);
+    }
+  }
+
+  private currentFilterState(): Record<string, string | string[]> {
+    return {
+      search: this.searchValue.trim(),
+      rag_status: this.ragFilter,
+      business_unit_id: this.businessUnitFilter,
+      workstream_id: this.workstreamFilter,
+      stage: this.stageFilter,
+      priority: this.priorityFilter,
+      tag: this.tagFilter,
+    };
+  }
+
+  private queryParamsFromState(state: Record<string, string | string[]>): Record<string, string | null> {
+    return Object.fromEntries(
+      Object.entries(state).map(([key, value]) => [
+        key,
+        Array.isArray(value) ? (value.length ? value.join(',') : null) : (value || null),
+      ])
+    );
+  }
+
+  private hasQueryFilters(params: { get: (key: string) => string | null }): boolean {
+    return ['search', 'rag_status', 'business_unit_id', 'workstream_id', 'stage', 'priority', 'tag']
+      .some(key => params.get(key));
+  }
+
+  private parseFilterParam(value: string | null): string[] {
+    if (!value) return [];
+    return value.split(',').map(item => item.trim()).filter(Boolean);
+  }
+
+  private filterValues(key: PipelineMultiFilterKey): string[] {
+    if (key === 'business_unit_id') return this.businessUnitFilter;
+    if (key === 'workstream_id') return this.workstreamFilter;
+    if (key === 'priority') return this.priorityFilter;
+    return this.tagFilter;
+  }
+
+  private setFilterValues(key: PipelineMultiFilterKey, values: string[]): void {
+    if (key === 'business_unit_id') this.businessUnitFilter = values;
+    if (key === 'workstream_id') this.workstreamFilter = values;
+    if (key === 'priority') this.priorityFilter = values;
+    if (key === 'tag') this.tagFilter = values;
   }
 
   toggleRow(id: string): void {

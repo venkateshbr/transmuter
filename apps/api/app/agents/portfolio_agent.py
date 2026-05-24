@@ -1,12 +1,13 @@
+from dataclasses import dataclass
 from uuid import UUID
 
 from openai import AsyncOpenAI
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
+from supabase import Client
 
 from app.core.config import settings
-from app.core.database import get_supabase_admin
 
 # Configure OpenAI client for OpenRouter
 client = AsyncOpenAI(
@@ -20,10 +21,17 @@ model = OpenAIChatModel(
     provider=provider,
 )
 
+
+@dataclass(frozen=True)
+class PortfolioAgentDeps:
+    tenant_id: UUID
+    client: Client
+
+
 # Define the agent
 portfolio_agent = Agent(
     model,
-    deps_type=UUID,
+    deps_type=PortfolioAgentDeps,
     system_prompt=(
         "You are Transmuter AI, a specialized assistant for Transformation Offices. "
         "You have access to the portfolio of transformation initiatives, milestones, and risks. "
@@ -34,10 +42,10 @@ portfolio_agent = Agent(
 
 
 @portfolio_agent.tool
-async def get_portfolio_summary(ctx: RunContext[UUID]) -> dict:
+async def get_portfolio_summary(ctx: RunContext[PortfolioAgentDeps]) -> dict:
     """Get a high-level summary of the entire portfolio."""
-    client = get_supabase_admin()
-    tid = str(ctx.deps)
+    client = ctx.deps.client
+    tid = str(ctx.deps.tenant_id)
     inits = (
         client.table("initiatives").select("id, rag_status, stage").eq("tenant_id", tid).execute()
     )
@@ -53,10 +61,10 @@ async def get_portfolio_summary(ctx: RunContext[UUID]) -> dict:
 
 
 @portfolio_agent.tool
-async def get_at_risk_initiatives(ctx: RunContext[UUID]) -> list[dict]:
+async def get_at_risk_initiatives(ctx: RunContext[PortfolioAgentDeps]) -> list[dict]:
     """List initiatives that are currently marked as RED or AMBER."""
-    client = get_supabase_admin()
-    tid = str(ctx.deps)
+    client = ctx.deps.client
+    tid = str(ctx.deps.tenant_id)
     res = (
         client.table("initiatives")
         .select("initiative_code, name, rag_status")

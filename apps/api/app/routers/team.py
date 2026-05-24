@@ -3,9 +3,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+from supabase import Client
 
 from app.core.auth import CurrentUser, get_current_user
-from app.core.database import get_supabase_admin
+from app.core.database import get_supabase_request_client
 from app.core.rbac import assert_can_manage_initiatives, assert_can_view_initiative
 
 router = APIRouter(tags=["initiative-team"])
@@ -54,9 +55,10 @@ def _assert_user_access(client, user_id: UUID, tenant_id: str) -> None:
 
 @router.get("/initiatives/{initiative_id}/team")
 async def get_initiative_team(
-    initiative_id: UUID, current_user: Annotated[CurrentUser, Depends(get_current_user)]
+    initiative_id: UUID,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ):
-    client = get_supabase_admin()
     tid = str(current_user.tenant_id)
     assert_can_view_initiative(client, current_user, str(initiative_id))
 
@@ -89,8 +91,8 @@ async def add_team_member(
     initiative_id: UUID,
     data: TeamMemberCreate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ):
-    client = get_supabase_admin()
     tid = str(current_user.tenant_id)
     assert_can_manage_initiatives(current_user)
     _assert_initiative_access(client, initiative_id, tid)
@@ -120,8 +122,8 @@ async def remove_team_member(
     initiative_id: UUID,
     member_id: UUID,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ):
-    client = get_supabase_admin()
     tid = str(current_user.tenant_id)
     assert_can_manage_initiatives(current_user)
     _assert_initiative_access(client, initiative_id, tid)

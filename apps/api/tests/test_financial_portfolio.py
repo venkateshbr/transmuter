@@ -10,6 +10,10 @@ from app.domain.financials import (
     FinancialConfigGroup,
     FinancialConfigItem,
     FinancialConfigurationResponse,
+    FinancialEntryUpdate,
+    FinancialGridUpdate,
+    FinancialMetricValueUpdate,
+    InitiativeFinancialSelections,
 )
 from app.services.financial import FinancialService
 
@@ -59,6 +63,250 @@ def _config() -> FinancialConfigurationResponse:
             ),
         ],
     )
+
+
+class _SummaryRepo:
+    def list_cost_lines(self, _initiative_id: str) -> list[dict]:
+        return []
+
+
+def test_financial_summary_cogs_does_not_double_count_quarters_with_monthly_rows() -> None:
+    service = FinancialService.__new__(FinancialService)
+    service._repo = _SummaryRepo()
+
+    summary = service._compute_summary(
+        [
+            {
+                "tenant_id": "t1",
+                "initiative_id": "i1",
+                "year": 2026,
+                "quarter": 1,
+                "month": None,
+                "revenue_uplift_base": "900.0000",
+                "revenue_uplift_high": "1200.0000",
+                "gross_margin_base": "450.0000",
+                "gross_margin_high": "600.0000",
+                "gm_uplift_base": "450.0000",
+                "gm_uplift_high": "600.0000",
+                "cogs_base": "450.0000",
+                "cogs_high": "600.0000",
+            },
+            {
+                "tenant_id": "t1",
+                "initiative_id": "i1",
+                "year": 2026,
+                "quarter": None,
+                "month": 1,
+                "revenue_uplift_base": "100.0000",
+                "revenue_uplift_high": "150.0000",
+                "gross_margin_base": "60.0000",
+                "gross_margin_high": "90.0000",
+                "gm_uplift_base": "60.0000",
+                "gm_uplift_high": "90.0000",
+                "cogs_base": "40.0000",
+                "cogs_high": "60.0000",
+            },
+            {
+                "tenant_id": "t1",
+                "initiative_id": "i1",
+                "year": 2026,
+                "quarter": None,
+                "month": 2,
+                "revenue_uplift_base": "200.0000",
+                "revenue_uplift_high": "250.0000",
+                "gross_margin_base": "120.0000",
+                "gross_margin_high": "150.0000",
+                "gm_uplift_base": "120.0000",
+                "gm_uplift_high": "150.0000",
+                "cogs_base": "80.0000",
+                "cogs_high": "100.0000",
+            },
+        ],
+        "i1",
+    )
+
+    assert summary.revenue_uplift_plan_base == "300.0000"
+    assert summary.gross_margin_plan_base == "180.0000"
+    assert summary.gm_uplift_plan_base == "180.0000"
+    assert summary.cogs_plan_base == "120.0000"
+
+
+def test_financial_summary_zero_month_rows_do_not_hide_quarter_values() -> None:
+    service = FinancialService.__new__(FinancialService)
+    service._repo = _SummaryRepo()
+
+    summary = service._compute_summary(
+        [
+            {
+                "tenant_id": "t1",
+                "initiative_id": "i1",
+                "year": 2026,
+                "quarter": 1,
+                "month": None,
+                "revenue_uplift_base": "125000.0000",
+                "revenue_uplift_high": "0.0000",
+                "gross_margin_base": "0.0000",
+                "gross_margin_high": "0.0000",
+                "gm_uplift_base": "125000.0000",
+                "gm_uplift_high": "0.0000",
+                "cogs_base": "0.0000",
+                "cogs_high": "0.0000",
+            },
+            {
+                "tenant_id": "t1",
+                "initiative_id": "i1",
+                "year": 2026,
+                "quarter": None,
+                "month": 1,
+                "revenue_uplift_base": "0.0000",
+                "revenue_uplift_high": "0.0000",
+                "gross_margin_base": "0.0000",
+                "gross_margin_high": "0.0000",
+                "gm_uplift_base": "0.0000",
+                "gm_uplift_high": "0.0000",
+                "cogs_base": "0.0000",
+                "cogs_high": "0.0000",
+            },
+        ],
+        "i1",
+    )
+
+    assert summary.revenue_uplift_plan_base == "125000.0000"
+    assert summary.gm_uplift_plan_base == "125000.0000"
+
+
+def test_reporting_cost_lines_do_not_double_count_quarter_with_monthly_lines() -> None:
+    rows = FinancialService._reporting_cost_lines(
+        [
+            {
+                "id": "quarter",
+                "tenant_id": "t1",
+                "initiative_id": "i1",
+                "year": 2026,
+                "quarter": 1,
+                "month": None,
+                "category_key": "implementation",
+                "amount_plan": "900.0000",
+                "amount_actual": None,
+                "is_recurring": False,
+            },
+            {
+                "id": "monthly",
+                "tenant_id": "t1",
+                "initiative_id": "i1",
+                "year": 2026,
+                "quarter": None,
+                "month": 1,
+                "category_key": "implementation",
+                "amount_plan": "300.0000",
+                "amount_actual": None,
+                "is_recurring": False,
+            },
+            {
+                "id": "other-category-quarter",
+                "tenant_id": "t1",
+                "initiative_id": "i1",
+                "year": 2026,
+                "quarter": 1,
+                "month": None,
+                "category_key": "software",
+                "amount_plan": "120.0000",
+                "amount_actual": None,
+                "is_recurring": True,
+            },
+        ]
+    )
+
+    assert [row["id"] for row in rows] == ["monthly", "other-category-quarter"]
+
+
+def test_value_bridge_uses_explicit_cogs_instead_of_deriving_from_revenue() -> None:
+    bridge = FinancialService._compute_value_bridge(
+        [
+            {
+                "tenant_id": "t1",
+                "initiative_id": "initiative-1",
+                "year": 2026,
+                "quarter": None,
+                "month": 1,
+                "revenue_uplift_base": "10000.0000",
+                "gross_margin_base": "0.0000",
+                "gm_uplift_base": "20000.0000",
+                "cogs_base": "0.0000",
+            }
+        ],
+        [],
+        "initiative-1",
+    )
+
+    assert bridge.base_case.revenue_uplift == "10000.0000"
+    assert bridge.base_case.cogs == "0.0000"
+
+
+def test_scenario_summary_uses_explicit_cogs_instead_of_deriving_from_revenue() -> None:
+    summary = FinancialService._compute_scenario_summary(
+        [
+            {
+                "tenant_id": "t1",
+                "initiative_id": "initiative-1",
+                "year": 2026,
+                "quarter": None,
+                "month": 1,
+                "revenue_uplift_base": "10000.0000",
+                "gross_margin_base": "0.0000",
+                "gm_uplift_base": "20000.0000",
+                "cogs_base": "0.0000",
+            }
+        ],
+        [],
+        "base",
+    )
+
+    assert summary.revenue_uplift == "10000.0000"
+    assert summary.cogs == "0.0000"
+
+
+def test_financial_scope_filters_hidden_metrics_and_costs_from_summary() -> None:
+    service = FinancialService.__new__(FinancialService)
+    rows, costs = service._apply_financial_scope(
+        [
+            {
+                "tenant_id": "t1",
+                "initiative_id": "initiative-1",
+                "year": 2026,
+                "quarter": None,
+                "month": 1,
+                "revenue_uplift_base": "10000.0000",
+                "gm_uplift_base": "6000.0000",
+                "cogs_base": "4000.0000",
+            }
+        ],
+        [
+            {
+                "tenant_id": "t1",
+                "initiative_id": "initiative-1",
+                "year": 2026,
+                "quarter": None,
+                "month": 1,
+                "category_key": "maintenance",
+                "amount_plan": "1000.0000",
+                "amount_actual": None,
+                "is_recurring": True,
+            }
+        ],
+        InitiativeFinancialSelections(
+            metric_keys=["revenue_uplift_base", "gm_uplift_base"],
+            cost_category_keys=[],
+        ),
+    )
+    service._repo = _SummaryRepo()
+
+    summary = service._compute_summary(rows, "initiative-1", costs)
+
+    assert summary.revenue_uplift_plan_base == "10000.0000"
+    assert summary.gm_uplift_plan_base == "6000.0000"
+    assert summary.cogs_plan_base == "0.0000"
+    assert summary.costs_plan == "0.0000"
 
 
 def test_portfolio_financials_keeps_broader_periods_separate_for_monthly_view() -> None:
@@ -425,4 +673,389 @@ def test_nested_financial_mutations_bind_rows_to_url_initiative() -> None:
         ("delete_cost_line", "initiative-1", "cost-1"),
         ("update_cell_assumption", "initiative-1", "assumption-1"),
         ("delete_cell_assumption", "initiative-1", "assumption-1"),
+    ]
+
+
+class _PlannedWindowRepo:
+    def get_initiative_period(self, _initiative_id: str) -> dict:
+        return {
+            "stage": "scoping",
+            "planned_start": "2026-04-01",
+            "planned_end": "2026-06-30",
+        }
+
+
+def test_financial_grid_normalization_moves_values_to_first_planned_month() -> None:
+    service = FinancialService.__new__(FinancialService)
+    service._repo = _PlannedWindowRepo()
+
+    normalized = service._normalize_grid_to_planned_window(
+        "initiative-1",
+        FinancialGridUpdate(
+            entries=[
+                FinancialEntryUpdate(year=2026, month=1, revenue_uplift_base="100.0000"),
+                FinancialEntryUpdate(year=2026, month=4, revenue_uplift_base="200.0000"),
+            ],
+            cost_lines=[
+                CostLineCreate(
+                    name="Legacy implementation",
+                    category_key="implementation",
+                    year=2026,
+                    month=1,
+                    amount_plan="25.0000",
+                    is_recurring=False,
+                ),
+                CostLineCreate(
+                    name="Legacy implementation 2",
+                    category_key="implementation",
+                    year=2026,
+                    month=2,
+                    amount_plan="75.0000",
+                    is_recurring=False,
+                ),
+            ],
+            metric_values=[
+                FinancialMetricValueUpdate(
+                    metric_key="custom_retention",
+                    year=2025,
+                    month=12,
+                    value_base="3.0000",
+                ),
+            ],
+        ),
+    )
+
+    assert [(row.year, row.month, row.revenue_uplift_base) for row in normalized.entries] == [
+        (2026, 4, 300),
+    ]
+    assert len(normalized.cost_lines or []) == 1
+    cost = (normalized.cost_lines or [])[0]
+    assert (cost.year, cost.month, cost.amount_plan) == (2026, 4, 100)
+    metric = (normalized.metric_values or [])[0]
+    assert (metric.year, metric.month, metric.value_base) == (2026, 4, 3)
+
+
+class _LockStateRepo:
+    def __init__(self, stage: str) -> None:
+        self.stage = stage
+
+    def get_initiative_period(self, _initiative_id: str) -> dict:
+        return {
+            "stage": self.stage,
+            "planned_start": "2026-04-01",
+            "planned_end": "2026-06-30",
+        }
+
+
+def test_financial_lock_state_only_allows_planned_stage_edits() -> None:
+    service = FinancialService.__new__(FinancialService)
+    service._repo = _LockStateRepo("scoping")
+    service._assert_financials_editable("initiative-1")
+
+    service._repo = _LockStateRepo("in_progress")
+    with pytest.raises(HTTPException) as exc:
+        service._assert_financials_editable("initiative-1")
+
+    assert exc.value.status_code == 409
+
+
+class _SelectionRepo:
+    def __init__(self, stage: str = "scoping") -> None:
+        self.stage = stage
+        self.saved_metric_keys: list[str] = []
+        self.saved_cost_keys: list[str] = []
+        self.saved_all_metric_keys: list[str] = []
+        self.saved_all_cost_keys: list[str] = []
+
+    def initiative_exists(self, _initiative_id: str) -> bool:
+        return True
+
+    def get_initiative_period(self, _initiative_id: str) -> dict:
+        return {
+            "stage": self.stage,
+            "planned_start": "2026-04-01",
+            "planned_end": "2026-06-30",
+        }
+
+    def list_config_groups(self) -> list[dict]:
+        return [
+            {
+                "id": "g1",
+                "key": "gross_margin",
+                "label": "Gross Margin",
+                "kind": "metric",
+                "display_order": 1,
+                "is_system": True,
+                "is_active": True,
+            },
+            {
+                "id": "g2",
+                "key": "operating",
+                "label": "Operating Costs",
+                "kind": "cost_category",
+                "display_order": 2,
+                "is_system": True,
+                "is_active": True,
+            },
+        ]
+
+    def list_config_items(self) -> list[dict]:
+        return [
+            {
+                "id": "m1",
+                "group_id": "g1",
+                "key": "gross_margin_percent",
+                "label": "Gross Margin %",
+                "item_type": "metric",
+                "system_metric_key": "gm_pct_base",
+                "display_order": 1,
+                "is_system": True,
+                "is_active": True,
+            },
+            {
+                "id": "m2",
+                "group_id": "g1",
+                "key": "gross_margin_percent_high",
+                "label": "Gross Margin % (High)",
+                "item_type": "metric",
+                "system_metric_key": "gm_pct_high",
+                "display_order": 2,
+                "is_system": True,
+                "is_active": True,
+            },
+            {
+                "id": "m3",
+                "group_id": "g1",
+                "key": "gross_margin_percent_actual",
+                "label": "Gross Margin % (Actual)",
+                "item_type": "metric",
+                "system_metric_key": "gm_pct_actual",
+                "display_order": 3,
+                "is_system": True,
+                "is_active": True,
+            },
+            {
+                "id": "c1",
+                "group_id": "g2",
+                "key": "maintenance",
+                "label": "Maintenance",
+                "item_type": "cost_category",
+                "rollup_type": "recurring_cost",
+                "display_order": 1,
+                "is_system": True,
+                "is_active": True,
+            },
+        ]
+
+    def replace_financial_selections(
+        self,
+        _initiative_id: str,
+        metric_keys: list[str],
+        cost_category_keys: list[str],
+        all_metric_keys: list[str] | None = None,
+        all_cost_category_keys: list[str] | None = None,
+    ) -> None:
+        self.saved_metric_keys = metric_keys
+        self.saved_cost_keys = cost_category_keys
+        self.saved_all_metric_keys = all_metric_keys or metric_keys
+        self.saved_all_cost_keys = all_cost_category_keys or cost_category_keys
+
+    def list_financial_selections(self, _initiative_id: str) -> list[dict]:
+        return [
+            {"item_key": key, "item_type": "metric", "is_active": key in self.saved_metric_keys}
+            for key in self.saved_all_metric_keys
+        ] + [
+            {
+                "item_key": key,
+                "item_type": "cost_category",
+                "is_active": key in self.saved_cost_keys,
+            }
+            for key in self.saved_all_cost_keys
+        ]
+
+    def get_entries(self, _initiative_id: str) -> list[dict]:
+        return []
+
+    def list_cost_lines(self, _initiative_id: str) -> list[dict]:
+        return []
+
+    def list_metric_values(self, _initiative_id: str) -> list[dict]:
+        return []
+
+
+def test_financial_selection_persists_system_metric_keys() -> None:
+    repo = _SelectionRepo()
+    service = FinancialService.__new__(FinancialService)
+    service._repo = repo
+
+    response = service.update_initiative_selections(
+        "initiative-1",
+        InitiativeFinancialSelections(
+            metric_keys=["gm_pct_base"],
+            cost_category_keys=["maintenance"],
+        ),
+    )
+
+    assert repo.saved_metric_keys == ["gm_pct_base"]
+    assert repo.saved_cost_keys == ["maintenance"]
+    assert "gm_pct_high" in repo.saved_all_metric_keys
+    assert response.selected.metric_keys == ["gm_pct_base"]
+
+
+def test_financial_selection_keeps_data_bearing_percentage_metrics_enabled() -> None:
+    repo = _SelectionRepo()
+    service = FinancialService.__new__(FinancialService)
+    service._repo = repo
+
+    selected = service._resolve_selections(
+        "initiative-1",
+        [
+            {
+                "year": 2026,
+                "quarter": None,
+                "month": 4,
+                "gm_pct_base": "42.5000",
+            }
+        ],
+        [],
+        [],
+    )
+
+    assert "gm_pct_base" in selected.metric_keys
+    assert "gm_pct_high" in selected.metric_keys
+    assert "gm_pct_actual" in selected.metric_keys
+
+
+def test_explicit_financial_selection_does_not_reenable_hidden_data_bearing_rows() -> None:
+    repo = _SelectionRepo()
+    service = FinancialService.__new__(FinancialService)
+    service._repo = repo
+    repo.replace_financial_selections(
+        "initiative-1",
+        [],
+        [],
+        ["gm_pct_base", "gm_pct_high", "gm_pct_actual"],
+        ["maintenance"],
+    )
+
+    selected = service._resolve_selections(
+        "initiative-1",
+        [
+            {
+                "year": 2026,
+                "quarter": None,
+                "month": 4,
+                "gm_pct_base": "42.5000",
+            }
+        ],
+        [
+            {
+                "year": 2026,
+                "quarter": None,
+                "month": 4,
+                "category_key": "maintenance",
+                "amount_plan": "1000.0000",
+                "is_recurring": True,
+            }
+        ],
+        [],
+    )
+
+    assert selected.metric_keys == []
+    assert selected.cost_category_keys == []
+
+
+def test_financial_selection_updates_are_allowed_after_financial_values_lock() -> None:
+    repo = _SelectionRepo(stage="in_progress")
+    service = FinancialService.__new__(FinancialService)
+    service._repo = repo
+
+    response = service.update_initiative_selections(
+        "initiative-1",
+        InitiativeFinancialSelections(
+            metric_keys=["gm_pct_base"],
+            cost_category_keys=["maintenance"],
+        ),
+    )
+
+    assert repo.saved_metric_keys == ["gm_pct_base"]
+    assert response.locked is True
+    assert response.selected.metric_keys == ["gm_pct_base"]
+
+
+class _ExistingMigrationRepo:
+    def __init__(self) -> None:
+        self.deleted = False
+        self.saved_costs: list[dict] = []
+
+    def get_initiative_period(self, _initiative_id: str) -> dict:
+        return {
+            "stage": "scoping",
+            "planned_start": "2026-04-01",
+            "planned_end": "2026-06-30",
+        }
+
+    def get_entries(self, _initiative_id: str) -> list[dict]:
+        return []
+
+    def list_metric_values(self, _initiative_id: str) -> list[dict]:
+        return []
+
+    def list_cost_lines(self, _initiative_id: str) -> list[dict]:
+        return [
+            {
+                "name": "Original vendor row",
+                "category_key": "implementation",
+                "year": 2025,
+                "quarter": None,
+                "month": 12,
+                "amount_plan": "10.0000",
+                "amount_actual": None,
+                "is_recurring": False,
+            },
+            {
+                "name": "Second vendor row",
+                "category_key": "implementation",
+                "year": 2026,
+                "quarter": 1,
+                "month": None,
+                "amount_plan": "15.0000",
+                "amount_actual": None,
+                "is_recurring": False,
+            },
+        ]
+
+    def delete_grid(self, _initiative_id: str) -> None:
+        self.deleted = True
+
+    def upsert_entries_batch(self, _initiative_id: str, _rows: list[dict]) -> list[dict]:
+        return []
+
+    def upsert_metric_values_batch(self, _initiative_id: str, _rows: list[dict]) -> list[dict]:
+        return []
+
+    def upsert_cost_lines_batch(self, _initiative_id: str, rows: list[dict]) -> list[dict]:
+        self.saved_costs = rows
+        return rows
+
+
+def test_existing_out_of_window_costs_are_migrated_once_to_first_planned_month() -> None:
+    repo = _ExistingMigrationRepo()
+    service = FinancialService.__new__(FinancialService)
+    service._repo = repo
+
+    service._migrate_existing_grid_to_planned_window("initiative-1")
+
+    assert repo.deleted is True
+    assert repo.saved_costs == [
+        {
+            "name": "Original vendor row",
+            "category_key": "implementation",
+            "year": 2026,
+            "quarter": None,
+            "month": 4,
+            "amount_plan": "25.0000",
+            "amount_actual": None,
+            "is_recurring": False,
+        }
     ]

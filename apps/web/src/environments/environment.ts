@@ -3,4 +3,7 @@ export const environment = {
   apiUrl: 'http://localhost:8000',
   supabaseUrl: 'https://kdtytqnnxxwdasaqwzlg.supabase.co',
   supabaseAnonKey: '',  // fill in .env.local or build-time replacement
+  sentryDsn: '',
+  sentryEnvironment: 'development',
+  sentryTracesSampleRate: 0.1,
 };

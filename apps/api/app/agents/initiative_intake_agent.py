@@ -19,6 +19,7 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from app.core.config import settings
+from app.core.observability import record_agent_run, start_agent_timer
 from app.domain.initiative_intake import (
     InitiativeIntakeRequest,
     InitiativeIntakeSuggestions,
@@ -74,6 +75,7 @@ async def generate_intake_suggestions(
     request: InitiativeIntakeRequest,
 ) -> InitiativeIntakeSuggestions:
     """Generate suggestions, falling back deterministically if LLM access is unavailable."""
+    started_at = start_agent_timer()
     trace_id = _trace_id()
     prompt = _masked_prompt(request)
     if settings.ai_enabled and settings.openrouter_api_key:
@@ -98,6 +100,7 @@ async def generate_intake_suggestions(
                         output=suggestions.model_dump(mode="json"),
                     )
                     langfuse.flush()
+                    record_agent_run("initiative_intake", "unscoped", "generated", started_at)
                     return suggestions
             result = await asyncio.wait_for(
                 _get_agent().run(prompt),
@@ -105,11 +108,14 @@ async def generate_intake_suggestions(
             )
             suggestions = _with_trace(result.output, trace_id, None)
             suggestions.agent_status = "generated"
+            record_agent_run("initiative_intake", "unscoped", "generated", started_at)
             return suggestions
         except Exception:
             # Core creation must not depend on external AI availability.
             pass
-    return deterministic_intake_suggestions(request, trace_id=trace_id)
+    suggestions = deterministic_intake_suggestions(request, trace_id=trace_id)
+    record_agent_run("initiative_intake", "unscoped", suggestions.agent_status, started_at)
+    return suggestions
 
 
 def deterministic_intake_suggestions(

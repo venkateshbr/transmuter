@@ -1,52 +1,61 @@
-# Transmuter Web — Antigravity Frontend Coding Rules
+# Transmuter Web — Frontend Coding Rules
 
 ## Stack
-Angular 18 standalone · Tailwind CSS · CSS variables · Inter font
+Angular standalone components · Tailwind CSS · CSS variables · Libre Franklin typography.
 
-## Design System (Purple Theme)
-- **Full spec**: `../../team/DESIGN_SYSTEM.md`
-- **Tokens**: `src/styles.css` — all `--t-*` CSS custom properties
-- **Tailwind colors**: `tailwind.config.js` — `brand-*` palette
+Check `package.json` for the exact installed Angular version before using framework-specific APIs.
 
-### Color Tokens (Light / Dark)
-| Role | Light | Dark |
-|------|-------|------|
-| Accent | `#7c3aed` (Violet-600) | `#a78bfa` (Violet-400) |
-| Background | `#f8f7fc` (lavender) | `#0c0a14` (purple-black) |
-| Surface | `#ffffff` | `#16132a` |
-| Border | `#e4e0ee` | `#2a2545` |
+## Required Context
+- Root rules: `../../AGENTS.md`
+- Durable context: `../../docs/team/CODEX_CONTEXT.md` for launch, hostnames, release state, and known follow-ups.
+- Design system: `../../team/DESIGN_SYSTEM.md`
+- Frontend review: `../../team/FRONTEND_REVIEW.md`
+- Rupa skills: `../../agents/skills/rupa_skills.md`
+- Chitra skills: `../../agents/skills/chitra_skills.md`
 
-### Component Classes
-| Class | Purpose |
-|-------|---------|
-| `.btn-primary` | Purple gradient CTA |
-| `.btn-secondary` | Outlined button |
-| `.btn-ghost` | Transparent tertiary |
-| `.card` | Container with hover glow |
-| `.glass-panel` | Frosted glass container |
-| `.input-field` | Text input with purple focus |
-| `.nav-item` | Navigation link |
-| `.badge-green/amber/red/purple/teal/gray` | Status badges |
+## Design System
+Use the A&M-inspired Transmuter direction from `../../team/DESIGN_SYSTEM.md`.
+
+- Deep navy, steel blue, light blue accents, white/grey surfaces.
+- Libre Franklin typography.
+- Square structural geometry, thin dividers, restrained shadows.
+- Dense executive layouts built for scanning and repeated operational use.
+- CSS variables from `src/styles.css` are the source of truth for theme-sensitive colors.
+- Shared component classes include `.btn-primary`, `.btn-secondary`, `.btn-ghost`, `.card`, `.glass-panel`, `.input-field`, `.nav-item`, and `.badge-*`.
+
+Do not introduce purple/lavender/violet palettes, purple gradients, decorative blobs/orbs, or rounded pill-heavy SaaS styling unless an existing component contract explicitly requires it.
 
 ## Non-Negotiable Rules
-- Standalone components only (no NgModules)
-- All routes lazy-loaded via `loadComponent`
-- Use `var(--t-*)` tokens — **NEVER** hardcode hex for theme colors
-- Every component must work in both light and dark mode
-- ARIA labels on all interactive elements
-- No business logic in components — use services
-- Template-driven or reactive forms — both acceptable
+- Standalone components only; no NgModules.
+- All routes lazy-loaded via `loadComponent`.
+- Use `var(--t-*)` tokens for theme-sensitive colors; never hardcode hex colors in components.
+- Every component must work in both light and dark mode.
+- ARIA labels on all interactive elements.
+- No business logic in components; use services for behavior and API access.
+- All user-facing workflows need loading, error, empty, and success states where applicable.
+- Monetary API values are strings; never use floating-point arithmetic for financial calculations.
+- Keep API contracts typed and coordinate backend contract changes with Karya/Vishwa.
 
-## Patterns
-- Skeleton loading: shimmer animation with `var(--t-surface-raised)` / `var(--t-border)`
-- Empty states: centered icon + title + description + CTA
-- Row hover: `var(--t-surface-raised)` background
-- Brand dot: `color: var(--t-accent)` after headings
-- Filter bar: search input + select dropdowns with `input-field` class
+## UI Patterns
+- Page shell: dense operational layouts, usually `p-8` with clear header rows and direct controls.
+- Tables and panels: square borders, thin separators, compact labels, scannable hierarchy.
+- Buttons: square, uppercase, high-contrast, with visible hover/focus/active states.
+- Forms: `input-field` styling, explicit labels, validation copy, and keyboard-friendly flow.
+- Empty states: concise title, useful next action, and no decorative filler.
+
+## Verification
+Run relevant checks from `apps/web`:
+
+```bash
+npm run build
+npm run e2e:real
+```
+
+For meaningful UI changes, start the Angular app on port `4300` and verify the real DOM in a browser at desktop and mobile widths. Text must not overlap, clip, or rely on manually created browser state.
 
 ## Dev Commands
 ```bash
-npx ng serve --port 4300    # dev server
-npx ng build                # production build
-npx ng test                 # unit tests
+npm start -- --port 4300
+npm run build
+npm run e2e:real
 ```

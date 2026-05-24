@@ -36,6 +36,7 @@ class CheckoutSessionRequest(BaseModel):
     organization_slug: str = Field(..., min_length=2, max_length=80, pattern=r"^[a-z0-9-]+$")
     admin_display_name: str = Field(..., min_length=2, max_length=120)
     admin_email: EmailStr
+    initial_password: str = Field(..., min_length=8, max_length=128)
     planned_user_count: int = Field(..., ge=1, le=5000)
     billing_interval: str = Field(default="month", pattern=r"^(month|year)$")
     success_url: str = Field(..., min_length=1)
@@ -93,6 +94,7 @@ async def create_checkout_session(body: CheckoutSessionRequest) -> CheckoutSessi
         organization_slug=body.organization_slug,
         admin_display_name=body.admin_display_name,
         admin_email=str(body.admin_email),
+        initial_password=body.initial_password,
         planned_user_count=body.planned_user_count,
         billing_interval=body.billing_interval,
     )

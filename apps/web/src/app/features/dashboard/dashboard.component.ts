@@ -1,23 +1,45 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ApiService } from '../../core/services/api.service';
 import { AuthService } from '../../core/services/auth.service';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { DashboardEchartCardComponent } from './dashboard-echart-card.component';
+import { CompactFilterToolbarComponent, type CompactFilterGroup } from '../../shared/components/compact-filter-toolbar/compact-filter-toolbar.component';
+
+type DashboardMultiFilterKey = 'business_unit_id' | 'workstream_id' | 'priority' | 'tag';
+type ExecutiveBriefPersona = 'management' | 'investor' | 'owner';
+
+interface FilterOption {
+  id: string;
+  name: string;
+  business_unit_id?: string | null;
+}
+
+interface DecisionQueueItem {
+  label: string;
+  description: string;
+  count: number;
+  icon: string;
+  route: string;
+  queryParams?: Record<string, string>;
+}
+
+const DASHBOARD_FILTER_STATE_KEY = 'transmuter.filters.dashboard';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, DashboardEchartCardComponent, CompactFilterToolbarComponent],
   template: `
     <div class="p-8 space-y-10 animate-fade-in" style="background:var(--t-bg)">
       
       <!-- Executive Hero Section -->
-      <section class="executive-surface relative overflow-hidden p-10 shadow-2xl">
+      <section class="executive-surface relative overflow-hidden p-8 shadow-2xl lg:p-10">
         <div class="absolute inset-y-0 right-0 w-1/3 border-l border-white/15 bg-white/5"></div>
         <div class="absolute right-10 top-8 h-24 w-24 border-t-4 border-r-4 border-[var(--t-blue-light)]/70"></div>
         <div class="absolute bottom-8 right-24 h-16 w-40 border-b-4 border-[var(--t-blue-light)]/45"></div>
         
-        <div class="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
+        <div class="relative z-10 grid gap-8 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
           <div class="flex-1">
             <div class="flex items-center gap-2 mb-4">
               <span class="h-2 w-8 bg-[var(--t-blue-light)]"></span>
@@ -34,88 +56,42 @@ import { RouterLink } from '@angular/router';
             </p>
           </div>
           
-          <div class="flex-none flex flex-col items-end gap-4">
-              <div class="flex gap-2">
+          <div class="w-full max-w-xl xl:w-[30rem]">
+              <div class="grid gap-3 sm:grid-cols-2">
                 <button
-                  (click)="generateReport()"
+                  (click)="openExecutiveBrief()"
                   data-testid="dashboard-executive-summary"
                   aria-label="Generate executive summary"
-                  class="border border-white/20 bg-white/10 px-6 py-3 text-xs font-black uppercase tracking-widest transition-all hover:bg-white/20"
+                  class="min-h-12 border border-white/20 bg-white/10 px-4 py-3 text-xs font-black uppercase tracking-widest transition-all hover:bg-white/20"
                 >
-                  {{ reporting() ? 'Generating...' : 'Executive Summary' }}
+                  {{ reporting() ? 'Preparing...' : 'Executive Brief' }}
                 </button>
-                <button routerLink="/initiatives/new" class="executive-action-button bg-white px-6 py-3 text-xs font-black uppercase tracking-widest shadow-lg transition-all hover:shadow-[inset_0_-4px_0_var(--t-blue-light)]">
-                  + Executive Action
+                <button
+                  type="button"
+                  class="executive-action-button min-h-12 bg-white px-4 py-3 text-xs font-black uppercase tracking-widest shadow-lg transition-all hover:shadow-[inset_0_-4px_0_var(--t-blue-light)]"
+                  data-testid="dashboard-decision-queue"
+                  aria-label="Open decision queue"
+                  (click)="openDecisionQueue()">
+                  Decision Queue
                 </button>
               </div>
-             <p class="text-[9px] font-bold opacity-60 uppercase tracking-widest mt-2">Last System Sync: Just Now</p>
+             <p class="mt-4 text-right text-[9px] font-bold uppercase tracking-widest opacity-60">Last System Sync: Just Now</p>
           </div>
         </div>
       </section>
 
       <!-- Portfolio Filters -->
-      <section class="card p-4">
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <label class="text-xs font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">
-            Business Unit
-            <select
-              class="input-field mt-2"
-              data-testid="dashboard-filter-business-unit"
-              aria-label="Filter dashboard by business unit"
-              [value]="filters().business_unit_id"
-              (change)="onFilterChange('business_unit_id', $event)"
-            >
-              <option value="">All Business Units</option>
-              @for (bu of data()?.available_filters?.business_units || []; track bu.id) {
-                <option [value]="bu.id">{{ bu.name }}</option>
-              }
-            </select>
-          </label>
-          <label class="text-xs font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">
-            Workstream
-            <select
-              class="input-field mt-2"
-              data-testid="dashboard-filter-workstream"
-              aria-label="Filter dashboard by workstream"
-              [value]="filters().workstream_id"
-              (change)="onFilterChange('workstream_id', $event)"
-            >
-              <option value="">All Workstreams</option>
-              @for (ws of data()?.available_filters?.workstreams || []; track ws.id) {
-                <option [value]="ws.id">{{ ws.name }}</option>
-              }
-            </select>
-          </label>
-          <label class="text-xs font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">
-            RAG
-            <select
-              class="input-field mt-2"
-              data-testid="dashboard-filter-rag"
-              aria-label="Filter dashboard by RAG status"
-              [value]="filters().rag_status"
-              (change)="onFilterChange('rag_status', $event)"
-            >
-              <option value="">All RAG</option>
-              @for (rag of data()?.available_filters?.rag_statuses || []; track rag.id) {
-                <option [value]="rag.id">{{ rag.name }}</option>
-              }
-            </select>
-          </label>
-          <div class="flex items-end">
-            <button
-              type="button"
-              class="btn-secondary w-full"
-              data-testid="dashboard-clear-filters"
-              aria-label="Clear dashboard filters"
-              (click)="clearFilters()"
-            >
-              Clear Filters
-            </button>
-          </div>
-        </div>
+      <section>
+        <app-compact-filter-toolbar
+          [showSearch]="false"
+          [groups]="filterGroups()"
+          [hasFilters]="hasDashboardFilters()"
+          clearTestId="dashboard-clear-filters"
+          (groupSelectionChange)="onFilterGroupChange($event)"
+          (clearFilters)="clearFilters()" />
         @if (reportReady()) {
           <p class="mt-3 text-xs font-semibold text-[var(--t-accent)]" data-testid="dashboard-executive-summary-ready">
-            Executive summary generated from the current portfolio view.
+            Executive brief prepared from the current portfolio view.
           </p>
         }
       </section>
@@ -289,98 +265,17 @@ import { RouterLink } from '@angular/router';
         <div class="lg:col-span-2 space-y-8">
           
           <!-- Pipeline by Stage -->
-          <div class="card p-6">
-            <h3 class="text-lg font-bold text-[var(--t-text-primary)] mb-6">Pipeline by Stage</h3>
-            <div class="flex items-end gap-2 h-40">
-              @for (stage of stages; track stage.id) {
-                <a
-                  routerLink="/initiatives/pipeline"
-                  [queryParams]="{ stage: stage.id }"
-                  [attr.data-testid]="'dashboard-stage-' + stage.id"
-                  class="flex-1 flex flex-col items-center group cursor-pointer rounded-lg hover:bg-[var(--t-surface-raised)]/60 transition-colors"
-                  [attr.aria-label]="'Open initiatives in ' + stage.label + ' stage'"
-                >
-                  <div class="w-full bg-[var(--t-accent-soft)] rounded-t-lg transition-all duration-500 group-hover:bg-[var(--t-accent)]"
-                       [style.height.%]="getStagePercentage(stage.id)">
-                    <div class="opacity-0 group-hover:opacity-100 transition-opacity bg-[var(--t-surface)] text-[var(--t-text-primary)] text-[10px] font-bold px-2 py-1 rounded shadow-lg -mt-8 mx-auto w-fit">
-                      {{ data()?.pipeline_by_stage?.[stage.id] || 0 }}
-                    </div>
-                  </div>
-                  <div class="w-full h-1 bg-[var(--t-border)] mt-2"></div>
-                  <p class="text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)] mt-3">
-                    {{ stage.label }}
-                  </p>
-                </a>
-              }
-            </div>
-          </div>
+          <app-dashboard-echart-card kind="stage" [data]="data()" [stages]="stages" />
 
           <!-- RAG Breakdown -->
-          <div class="card p-6">
-            <h3 class="text-lg font-bold text-[var(--t-text-primary)] mb-6">Health Breakdown (RAG)</h3>
-            <div class="flex items-center gap-8">
-              <div class="flex-1 space-y-4">
-                @for (rag of ['green', 'amber', 'red']; track rag) {
-                  <a
-                    routerLink="/initiatives/pipeline"
-                    [queryParams]="{ rag_status: rag }"
-                    [attr.data-testid]="'dashboard-rag-' + rag"
-                    class="block space-y-1 rounded-lg p-2 -mx-2 cursor-pointer hover:bg-[var(--t-surface-raised)] transition-colors"
-                    [attr.aria-label]="'Open ' + rag + ' initiatives'"
-                  >
-                    <div class="flex justify-between text-xs">
-                      <span class="capitalize font-medium">{{ rag }}</span>
-                      <span class="text-[var(--t-text-tertiary)]">{{ data()?.rag_breakdown?.[rag] || 0 }} initiatives</span>
-                    </div>
-                    <div class="h-2 bg-[var(--t-bg-page)] rounded-full overflow-hidden border border-[var(--t-border)]">
-                      <div class="h-full transition-all duration-1000"
-                           [style.width.%]="getRagPercentage(rag)"
-                           [style.background]="getRagColor(rag)"></div>
-                    </div>
-                  </a>
-                }
-              </div>
-              <div class="w-32 h-32 rounded-full border-8 border-[var(--t-surface-raised)] flex items-center justify-center relative">
-                <div class="text-center">
-                  <p class="text-2xl font-bold text-[var(--t-text-primary)]">
-                    {{ getHealthScore() }}%
-                  </p>
-                  <p class="text-[10px] uppercase font-bold text-[var(--t-text-tertiary)]">Healthy</p>
-                </div>
-              </div>
-            </div>
-          </div>
+          <app-dashboard-echart-card kind="rag" [data]="data()" />
         </div>
 
         <!-- Right Column: Pressure & Milestones -->
         <div class="space-y-8">
           
           <!-- Pressure Gauge -->
-          <a
-            routerLink="/progress"
-            data-testid="dashboard-pressure"
-            class="card block p-6 bg-gradient-to-br from-[var(--t-surface)] to-[var(--t-accent-soft)]/10 cursor-pointer hover:-translate-y-0.5 hover:border-[var(--t-accent)] hover:shadow-xl transition-all"
-            aria-label="Open milestone tracker"
-          >
-            <h3 class="text-lg font-bold text-[var(--t-text-primary)] mb-6">Portfolio Pressure</h3>
-            <div class="relative pt-10 flex flex-col items-center">
-               <div class="w-48 h-24 overflow-hidden relative">
-                  <div class="w-48 h-48 rounded-full border-[16px] border-[var(--t-border)] absolute top-0 left-0"></div>
-                  <div class="w-48 h-48 rounded-full border-[16px] border-[var(--t-accent)] absolute top-0 left-0 transition-all duration-1000"
-                       style="clip-path: polygon(0 0, 100% 0, 100% 50%, 0 50%)"
-                       [style.transform]="getPressureRotation()"></div>
-               </div>
-               <div class="text-center -mt-4">
-                 <p class="text-3xl font-black text-[var(--t-text-primary)]">
-                   {{ (data()?.portfolio_pressure?.score || 0).toFixed(1) }}
-                 </p>
-                 <p class="text-xs font-bold uppercase tracking-widest"
-                    [style.color]="getPressureColor()">
-                   {{ data()?.portfolio_pressure?.label }}
-                 </p>
-               </div>
-            </div>
-          </a>
+          <app-dashboard-echart-card kind="pressure" [data]="data()" />
 
           <!-- My Milestones -->
           <div class="card p-6">
@@ -457,53 +352,11 @@ import { RouterLink } from '@angular/router';
           </div>
         </section>
 
-        <section class="card p-6" data-testid="dashboard-value-bridge">
-          <div class="flex items-start justify-between gap-3 mb-5">
-            <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Value Bridge</h3>
-            <span class="material-icons text-[var(--t-text-tertiary)]" title="Portfolio benefits, costs, and net value">help_outline</span>
-          </div>
-          <div class="grid grid-cols-3 gap-3 text-center">
-            <div class="rounded-lg bg-[var(--t-surface-raised)] p-3">
-              <p class="text-[10px] font-bold uppercase text-[var(--t-text-tertiary)]">Base</p>
-              <p class="text-sm font-black text-[var(--t-text-primary)]">{{ formatMoney(data()?.value_bridge?.net_base) }}</p>
-            </div>
-            <div class="rounded-lg bg-[var(--t-surface-raised)] p-3">
-              <p class="text-[10px] font-bold uppercase text-[var(--t-text-tertiary)]">High</p>
-              <p class="text-sm font-black text-[var(--t-text-primary)]">{{ formatMoney(data()?.value_bridge?.net_high) }}</p>
-            </div>
-            <div class="rounded-lg bg-[var(--t-surface-raised)] p-3">
-              <p class="text-[10px] font-bold uppercase text-[var(--t-text-tertiary)]">Actual</p>
-              <p class="text-sm font-black text-[var(--t-accent)]">{{ formatMoney(data()?.value_bridge?.net_actual) }}</p>
-            </div>
-          </div>
-          <a routerLink="/initiatives/pipeline" class="mt-4 inline-flex text-xs font-bold text-[var(--t-accent)]">Open financial initiatives</a>
-        </section>
+        <app-dashboard-echart-card kind="valueBridge" [data]="data()" />
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <section class="card p-6" data-testid="dashboard-risk-heatmap">
-          <div class="flex items-start justify-between gap-3 mb-5">
-            <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Risk Heatmap</h3>
-            <span class="material-icons text-[var(--t-text-tertiary)]" title="Open risks by impact and likelihood">help_outline</span>
-          </div>
-          <div class="grid grid-cols-3 gap-2">
-            @for (impact of heatmapLevels; track impact) {
-              @for (likelihood of heatmapLevels; track likelihood) {
-                <a
-                  routerLink="/pmo/risks"
-                  [queryParams]="{ impact, likelihood }"
-                  class="heatmap-cell aspect-square flex flex-col items-center justify-center"
-                  [ngClass]="getHeatmapClass(impact, likelihood)"
-                  [attr.aria-label]="'Open ' + impact + ' impact, ' + likelihood + ' likelihood risks'"
-                  [attr.data-testid]="'dashboard-risk-' + impact + '-' + likelihood"
-                >
-                  <span class="heatmap-count">{{ getHeatmapCount(impact, likelihood) }}</span>
-                  <span class="heatmap-label">{{ impact }}/{{ likelihood }}</span>
-                </a>
-              }
-            }
-          </div>
-        </section>
+        <app-dashboard-echart-card kind="riskHeatmap" [data]="data()" [heatmapLevels]="heatmapLevels" />
 
         <section class="card p-6" data-testid="dashboard-recent-activity">
           <div class="flex items-start justify-between gap-3 mb-5">
@@ -653,6 +506,231 @@ import { RouterLink } from '@angular/router';
         </aside>
       </div>
     }
+
+    @if (executiveBriefOpen()) {
+      <div class="overlay flex items-end justify-end bg-black/35 backdrop-blur-sm" (click)="closeExecutiveBrief()">
+        <aside
+          class="h-full w-full max-w-3xl overflow-y-auto bg-[var(--t-surface)] shadow-2xl"
+          data-testid="dashboard-executive-brief"
+          (click)="$event.stopPropagation()"
+        >
+          <div class="executive-surface sticky top-0 z-10 border-b border-[var(--t-border)] p-6">
+            <div class="flex items-start justify-between gap-5">
+              <div>
+                <p class="text-[10px] font-black uppercase tracking-[0.2em] text-white/60">Management Report</p>
+                <h3 class="mt-2 text-2xl font-black">Executive Brief</h3>
+                <p class="mt-2 max-w-xl text-xs font-bold leading-5 text-white/70">
+                  Live executive report signals for the current dashboard filters.
+                </p>
+              </div>
+              <div class="flex gap-2">
+                <button
+                  type="button"
+                  class="border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  data-testid="dashboard-executive-brief-pdf"
+                  [disabled]="!executiveReport() || executiveReportLoading()"
+                  aria-label="Export executive brief to PDF"
+                  (click)="exportExecutiveBriefPdf()">
+                  PDF
+                </button>
+                <button
+                  type="button"
+                  class="border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+                  data-testid="dashboard-executive-brief-excel"
+                  [disabled]="!executiveReport() || executiveReportLoading()"
+                  aria-label="Export executive brief to Excel"
+                  (click)="exportExecutiveBriefExcel()">
+                  Excel
+                </button>
+                <a routerLink="/reports/control-tower" class="border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest hover:bg-white/10" (click)="closeExecutiveBrief()">Full Report</a>
+                <button type="button" class="border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest hover:bg-white/10" aria-label="Close executive brief" (click)="closeExecutiveBrief()">Close</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-6 p-6">
+            <section class="flex flex-wrap items-end justify-between gap-4 border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4">
+              <div>
+                <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Brief View</p>
+                <div class="mt-3 inline-flex border border-[var(--t-border)] bg-[var(--t-surface)] p-1">
+                  @for (persona of executivePersonas; track persona.id) {
+                    <button
+                      type="button"
+                      class="px-3 py-2 text-[10px] font-black uppercase tracking-widest"
+                      [class.bg-[var(--t-primary)]]="executivePersona() === persona.id"
+                      [class.text-white]="executivePersona() === persona.id"
+                      [class.text-[var(--t-text-secondary)]]="executivePersona() !== persona.id"
+                      [attr.aria-pressed]="executivePersona() === persona.id"
+                      (click)="setExecutivePersona(persona.id)">
+                      {{ persona.label }}
+                    </button>
+                  }
+                </div>
+              </div>
+              <div class="flex flex-wrap items-end gap-3">
+                <label class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">
+                  Target Year
+                  <input
+                    type="number"
+                    class="input-field mt-2 h-10 w-28 text-sm"
+                    [value]="filters().target_year || data()?.value_matrix?.selected_year || ''"
+                    aria-label="Executive brief target year"
+                    (change)="onExecutiveTargetYearChange($event)">
+                </label>
+                <a routerLink="/shared-costs" class="btn-secondary h-10 px-3 text-[10px]" (click)="closeExecutiveBrief()">Shared Costs</a>
+              </div>
+            </section>
+
+            @if (executiveReportLoading()) {
+              <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-8 text-sm font-bold text-[var(--t-text-secondary)]">Preparing executive brief...</div>
+            } @else if (executiveReportError()) {
+              <div class="border border-red-500/30 bg-red-500/10 p-5 text-sm font-bold text-red-500">{{ executiveReportError() }}</div>
+            } @else {
+              <section class="grid gap-3 md:grid-cols-5">
+                @for (card of executiveBriefCards(); track card.label) {
+                  <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4">
+                    <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">{{ card.label }}</p>
+                    <p class="mt-3 text-2xl font-black text-[var(--t-text-primary)]">{{ card.value }}</p>
+                  </div>
+                }
+              </section>
+
+              <section class="grid gap-4 lg:grid-cols-2">
+                <div class="border border-[var(--t-border)] bg-[var(--t-surface)] p-5">
+                  <h4 class="text-sm font-black uppercase tracking-widest text-[var(--t-text-primary)]">Value Position</h4>
+                  <div class="mt-4 grid gap-3">
+                    @for (row of executiveValueRows(); track row.label) {
+                      <div class="flex items-center justify-between border-b border-[var(--t-border)] pb-2 last:border-b-0">
+                        <span class="text-xs font-bold text-[var(--t-text-secondary)]">{{ row.label }}</span>
+                        <span class="text-sm font-black text-[var(--t-text-primary)]">{{ formatCurrency(row.value) }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+
+                <div class="border border-[var(--t-border)] bg-[var(--t-surface)] p-5">
+                  <h4 class="text-sm font-black uppercase tracking-widest text-[var(--t-text-primary)]">Dependency Risk</h4>
+                  <div class="mt-4 grid grid-cols-2 gap-3">
+                    @for (row of dependencyRiskRows(); track row.label) {
+                      <div class="bg-[var(--t-surface-raised)] p-3">
+                        <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">{{ row.label }}</p>
+                        <p class="mt-2 text-xl font-black text-[var(--t-text-primary)]">{{ row.value }}</p>
+                      </div>
+                    }
+                  </div>
+                </div>
+              </section>
+
+              <section class="border border-[var(--t-border)] bg-[var(--t-surface)]">
+                <div class="border-b border-[var(--t-border)] p-5">
+                  <h4 class="text-sm font-black uppercase tracking-widest text-[var(--t-text-primary)]">Needs Attention</h4>
+                </div>
+                <div class="divide-y divide-[var(--t-border)]">
+                  @for (item of executiveNeedsAttention(); track item.reason + item.initiative_id) {
+                    <a routerLink="/reports/control-tower" class="block p-4 hover:bg-[var(--t-surface-raised)]" (click)="closeExecutiveBrief()">
+                      <p class="text-sm font-black text-[var(--t-text-primary)]">{{ item.reason }}</p>
+                      <p class="mt-1 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">{{ item.initiative_id }}</p>
+                    </a>
+                  } @empty {
+                    <p class="p-6 text-sm font-semibold text-[var(--t-text-secondary)]">No executive exceptions for the selected view.</p>
+                  }
+                </div>
+              </section>
+
+              <section class="border border-[var(--t-border)] bg-[var(--t-surface)]">
+                <div class="flex items-center justify-between gap-3 border-b border-[var(--t-border)] p-5">
+                  <h4 class="text-sm font-black uppercase tracking-widest text-[var(--t-text-primary)]">Initiative Burdening</h4>
+                  <span class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Top exceptions</span>
+                </div>
+                <div class="overflow-x-auto">
+                  <table class="w-full min-w-[720px] text-left text-xs">
+                    <thead class="bg-[var(--t-surface-raised)] text-[10px] uppercase tracking-widest text-[var(--t-text-tertiary)]">
+                      <tr>
+                        <th class="px-4 py-3">Initiative</th>
+                        <th class="px-4 py-3">RAG</th>
+                        <th class="px-4 py-3">Realization</th>
+                        <th class="px-4 py-3 text-right">Benefits</th>
+                        <th class="px-4 py-3 text-right">Burdened Cost</th>
+                        <th class="px-4 py-3 text-right">Net After Allocation</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (row of initiativeBurdeningRows(); track row.id) {
+                        <tr class="border-t border-[var(--t-border)]">
+                          <td class="px-4 py-3">
+                            <a [routerLink]="['/initiatives', row.id]" class="font-black text-[var(--t-accent)]" (click)="closeExecutiveBrief()">
+                              {{ row.initiative_code }} · {{ row.name }}
+                            </a>
+                          </td>
+                          <td class="px-4 py-3 uppercase">{{ row.rag_status }}</td>
+                          <td class="px-4 py-3 uppercase">{{ row.realization_status?.replace('_', ' ') }}</td>
+                          <td class="px-4 py-3 text-right">{{ formatCurrency(row.benefits_plan) }}</td>
+                          <td class="px-4 py-3 text-right">{{ formatCurrency(row.total_burdened_costs_plan) }}</td>
+                          <td class="px-4 py-3 text-right font-black">{{ formatCurrency(row.net_after_allocation_plan) }}</td>
+                        </tr>
+                      } @empty {
+                        <tr>
+                          <td colspan="6" class="px-4 py-8 text-center text-sm font-semibold text-[var(--t-text-secondary)]">No burdening exceptions for the selected view.</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            }
+          </div>
+        </aside>
+      </div>
+    }
+
+    @if (decisionQueueOpen()) {
+      <div class="overlay flex items-end justify-end bg-black/35 backdrop-blur-sm" (click)="closeDecisionQueue()">
+        <aside
+          class="h-full w-full max-w-2xl overflow-y-auto bg-[var(--t-surface)] shadow-2xl"
+          data-testid="dashboard-decision-queue-panel"
+          (click)="$event.stopPropagation()"
+        >
+          <div class="executive-surface sticky top-0 z-10 border-b border-[var(--t-border)] p-6">
+            <div class="flex items-start justify-between gap-5">
+              <div>
+                <p class="text-[10px] font-black uppercase tracking-[0.2em] text-white/60">Actionable Exceptions</p>
+                <h3 class="mt-2 text-2xl font-black">Decision Queue</h3>
+                <p class="mt-2 max-w-xl text-xs font-bold leading-5 text-white/70">
+                  A short queue of portfolio items that need an executive decision or follow-up.
+                </p>
+              </div>
+              <button type="button" class="border border-white/20 px-3 py-2 text-xs font-black uppercase tracking-widest hover:bg-white/10" aria-label="Close decision queue" (click)="closeDecisionQueue()">Close</button>
+            </div>
+          </div>
+
+          <div class="space-y-4 p-6">
+            @if (executiveReportLoading()) {
+              <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-8 text-sm font-bold text-[var(--t-text-secondary)]">Refreshing decision queue...</div>
+            }
+            @for (item of decisionQueueItems(); track item.label) {
+              <a
+                [routerLink]="item.route"
+                [queryParams]="item.queryParams"
+                class="grid gap-4 border border-[var(--t-border)] bg-[var(--t-surface)] p-5 transition-colors hover:border-[var(--t-accent)] hover:bg-[var(--t-surface-raised)] sm:grid-cols-[auto_minmax(0,1fr)_auto]"
+                (click)="closeDecisionQueue()"
+              >
+                <div class="flex h-11 w-11 items-center justify-center bg-[var(--t-accent-soft)] text-[var(--t-accent)]">
+                  <span class="material-icons text-lg">{{ item.icon }}</span>
+                </div>
+                <div>
+                  <p class="text-sm font-black text-[var(--t-text-primary)]">{{ item.label }}</p>
+                  <p class="mt-1 text-xs font-semibold leading-5 text-[var(--t-text-secondary)]">{{ item.description }}</p>
+                </div>
+                <div class="text-right">
+                  <p class="text-2xl font-black text-[var(--t-text-primary)]">{{ item.count }}</p>
+                  <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Open</p>
+                </div>
+              </a>
+            }
+          </div>
+        </aside>
+      </div>
+    }
   `,
   styles: [`
     :host { display: block; }
@@ -663,6 +741,46 @@ import { RouterLink } from '@angular/router';
     .executive-action-button,
     .executive-select {
       color: var(--t-executive, #071f3c) !important;
+    }
+    .filter-panel {
+      min-height: 8.75rem;
+      border: 1px solid var(--t-border);
+      background: var(--t-surface-raised);
+      padding: 0.75rem;
+    }
+    .filter-label {
+      margin-bottom: 0.625rem;
+      color: var(--t-text-tertiary);
+      font-size: 0.625rem;
+      font-weight: 900;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+    .filter-options {
+      display: grid;
+      gap: 0.375rem;
+      max-height: 6.5rem;
+      overflow-y: auto;
+    }
+    .filter-option {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      min-height: 1.75rem;
+      border: 1px solid var(--t-border);
+      background: var(--t-surface);
+      padding: 0.25rem 0.5rem;
+      color: var(--t-text-secondary);
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+    .filter-option input {
+      accent-color: var(--t-accent);
+    }
+    .filter-option:has(input:checked) {
+      border-color: var(--t-accent);
+      color: var(--t-text-primary);
+      background: var(--t-accent-soft);
     }
     .matrix-cell {
       min-height: 4.25rem;
@@ -740,22 +858,192 @@ import { RouterLink } from '@angular/router';
 export class DashboardComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   
   data = signal<any>(null);
   reporting = signal(false);
   reportReady = signal(false);
   showWelcome = signal(false);
   selectedMatrixCell = signal<any>(null);
-  filters = signal({ business_unit_id: '', workstream_id: '', rag_status: '', target_year: '' });
+  executiveBriefOpen = signal(false);
+  decisionQueueOpen = signal(false);
+  executiveReport = signal<any | null>(null);
+  executiveReportLoading = signal(false);
+  executiveReportError = signal<string | null>(null);
+  executivePersona = signal<ExecutiveBriefPersona>('management');
+  filters = signal({
+    business_unit_id: [] as string[],
+    workstream_id: [] as string[],
+    priority: [] as string[],
+    tag: [] as string[],
+    target_year: '',
+  });
   heatmapLevels = ['high', 'medium', 'low'];
   stages = [
     { id: 'scoping', label: 'Scoping' },
     { id: 'in_progress', label: 'In-Progress' },
     { id: 'complete', label: 'Complete' }
   ];
+  readonly executivePersonas: { id: ExecutiveBriefPersona; label: string }[] = [
+    { id: 'management', label: 'Management' },
+    { id: 'investor', label: 'Investor' },
+    { id: 'owner', label: 'Owner' },
+  ];
+
+  readonly filterGroups = computed<CompactFilterGroup[]>(() => [
+    {
+      key: 'business_unit_id',
+      label: 'Business Unit',
+      options: this.data()?.available_filters?.business_units || [],
+      selected: this.filters().business_unit_id,
+      testId: 'dashboard-filter-business-unit',
+    },
+    {
+      key: 'workstream_id',
+      label: 'Workstream',
+      options: this.availableWorkstreams(),
+      selected: this.filters().workstream_id,
+      testId: 'dashboard-filter-workstream',
+    },
+    {
+      key: 'priority',
+      label: 'Priority',
+      options: this.data()?.available_filters?.priorities || [],
+      selected: this.filters().priority,
+      testId: 'dashboard-filter-priority',
+    },
+    {
+      key: 'tag',
+      label: 'Tag',
+      options: this.data()?.available_filters?.tags || [],
+      selected: this.filters().tag,
+      testId: 'dashboard-filter-tag',
+    },
+  ]);
+
+  readonly executiveBriefCards = computed(() => {
+    const summary = this.executiveReport()?.summary || {};
+    return [
+      { label: 'Initiatives', value: summary.initiative_count ?? this.data()?.summary?.total_initiatives ?? 0 },
+      { label: 'Red', value: summary.red ?? this.data()?.rag_breakdown?.red ?? 0 },
+      { label: 'Amber', value: summary.amber ?? this.data()?.rag_breakdown?.amber ?? 0 },
+      { label: 'Realized', value: summary.realized ?? 0 },
+      { label: 'Attention', value: summary.needs_attention ?? this.executiveNeedsAttention().length },
+    ];
+  });
+
+  readonly executiveValueRows = computed(() => {
+    const bridge = this.executiveReport()?.value_bridge || {};
+    return [
+      { label: 'Benefits Plan', value: bridge.benefits_plan },
+      { label: 'Direct Costs', value: bridge.direct_costs_plan },
+      { label: 'Allocated Costs', value: bridge.allocated_costs_plan },
+      { label: 'Burdened Costs', value: bridge.total_burdened_costs_plan },
+      { label: 'Net Before Allocation', value: bridge.net_before_allocation_plan },
+      { label: 'Net After Allocation', value: bridge.net_after_allocation_plan },
+    ];
+  });
+
+  readonly dependencyRiskRows = computed(() => {
+    const risk = this.executiveReport()?.dependency_risk || {};
+    return [
+      { label: 'Total', value: risk.total || 0 },
+      { label: 'Blocking', value: risk.blocking || 0 },
+      { label: 'At Risk', value: risk.at_risk || 0 },
+      { label: 'Overdue', value: risk.overdue || 0 },
+      { label: 'Critical Path', value: risk.critical_path_risk || 0 },
+      { label: 'Resolved', value: risk.resolved || 0 },
+    ];
+  });
+
+  readonly initiativeBurdeningRows = computed(() => {
+    const rows = this.executiveReport()?.initiatives || [];
+    return rows
+      .filter((row: any) =>
+        ['red', 'amber'].includes(row.rag_status) ||
+        Number(row.total_burdened_costs_plan || 0) > 0 ||
+        Number(row.net_after_allocation_plan || 0) < 0
+      )
+      .slice(0, 8);
+  });
+
+  readonly decisionQueueItems = computed<DecisionQueueItem[]>(() => {
+    const dashboard = this.data();
+    const report = this.executiveReport();
+    const risk = report?.dependency_risk || {};
+    const attention = this.executiveNeedsAttention();
+    const items: DecisionQueueItem[] = [
+      {
+        label: 'Pending Gate Decisions',
+        description: 'Governance approvals waiting for transformation office review.',
+        count: dashboard?.summary?.pending_approvals || 0,
+        icon: 'gavel',
+        route: '/pmo/governance',
+        queryParams: { status: 'pending' } as Record<string, string>,
+      },
+      {
+        label: 'Red Initiatives',
+        description: 'Portfolio items marked red and requiring intervention.',
+        count: dashboard?.summary?.at_risk || 0,
+        icon: 'warning',
+        route: '/initiatives/pipeline',
+        queryParams: { rag_status: 'red' } as Record<string, string>,
+      },
+      {
+        label: 'Blocking Dependencies',
+        description: 'Active dependencies currently blocking portfolio delivery.',
+        count: risk.blocking || 0,
+        icon: 'account_tree',
+        route: '/reports/control-tower',
+      },
+      {
+        label: 'Overdue Dependencies',
+        description: 'Dependency decisions or resolutions past their due date.',
+        count: risk.overdue || 0,
+        icon: 'event_busy',
+        route: '/reports/control-tower',
+      },
+      {
+        label: 'Executive Exceptions',
+        description: 'Value, dependency, or realization signals needing attention.',
+        count: attention.length,
+        icon: 'radar',
+        route: '/reports/control-tower',
+      },
+      {
+        label: 'Assigned Actions',
+        description: 'Open meeting actions assigned to you from the current portfolio view.',
+        count: dashboard?.my_actions?.length || 0,
+        icon: 'assignment',
+        route: '/progress/action-items',
+      },
+    ].filter(item => item.count > 0);
+
+    return items.length ? items : [{
+      label: 'No Open Executive Decisions',
+      description: 'The current portfolio view has no urgent decision queue items.',
+      count: 0,
+      icon: 'verified',
+      route: '/dashboard',
+    }];
+  });
 
   ngOnInit() {
-    this.loadDashboard();
+    this.route.queryParamMap.subscribe(params => {
+      if (this.hasQueryFilters(params)) {
+        this.filters.set({
+          business_unit_id: this.parseFilterParam(params.get('business_unit_id')),
+          workstream_id: this.parseFilterParam(params.get('workstream_id')),
+          priority: this.parseFilterParam(params.get('priority')),
+          tag: this.parseFilterParam(params.get('tag')),
+          target_year: params.get('target_year') ?? '',
+        });
+      } else {
+        this.restoreFilters();
+      }
+      this.loadDashboard(false);
+    });
     this.checkOnboarding();
   }
 
@@ -774,17 +1062,278 @@ export class DashboardComponent implements OnInit {
     });
   }
 
-  loadDashboard() {
-    const params = Object.fromEntries(
-      Object.entries(this.filters()).filter(([, value]) => !!value)
-    );
+  loadDashboard(syncState = true) {
+    if (syncState) this.persistFilters();
+    const current = this.filters();
+    const params: Record<string, string> = {};
+    (['business_unit_id', 'workstream_id', 'priority', 'tag'] as DashboardMultiFilterKey[]).forEach(key => {
+      if (current[key].length) params[key] = current[key].join(',');
+    });
+    if (current.target_year) params['target_year'] = current.target_year;
     this.api.get<any>('/dashboard', params).subscribe(d => this.data.set(d));
   }
 
-  onFilterChange(key: 'business_unit_id' | 'workstream_id' | 'rag_status', event: Event) {
-    const value = (event.target as HTMLSelectElement).value;
-    this.filters.update(current => ({ ...current, [key]: value }));
+  openExecutiveBrief(): void {
+    this.executiveBriefOpen.set(true);
+    this.reportReady.set(false);
+    this.loadExecutiveReport(true);
+  }
+
+  closeExecutiveBrief(): void {
+    this.executiveBriefOpen.set(false);
+  }
+
+  openDecisionQueue(): void {
+    this.decisionQueueOpen.set(true);
+    if (!this.executiveReport()) this.loadExecutiveReport(false);
+  }
+
+  closeDecisionQueue(): void {
+    this.decisionQueueOpen.set(false);
+  }
+
+  private loadExecutiveReport(markReady: boolean): void {
+    if (this.executiveReportLoading()) return;
+    this.reporting.set(markReady);
+    this.executiveReportLoading.set(true);
+    this.executiveReportError.set(null);
+    this.api.get<any>(this.executiveReportPath(), this.executiveReportParams()).subscribe({
+      next: report => {
+        this.executiveReport.set(report);
+        this.executiveReportLoading.set(false);
+        this.reporting.set(false);
+        if (markReady) this.reportReady.set(true);
+      },
+      error: error => {
+        this.executiveReportLoading.set(false);
+        this.reporting.set(false);
+        this.executiveReportError.set(error.error?.detail || 'Executive brief could not be prepared.');
+      },
+    });
+  }
+
+  setExecutivePersona(persona: ExecutiveBriefPersona): void {
+    if (this.executivePersona() === persona) return;
+    this.executivePersona.set(persona);
+    this.executiveReport.set(null);
+    this.loadExecutiveReport(this.executiveBriefOpen());
+  }
+
+  onExecutiveTargetYearChange(event: Event): void {
+    const value = String((event.target as HTMLInputElement).value || '').trim();
+    this.filters.update(current => ({ ...current, target_year: value }));
+    this.persistFilters();
+    this.executiveReport.set(null);
+    this.loadExecutiveReport(this.executiveBriefOpen());
+  }
+
+  private executiveReportPath(): string {
+    if (this.executivePersona() === 'owner') return '/reports/owner-cockpit';
+    if (this.executivePersona() === 'investor') return '/reports/investor-summary';
+    return '/reports/executive-control-tower';
+  }
+
+  private executiveReportParams(): Record<string, string> {
+    const current = this.filters();
+    const params: Record<string, string> = {};
+    if (current.business_unit_id.length) params['business_unit_id'] = current.business_unit_id.join(',');
+    if (current.workstream_id.length) params['workstream_id'] = current.workstream_id.join(',');
+    if (current.tag.length) params['tag'] = current.tag.join(',');
+    if (current.target_year) params['target_year'] = current.target_year;
+    return params;
+  }
+
+  exportExecutiveBriefExcel(): void {
+    const report = this.executiveReport();
+    if (!report) return;
+
+    const html = `
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            table { border-collapse: collapse; width: 100%; }
+            th, td { border: 1px solid #9aaabe; padding: 8px; text-align: left; }
+            th { background: #071f3c; color: #ffffff; }
+            h1, h2 { color: #071f3c; }
+          </style>
+        </head>
+        <body>
+          <h1>Transmuter Executive Brief</h1>
+          <p>Generated ${this.exportTimestamp()}</p>
+          ${this.exportTable('Summary', this.executiveBriefCards().map(row => [row.label, row.value]))}
+          ${this.exportTable('Value Position', this.executiveValueRows().map(row => [row.label, this.formatCurrency(row.value)]))}
+          ${this.exportTable('Dependency Risk', this.dependencyRiskRows().map(row => [row.label, row.value]))}
+          ${this.exportTable('Needs Attention', this.executiveNeedsAttention().map(row => [row.reason, row.initiative_id]))}
+          ${this.exportTable('Initiative Burdening', this.initiativeBurdeningRows().map((row: any) => [
+            `${row.initiative_code || ''} ${row.name || ''}`.trim(),
+            row.rag_status || '',
+            row.realization_status || '',
+            this.formatCurrency(row.benefits_plan),
+            this.formatCurrency(row.total_burdened_costs_plan),
+            this.formatCurrency(row.net_after_allocation_plan),
+          ]))}
+        </body>
+      </html>
+    `;
+    this.downloadBlob(
+      html,
+      `transmuter-executive-brief-${this.exportDateStamp()}.xls`,
+      'application/vnd.ms-excel;charset=utf-8'
+    );
+  }
+
+  exportExecutiveBriefPdf(): void {
+    const report = this.executiveReport();
+    if (!report) return;
+
+    const popup = window.open('', '_blank');
+    if (!popup) {
+      this.downloadBlob(
+        this.printableExecutiveBriefHtml(),
+        `transmuter-executive-brief-${this.exportDateStamp()}.html`,
+        'text/html;charset=utf-8'
+      );
+      return;
+    }
+    popup.document.open();
+    popup.document.write(this.printableExecutiveBriefHtml());
+    popup.document.close();
+    popup.focus();
+    popup.print();
+  }
+
+  private printableExecutiveBriefHtml(): string {
+    return `
+      <html>
+        <head>
+          <title>Transmuter Executive Brief</title>
+          <style>
+            @page { margin: 18mm; }
+            body { color: #071f3c; font-family: Arial, sans-serif; font-size: 12px; }
+            h1 { margin: 0 0 6px; font-size: 24px; }
+            h2 { border-bottom: 2px solid #071f3c; font-size: 15px; margin-top: 24px; padding-bottom: 6px; }
+            p { margin: 0 0 14px; color: #4c6178; }
+            table { border-collapse: collapse; margin-top: 10px; width: 100%; }
+            th, td { border: 1px solid #cfd8e2; padding: 8px; text-align: left; vertical-align: top; }
+            th { background: #071f3c; color: white; font-size: 10px; text-transform: uppercase; }
+            .summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 18px 0; }
+            .metric { border: 1px solid #cfd8e2; padding: 10px; }
+            .metric-label { color: #77879a; font-size: 9px; font-weight: 700; text-transform: uppercase; }
+            .metric-value { color: #071f3c; font-size: 20px; font-weight: 900; margin-top: 8px; }
+          </style>
+        </head>
+        <body>
+          <h1>Transmuter Executive Brief</h1>
+          <p>Generated ${this.exportTimestamp()}</p>
+          <div class="summary">
+            ${this.executiveBriefCards().map(row => `
+              <div class="metric">
+                <div class="metric-label">${this.escapeHtml(row.label)}</div>
+                <div class="metric-value">${this.escapeHtml(String(row.value))}</div>
+              </div>
+            `).join('')}
+          </div>
+          ${this.exportTable('Value Position', this.executiveValueRows().map(row => [row.label, this.formatCurrency(row.value)]))}
+          ${this.exportTable('Dependency Risk', this.dependencyRiskRows().map(row => [row.label, row.value]))}
+          ${this.exportTable('Needs Attention', this.executiveNeedsAttention().map(row => [row.reason, row.initiative_id]))}
+          ${this.exportTable('Initiative Burdening', this.initiativeBurdeningRows().map((row: any) => [
+            `${row.initiative_code || ''} ${row.name || ''}`.trim(),
+            row.rag_status || '',
+            row.realization_status || '',
+            this.formatCurrency(row.benefits_plan),
+            this.formatCurrency(row.total_burdened_costs_plan),
+            this.formatCurrency(row.net_after_allocation_plan),
+          ]))}
+        </body>
+      </html>
+    `;
+  }
+
+  private exportTable(title: string, rows: Array<Array<string | number>>): string {
+    const safeRows = rows.length ? rows : [['None', '']];
+    return `
+      <h2>${this.escapeHtml(title)}</h2>
+      <table>
+        <tbody>
+          ${safeRows.map(row => `
+            <tr>
+              ${row.map(cell => `<td>${this.escapeHtml(String(cell ?? ''))}</td>`).join('')}
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
+  private downloadBlob(content: string, filename: string, type: string): void {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  private exportTimestamp(): string {
+    return new Intl.DateTimeFormat('en-US', {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(new Date());
+  }
+
+  private exportDateStamp(): string {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  private escapeHtml(value: string): string {
+    return value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  isFilterSelected(key: DashboardMultiFilterKey, value: string): boolean {
+    return this.filters()[key].includes(value);
+  }
+
+  onFilterGroupChange(change: { key: string; selected: string[] }) {
+    this.filters.update(current => {
+      const key = change.key as DashboardMultiFilterKey;
+      const next = { ...current, [key]: change.selected };
+      if (key === 'business_unit_id') {
+        const visibleWorkstreamIds = new Set(this.availableWorkstreams(change.selected).map(ws => ws.id));
+        next.workstream_id = next.workstream_id.filter(wsId => visibleWorkstreamIds.has(wsId));
+      }
+      return next;
+    });
     this.loadDashboard();
+  }
+
+  toggleFilter(key: DashboardMultiFilterKey, value: string, event: Event) {
+    const checked = (event.target as HTMLInputElement).checked;
+    this.filters.update(current => {
+      const nextValues = checked
+        ? Array.from(new Set([...current[key], value]))
+        : current[key].filter(item => item !== value);
+      const next = { ...current, [key]: nextValues };
+      if (key === 'business_unit_id') {
+        const visibleWorkstreamIds = new Set(this.availableWorkstreams(next.business_unit_id).map(ws => ws.id));
+        next.workstream_id = next.workstream_id.filter(wsId => visibleWorkstreamIds.has(wsId));
+      }
+      return next;
+    });
+    this.loadDashboard();
+  }
+
+  availableWorkstreams(selectedBusinessUnits = this.filters().business_unit_id): FilterOption[] {
+    const workstreams = this.data()?.available_filters?.workstreams || [];
+    if (!selectedBusinessUnits.length) return workstreams;
+    const selected = new Set(selectedBusinessUnits);
+    return workstreams.filter((ws: FilterOption) => selected.has(ws.business_unit_id || ''));
   }
 
   onTargetYearChange(event: Event) {
@@ -794,8 +1343,68 @@ export class DashboardComponent implements OnInit {
   }
 
   clearFilters() {
-    this.filters.set({ business_unit_id: '', workstream_id: '', rag_status: '', target_year: '' });
+    this.filters.set({
+      business_unit_id: [],
+      workstream_id: [],
+      priority: [],
+      tag: [],
+      target_year: '',
+    });
     this.loadDashboard();
+  }
+
+  hasDashboardFilters(): boolean {
+    const current = this.filters();
+    return Boolean(
+      current.business_unit_id.length ||
+      current.workstream_id.length ||
+      current.priority.length ||
+      current.tag.length ||
+      current.target_year
+    );
+  }
+
+  private persistFilters(): void {
+    const state = this.filters();
+    localStorage.setItem(DASHBOARD_FILTER_STATE_KEY, JSON.stringify(state));
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: {
+        business_unit_id: state.business_unit_id.length ? state.business_unit_id.join(',') : null,
+        workstream_id: state.workstream_id.length ? state.workstream_id.join(',') : null,
+        priority: state.priority.length ? state.priority.join(',') : null,
+        tag: state.tag.length ? state.tag.join(',') : null,
+        target_year: state.target_year || null,
+      },
+      replaceUrl: true,
+    });
+  }
+
+  private restoreFilters(): void {
+    try {
+      const raw = localStorage.getItem(DASHBOARD_FILTER_STATE_KEY);
+      if (!raw) return;
+      const state = JSON.parse(raw) as Partial<ReturnType<typeof this.filters>>;
+      this.filters.set({
+        business_unit_id: Array.isArray(state.business_unit_id) ? state.business_unit_id : [],
+        workstream_id: Array.isArray(state.workstream_id) ? state.workstream_id : [],
+        priority: Array.isArray(state.priority) ? state.priority : [],
+        tag: Array.isArray(state.tag) ? state.tag : [],
+        target_year: typeof state.target_year === 'string' ? state.target_year : '',
+      });
+    } catch {
+      localStorage.removeItem(DASHBOARD_FILTER_STATE_KEY);
+    }
+  }
+
+  private parseFilterParam(value: string | null): string[] {
+    if (!value) return [];
+    return value.split(',').map(item => item.trim()).filter(Boolean);
+  }
+
+  private hasQueryFilters(params: { get: (key: string) => string | null }): boolean {
+    return ['business_unit_id', 'workstream_id', 'priority', 'tag', 'target_year']
+      .some(key => params.get(key));
   }
 
   getStagePercentage(stage: string): number {
@@ -858,6 +1467,16 @@ export class DashboardComponent implements OnInit {
     }).format(amount);
   }
 
+  formatCurrency(value: string | number | null | undefined): string {
+    const amount = Number(value || 0);
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      notation: 'compact',
+      maximumFractionDigits: 1,
+    }).format(amount);
+  }
+
   formatRange(cell: any): string {
     if (!cell) return '-';
     const base = Number(cell.base || 0);
@@ -880,14 +1499,7 @@ export class DashboardComponent implements OnInit {
     this.selectedMatrixCell.set(null);
   }
 
-  generateReport() {
-    if (this.reporting()) return;
-    this.reporting.set(true);
-    this.reportReady.set(false);
-    
-    setTimeout(() => {
-      this.reporting.set(false);
-      this.reportReady.set(true);
-    }, 500);
+  executiveNeedsAttention(): Array<{ reason: string; initiative_id: string }> {
+    return this.executiveReport()?.needs_attention || [];
   }
 }

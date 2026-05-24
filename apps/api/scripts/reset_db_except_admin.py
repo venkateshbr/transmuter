@@ -23,6 +23,8 @@ def reset_db():
         "agent_corrections",
         "agent_audit_log",
         "action_items",
+        "meeting_artifacts",
+        "meeting_external_events",
         "agenda_items",
         "meeting_sessions",
         "meeting_initiatives",

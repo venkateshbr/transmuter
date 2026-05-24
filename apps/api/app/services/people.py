@@ -12,6 +12,7 @@ from fastapi import HTTPException, status
 from supabase import Client
 from supabase_auth.errors import AuthApiError
 
+from app.core.database import get_supabase_admin
 from app.core.rbac import assert_valid_role
 from app.domain.people import InviteCreate, UserUpdate, WorkstreamAssignment
 from app.repositories.people import PeopleRepository
@@ -19,7 +20,6 @@ from app.repositories.people import PeopleRepository
 
 class PeopleService:
     def __init__(self, client: Client, tenant_id: UUID) -> None:
-        self._client = client
         self._repo = PeopleRepository(client, tenant_id)
         self._tenant_id = str(tenant_id)
 
@@ -170,7 +170,7 @@ class PeopleService:
             return existing_id
 
         try:
-            response = self._client.auth.admin.invite_user_by_email(
+            response = get_supabase_admin().auth.admin.invite_user_by_email(
                 str(data.email),
                 {
                     "data": {
@@ -190,7 +190,7 @@ class PeopleService:
         return str(response.user.id)
 
     def _create_rate_limited_auth_invite(self, data: InviteCreate) -> str:
-        response = self._client.auth.admin.create_user(
+        response = get_supabase_admin().auth.admin.create_user(
             {
                 "email": str(data.email),
                 "password": f"TransmuterInvite{token_urlsafe(24)}!",
@@ -209,7 +209,7 @@ class PeopleService:
         page = 1
         per_page = 100
         while True:
-            users = self._client.auth.admin.list_users(page=page, per_page=per_page)
+            users = get_supabase_admin().auth.admin.list_users(page=page, per_page=per_page)
             for user in users:
                 if getattr(user, "email", None) == email:
                     return str(user.id)

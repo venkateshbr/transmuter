@@ -1,6 +1,7 @@
 """Milestone API integration tests — Aksha #42."""
 
 import os
+from uuid import uuid4
 
 import pytest
 from dotenv import load_dotenv
@@ -102,6 +103,58 @@ def test_circular_dependency(admin_token: str, init_id: str) -> None:
     )
     assert resp.status_code == 400
     assert "cycle" in resp.json()["detail"].lower()
+
+
+def test_cross_initiative_dependency_cycle_and_cascade(admin_token: str, init_id: str) -> None:
+    other_init = client.post(
+        "/initiatives",
+        json={
+            "name": f"Milestone Dependency Peer {uuid4()}",
+            "priority": "medium",
+            "country": "Singapore",
+        },
+        headers=auth(admin_token),
+    ).json()
+
+    upstream = client.post(
+        f"/initiatives/{other_init['id']}/milestones",
+        json={"name": f"Cross Initiative Upstream {uuid4()}"},
+        headers=auth(admin_token),
+    ).json()
+    downstream = client.post(
+        f"/initiatives/{init_id}/milestones",
+        json={"name": f"Cross Initiative Downstream {uuid4()}"},
+        headers=auth(admin_token),
+    ).json()
+
+    resp = client.post(
+        f"/milestones/{downstream['id']}/dependencies",
+        json={"upstream_milestone_id": upstream["id"]},
+        headers=auth(admin_token),
+    )
+    assert resp.status_code == 201
+
+    detail = client.get(f"/milestones/{downstream['id']}", headers=auth(admin_token)).json()
+    assert any(dep["upstream_milestone_id"] == upstream["id"] for dep in detail["dependencies"])
+
+    cycle_resp = client.post(
+        f"/milestones/{upstream['id']}/dependencies",
+        json={"upstream_milestone_id": downstream["id"]},
+        headers=auth(admin_token),
+    )
+    assert cycle_resp.status_code == 400
+    assert "cycle" in cycle_resp.json()["detail"].lower()
+
+    delete_resp = client.delete(f"/milestones/{upstream['id']}", headers=auth(admin_token))
+    assert delete_resp.status_code == 204
+    detail_after_delete = client.get(
+        f"/milestones/{downstream['id']}",
+        headers=auth(admin_token),
+    ).json()
+    assert not any(
+        dep["upstream_milestone_id"] == upstream["id"]
+        for dep in detail_after_delete["dependencies"]
+    )
 
 
 def test_blast_radius_recalc(admin_token: str, init_id: str) -> None:

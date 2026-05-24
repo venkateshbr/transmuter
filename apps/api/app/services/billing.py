@@ -4,14 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from secrets import token_urlsafe
 from typing import Any
 from uuid import uuid4
 
 from fastapi import HTTPException, status
 from pydantic import EmailStr, TypeAdapter
 from supabase import Client
-from supabase_auth.errors import AuthApiError
 
 from app.core.config import settings
 
@@ -161,6 +159,7 @@ class BillingProvisioningService:
         organization_slug: str,
         admin_display_name: str,
         admin_email: str,
+        initial_password: str,
         planned_user_count: int,
         billing_interval: str = "month",
     ) -> dict[str, Any]:
@@ -186,7 +185,10 @@ class BillingProvisioningService:
                     "plan_code": plan.code,
                     "billing_interval": plan.billing_interval,
                     "status": "pending_checkout",
-                    "metadata": {"subscription_plan_id": plan_record["id"]},
+                    "metadata": {
+                        "subscription_plan_id": plan_record["id"],
+                        "initial_password": initial_password,
+                    },
                     "updated_at": now,
                 }
             )
@@ -233,6 +235,12 @@ class BillingProvisioningService:
             (intent or {}).get("planned_user_count")
             or self._int_metadata(metadata, "planned_user_count", default=1)
         )
+        initial_password = str(((intent or {}).get("metadata") or {}).get("initial_password") or "")
+        if not initial_password:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Signup password is unavailable. Please restart checkout.",
+            )
 
         org = self._ensure_organization(
             name=organization_name,
@@ -245,7 +253,10 @@ class BillingProvisioningService:
             tenant_id=org["id"],
             email=str(admin_email),
             display_name=admin_display_name,
+            password=initial_password,
         )
+        if intent:
+            self._clear_signup_initial_password(intent)
         subscription = self._upsert_tenant_subscription(
             tenant_id=org["id"],
             session=session,
@@ -532,7 +543,9 @@ class BillingProvisioningService:
         result = self._client.table("tenant_subscriptions").insert(payload).execute()
         return result.data[0]
 
-    def _ensure_initial_admin(self, *, tenant_id: str, email: str, display_name: str) -> str:
+    def _ensure_initial_admin(
+        self, *, tenant_id: str, email: str, display_name: str, password: str
+    ) -> str:
         existing_user = (
             self._client.table("users")
             .select("id")
@@ -567,10 +580,11 @@ class BillingProvisioningService:
                 detail="Initial admin email already belongs to another tenant",
             )
 
-        auth_user_id = self._ensure_auth_invite_user(
+        auth_user_id = self._ensure_auth_user_with_password(
             tenant_id=tenant_id,
             email=email,
             display_name=display_name,
+            password=password,
         )
         self._client.table("users").insert(
             {
@@ -587,7 +601,14 @@ class BillingProvisioningService:
         ).execute()
         return auth_user_id
 
-    def _ensure_auth_invite_user(self, *, tenant_id: str, email: str, display_name: str) -> str:
+    def _ensure_auth_user_with_password(
+        self, *, tenant_id: str, email: str, display_name: str, password: str
+    ) -> str:
+        if len(password) < 8:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Signup password does not meet the minimum length requirement.",
+            )
         existing_id = self._find_auth_user_id(email)
         metadata = {
             "tenant_id": tenant_id,
@@ -601,40 +622,12 @@ class BillingProvisioningService:
             )
             return existing_id
 
-        try:
-            response = self._client.auth.admin.invite_user_by_email(
-                email,
-                {"data": metadata},
-            )
-        except AuthApiError as exc:
-            return self._create_deferred_auth_invite(
-                tenant_id=tenant_id,
-                email=email,
-                display_name=display_name,
-                reason=exc.message,
-            )
-        return str(response.user.id)
-
-    def _create_deferred_auth_invite(
-        self,
-        *,
-        tenant_id: str,
-        email: str,
-        display_name: str,
-        reason: str,
-    ) -> str:
         response = self._client.auth.admin.create_user(
             {
                 "email": email,
-                "password": f"TransmuterInvite{token_urlsafe(24)}!",
-                "email_confirm": False,
-                "user_metadata": {
-                    "tenant_id": tenant_id,
-                    "role": "transformation_office",
-                    "display_name": display_name,
-                    "invite_delivery_status": "deferred",
-                    "invite_delivery_reason": reason[:160],
-                },
+                "password": password,
+                "email_confirm": True,
+                "user_metadata": metadata,
             }
         )
         return str(response.user.id)
@@ -650,6 +643,15 @@ class BillingProvisioningService:
             if len(users) < per_page:
                 return None
             page += 1
+
+    def _clear_signup_initial_password(self, intent: dict[str, Any]) -> None:
+        metadata = {**(intent.get("metadata") or {}), "initial_password": None}
+        self._client.table("signup_intents").update(
+            {
+                "metadata": metadata,
+                "updated_at": datetime.now(UTC).isoformat(),
+            }
+        ).eq("id", intent["id"]).execute()
 
     @staticmethod
     def _require_metadata(metadata: dict[str, Any], key: str) -> str:

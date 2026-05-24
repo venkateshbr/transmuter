@@ -33,13 +33,16 @@ from app.domain.pressure import (
     MilestonePressureResult,
     pressure_level,
 )
+from app.repositories.audit import AuditRepository
 from app.repositories.milestone import MilestoneRepository
 
 
 class MilestoneService:
-    def __init__(self, client: Client, tenant_id: UUID) -> None:
+    def __init__(self, client: Client, tenant_id: UUID, user_id: UUID | None = None) -> None:
         self._repo = MilestoneRepository(client, tenant_id)
+        self._audit = AuditRepository(client, tenant_id)
         self._tenant_id = tenant_id
+        self._user_id = str(user_id) if user_id else None
 
     # ── List / Detail ────────────────────────────────────────────────
 
@@ -106,7 +109,11 @@ class MilestoneService:
             },
         )
         self._recalc_pressure(row["id"], initiative_id)
-        return self.get_milestone(row["id"])
+        milestone = self.get_milestone(row["id"])
+        self._audit_change(
+            "create", "milestone", row["id"], after_data=milestone.model_dump(mode="json")
+        )
+        return milestone
 
     def update_milestone(self, milestone_id: str, data: MilestoneUpdate) -> MilestoneDetail:
         existing = self._assert_exists(milestone_id)
@@ -116,11 +123,20 @@ class MilestoneService:
             milestone_id,
             existing["initiative_id"],
         )
-        return self.get_milestone(milestone_id)
+        milestone = self.get_milestone(milestone_id)
+        self._audit_change(
+            "update",
+            "milestone",
+            milestone_id,
+            before_data=existing,
+            after_data=milestone.model_dump(mode="json"),
+        )
+        return milestone
 
     def delete_milestone(self, milestone_id: str) -> None:
-        self._assert_exists(milestone_id)
+        existing = self._assert_exists(milestone_id)
         self._repo.delete(milestone_id)
+        self._audit_change("delete", "milestone", milestone_id, before_data=existing)
 
     # ── Checklist ────────────────────────────────────────────────────
 
@@ -479,7 +495,7 @@ class MilestoneService:
             return str(v) if v is not None else None
 
         return MilestoneDetail(
-            **item.model_dump(),
+            **item.model_dump(mode="json"),
             pressure_blast_radius=_str(row.get("pressure_blast_radius")),
             pressure_dep_urgency=_str(row.get("pressure_dep_urgency")),
             pressure_cluster=_str(row.get("pressure_cluster")),
@@ -490,4 +506,24 @@ class MilestoneService:
             dependencies=dep_items,
             created_at=row.get("created_at"),
             updated_at=row.get("updated_at"),
+        )
+
+    def _audit_change(
+        self,
+        action: str,
+        entity_type: str,
+        entity_id: str,
+        *,
+        before_data: dict | None = None,  # type: ignore[type-arg]
+        after_data: dict | None = None,  # type: ignore[type-arg]
+    ) -> None:
+        if not self._user_id:
+            return
+        self._audit.log_change(
+            action=action,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            actor_id=self._user_id,
+            before_data=before_data,
+            after_data=after_data,
         )

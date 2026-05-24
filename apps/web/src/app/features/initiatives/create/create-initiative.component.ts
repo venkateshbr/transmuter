@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, WritableSignal, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -18,6 +18,30 @@ interface BusinessUnitOption {
 interface UserOption {
   id: string;
   display_name: string;
+}
+
+interface FinancialConfigGroup {
+  key: string;
+  label: string;
+  kind: 'calculation' | 'metric' | 'cost_category';
+  display_order: number;
+  is_active: boolean;
+}
+
+interface FinancialConfigItem {
+  key: string;
+  label: string;
+  item_type: 'metric' | 'cost_category';
+  system_metric_key?: string | null;
+  rollup_type?: string | null;
+  group_key?: string | null;
+  display_order: number;
+  is_active: boolean;
+}
+
+interface FinancialConfiguration {
+  groups: FinancialConfigGroup[];
+  items: FinancialConfigItem[];
 }
 
 type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
@@ -372,6 +396,51 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
                      [(ngModel)]="form.planned_end">
             </div>
           </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-2">
+            <div *ngIf="financialSelectionsLocked()" class="lg:col-span-2 border-l-4 border-[var(--t-accent)] bg-[var(--t-surface-raised)] px-4 py-3 text-sm" style="color:var(--t-text-secondary)">
+              <span class="font-bold" style="color:var(--t-text-primary)">Financial values locked.</span>
+              Scope selections can still be saved by the transformation office.
+            </div>
+            <section class="rounded-lg border p-4" style="border-color:var(--t-border);background:var(--t-bg)">
+              <div class="mb-3">
+                <p class="text-[10px] font-bold uppercase tracking-wider" style="color:var(--t-text-secondary)">Financial Metrics</p>
+                <h3 class="text-sm font-bold" style="color:var(--t-text-primary)">Shown in Initiative Financials</h3>
+              </div>
+              <div class="space-y-2 max-h-56 overflow-auto pr-1">
+                <label *ngFor="let metric of financialMetricOptions()"
+                       class="flex items-center gap-3 rounded border px-3 py-2 text-sm"
+                       style="border-color:var(--t-border);color:var(--t-text-primary)">
+                  <input type="checkbox"
+                         [checked]="isMetricSelected(metric)"
+                         (change)="toggleMetric(metric, $any($event.target).checked)"
+                         aria-label="Toggle financial metric">
+                  <span class="min-w-0 flex-1 truncate">{{ metric.label }}</span>
+                </label>
+              </div>
+            </section>
+
+            <section class="rounded-lg border p-4" style="border-color:var(--t-border);background:var(--t-bg)">
+              <div class="mb-3">
+                <p class="text-[10px] font-bold uppercase tracking-wider" style="color:var(--t-text-secondary)">Cost Categories</p>
+                <h3 class="text-sm font-bold" style="color:var(--t-text-primary)">One-time and recurring cost rows</h3>
+              </div>
+              <div class="space-y-2 max-h-56 overflow-auto pr-1">
+                <label *ngFor="let cost of costCategoryOptions()"
+                       class="flex items-center gap-3 rounded border px-3 py-2 text-sm"
+                       style="border-color:var(--t-border);color:var(--t-text-primary)">
+                  <input type="checkbox"
+                         [checked]="isCostCategorySelected(cost)"
+                         (change)="toggleCostCategory(cost, $any($event.target).checked)"
+                         aria-label="Toggle cost category">
+                  <span class="min-w-0 flex-1 truncate">{{ cost.label }}</span>
+                  <span class="text-[10px] font-bold uppercase" style="color:var(--t-text-tertiary)">
+                    {{ cost.rollup_type === 'recurring_cost' ? 'Recurring' : 'One-time' }}
+                  </span>
+                </label>
+              </div>
+            </section>
+          </div>
         </div>
 
         <!-- STEP 4: HITL Suggestions -->
@@ -632,6 +701,18 @@ export class CreateInitiativeComponent {
   readonly themes = signal<string[]>([]);
   readonly tags = signal<string[]>([]);
   readonly users = signal<UserOption[]>([]);
+  readonly financialConfiguration = signal<FinancialConfiguration | null>(null);
+  readonly financialSelectionsLocked = signal(false);
+  readonly financialSelectionsLockReason = signal<string | null>(null);
+  readonly selectedMetricKeys = signal<string[]>([
+    'revenue_uplift_base',
+    'revenue_uplift_high',
+    'revenue_uplift_actual',
+    'gm_uplift_base',
+    'gm_uplift_high',
+    'gm_uplift_actual',
+  ]);
+  readonly selectedCostCategoryKeys = signal<string[]>(['implementation', 'maintenance']);
   readonly uploadedFileName = signal<string | null>(null);
   readonly uploadPreview = signal<any | null>(null);
   readonly suggestions = signal<any | null>(null);
@@ -703,6 +784,10 @@ export class CreateInitiativeComponent {
       next: r => this.users.set(r.data ?? []),
       error: () => {},
     });
+    this.api.get<FinancialConfiguration>('/financial-configuration').subscribe({
+      next: r => this.financialConfiguration.set(r),
+      error: () => this.financialConfiguration.set(null),
+    });
   }
 
   private loadForEdit(id: string): void {
@@ -728,6 +813,20 @@ export class CreateInitiativeComponent {
         };
       },
       error: err => this.error.set(this.errorText(err, 'Failed to load initiative for editing.')),
+    });
+    this.api.get<any>(`/initiatives/${id}/financials/selections`).subscribe({
+      next: response => {
+        const selected = response?.selected || {};
+        this.financialSelectionsLocked.set(Boolean(response?.locked));
+        this.financialSelectionsLockReason.set(response?.lock_reason || null);
+        if (Array.isArray(selected.metric_keys) && selected.metric_keys.length) {
+          this.selectedMetricKeys.set(selected.metric_keys);
+        }
+        if (Array.isArray(selected.cost_category_keys) && selected.cost_category_keys.length) {
+          this.selectedCostCategoryKeys.set(selected.cost_category_keys);
+        }
+      },
+      error: () => {},
     });
   }
 
@@ -781,6 +880,30 @@ export class CreateInitiativeComponent {
     return this.withCurrentOption(this.tags(), this.form.tag);
   }
 
+  financialMetricOptions(): FinancialConfigItem[] {
+    return this.sortedFinancialItems('metric');
+  }
+
+  costCategoryOptions(): FinancialConfigItem[] {
+    return this.sortedFinancialItems('cost_category');
+  }
+
+  isMetricSelected(item: FinancialConfigItem): boolean {
+    return this.selectedMetricKeys().includes(this.financialMetricKey(item));
+  }
+
+  isCostCategorySelected(item: FinancialConfigItem): boolean {
+    return this.selectedCostCategoryKeys().includes(item.key);
+  }
+
+  toggleMetric(item: FinancialConfigItem, checked: boolean): void {
+    this.toggleSelection(this.selectedMetricKeys, this.financialMetricKey(item), checked);
+  }
+
+  toggleCostCategory(item: FinancialConfigItem, checked: boolean): void {
+    this.toggleSelection(this.selectedCostCategoryKeys, item.key, checked);
+  }
+
   onBusinessUnitChange(businessUnitId: string): void {
     this.form.business_unit_id = businessUnitId;
     if (!businessUnitId) return;
@@ -806,6 +929,30 @@ export class CreateInitiativeComponent {
   private withCurrentOption(options: string[], currentValue: string): string[] {
     const current = currentValue.trim();
     return this.normalizeConfigList(current ? [...options, current] : options);
+  }
+
+  private sortedFinancialItems(type: 'metric' | 'cost_category'): FinancialConfigItem[] {
+    const config = this.financialConfiguration();
+    if (!config) return [];
+    const groups = new Map(config.groups.map(group => [group.key, group]));
+    return config.items
+      .filter(item => item.item_type === type && item.is_active)
+      .sort((a, b) => {
+        const groupA = groups.get(a.group_key || '')?.display_order || 0;
+        const groupB = groups.get(b.group_key || '')?.display_order || 0;
+        return groupA - groupB || a.display_order - b.display_order || a.label.localeCompare(b.label);
+      });
+  }
+
+  private financialMetricKey(item: FinancialConfigItem): string {
+    return item.system_metric_key || item.key;
+  }
+
+  private toggleSelection(target: WritableSignal<string[]>, key: string, checked: boolean): void {
+    const current = new Set(target());
+    if (checked) current.add(key);
+    else current.delete(key);
+    target.set(Array.from(current));
   }
 
   labelize(value: string): string {
@@ -850,14 +997,35 @@ export class CreateInitiativeComponent {
 
     request.subscribe({
       next: result => {
-        this.submitting.set(false);
-        this.router.navigate(['/initiatives', result.id]);
+        const initiativeId = result.id || this.editId;
+        if (!initiativeId) {
+          this.submitting.set(false);
+          this.router.navigate(['/initiatives/pipeline']);
+          return;
+        }
+        this.saveFinancialSelections(initiativeId);
       },
       error: err => {
         this.submitting.set(false);
         this.error.set(this.errorText(err, this.editId
           ? 'Failed to save initiative. Please try again.'
           : 'Failed to create initiative. Please try again.'));
+      },
+    });
+  }
+
+  private saveFinancialSelections(initiativeId: string): void {
+    this.api.put(`/initiatives/${initiativeId}/financials/selections`, {
+      metric_keys: this.selectedMetricKeys(),
+      cost_category_keys: this.selectedCostCategoryKeys(),
+    }).subscribe({
+      next: () => {
+        this.submitting.set(false);
+        this.router.navigate(['/initiatives', initiativeId]);
+      },
+      error: err => {
+        this.submitting.set(false);
+        this.error.set(this.errorText(err, 'Initiative saved, but financial selections could not be updated.'));
       },
     });
   }

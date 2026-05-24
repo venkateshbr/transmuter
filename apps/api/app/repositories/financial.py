@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 from supabase import Client
@@ -37,6 +38,17 @@ class FinancialRepository:
             .execute()
         )
         return result.data or []
+
+    def get_initiative_period(self, initiative_id: str) -> dict | None:  # type: ignore[type-arg]
+        result = (
+            self._c.table("initiatives")
+            .select("id,stage,planned_start,planned_end")
+            .eq("tenant_id", self._tid)
+            .eq("id", initiative_id)
+            .maybe_single()
+            .execute()
+        )
+        return result.data if result and result.data else None
 
     def upsert_entry(self, initiative_id: str, data: dict) -> dict:  # type: ignore[type-arg]
         """Insert or update a single financial entry (unique on initiative_id + year + quarter)."""
@@ -75,6 +87,107 @@ class FinancialRepository:
             .execute()
         )
         return result.data or []
+
+    def list_metric_values(self, initiative_id: str) -> list[dict]:  # type: ignore[type-arg]
+        try:
+            result = (
+                self._c.table("financial_metric_values")
+                .select("*")
+                .eq("tenant_id", self._tid)
+                .eq("initiative_id", initiative_id)
+                .order("metric_key")
+                .order("year")
+                .order("quarter")
+                .order("month")
+                .execute()
+            )
+            return result.data or []
+        except Exception as exc:
+            if self._is_missing_table(exc, "financial_metric_values"):
+                return []
+            raise
+
+    def upsert_metric_values_batch(self, initiative_id: str, rows: list[dict]) -> list[dict]:  # type: ignore[type-arg]
+        saved = []
+        for row in rows:
+            row["tenant_id"] = self._tid
+            row["initiative_id"] = initiative_id
+            existing_rows = self._find_metric_values(initiative_id, row)
+            if existing_rows:
+                row["updated_at"] = datetime.now(UTC).isoformat()
+                result = None
+                for existing in existing_rows:
+                    result = (
+                        self._c.table("financial_metric_values")
+                        .update(row)
+                        .eq("tenant_id", self._tid)
+                        .eq("id", existing["id"])
+                        .execute()
+                    )
+            else:
+                row["id"] = str(uuid4())
+                result = self._c.table("financial_metric_values").insert(row).execute()
+            if result and result.data:
+                saved.append(result.data[0])
+        return saved
+
+    def list_financial_selections(self, initiative_id: str) -> list[dict]:  # type: ignore[type-arg]
+        try:
+            result = (
+                self._c.table("initiative_financial_selections")
+                .select("*")
+                .eq("tenant_id", self._tid)
+                .eq("initiative_id", initiative_id)
+                .execute()
+            )
+            return result.data or []
+        except Exception as exc:
+            if self._is_missing_table(exc, "initiative_financial_selections"):
+                return []
+            raise
+
+    def replace_financial_selections(
+        self,
+        initiative_id: str,
+        metric_keys: list[str],
+        cost_category_keys: list[str],
+        all_metric_keys: list[str] | None = None,
+        all_cost_category_keys: list[str] | None = None,
+    ) -> None:
+        (
+            self._c.table("initiative_financial_selections")
+            .delete()
+            .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
+            .execute()
+        )
+        active_metric_keys = set(metric_keys)
+        active_cost_keys = set(cost_category_keys)
+        metric_rows = sorted(set(all_metric_keys or metric_keys))
+        cost_rows = sorted(set(all_cost_category_keys or cost_category_keys))
+        rows = [
+            {
+                "id": str(uuid4()),
+                "tenant_id": self._tid,
+                "initiative_id": initiative_id,
+                "item_key": key,
+                "item_type": "metric",
+                "is_active": key in active_metric_keys,
+            }
+            for key in metric_rows
+        ] + [
+            {
+                "id": str(uuid4()),
+                "tenant_id": self._tid,
+                "initiative_id": initiative_id,
+                "item_key": key,
+                "item_type": "cost_category",
+                "is_active": key in active_cost_keys,
+            }
+            for key in cost_rows
+        ]
+        if rows:
+            self._c.table("initiative_financial_selections").insert(rows).execute()
 
     def create_cost_line(self, initiative_id: str, data: dict) -> dict:  # type: ignore[type-arg]
         data["id"] = str(uuid4())
@@ -275,6 +388,17 @@ class FinancialRepository:
             .eq("initiative_id", initiative_id)
             .execute()
         )
+        try:
+            (
+                self._c.table("financial_metric_values")
+                .delete()
+                .eq("tenant_id", self._tid)
+                .eq("initiative_id", initiative_id)
+                .execute()
+            )
+        except Exception as exc:
+            if not self._is_missing_table(exc, "financial_metric_values"):
+                raise
 
     def initiative_exists(self, initiative_id: str) -> bool:
         result = (
@@ -288,26 +412,24 @@ class FinancialRepository:
         return bool(result and result.data)
 
     def upsert_cost_lines_batch(self, initiative_id: str, rows: list[dict]) -> list[dict]:
-        """Upsert multiple cost lines at once."""
+        """Replace category-period cost values from the grid/import payload."""
         saved = []
         for row in rows:
             row["tenant_id"] = self._tid
             row["initiative_id"] = initiative_id
             existing_rows = self._find_cost_lines(initiative_id, row)
-            if existing_rows:
-                row["updated_at"] = datetime.now(UTC).isoformat()
-                result = None
-                for existing in existing_rows:
-                    result = (
-                        self._c.table("financial_cost_lines")
-                        .update(row)
-                        .eq("tenant_id", self._tid)
-                        .eq("id", existing["id"])
-                        .execute()
-                    )
-            else:
-                row["id"] = str(uuid4())
-                result = self._c.table("financial_cost_lines").insert(row).execute()
+            for existing in existing_rows:
+                (
+                    self._c.table("financial_cost_lines")
+                    .delete()
+                    .eq("tenant_id", self._tid)
+                    .eq("id", existing["id"])
+                    .execute()
+                )
+            if self._cost_row_is_zero(row):
+                continue
+            row["id"] = str(uuid4())
+            result = self._c.table("financial_cost_lines").insert(row).execute()
             if result.data:
                 saved.append(result.data[0])
         return saved
@@ -453,12 +575,37 @@ class FinancialRepository:
             .select("id")
             .eq("tenant_id", self._tid)
             .eq("initiative_id", initiative_id)
-            .eq("name", row["name"])
+            .eq("category_key", row.get("category_key", "other"))
             .eq("year", row["year"])
             .eq("is_recurring", row["is_recurring"])
         )
         query = self._match_period(query, row)
         result = query.execute()
+        return result.data or []
+
+    @staticmethod
+    def _cost_row_is_zero(row: dict) -> bool:  # type: ignore[type-arg]
+        return (
+            Decimal(str(row.get("amount_plan") or "0")) == 0
+            and Decimal(str(row.get("amount_actual") or "0")) == 0
+        )
+
+    def _find_metric_values(self, initiative_id: str, row: dict) -> list[dict]:  # type: ignore[type-arg]
+        query = (
+            self._c.table("financial_metric_values")
+            .select("id")
+            .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
+            .eq("metric_key", row["metric_key"])
+            .eq("year", row["year"])
+        )
+        query = self._match_period(query, row)
+        try:
+            result = query.execute()
+        except Exception as exc:
+            if self._is_missing_table(exc, "financial_metric_values"):
+                return []
+            raise
         return result.data or []
 
     @staticmethod
@@ -472,3 +619,10 @@ class FinancialRepository:
         else:
             query = query.eq("month", row["month"])
         return query
+
+    @staticmethod
+    def _is_missing_table(exc: Exception, table_name: str) -> bool:
+        text = str(exc)
+        return table_name in text and (
+            "Could not find the table" in text or "does not exist" in text or "schema cache" in text
+        )

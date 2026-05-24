@@ -3,11 +3,14 @@ import { CommonModule } from '@angular/common';
 import { ApiService } from '../../../core/services/api.service';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { CompactFilterToolbarComponent, type CompactFilterGroup } from '../../../shared/components/compact-filter-toolbar/compact-filter-toolbar.component';
+
+const MILESTONE_FILTER_STATE_KEY = 'transmuter.filters.progress.milestones';
 
 @Component({
   selector: 'app-milestones',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, CompactFilterToolbarComponent],
   template: `
     <div class="p-8 space-y-8 animate-fade-in" style="background:var(--t-bg)">
       
@@ -24,18 +27,18 @@ import { RouterLink } from '@angular/router';
              <button class="px-4 py-1 text-xs font-medium rounded-md bg-[var(--t-surface)] text-[var(--t-accent)] shadow-sm">Milestones</button>
              <a routerLink="/progress/roadmap" class="px-4 py-1 text-xs font-medium rounded-md text-[var(--t-text-tertiary)] hover:text-[var(--t-text-primary)] transition-colors">Roadmap</a>
              <a routerLink="/progress/action-items" class="px-4 py-1 text-xs font-medium rounded-md text-[var(--t-text-tertiary)] hover:text-[var(--t-text-primary)] transition-colors">Action Items</a>
-             <a routerLink="/progress/dependencies" class="px-4 py-1 text-xs font-medium rounded-md text-[var(--t-text-tertiary)] hover:text-[var(--t-text-primary)] transition-colors">Dependencies</a>
           </div>
-          <select [(ngModel)]="statusFilter" (change)="applyFilters()" class="input-field text-xs h-9 w-32">
-            <option value="">All Status</option>
-            <option value="not_started">Not Started</option>
-            <option value="in_progress">In Progress</option>
-            <option value="overdue">Overdue</option>
-            <option value="complete">Complete</option>
-          </select>
-          <input [(ngModel)]="searchQuery" (input)="applyFilters()" placeholder="Search..." class="input-field text-xs h-9 w-48" />
         </div>
       </div>
+
+      <app-compact-filter-toolbar
+        [searchValue]="searchQuery"
+        searchPlaceholder="Search milestones"
+        [groups]="milestoneFilterGroups()"
+        [hasFilters]="hasMilestoneFilters()"
+        (searchValueChange)="onSearchChange($event)"
+        (groupSelectionChange)="onFilterGroupChange($event)"
+        (clearFilters)="clearMilestoneFilters()" />
 
       <!-- Stats Summary -->
       <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -157,6 +160,7 @@ export class MilestonesComponent implements OnInit {
   statusFilter = '';
 
   ngOnInit() {
+    this.restoreMilestoneFilters();
     this.api.get<any>('/portfolio/milestones').subscribe(res => {
       this.milestones.set(res.items || []);
       this.stats.set(res.stats || null);
@@ -165,6 +169,7 @@ export class MilestonesComponent implements OnInit {
   }
 
   applyFilters() {
+    this.persistMilestoneFilters();
     let filtered = [...this.milestones()];
     
     if (this.statusFilter) {
@@ -180,6 +185,62 @@ export class MilestonesComponent implements OnInit {
     }
     
     this.filteredMilestones.set(filtered);
+  }
+
+  milestoneFilterGroups(): CompactFilterGroup[] {
+    return [
+      {
+        key: 'status',
+        label: 'Status',
+        mode: 'single',
+        selected: this.statusFilter ? [this.statusFilter] : [],
+        options: [
+          { id: 'not_started', name: 'Not Started' },
+          { id: 'in_progress', name: 'In Progress' },
+          { id: 'overdue', name: 'Overdue' },
+          { id: 'complete', name: 'Complete' },
+        ],
+      },
+    ];
+  }
+
+  onSearchChange(value: string): void {
+    this.searchQuery = value;
+    this.applyFilters();
+  }
+
+  onFilterGroupChange(change: { key: string; selected: string[] }): void {
+    if (change.key === 'status') this.statusFilter = change.selected[0] || '';
+    this.applyFilters();
+  }
+
+  clearMilestoneFilters(): void {
+    this.searchQuery = '';
+    this.statusFilter = '';
+    this.applyFilters();
+  }
+
+  hasMilestoneFilters(): boolean {
+    return Boolean(this.searchQuery.trim() || this.statusFilter);
+  }
+
+  private persistMilestoneFilters(): void {
+    localStorage.setItem(MILESTONE_FILTER_STATE_KEY, JSON.stringify({
+      searchQuery: this.searchQuery,
+      statusFilter: this.statusFilter,
+    }));
+  }
+
+  private restoreMilestoneFilters(): void {
+    try {
+      const raw = localStorage.getItem(MILESTONE_FILTER_STATE_KEY);
+      if (!raw) return;
+      const state = JSON.parse(raw) as Record<string, string>;
+      this.searchQuery = typeof state['searchQuery'] === 'string' ? state['searchQuery'] : '';
+      this.statusFilter = typeof state['statusFilter'] === 'string' ? state['statusFilter'] : '';
+    } catch {
+      localStorage.removeItem(MILESTONE_FILTER_STATE_KEY);
+    }
   }
 
   getStatusClass(status: string): string {

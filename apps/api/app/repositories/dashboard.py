@@ -11,7 +11,7 @@ class DashboardRepository:
         self, owner_user_id: str | None = None
     ) -> list[dict[str, Any]]:
         select = (
-            "id, name, initiative_code, stage, rag_status, pressure_score, workstream_id, tag, "
+            "id, name, initiative_code, stage, rag_status, priority, pressure_score, workstream_id, tag, "
             "workstreams(name, business_unit_id, business_units(name))"
         )
         res = (

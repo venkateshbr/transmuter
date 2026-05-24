@@ -252,6 +252,114 @@ class MeetingRepository:
         )
         return result.data or []
 
+    def get_carry_forward_action_items(
+        self,
+        meeting_id: str,
+        current_session_id: str,
+    ) -> list[dict]:
+        sessions = [s for s in self.get_sessions(meeting_id) if s["id"] != current_session_id]
+        session_ids = [s["id"] for s in sessions]
+        if not session_ids:
+            return []
+        result = (
+            self._c.table("action_items")
+            .select(
+                "*, users!action_items_assignee_id_fkey(display_name), "
+                "initiatives(name, initiative_code), "
+                "meeting_sessions(session_date, meeting_id, meetings(name))"
+            )
+            .eq("tenant_id", self._tid)
+            .in_("session_id", session_ids)
+            .order("due_date")
+            .order("created_at", desc=True)
+            .execute()
+        )
+        return [
+            item
+            for item in (result.data or [])
+            if item.get("status") not in {"completed", "cancelled"}
+        ]
+
+    def list_session_artifacts(self, session_id: str) -> list[dict]:
+        result = (
+            self._c.table("meeting_artifacts")
+            .select(
+                "*, "
+                "agenda_items(text, sort_order), "
+                "initiatives(name, initiative_code, rag_status, stage), "
+                "users!meeting_artifacts_assignee_id_fkey(display_name)"
+            )
+            .eq("tenant_id", self._tid)
+            .eq("session_id", session_id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        return result.data or []
+
+    def get_artifact(self, artifact_id: str) -> dict | None:
+        result = (
+            self._c.table("meeting_artifacts")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .eq("id", artifact_id)
+            .maybe_single()
+            .execute()
+        )
+        return result.data if result else None
+
+    def create_artifact(self, data: dict) -> dict:
+        result = (
+            self._c.table("meeting_artifacts").insert({"tenant_id": self._tid, **data}).execute()
+        )
+        row = result.data[0] if result.data else {}
+        return self.get_artifact(row["id"]) if row else {}
+
+    def update_artifact(self, artifact_id: str, data: dict) -> dict:
+        data["updated_at"] = datetime.now(UTC).isoformat()
+        result = (
+            self._c.table("meeting_artifacts")
+            .update(data)
+            .eq("tenant_id", self._tid)
+            .eq("id", artifact_id)
+            .execute()
+        )
+        row = result.data[0] if result.data else {}
+        return self.get_artifact(row["id"]) if row else {}
+
+    def delete_artifact(self, artifact_id: str) -> None:
+        (
+            self._c.table("meeting_artifacts")
+            .delete()
+            .eq("tenant_id", self._tid)
+            .eq("id", artifact_id)
+            .execute()
+        )
+
+    def upsert_external_event(self, meeting_id: str, provider: str, data: dict) -> dict:
+        payload = {
+            "tenant_id": self._tid,
+            "meeting_id": meeting_id,
+            "provider": provider,
+            **data,
+            "updated_at": datetime.now(UTC).isoformat(),
+        }
+        result = (
+            self._c.table("meeting_external_events")
+            .upsert(payload, on_conflict="meeting_id,provider")
+            .execute()
+        )
+        return result.data[0] if result.data else {}
+
+    def get_external_events(self, meeting_id: str) -> list[dict]:
+        result = (
+            self._c.table("meeting_external_events")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .eq("meeting_id", meeting_id)
+            .execute()
+        )
+        return result.data or []
+
     def list_action_items(self) -> list[dict]:
         result = (
             self._c.table("action_items")

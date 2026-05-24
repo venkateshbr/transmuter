@@ -6,9 +6,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import Response
+from supabase import Client
 
 from app.core.auth import CurrentUser, get_current_user
-from app.core.database import get_supabase_admin
+from app.core.database import get_supabase_request_client
 from app.core.rbac import (
     assert_can_manage_initiatives,
     assert_can_view_initiative,
@@ -31,6 +32,8 @@ from app.domain.financials import (
     FinancialGridUpdate,
     FinancialMetricDeactivateRequest,
     FinancialScenario,
+    InitiativeFinancialSelections,
+    InitiativeFinancialSelectionsResponse,
     PortfolioFinancialContributorsResponse,
     PortfolioFinancialsResponse,
     PortfolioGranularity,
@@ -42,8 +45,11 @@ from app.services.financial import FinancialService
 router = APIRouter(tags=["financials"])
 
 
-def _svc(current_user: Annotated[CurrentUser, Depends(get_current_user)]) -> FinancialService:
-    return FinancialService(get_supabase_admin(), current_user.tenant_id)
+def _svc(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
+) -> FinancialService:
+    return FinancialService(client, current_user.tenant_id)
 
 
 # ── Financial Grid ────────────────────────────────────────────────────────────
@@ -54,9 +60,10 @@ async def get_financials(
     initiative_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> FinancialGridResponse:
     """Return full financial grid (2026–2030, quarterly) for an initiative."""
-    assert_can_view_initiative(get_supabase_admin(), current_user, initiative_id)
+    assert_can_view_initiative(client, current_user, initiative_id)
     return svc.get_financial_grid(initiative_id)
 
 
@@ -72,14 +79,43 @@ async def update_financials(
     return svc.update_financial_grid(initiative_id, body)
 
 
+@router.get(
+    "/initiatives/{initiative_id}/financials/selections",
+    response_model=InitiativeFinancialSelectionsResponse,
+)
+async def get_financial_selections(
+    initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
+) -> InitiativeFinancialSelectionsResponse:
+    assert_can_view_initiative(client, current_user, initiative_id)
+    return svc.get_initiative_selections(initiative_id)
+
+
+@router.put(
+    "/initiatives/{initiative_id}/financials/selections",
+    response_model=InitiativeFinancialSelectionsResponse,
+)
+async def update_financial_selections(
+    initiative_id: str,
+    body: InitiativeFinancialSelections,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> InitiativeFinancialSelectionsResponse:
+    assert_can_manage_initiatives(current_user)
+    return svc.update_initiative_selections(initiative_id, body)
+
+
 @router.get("/initiatives/{initiative_id}/financials/export.xlsx")
 async def export_financials_workbook(
     initiative_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> Response:
     """Export financial entries and cost lines as an XLSX workbook."""
-    assert_can_view_initiative(get_supabase_admin(), current_user, initiative_id)
+    assert_can_view_initiative(client, current_user, initiative_id)
     workbook = svc.export_workbook(initiative_id)
     return Response(
         content=workbook,
@@ -118,8 +154,9 @@ async def list_cost_lines(
     initiative_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> CostLineListResponse:
-    assert_can_view_initiative(get_supabase_admin(), current_user, initiative_id)
+    assert_can_view_initiative(client, current_user, initiative_id)
     return svc.list_cost_lines(initiative_id)
 
 
@@ -235,9 +272,10 @@ async def get_value_bridge(
     initiative_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> ValueBridgeResponse:
     """Value Bridge for a single initiative."""
-    assert_can_view_initiative(get_supabase_admin(), current_user, initiative_id)
+    assert_can_view_initiative(client, current_user, initiative_id)
     return svc.get_value_bridge(initiative_id)
 
 
@@ -249,9 +287,10 @@ async def get_scenario_summary(
     initiative_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
     scenario: FinancialScenario = Query("base"),
 ) -> ScenarioFinancialSummary:
-    assert_can_view_initiative(get_supabase_admin(), current_user, initiative_id)
+    assert_can_view_initiative(client, current_user, initiative_id)
     return svc.get_scenario_summary(initiative_id, scenario)
 
 
@@ -263,9 +302,10 @@ async def get_break_even(
     initiative_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
     scenario: FinancialScenario = Query("base"),
 ) -> BreakEvenResponse:
-    assert_can_view_initiative(get_supabase_admin(), current_user, initiative_id)
+    assert_can_view_initiative(client, current_user, initiative_id)
     return svc.get_break_even(initiative_id, scenario)
 
 
@@ -277,8 +317,9 @@ async def list_cell_assumptions(
     initiative_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> FinancialCellAssumptionListResponse:
-    assert_can_view_initiative(get_supabase_admin(), current_user, initiative_id)
+    assert_can_view_initiative(client, current_user, initiative_id)
     return svc.list_cell_assumptions(initiative_id)
 
 

@@ -5,9 +5,10 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
+from supabase import Client
 
 from app.core.auth import CurrentUser, get_current_user
-from app.core.database import get_supabase_admin
+from app.core.database import get_supabase_request_client
 from app.core.rbac import (
     assert_can_manage_initiatives,
     assert_can_view_initiative,
@@ -39,8 +40,9 @@ router = APIRouter(tags=["executive-control"])
 
 def _svc(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> ExecutiveControlService:
-    return ExecutiveControlService(get_supabase_admin(), current_user.tenant_id)
+    return ExecutiveControlService(client, current_user.tenant_id)
 
 
 def _filters(
@@ -112,8 +114,9 @@ async def list_dependencies_for_initiative(
     initiative_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[ExecutiveControlService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> InitiativeDependencyListResponse:
-    assert_can_view_initiative(get_supabase_admin(), current_user, initiative_id)
+    assert_can_view_initiative(client, current_user, initiative_id)
     return svc.list_dependencies(current_user, initiative_id=initiative_id)
 
 
@@ -220,8 +223,9 @@ async def list_value_realization_notes(
     initiative_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[ExecutiveControlService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> list[ValueRealizationNoteItem]:
-    assert_can_view_initiative(get_supabase_admin(), current_user, initiative_id)
+    assert_can_view_initiative(client, current_user, initiative_id)
     return svc.list_value_notes(initiative_id, current_user)
 
 
@@ -235,8 +239,9 @@ async def create_value_realization_note(
     body: ValueRealizationNoteCreate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[ExecutiveControlService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> ValueRealizationNoteItem:
-    assert_can_view_initiative(get_supabase_admin(), current_user, initiative_id)
+    assert_can_view_initiative(client, current_user, initiative_id)
     return svc.create_value_note(initiative_id, body, current_user)
 
 

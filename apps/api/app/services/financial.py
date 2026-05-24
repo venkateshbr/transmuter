@@ -5,6 +5,7 @@ All financial calculations use Decimal arithmetic. Never float.
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
@@ -28,11 +29,16 @@ from app.domain.financials import (
     FinancialConfigurationResponse,
     FinancialConfigurationUpdate,
     FinancialEntryRow,
+    FinancialEntryUpdate,
     FinancialGridResponse,
     FinancialGridUpdate,
     FinancialMetricDeactivateRequest,
+    FinancialMetricValueRow,
+    FinancialMetricValueUpdate,
     FinancialScenario,
     FinancialSummary,
+    InitiativeFinancialSelections,
+    InitiativeFinancialSelectionsResponse,
     PortfolioFinancialBreakdown,
     PortfolioFinancialContributorsResponse,
     PortfolioFinancialCostLineContribution,
@@ -113,25 +119,43 @@ class FinancialService:
 
     def get_financial_grid(self, initiative_id: str) -> FinancialGridResponse:
         """Return the full financial grid with summary cards."""
+        locked, lock_reason = self._financial_lock_state(initiative_id)
+        if not locked:
+            self._migrate_existing_grid_to_planned_window(initiative_id)
         rows = self._repo.get_entries(initiative_id)
+        costs = self._repo.list_cost_lines(initiative_id)
+        raw_metric_values = self._repo.list_metric_values(initiative_id)
         entries = [self._to_entry_row(r) for r in rows]
-        summary = self._compute_summary(rows, initiative_id)
+        metric_values = [self._to_metric_value_row(r) for r in raw_metric_values]
+        selections = self._resolve_selections(initiative_id, rows, costs, raw_metric_values)
+        scoped_rows, scoped_costs = self._apply_financial_scope(rows, costs, selections)
+        summary = self._compute_summary(scoped_rows, initiative_id, scoped_costs)
         return FinancialGridResponse(
             initiative_id=initiative_id,
             entries=entries,
+            metric_values=metric_values,
+            selections=selections,
+            locked=locked,
+            lock_reason=lock_reason,
             summary=summary,
         )
 
     def get_financial_summary(self, initiative_id: str) -> FinancialSummary:
         """Aggregated summary cards only."""
         rows = self._repo.get_entries(initiative_id)
-        return self._compute_summary(rows, initiative_id)
+        costs = self._repo.list_cost_lines(initiative_id)
+        metric_values = self._repo.list_metric_values(initiative_id)
+        selections = self._resolve_selections(initiative_id, rows, costs, metric_values)
+        scoped_rows, scoped_costs = self._apply_financial_scope(rows, costs, selections)
+        return self._compute_summary(scoped_rows, initiative_id, scoped_costs)
 
     def update_financial_grid(
         self, initiative_id: str, data: FinancialGridUpdate
     ) -> FinancialGridResponse:
         """Upsert the full financial grid."""
         self._ensure_tenant_initiative(initiative_id)
+        self._assert_financials_editable(initiative_id)
+        data = self._normalize_grid_to_planned_window(initiative_id, data)
         db_rows: list[dict[str, object]] = []
         for entry in data.entries:
             row: dict[str, object] = {
@@ -197,6 +221,24 @@ class FinancialService:
                     }
                 )
             self._repo.upsert_cost_lines_batch(initiative_id, cost_rows)
+
+        if data.metric_values:
+            metric_rows = []
+            for metric in data.metric_values:
+                metric_rows.append(
+                    {
+                        "metric_key": metric.metric_key,
+                        "year": metric.year,
+                        "quarter": metric.quarter,
+                        "month": metric.month,
+                        "value_base": _money(metric.value_base),
+                        "value_high": _money(metric.value_high),
+                        "value_actual": _money(metric.value_actual)
+                        if metric.value_actual is not None
+                        else None,
+                    }
+                )
+            self._repo.upsert_metric_values_batch(initiative_id, metric_rows)
 
         return self.get_financial_grid(initiative_id)
 
@@ -344,6 +386,41 @@ class FinancialService:
         self._repo.deactivate_metric(data.metric_key)
         return {"metric_key": data.metric_key, "is_active": False}
 
+    def get_initiative_selections(
+        self, initiative_id: str
+    ) -> InitiativeFinancialSelectionsResponse:
+        self._ensure_tenant_initiative(initiative_id)
+        entries = self._repo.get_entries(initiative_id)
+        costs = self._repo.list_cost_lines(initiative_id)
+        metric_values = self._repo.list_metric_values(initiative_id)
+        locked, lock_reason = self._financial_lock_state(initiative_id)
+        config = self.get_configuration()
+        return InitiativeFinancialSelectionsResponse(
+            available=config,
+            selected=self._resolve_selections(initiative_id, entries, costs, metric_values, config),
+            locked=locked,
+            lock_reason=lock_reason,
+        )
+
+    def update_initiative_selections(
+        self,
+        initiative_id: str,
+        selections: InitiativeFinancialSelections,
+    ) -> InitiativeFinancialSelectionsResponse:
+        self._ensure_tenant_initiative(initiative_id)
+        config = self.get_configuration()
+        valid_metric_keys, valid_cost_keys = self._active_selection_keys(config)
+        metric_keys = [key for key in selections.metric_keys if key in valid_metric_keys]
+        cost_keys = [key for key in selections.cost_category_keys if key in valid_cost_keys]
+        self._repo.replace_financial_selections(
+            initiative_id,
+            metric_keys,
+            cost_keys,
+            sorted(valid_metric_keys),
+            sorted(valid_cost_keys),
+        )
+        return self.get_initiative_selections(initiative_id)
+
     def get_portfolio_financials(
         self,
         granularity: PortfolioGranularity,
@@ -369,7 +446,7 @@ class FinancialService:
         ]
         costs = [
             row
-            for row in self._repo.get_all_cost_lines()
+            for row in self._reporting_cost_lines(self._repo.get_all_cost_lines())
             if row.get("initiative_id") in initiatives
             and (year is None or row.get("year") == year)
             and (not category_key or row.get("category_key", "other") == category_key)
@@ -407,7 +484,7 @@ class FinancialService:
         ]
         costs = [
             row
-            for row in self._repo.get_all_cost_lines()
+            for row in self._reporting_cost_lines(self._repo.get_all_cost_lines())
             if row.get("initiative_id") in initiatives
             and row.get("year") == effective_year
             and self._portfolio_row_period_label(row, granularity) == period
@@ -428,8 +505,17 @@ class FinancialService:
 
     def get_value_bridge(self, initiative_id: str) -> ValueBridgeResponse:
         """Value Bridge for a single initiative."""
-        entries = self._reporting_rows(self._repo.get_entries(initiative_id))
-        cost_lines = self._repo.list_cost_lines(initiative_id)
+        raw_entries = self._repo.get_entries(initiative_id)
+        raw_cost_lines = self._repo.list_cost_lines(initiative_id)
+        metric_values = self._repo.list_metric_values(initiative_id)
+        selections = self._resolve_selections(
+            initiative_id, raw_entries, raw_cost_lines, metric_values
+        )
+        scoped_entries, scoped_cost_lines = self._apply_financial_scope(
+            raw_entries, raw_cost_lines, selections
+        )
+        entries = self._reporting_rows(scoped_entries)
+        cost_lines = self._reporting_cost_lines(scoped_cost_lines)
         return self._compute_value_bridge(entries, cost_lines, initiative_id)
 
     def get_scenario_summary(
@@ -437,8 +523,17 @@ class FinancialService:
         initiative_id: str,
         scenario: FinancialScenario,
     ) -> ScenarioFinancialSummary:
-        entries = self._reporting_rows(self._repo.get_entries(initiative_id))
-        cost_lines = self._repo.list_cost_lines(initiative_id)
+        raw_entries = self._repo.get_entries(initiative_id)
+        raw_cost_lines = self._repo.list_cost_lines(initiative_id)
+        metric_values = self._repo.list_metric_values(initiative_id)
+        selections = self._resolve_selections(
+            initiative_id, raw_entries, raw_cost_lines, metric_values
+        )
+        scoped_entries, scoped_cost_lines = self._apply_financial_scope(
+            raw_entries, raw_cost_lines, selections
+        )
+        entries = self._reporting_rows(scoped_entries)
+        cost_lines = self._reporting_cost_lines(scoped_cost_lines)
         return self._compute_scenario_summary(entries, cost_lines, scenario)
 
     def get_break_even(
@@ -446,8 +541,17 @@ class FinancialService:
         initiative_id: str,
         scenario: FinancialScenario,
     ) -> BreakEvenResponse:
-        entries = self._reporting_rows(self._repo.get_entries(initiative_id))
-        cost_lines = self._repo.list_cost_lines(initiative_id)
+        raw_entries = self._repo.get_entries(initiative_id)
+        raw_cost_lines = self._repo.list_cost_lines(initiative_id)
+        metric_values = self._repo.list_metric_values(initiative_id)
+        selections = self._resolve_selections(
+            initiative_id, raw_entries, raw_cost_lines, metric_values
+        )
+        scoped_entries, scoped_cost_lines = self._apply_financial_scope(
+            raw_entries, raw_cost_lines, selections
+        )
+        entries = self._reporting_rows(scoped_entries)
+        cost_lines = self._reporting_cost_lines(scoped_cost_lines)
         periods = sorted(
             {
                 self._period_key(row)
@@ -517,7 +621,7 @@ class FinancialService:
     def get_portfolio_value_bridge(self) -> ValueBridgeResponse:
         """Portfolio-level Value Bridge across all initiatives."""
         entries = self._reporting_rows(self._repo.get_all_entries())
-        cost_lines = self._repo.get_all_cost_lines()
+        cost_lines = self._reporting_cost_lines(self._repo.get_all_cost_lines())
         return self._compute_value_bridge(entries, cost_lines, initiative_id=None)
 
     def list_cell_assumptions(self, initiative_id: str) -> FinancialCellAssumptionListResponse:
@@ -599,6 +703,424 @@ class FinancialService:
         )
 
     @staticmethod
+    def _to_metric_value_row(row: dict) -> FinancialMetricValueRow:  # type: ignore[type-arg]
+        def _actual(key: str) -> str | None:
+            value = row.get(key)
+            return _money(value) if value is not None else None
+
+        return FinancialMetricValueRow(
+            metric_key=row["metric_key"],
+            year=row["year"],
+            quarter=row.get("quarter"),
+            month=row.get("month"),
+            value_base=_money(row.get("value_base")),
+            value_high=_money(row.get("value_high")),
+            value_actual=_actual("value_actual"),
+        )
+
+    def _financial_lock_state(self, initiative_id: str) -> tuple[bool, str | None]:
+        initiative = self._repo.get_initiative_period(initiative_id)
+        stage = str((initiative or {}).get("stage") or "")
+        if stage and stage != "scoping":
+            return True, "Financials are locked after the initiative moves to execution."
+        return False, None
+
+    def _assert_financials_editable(self, initiative_id: str) -> None:
+        locked, reason = self._financial_lock_state(initiative_id)
+        if locked:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=reason or "Financials are locked for this initiative.",
+            )
+
+    def _resolve_selections(
+        self,
+        initiative_id: str,
+        entries: list[dict],  # type: ignore[type-arg]
+        costs: list[dict],  # type: ignore[type-arg]
+        metric_values: list[dict],  # type: ignore[type-arg]
+        config: FinancialConfigurationResponse | None = None,
+    ) -> InitiativeFinancialSelections:
+        valid_metric_keys, valid_cost_keys = self._active_selection_keys(config)
+        selection_rows = self._repo.list_financial_selections(initiative_id)
+        if selection_rows:
+            metric_keys = {
+                row["item_key"]
+                for row in selection_rows
+                if row.get("item_type") == "metric"
+                and row.get("is_active", True)
+                and row["item_key"] in valid_metric_keys
+            }
+            cost_keys = {
+                row["item_key"]
+                for row in selection_rows
+                if row.get("item_type") == "cost_category"
+                and row.get("is_active", True)
+                and row["item_key"] in valid_cost_keys
+            }
+        else:
+            metric_keys = set(self._default_metric_keys())
+            cost_keys = set(self._default_cost_category_keys())
+            for row in entries:
+                self._add_data_bearing_metric_keys(
+                    metric_keys,
+                    row,
+                    [
+                        "revenue_uplift",
+                        "revenue_uplift_pct",
+                        "gross_margin",
+                        "gm_pct",
+                        "gm_uplift",
+                        "gm_uplift_pct",
+                        "cogs",
+                        "cogs_pct",
+                    ],
+                )
+            for row in metric_values:
+                if (
+                    self._metric_value_has_value(row)
+                    and str(row["metric_key"]) in valid_metric_keys
+                ):
+                    metric_keys.add(str(row["metric_key"]))
+
+            for row in costs:
+                category_key = str(row.get("category_key") or "other")
+                if self._cost_line_has_value(row) and category_key in valid_cost_keys:
+                    cost_keys.add(category_key)
+
+        return InitiativeFinancialSelections(
+            metric_keys=sorted(metric_keys & valid_metric_keys),
+            cost_category_keys=sorted(cost_keys & valid_cost_keys),
+        )
+
+    def _active_selection_keys(
+        self,
+        config: FinancialConfigurationResponse | None = None,
+    ) -> tuple[set[str], set[str]]:
+        config = config or self.get_configuration()
+        return (
+            {
+                item.system_metric_key or item.key
+                for item in config.items
+                if item.item_type == "metric" and item.is_active
+            },
+            {
+                item.key
+                for item in config.items
+                if item.item_type == "cost_category" and item.is_active
+            },
+        )
+
+    def initialize_default_selections(self, initiative_id: str) -> None:
+        valid_metric_keys, valid_cost_keys = self._active_selection_keys()
+        self._repo.replace_financial_selections(
+            initiative_id,
+            self._default_metric_keys(),
+            self._default_cost_category_keys(),
+            sorted(valid_metric_keys),
+            sorted(valid_cost_keys),
+        )
+
+    @staticmethod
+    def _default_metric_keys() -> list[str]:
+        return [
+            "revenue_uplift_base",
+            "revenue_uplift_high",
+            "revenue_uplift_actual",
+            "gm_uplift_base",
+            "gm_uplift_high",
+            "gm_uplift_actual",
+        ]
+
+    @staticmethod
+    def _add_data_bearing_metric_keys(
+        metric_keys: set[str],
+        row: dict,  # type: ignore[type-arg]
+        prefixes: list[str],
+    ) -> None:
+        for prefix in prefixes:
+            fields = [f"{prefix}_base", f"{prefix}_high", f"{prefix}_actual"]
+            if any(_dec(row.get(field)) != Decimal("0") for field in fields):
+                metric_keys.update(fields)
+
+    @staticmethod
+    def _default_cost_category_keys() -> list[str]:
+        return ["implementation", "maintenance", "other"]
+
+    def _apply_financial_scope(
+        self,
+        entries: list[dict],  # type: ignore[type-arg]
+        costs: list[dict],  # type: ignore[type-arg]
+        selections: InitiativeFinancialSelections,
+    ) -> tuple[list[dict], list[dict]]:  # type: ignore[type-arg]
+        selected_metrics = set(selections.metric_keys)
+        selected_costs = set(selections.cost_category_keys)
+        scoped_entries = [
+            self._entry_with_inactive_metrics_zeroed(row, selected_metrics) for row in entries
+        ]
+        scoped_costs = [
+            row for row in costs if str(row.get("category_key") or "other") in selected_costs
+        ]
+        return scoped_entries, scoped_costs
+
+    @staticmethod
+    def _entry_with_inactive_metrics_zeroed(
+        row: dict,  # type: ignore[type-arg]
+        selected_metrics: set[str],
+    ) -> dict:  # type: ignore[type-arg]
+        scoped = dict(row)
+        for field in _ENTRY_FIELDS:
+            if field not in selected_metrics:
+                scoped[field] = None if field.endswith("_actual") else "0"
+        return scoped
+
+    def _migrate_existing_grid_to_planned_window(self, initiative_id: str) -> None:
+        initiative = self._repo.get_initiative_period(initiative_id)
+        start, end = self._planned_month_bounds(initiative)
+        if start is None or end is None:
+            return
+
+        rows = self._repo.get_entries(initiative_id)
+        costs = self._repo.list_cost_lines(initiative_id)
+        metric_values = self._repo.list_metric_values(initiative_id)
+        if not any(
+            self._period_outside_window(row, start, end) for row in [*rows, *costs, *metric_values]
+        ):
+            return
+
+        normalized = self._normalize_grid_to_planned_window(
+            initiative_id,
+            FinancialGridUpdate(
+                entries=[FinancialEntryUpdate(**self._entry_update_payload(row)) for row in rows],
+                cost_lines=[CostLineCreate(**self._cost_line_update_payload(row)) for row in costs],
+                metric_values=[
+                    FinancialMetricValueUpdate(**self._metric_value_update_payload(row))
+                    for row in metric_values
+                ],
+            ),
+        )
+
+        self._repo.delete_grid(initiative_id)
+        if normalized.entries:
+            self._repo.upsert_entries_batch(
+                initiative_id,
+                [self._entry_write_payload(entry) for entry in normalized.entries],
+            )
+        if normalized.cost_lines:
+            self._repo.upsert_cost_lines_batch(
+                initiative_id,
+                [self._cost_line_write_payload(cost) for cost in normalized.cost_lines],
+            )
+        if normalized.metric_values:
+            self._repo.upsert_metric_values_batch(
+                initiative_id,
+                [self._metric_value_write_payload(metric) for metric in normalized.metric_values],
+            )
+
+    @staticmethod
+    def _period_outside_window(row: dict, start: int, end: int) -> bool:  # type: ignore[type-arg]
+        month = row.get("month")
+        quarter = row.get("quarter")
+        if month is None:
+            row_month = (int(quarter) - 1) * 3 + 1 if quarter is not None else 1
+        else:
+            row_month = int(month)
+        key = int(row["year"]) * 12 + row_month
+        return key < start or key > end
+
+    @staticmethod
+    def _entry_update_payload(row: dict) -> dict:  # type: ignore[type-arg]
+        payload = {
+            "year": row["year"],
+            "quarter": row.get("quarter"),
+            "month": row.get("month"),
+        }
+        for field in FinancialEntryUpdate.model_fields:
+            if field in payload:
+                continue
+            value = row.get(field)
+            if value is not None:
+                payload[field] = value
+        return payload
+
+    @staticmethod
+    def _cost_line_update_payload(row: dict) -> dict:  # type: ignore[type-arg]
+        return {
+            "name": row.get("name") or "Cost (Grid)",
+            "category_key": row.get("category_key") or "other",
+            "year": row["year"],
+            "quarter": row.get("quarter"),
+            "month": row.get("month"),
+            "amount_plan": row.get("amount_plan") or "0",
+            "amount_actual": row.get("amount_actual"),
+            "is_recurring": bool(row.get("is_recurring")),
+        }
+
+    @staticmethod
+    def _metric_value_update_payload(row: dict) -> dict:  # type: ignore[type-arg]
+        return {
+            "metric_key": row["metric_key"],
+            "year": row["year"],
+            "quarter": row.get("quarter"),
+            "month": row.get("month"),
+            "value_base": row.get("value_base") or "0",
+            "value_high": row.get("value_high") or "0",
+            "value_actual": row.get("value_actual"),
+        }
+
+    @staticmethod
+    def _entry_write_payload(entry: FinancialEntryUpdate) -> dict[str, object]:
+        row: dict[str, object] = {
+            "year": entry.year,
+            "quarter": entry.quarter,
+            "month": entry.month,
+        }
+        for field_name in FinancialEntryUpdate.model_fields:
+            if field_name in {"year", "quarter", "month"}:
+                continue
+            value = getattr(entry, field_name)
+            row[field_name] = _money(value) if value is not None else None
+        return row
+
+    @staticmethod
+    def _cost_line_write_payload(cost: CostLineCreate) -> dict[str, object]:
+        return {
+            "name": cost.name,
+            "category_key": cost.category_key,
+            "year": cost.year,
+            "quarter": cost.quarter,
+            "month": cost.month,
+            "amount_plan": _money(cost.amount_plan),
+            "amount_actual": _money(cost.amount_actual) if cost.amount_actual is not None else None,
+            "is_recurring": cost.is_recurring,
+        }
+
+    @staticmethod
+    def _metric_value_write_payload(metric: FinancialMetricValueUpdate) -> dict[str, object]:
+        return {
+            "metric_key": metric.metric_key,
+            "year": metric.year,
+            "quarter": metric.quarter,
+            "month": metric.month,
+            "value_base": _money(metric.value_base),
+            "value_high": _money(metric.value_high),
+            "value_actual": _money(metric.value_actual)
+            if metric.value_actual is not None
+            else None,
+        }
+
+    def _normalize_grid_to_planned_window(
+        self,
+        initiative_id: str,
+        data: FinancialGridUpdate,
+    ) -> FinancialGridUpdate:
+        initiative = self._repo.get_initiative_period(initiative_id)
+        first_month = self._first_planned_month(initiative)
+        if first_month is None:
+            return data
+
+        start, end = self._planned_month_bounds(initiative)
+        if start is None or end is None:
+            return data
+
+        target_year, target_month = first_month
+
+        def normalize_period(row: object) -> tuple[int, int | None, int | None]:
+            year = int(row.year)
+            month = row.month
+            quarter = row.quarter
+            if month is None:
+                row_month = (quarter - 1) * 3 + 1 if quarter is not None else 1
+            else:
+                row_month = int(month)
+            key = year * 12 + row_month
+            if start <= key <= end:
+                return year, month, quarter
+            return target_year, target_month, None
+
+        entry_map: dict[tuple[int, int | None, int | None], dict[str, Decimal | None | int]] = {}
+        for entry in data.entries:
+            year, month, quarter = normalize_period(entry)
+            key = (year, month, quarter)
+            current = entry_map.setdefault(key, {"year": year, "month": month, "quarter": quarter})
+            for field_name in FinancialEntryUpdate.model_fields:
+                if field_name in {"year", "month", "quarter"}:
+                    continue
+                value = getattr(entry, field_name)
+                if value is None:
+                    continue
+                current[field_name] = _dec(current.get(field_name)) + _dec(value)
+
+        metric_map: dict[
+            tuple[str, int, int | None, int | None], dict[str, Decimal | None | int | str]
+        ] = {}
+        for metric in data.metric_values or []:
+            year, month, quarter = normalize_period(metric)
+            key = (metric.metric_key, year, month, quarter)
+            current = metric_map.setdefault(
+                key,
+                {"metric_key": metric.metric_key, "year": year, "month": month, "quarter": quarter},
+            )
+            for field_name in ("value_base", "value_high", "value_actual"):
+                value = getattr(metric, field_name)
+                if value is None:
+                    continue
+                current[field_name] = _dec(current.get(field_name)) + _dec(value)
+
+        cost_map: dict[
+            tuple[str, bool, int, int | None, int | None],
+            dict[str, Decimal | None | int | bool | str],
+        ] = {}
+        for cost in data.cost_lines or []:
+            year, month, quarter = normalize_period(cost)
+            key = (cost.category_key, cost.is_recurring, year, month, quarter)
+            current = cost_map.setdefault(
+                key,
+                {
+                    "name": cost.name,
+                    "category_key": cost.category_key,
+                    "year": year,
+                    "month": month,
+                    "quarter": quarter,
+                    "amount_plan": Decimal("0"),
+                    "amount_actual": None,
+                    "is_recurring": cost.is_recurring,
+                },
+            )
+            current["amount_plan"] = _dec(current.get("amount_plan")) + _dec(cost.amount_plan)
+            if cost.amount_actual is not None:
+                current["amount_actual"] = _dec(current.get("amount_actual")) + _dec(
+                    cost.amount_actual
+                )
+
+        return FinancialGridUpdate(
+            entries=[FinancialEntryUpdate(**row) for row in entry_map.values()],
+            cost_lines=[CostLineCreate(**row) for row in cost_map.values()],
+            metric_values=[FinancialMetricValueUpdate(**row) for row in metric_map.values()],
+        )
+
+    @staticmethod
+    def _planned_month_bounds(
+        initiative: dict | None,  # type: ignore[type-arg]
+    ) -> tuple[int | None, int | None]:
+        if (
+            not initiative
+            or not initiative.get("planned_start")
+            or not initiative.get("planned_end")
+        ):
+            return None, None
+        start = date.fromisoformat(str(initiative["planned_start"]))
+        end = date.fromisoformat(str(initiative["planned_end"]))
+        return start.year * 12 + start.month, end.year * 12 + end.month
+
+    @staticmethod
+    def _first_planned_month(initiative: dict | None) -> tuple[int, int] | None:  # type: ignore[type-arg]
+        if not initiative or not initiative.get("planned_start"):
+            return None
+        start = date.fromisoformat(str(initiative["planned_start"]))
+        return start.year, start.month
+
+    @staticmethod
     def _unique_entries(rows: list[dict]) -> list[dict]:  # type: ignore[type-arg]
         by_period: dict[tuple[object, object, object], dict] = {}
         for row in rows:
@@ -620,7 +1142,12 @@ class FinancialService:
             by_line.setdefault(key, row)
         return list(by_line.values())
 
-    def _compute_summary(self, rows: list[dict], initiative_id: str) -> FinancialSummary:  # type: ignore[type-arg]
+    def _compute_summary(
+        self,
+        rows: list[dict],  # type: ignore[type-arg]
+        initiative_id: str,
+        cost_lines: list[dict] | None = None,  # type: ignore[type-arg]
+    ) -> FinancialSummary:
         """Aggregate summary cards from all entries + cost lines.
 
         Net Value = GM Uplift - Recurring Costs.
@@ -667,7 +1194,9 @@ class FinancialService:
                 cogs_actual = (cogs_actual or Decimal("0")) + _dec(r["cogs_actual"])
 
         # Cost aggregation — split by one-off vs recurring
-        cost_lines = self._repo.list_cost_lines(initiative_id)
+        cost_lines = self._reporting_cost_lines(
+            cost_lines if cost_lines is not None else self._repo.list_cost_lines(initiative_id)
+        )
         costs_recurring_plan = Decimal("0")
         costs_recurring_actual: Decimal | None = None
         costs_one_off_plan = Decimal("0")
@@ -732,7 +1261,7 @@ class FinancialService:
         month_keys = {
             (row["initiative_id"], row["year"], ((row["month"] - 1) // 3) + 1)
             for row in rows
-            if row.get("month") is not None
+            if row.get("month") is not None and FinancialService._financial_row_has_value(row)
         }
         reporting = []
         for row in rows:
@@ -747,6 +1276,85 @@ class FinancialService:
             if key not in month_keys:
                 reporting.append(row)
         return reporting
+
+    @staticmethod
+    def _reporting_cost_lines(rows: list[dict]) -> list[dict]:  # type: ignore[type-arg]
+        """Return cost lines for rollups without counting quarter rows covered by month rows."""
+        month_keys = {
+            (
+                row["initiative_id"],
+                row["year"],
+                ((row["month"] - 1) // 3) + 1,
+                row.get("category_key") or "other",
+                bool(row.get("is_recurring", False)),
+            )
+            for row in rows
+            if row.get("month") is not None and FinancialService._cost_line_has_value(row)
+        }
+        reporting = []
+        for row in rows:
+            if row.get("month") is not None:
+                reporting.append(row)
+                continue
+            quarter = row.get("quarter")
+            if quarter is None:
+                reporting.append(row)
+                continue
+            key = (
+                row["initiative_id"],
+                row["year"],
+                quarter,
+                row.get("category_key") or "other",
+                bool(row.get("is_recurring", False)),
+            )
+            if key not in month_keys:
+                reporting.append(row)
+        return reporting
+
+    @staticmethod
+    def _financial_row_has_value(row: dict) -> bool:  # type: ignore[type-arg]
+        return any(
+            _dec(row.get(field)) != Decimal("0")
+            for field in (
+                "revenue_uplift_base",
+                "revenue_uplift_high",
+                "revenue_uplift_actual",
+                "revenue_uplift_pct_base",
+                "revenue_uplift_pct_high",
+                "revenue_uplift_pct_actual",
+                "gross_margin_base",
+                "gross_margin_high",
+                "gross_margin_actual",
+                "gm_pct_base",
+                "gm_pct_high",
+                "gm_pct_actual",
+                "gm_uplift_base",
+                "gm_uplift_high",
+                "gm_uplift_actual",
+                "gm_uplift_pct_base",
+                "gm_uplift_pct_high",
+                "gm_uplift_pct_actual",
+                "cogs_base",
+                "cogs_high",
+                "cogs_actual",
+                "cogs_pct_base",
+                "cogs_pct_high",
+                "cogs_pct_actual",
+            )
+        )
+
+    @staticmethod
+    def _cost_line_has_value(row: dict) -> bool:  # type: ignore[type-arg]
+        return _dec(row.get("amount_plan")) != Decimal("0") or _dec(
+            row.get("amount_actual")
+        ) != Decimal("0")
+
+    @staticmethod
+    def _metric_value_has_value(row: dict) -> bool:  # type: ignore[type-arg]
+        return any(
+            _dec(row.get(field)) != Decimal("0")
+            for field in ("value_base", "value_high", "value_actual")
+        )
 
     @staticmethod
     def _compute_value_bridge(
@@ -764,6 +1372,9 @@ class FinancialService:
         gm_up_base = Decimal("0")
         gm_up_high = Decimal("0")
         gm_up_actual = Decimal("0")
+        cogs_base = Decimal("0")
+        cogs_high = Decimal("0")
+        cogs_actual = Decimal("0")
 
         for r in entries:
             rev_base += _dec(r.get("revenue_uplift_base"))
@@ -775,6 +1386,9 @@ class FinancialService:
             gm_up_base += _dec(r.get("gm_uplift_base"))
             gm_up_high += _dec(r.get("gm_uplift_high"))
             gm_up_actual += _dec(r.get("gm_uplift_actual"))
+            cogs_base += _dec(r.get("cogs_base"))
+            cogs_high += _dec(r.get("cogs_high"))
+            cogs_actual += _dec(r.get("cogs_actual"))
 
         # Split costs by one-off vs recurring
         costs_recurring_plan = Decimal("0")
@@ -801,6 +1415,7 @@ class FinancialService:
                 revenue_uplift=_money(rev_base),
                 gross_margin=_money(gm_base),
                 gm_uplift=_money(gm_up_base),
+                cogs=_money(cogs_base),
                 costs_recurring=_money(costs_recurring_plan),
                 costs_one_off=_money(costs_one_off_plan),
                 costs_total=_money(total_costs_plan),
@@ -810,6 +1425,7 @@ class FinancialService:
                 revenue_uplift=_money(rev_high),
                 gross_margin=_money(gm_high),
                 gm_uplift=_money(gm_up_high),
+                cogs=_money(cogs_high),
                 costs_recurring=_money(costs_recurring_plan),
                 costs_one_off=_money(costs_one_off_plan),
                 costs_total=_money(total_costs_plan),
@@ -819,6 +1435,7 @@ class FinancialService:
                 revenue_uplift=_money(rev_actual),
                 gross_margin=_money(gm_actual),
                 gm_uplift=_money(gm_up_actual),
+                cogs=_money(cogs_actual),
                 costs_recurring=_money(costs_recurring_actual),
                 costs_one_off=_money(costs_one_off_actual),
                 costs_total=_money(total_costs_actual),
@@ -835,10 +1452,12 @@ class FinancialService:
         revenue = Decimal("0")
         gross_margin = Decimal("0")
         gm_uplift = Decimal("0")
+        cogs = Decimal("0")
         for row in entries:
             revenue += FinancialService._scenario_entry_value(row, "revenue_uplift", scenario)
             gross_margin += FinancialService._scenario_entry_value(row, "gross_margin", scenario)
             gm_uplift += FinancialService._scenario_entry_value(row, "gm_uplift", scenario)
+            cogs += FinancialService._scenario_entry_value(row, "cogs", scenario)
 
         recurring = Decimal("0")
         one_off = Decimal("0")
@@ -854,7 +1473,7 @@ class FinancialService:
             revenue_uplift=_money(revenue),
             gross_margin=_money(gross_margin),
             gm_uplift=_money(gm_uplift),
-            cogs=_money(revenue - gross_margin),
+            cogs=_money(cogs),
             costs_recurring=_money(recurring),
             costs_one_off=_money(one_off),
             costs_total=_money(total_costs),

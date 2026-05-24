@@ -4,17 +4,20 @@ import asyncio
 from typing import Any
 from uuid import UUID
 
-from app.agents.portfolio_agent import portfolio_agent
-from app.core.database import get_supabase_admin
+from supabase import Client
+
+from app.agents.portfolio_agent import PortfolioAgentDeps, portfolio_agent
+from app.core.observability import record_agent_run, start_agent_timer
 
 
 class AIService:
-    def __init__(self, tenant_id: UUID):
-        self.client = get_supabase_admin()
+    def __init__(self, client: Client, tenant_id: UUID):
+        self.client = client
         self.tenant_id = str(tenant_id)
 
     async def chat(self, query: str) -> dict[str, Any]:
         """Chat with Transmuter AI about the portfolio."""
+        started_at = start_agent_timer()
         sources = [
             {"label": "Portfolio initiatives", "source_type": "initiatives"},
             {"label": "Milestones and risks", "source_type": "portfolio"},
@@ -26,6 +29,7 @@ class AIService:
             phrase in query_l
             for phrase in ("at-risk", "at risk", "summarize the portfolio", "milestones")
         ):
+            record_agent_run("portfolio_chat", self.tenant_id, "deterministic_summary", started_at)
             return {"response": self._deterministic_answer(query), "sources": sources}
 
         try:
@@ -38,18 +42,27 @@ class AIService:
                     name="portfolio-chat", input=query, tags=["ai-chat", "portfolio-agent"]
                 ) as observation:
                     result = await asyncio.wait_for(
-                        portfolio_agent.run(query, deps=UUID(self.tenant_id)),
+                        portfolio_agent.run(
+                            query,
+                            deps=PortfolioAgentDeps(UUID(self.tenant_id), self.client),
+                        ),
                         timeout=12.0,
                     )
                     observation.update(output=str(result.output))
+                    record_agent_run("portfolio_chat", self.tenant_id, "generated", started_at)
                     return {"response": str(result.output), "sources": sources}
             else:
                 result = await asyncio.wait_for(
-                    portfolio_agent.run(query, deps=UUID(self.tenant_id)),
+                    portfolio_agent.run(
+                        query,
+                        deps=PortfolioAgentDeps(UUID(self.tenant_id), self.client),
+                    ),
                     timeout=12.0,
                 )
+                record_agent_run("portfolio_chat", self.tenant_id, "generated", started_at)
                 return {"response": str(result.output), "sources": sources}
         except Exception:
+            record_agent_run("portfolio_chat", self.tenant_id, "deterministic_fallback", started_at)
             return {"response": self._deterministic_answer(query), "sources": sources}
 
     def _deterministic_answer(self, query: str) -> str:

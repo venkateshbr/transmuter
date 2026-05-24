@@ -7,10 +7,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import Response, StreamingResponse
+from supabase import Client
 
 from app.agents.initiative_intake_agent import generate_intake_suggestions
 from app.core.auth import CurrentUser, RequireAdmin, get_current_user
-from app.core.database import get_supabase_admin
+from app.core.database import get_supabase_request_client
 from app.core.rbac import assert_can_manage_initiatives
 from app.domain.initiative_intake import (
     InitiativeIntakeCreate,
@@ -29,8 +30,11 @@ from app.services.initiative import InitiativeService
 router = APIRouter(prefix="/initiatives", tags=["initiatives"])
 
 
-def _svc(current_user: Annotated[CurrentUser, Depends(get_current_user)]) -> InitiativeService:
-    return InitiativeService(get_supabase_admin(), current_user.tenant_id)
+def _svc(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
+) -> InitiativeService:
+    return InitiativeService(client, current_user.tenant_id, current_user.id)
 
 
 # ── List ──────────────────────────────────────────────────────────────────────
@@ -40,10 +44,12 @@ def _svc(current_user: Annotated[CurrentUser, Depends(get_current_user)]) -> Ini
 async def list_initiatives(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[InitiativeService, Depends(_svc)],
+    business_unit_id: str | None = Query(None),
     workstream_id: str | None = Query(None),
     rag_status: str | None = Query(None),
     stage: str | None = Query(None),
     priority: str | None = Query(None),
+    tag: str | None = Query(None),
     search: str | None = Query(None),
     sort_by: str = Query("initiative_code"),
     sort_desc: bool = Query(False),
@@ -51,10 +57,12 @@ async def list_initiatives(
     page_size: int = Query(50, ge=1, le=200),
 ) -> InitiativeListResponse:
     return svc.list_initiatives(
+        business_unit_id=business_unit_id,
         workstream_id=workstream_id,
         rag_status=rag_status,
         stage=stage,
         priority=priority,
+        tag=tag,
         search=search,
         sort_by=sort_by,
         sort_desc=sort_desc,

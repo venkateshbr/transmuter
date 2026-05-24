@@ -146,8 +146,8 @@ async function main() {
     await assertPage(
       page,
       `${uiBaseUrl}/progress/dependencies`,
-      "location.pathname === '/progress/dependencies' && !!document.querySelector('[data-testid=\"dependency-stats\"]') && !!document.querySelector('[data-testid=\"dependency-graph\"]') && !!document.querySelector('[data-testid=\"dependency-table\"]')",
-      'portfolio dependency UI',
+      "location.pathname === '/progress/roadmap' && document.body.innerText.includes('Roadmap Explorer') && !document.querySelector('[data-testid=\"dependency-graph\"]') && !document.querySelector('[data-testid=\"dependency-table\"]')",
+      'portfolio dependency redirect to roadmap',
     );
     await assertPage(
       page,

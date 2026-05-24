@@ -361,7 +361,7 @@ def test_real_api_initiative_template_import_flow() -> None:
             row = next(
                 item
                 for item in financials.json()["entries"]
-                if item["year"] == 2030 and item["quarter"] == 1
+                if item["year"] == 2026 and item["month"] == 6
             )
             assert Decimal(row["revenue_uplift_base"]) == Decimal("100000.0000")
             assert Decimal(row["gm_uplift_high"]) == Decimal("70000.0000")
@@ -453,7 +453,7 @@ def test_real_api_initiative_template_import_flow() -> None:
             updated_row = next(
                 item
                 for item in updated_financials.json()["entries"]
-                if item["year"] == 2030 and item["month"] == 1
+                if Decimal(item["revenue_uplift_base"]) == Decimal("33333.0000")
             )
             assert Decimal(updated_row["revenue_uplift_base"]) == Decimal("33333.0")
 
@@ -1326,6 +1326,13 @@ def test_real_api_financial_grid_save_reload_and_value_bridge() -> None:
         assert len(period_keys) == len(entries), "financial periods must be unique"
 
         original = next((entry for entry in entries if entry["month"] is not None), entries[0])
+        selections = client.get(
+            f"/initiatives/{initiative_id}/financials/selections",
+            headers=headers,
+        )
+        selections.raise_for_status()
+        selected_cost_keys = selections.json()["selected"]["cost_category_keys"]
+        cost_category_key = selected_cost_keys[0] if selected_cost_keys else "implementation"
         cost_name = f"Acceptance Recurring Cost {uuid4()}"
         cost_line_id: str | None = None
         assumption_id: str | None = None
@@ -1353,6 +1360,7 @@ def test_real_api_financial_grid_save_reload_and_value_bridge() -> None:
                     "cost_lines": [
                         {
                             "name": cost_name,
+                            "category_key": cost_category_key,
                             "year": original["year"],
                             "quarter": original["quarter"],
                             "month": original["month"],
@@ -1708,6 +1716,8 @@ def _patched_initiative_workbook(
             content = zin.read(item.filename)
             if item.filename == "xl/worksheets/sheet1.xml":
                 content = _patch_initiative_overview_sheet(content, name=name, summary=summary)
+            elif item.filename.startswith("xl/worksheets/sheet"):
+                content = _patch_import_benefits_sheet_if_present(content)
             zout.writestr(item, content)
     return output.getvalue()
 
@@ -1752,6 +1762,42 @@ def _patch_reference_sheet(data: bytes, *, key: str, value: str) -> bytes:
     for row in rows[1:]:
         if _row_values(row)[key_index - 1] == key:
             _set_cell(row, value_index, value)
+            break
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+
+def _patch_import_benefits_sheet_if_present(data: bytes) -> bytes:
+    ET.register_namespace("", SHEET_NS["main"])
+    try:
+        root = ET.fromstring(data)
+    except ET.ParseError:
+        return data
+    rows = root.findall("main:sheetData/main:row", SHEET_NS)
+    if len(rows) < 2:
+        return data
+    headers = _row_values(rows[0])
+    if {"year", "month", "revenue_uplift_base"}.issubset(headers):
+        target = rows[1]
+        updates = {
+            "year": "2030",
+            "quarter": "",
+            "month": "1",
+            "revenue_uplift_base": "33333.0",
+        }
+        for header, value in updates.items():
+            if header in headers:
+                _set_cell(target, headers.index(header) + 1, value)
+        return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+    if not {"Name", "Lane", "FY26"}.issubset(headers):
+        return data
+    monthly_start = headers.index("FY26") + 5
+    fy26_june_col = monthly_start + 5
+    for row in rows[1:]:
+        values = _row_values(row)
+        if len(values) >= 2 and values[0] == "Revenue Uplift" and values[1] == "Plan Base":
+            _set_cell(row, headers.index("FY26") + 1, "0.033333")
+            _set_cell(row, fy26_june_col + 1, "0.033333")
             break
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
