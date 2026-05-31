@@ -1,0 +1,83 @@
+apiVersion: agentic/v1
+kind: SkillSpec
+metadata:
+  name: action_item_extraction
+  version: 0.1.0
+  owner_agent: netra
+  description: Extract reviewable meeting action items and fuzzy-match assignees to attendee user IDs.
+contract:
+  input_schema:
+    type: object
+    required:
+      - chunks
+      - attendees
+    properties:
+      chunks:
+        type: array
+        items:
+          type: object
+      attendees:
+        type: array
+        items:
+          type: object
+  output_schema:
+    type: object
+    required:
+      - action_items
+    properties:
+      action_items:
+        type: array
+        items:
+          type: object
+          required:
+            - description
+            - priority
+            - accepted
+          properties:
+            description:
+              type: string
+            suggested_assignee_id:
+              type:
+                - string
+                - "null"
+            suggested_assignee_name:
+              type:
+                - string
+                - "null"
+            due_date:
+              type:
+                - string
+                - "null"
+              format: date
+            priority:
+              type: string
+              enum:
+                - high
+                - medium
+                - low
+            accepted:
+              type: boolean
+            rationale:
+              type:
+                - string
+                - "null"
+behavior:
+  deterministic: true
+  idempotent: true
+  side_effects:
+    - none
+  retries:
+    max: 0
+    backoff: none
+  timeout_ms: 1000
+security:
+  scopes_required:
+    - meetings:read
+  pii_sensitivity: medium
+  audit_required: true
+telemetry:
+  trace_provider: langfuse
+  metric_name: action_item_extraction
+implementation:
+  handler: apps/api/app/agents/meeting_notes_agent.py::extract_action_items
+  fallback: Deterministic transcript pattern extraction with human review.

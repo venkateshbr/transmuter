@@ -1,0 +1,61 @@
+apiVersion: agentic/v1
+kind: SkillSpec
+metadata:
+  name: transcript_chunking
+  version: 0.1.0
+  owner_agent: netra
+  description: Split a meeting transcript into typed speaker and topic chunks for downstream extraction.
+contract:
+  input_schema:
+    type: object
+    required:
+      - transcript
+    properties:
+      transcript:
+        type: string
+        minLength: 1
+  output_schema:
+    type: object
+    required:
+      - chunks
+    properties:
+      chunks:
+        type: array
+        items:
+          type: object
+          required:
+            - index
+            - text
+          properties:
+            index:
+              type: integer
+            speaker:
+              type:
+                - string
+                - "null"
+            text:
+              type: string
+            topic_hint:
+              type:
+                - string
+                - "null"
+behavior:
+  deterministic: true
+  idempotent: true
+  side_effects:
+    - none
+  retries:
+    max: 0
+    backoff: none
+  timeout_ms: 1000
+security:
+  scopes_required:
+    - meetings:read
+  pii_sensitivity: medium
+  audit_required: true
+telemetry:
+  trace_provider: langfuse
+  metric_name: transcript_chunking
+implementation:
+  handler: apps/api/app/agents/meeting_notes_agent.py::chunk_transcript
+  fallback: Split transcript by speaker markers and paragraph boundaries.
