@@ -38,23 +38,34 @@ import { DependenciesTabComponent } from './dependencies/dependencies-tab.compon
           </a>
         </section>
       } @else {
-        <div class="flex justify-between items-start gap-4">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h1 class="text-3xl font-bold tracking-tight text-[var(--t-text-primary)]">
               {{ initiative()?.name || 'Initiative Details' }}
             </h1>
           </div>
-          <button
-            type="button"
-            class="btn-secondary inline-flex items-center gap-2"
-            data-testid="initiative-export-workbook"
-            aria-label="Export initiative workbook"
-            (click)="exportWorkbook()"
-            [disabled]="exporting()"
-          >
-            <span class="material-icons text-base">download</span>
-            {{ exporting() ? 'Exporting...' : 'Export Excel' }}
-          </button>
+          <div class="flex flex-wrap items-center gap-2">
+            <a
+              [routerLink]="['/initiatives', id, 'edit']"
+              class="btn-primary inline-flex items-center gap-2"
+              aria-label="Edit initiative"
+              title="Edit initiative"
+            >
+              <span class="material-icons text-base">edit</span>
+              Edit Initiative
+            </a>
+            <button
+              type="button"
+              class="btn-secondary inline-flex items-center gap-2"
+              data-testid="initiative-export-workbook"
+              aria-label="Export initiative workbook"
+              (click)="exportWorkbook()"
+              [disabled]="exporting()"
+            >
+              <span class="material-icons text-base">download</span>
+              {{ exporting() ? 'Exporting...' : 'Export Excel' }}
+            </button>
+          </div>
         </div>
 
         <div class="border-b border-[var(--t-border)]">

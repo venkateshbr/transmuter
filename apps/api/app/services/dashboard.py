@@ -16,15 +16,24 @@ class DashboardService:
         business_unit_id: str | None = None,
         workstream_id: str | None = None,
         rag_status: str | None = None,
+        priority: str | None = None,
+        tag: str | None = None,
         target_year: int | None = None,
     ) -> dict[str, Any]:
         # 1. Initiatives & Filters
         owner_user_id = str(user_id) if role == "initiative_owner" else None
         all_inits = self.repo.get_initiatives_for_dashboard(owner_user_id=owner_user_id)
+        business_unit_ids = self._split_filter_values(business_unit_id)
+        workstream_ids = self._split_filter_values(workstream_id)
+        rag_statuses = self._split_filter_values(rag_status)
+        priorities = self._split_filter_values(priority)
+        tags = self._split_filter_values(tag)
         filtered_inits = [
             i
             for i in all_inits
-            if self._matches_filters(i, business_unit_id, workstream_id, rag_status)
+            if self._matches_filters(
+                i, business_unit_ids, workstream_ids, rag_statuses, priorities, tags
+            )
         ]
         initiative_ids = {i["id"] for i in filtered_inits}
 
@@ -95,6 +104,11 @@ class DashboardService:
 
         bus, wss = self.repo.get_filter_options()
         rag_values = sorted({i.get("rag_status") for i in all_inits if i.get("rag_status")})
+        priority_values = self._ordered_values(
+            {i.get("priority") for i in all_inits if i.get("priority")},
+            ["high", "medium", "low"],
+        )
+        tag_values = sorted({i.get("tag") for i in all_inits if i.get("tag")})
 
         return {
             "summary": {
@@ -123,22 +137,46 @@ class DashboardService:
                 "business_units": bus,
                 "workstreams": wss,
                 "rag_statuses": [{"id": v, "name": v.title()} for v in rag_values],
+                "priorities": [{"id": v, "name": v.title()} for v in priority_values],
+                "tags": [{"id": v, "name": self._label(v)} for v in tag_values],
             },
         }
 
     def _matches_filters(
         self,
         row: dict[str, Any],
-        bu_id: str | None,
-        ws_id: str | None,
-        rag: str | None,
+        bu_ids: set[str],
+        ws_ids: set[str],
+        rag_statuses: set[str],
+        priorities: set[str],
+        tags: set[str],
     ) -> bool:
         ws = row.get("workstreams") or {}
-        if bu_id and ws.get("business_unit_id") != bu_id:
+        if bu_ids and ws.get("business_unit_id") not in bu_ids:
             return False
-        if ws_id and row.get("workstream_id") != ws_id:
+        if ws_ids and row.get("workstream_id") not in ws_ids:
             return False
-        return not rag or row.get("rag_status") == rag
+        if rag_statuses and row.get("rag_status") not in rag_statuses:
+            return False
+        if priorities and row.get("priority") not in priorities:
+            return False
+        return not tags or row.get("tag") in tags
+
+    @staticmethod
+    def _split_filter_values(value: str | None) -> set[str]:
+        if not value:
+            return set()
+        return {part.strip() for part in value.split(",") if part.strip()}
+
+    @staticmethod
+    def _ordered_values(values: set[str], preferred_order: list[str]) -> list[str]:
+        ordered = [value for value in preferred_order if value in values]
+        ordered.extend(sorted(values - set(preferred_order)))
+        return ordered
+
+    @staticmethod
+    def _label(value: str) -> str:
+        return value.replace("_", " ").replace("-", " ").title()
 
     def _calculate_kpi_pulse(
         self,

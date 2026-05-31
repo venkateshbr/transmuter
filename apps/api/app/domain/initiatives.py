@@ -96,6 +96,8 @@ class InitiativeListItem(BaseModel):
     name: str
     workstream_id: UUID | None
     workstream_name: str | None
+    business_unit_id: UUID | None = None
+    business_unit_name: str | None = None
     owner_id: UUID | None
     owner_name: str | None
     type: str | None

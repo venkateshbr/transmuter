@@ -5,9 +5,10 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
+from supabase import Client
 
 from app.core.auth import CurrentUser, get_current_user
-from app.core.database import get_supabase_admin
+from app.core.database import get_supabase_request_client
 from app.core.rbac import (
     assert_can_manage_initiatives,
     assert_can_view_initiative,
@@ -28,8 +29,9 @@ router = APIRouter(tags=["governance"])
 
 def _svc(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> GovernanceService:
-    return GovernanceService(get_supabase_admin(), current_user.tenant_id, current_user.id)
+    return GovernanceService(client, current_user.tenant_id, current_user.id)
 
 
 @router.get(
@@ -40,8 +42,9 @@ async def get_governance_status(
     id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[GovernanceService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> GovernanceStatusResponse:
-    assert_can_view_initiative(get_supabase_admin(), current_user, id)
+    assert_can_view_initiative(client, current_user, id)
     return svc.get_status(id)
 
 
@@ -53,8 +56,9 @@ async def get_initiative_gates(
     id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[GovernanceService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> GovernanceStatusResponse:
-    assert_can_view_initiative(get_supabase_admin(), current_user, id)
+    assert_can_view_initiative(client, current_user, id)
     return svc.get_status(id)
 
 
@@ -80,8 +84,9 @@ async def list_initiative_gate_criteria(
     gate_number: int,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[GovernanceService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> list[GateCriteriaState]:
-    assert_can_view_initiative(get_supabase_admin(), current_user, id)
+    assert_can_view_initiative(client, current_user, id)
     return svc.list_criteria(gate_number, id)
 
 

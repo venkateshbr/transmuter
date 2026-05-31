@@ -17,6 +17,8 @@ from app.services.billing import stripe_price_configuration
 
 PORTFOLIO_CLEANUP_TABLES = [
     "action_items",
+    "meeting_artifacts",
+    "meeting_external_events",
     "agenda_items",
     "meeting_sessions",
     "meeting_initiatives",
@@ -411,6 +413,8 @@ class AdminService:
                 "meetings",
                 "meeting_attendees",
                 "meeting_initiatives",
+                "meeting_external_events",
+                "meeting_artifacts",
                 "meeting_sessions",
                 "agenda_items",
             ],

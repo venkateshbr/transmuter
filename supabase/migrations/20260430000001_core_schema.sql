@@ -8,11 +8,23 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION current_tenant_id() RETURNS uuid
   LANGUAGE sql STABLE
-  AS $$ SELECT (auth.jwt() ->> 'tenant_id')::uuid $$;
+  AS $$
+    SELECT COALESCE(
+      auth.jwt() ->> 'tenant_id',
+      auth.jwt() -> 'user_metadata' ->> 'tenant_id'
+    )::uuid
+  $$;
 
 CREATE OR REPLACE FUNCTION current_user_role() RETURNS text
   LANGUAGE sql STABLE
-  AS $$ SELECT auth.jwt() ->> 'role' $$;
+  AS $$
+    SELECT COALESCE(
+      auth.jwt() ->> 'app_role',
+      auth.jwt() -> 'user_metadata' ->> 'role',
+      NULLIF(auth.jwt() ->> 'role', 'authenticated'),
+      auth.jwt() ->> 'role'
+    )
+  $$;
 
 
 -- ─────────────────────────────────────────────────────────────────────────────

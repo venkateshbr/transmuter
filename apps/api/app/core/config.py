@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     jwt_secret: str
     jwt_algorithm: str = "HS256"
     jwt_expiry_minutes: int = 60
+    max_request_body_bytes: int = 10 * 1024 * 1024
+    auth_login_rate_limit: int = 10
+    auth_login_rate_window_seconds: int = 60
 
     # LLM
     openrouter_api_key: str
@@ -28,6 +31,14 @@ class Settings(BaseSettings):
     langfuse_secret_key: str = ""
     langfuse_public_key: str = ""
     langfuse_host: str = "https://cloud.langfuse.com"
+    logfire_token: str = ""
+    environment: str = "development"
+    sentry_dsn: str = ""
+    sentry_traces_sample_rate: float = 0.1
+    alert_webhook_url: str = ""
+    api_p99_slo_ms: float = 2000.0
+    agent_latency_slo_ms: float = 12000.0
+    agent_correction_rate_slo: float = 0.10
 
     # Procrastinate (PostgreSQL connection string)
     database_url: str = ""
@@ -35,6 +46,10 @@ class Settings(BaseSettings):
     # Notifications
     resend_api_key: str = ""
     resend_from_email: str = ""
+
+    # Microsoft Graph (optional)
+    microsoft_graph_access_token: str = ""
+    microsoft_graph_user_id: str = ""
 
     # Feature flags
     ai_enabled: bool = True

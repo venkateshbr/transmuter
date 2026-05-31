@@ -3,11 +3,14 @@ import { CommonModule } from '@angular/common';
 import { ApiService } from '../../../core/services/api.service';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { CompactFilterToolbarComponent, type CompactFilterGroup } from '../../../shared/components/compact-filter-toolbar/compact-filter-toolbar.component';
+
+const ACTION_ITEM_FILTER_STATE_KEY = 'transmuter.filters.progress.action-items';
 
 @Component({
   selector: 'app-action-items',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, CompactFilterToolbarComponent],
   template: `
     <div class="p-8 space-y-8 animate-fade-in" style="background:var(--t-bg)">
       
@@ -24,18 +27,16 @@ import { RouterLink } from '@angular/router';
              <a routerLink="/progress" class="px-4 py-1 text-xs font-medium rounded-md text-[var(--t-text-tertiary)] hover:text-[var(--t-text-primary)] transition-colors">Milestones</a>
              <a routerLink="/progress/roadmap" class="px-4 py-1 text-xs font-medium rounded-md text-[var(--t-text-tertiary)] hover:text-[var(--t-text-primary)] transition-colors">Roadmap</a>
              <button class="px-4 py-1 text-xs font-medium rounded-md bg-[var(--t-surface)] text-[var(--t-accent)] shadow-sm">Action Items</button>
-             <a routerLink="/progress/dependencies" class="px-4 py-1 text-xs font-medium rounded-md text-[var(--t-text-tertiary)] hover:text-[var(--t-text-primary)] transition-colors">Dependencies</a>
           </div>
-          <select [(ngModel)]="statusFilter" (change)="applyFilters()" class="input-field text-xs h-9 w-32">
-            <option value="">All Status</option>
-            <option value="open">Open</option>
-            <option value="in_progress">In Progress</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-            <option value="overdue">Overdue</option>
-          </select>
         </div>
       </div>
+
+      <app-compact-filter-toolbar
+        [showSearch]="false"
+        [groups]="actionItemFilterGroups()"
+        [hasFilters]="hasActionItemFilters()"
+        (groupSelectionChange)="onFilterGroupChange($event)"
+        (clearFilters)="clearActionItemFilters()" />
 
       <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4" data-testid="action-item-stats">
         @for (card of statsCards(); track card.label) {
@@ -167,6 +168,7 @@ export class ActionItemsComponent implements OnInit {
   statusFilter = '';
 
   ngOnInit() {
+    this.restoreActionItemFilters();
     this.fetchItems();
   }
 
@@ -179,6 +181,7 @@ export class ActionItemsComponent implements OnInit {
   }
 
   applyFilters() {
+    this.persistActionItemFilters();
     let filtered = [...this.items()];
     if (this.statusFilter === 'overdue') {
       filtered = filtered.filter(i => this.isOverdue(i));
@@ -191,6 +194,55 @@ export class ActionItemsComponent implements OnInit {
   setStatusFilter(filter: string) {
     this.statusFilter = filter;
     this.applyFilters();
+  }
+
+  actionItemFilterGroups(): CompactFilterGroup[] {
+    return [
+      {
+        key: 'status',
+        label: 'Status',
+        mode: 'single',
+        selected: this.statusFilter ? [this.statusFilter] : [],
+        options: [
+          { id: 'open', name: 'Open' },
+          { id: 'in_progress', name: 'In Progress' },
+          { id: 'completed', name: 'Completed' },
+          { id: 'cancelled', name: 'Cancelled' },
+          { id: 'overdue', name: 'Overdue' },
+        ],
+      },
+    ];
+  }
+
+  onFilterGroupChange(change: { key: string; selected: string[] }): void {
+    if (change.key === 'status') this.statusFilter = change.selected[0] || '';
+    this.applyFilters();
+  }
+
+  clearActionItemFilters(): void {
+    this.statusFilter = '';
+    this.applyFilters();
+  }
+
+  hasActionItemFilters(): boolean {
+    return Boolean(this.statusFilter);
+  }
+
+  private persistActionItemFilters(): void {
+    localStorage.setItem(ACTION_ITEM_FILTER_STATE_KEY, JSON.stringify({
+      statusFilter: this.statusFilter,
+    }));
+  }
+
+  private restoreActionItemFilters(): void {
+    try {
+      const raw = localStorage.getItem(ACTION_ITEM_FILTER_STATE_KEY);
+      if (!raw) return;
+      const state = JSON.parse(raw) as Record<string, string>;
+      this.statusFilter = typeof state['statusFilter'] === 'string' ? state['statusFilter'] : '';
+    } catch {
+      localStorage.removeItem(ACTION_ITEM_FILTER_STATE_KEY);
+    }
   }
 
   toggleComplete(item: any) {

@@ -24,6 +24,10 @@ import { FormsModule } from '@angular/forms';
             <p class="text-[var(--t-text-secondary)]">{{ m.description }}</p>
           </div>
           <div class="flex gap-2">
+            <button (click)="createMicrosoftEvent()" class="btn-secondary text-sm flex items-center gap-2" aria-label="Create Microsoft Teams invite">
+              <span class="material-icons text-sm">video_call</span>
+              Teams Invite
+            </button>
             <button (click)="openEdit(m)" class="btn-ghost text-sm" aria-label="Edit meeting series">Edit Series</button>
             <button (click)="startSession()" class="btn-primary text-sm flex items-center gap-2">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -50,6 +54,26 @@ import { FormsModule } from '@angular/forms';
             <p class="text-sm font-bold text-[var(--t-text-primary)]">{{ m.sessions?.length || 0 }}</p>
           </div>
         </div>
+
+        @if ((m.external_events || []).length > 0) {
+          <div class="card p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p class="text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">Microsoft 365</p>
+              @for (event of m.external_events; track event.id) {
+                <p class="mt-1 text-sm font-bold text-[var(--t-text-primary)]">
+                  {{ event.sync_status | titlecase }}
+                  @if (event.join_url) {
+                    · <a [href]="event.join_url" target="_blank" rel="noreferrer" class="text-[var(--t-accent)] hover:underline">Join Teams</a>
+                  }
+                </p>
+                @if (event.sync_error) {
+                  <p class="mt-1 text-xs text-[var(--t-text-secondary)]">{{ event.sync_error }}</p>
+                }
+              }
+            </div>
+            <button (click)="createMicrosoftEvent()" class="btn-ghost text-xs">Sync Invite</button>
+          </div>
+        }
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div class="lg:col-span-2 space-y-8">
@@ -361,5 +385,14 @@ export class MeetingDetailComponent implements OnInit {
     this.api.post<any>(`/meetings/${m.id}/sessions/start`, {}).subscribe(session => {
       this.router.navigate(['/meetings/sessions', session.id]);
     });
+  }
+
+  createMicrosoftEvent() {
+    const m = this.meeting();
+    if (!m) return;
+    this.api.post<any>(`/meetings/${m.id}/external-events/microsoft`, {
+      organizer_email: null,
+      time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    }).subscribe(() => this.loadMeeting());
   }
 }

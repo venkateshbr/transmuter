@@ -1,8 +1,9 @@
 import { Component, inject, signal } from '@angular/core';
-import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { NavigationCancel, NavigationEnd, NavigationError, NavigationStart, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { ThemeService } from './core/services/theme.service';
 import { ApiService } from './core/services/api.service';
 import { AuthService } from './core/services/auth.service';
+import { LoadingService } from './core/services/loading.service';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
@@ -44,12 +45,39 @@ interface Message {
         </a>
 
         <!-- Primary Nav -->
-        <nav class="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
-          @for (item of navItems; track item.path) {
+        <nav class="flex min-w-0 flex-1 items-center gap-0.5 overflow-visible">
+          @for (item of primaryNavItems; track item.path) {
             <a [routerLink]="item.path" routerLinkActive="bg-[var(--t-accent-soft)] text-[var(--t-accent)]"
                class="nav-item whitespace-nowrap px-2 text-[11px] font-bold uppercase">
               {{ item.label }}
             </a>
+          }
+          @if (overflowNavItems.length) {
+            <div class="relative shrink-0">
+              <button
+                type="button"
+                class="nav-item whitespace-nowrap px-2 text-[11px] font-bold uppercase"
+                [class.bg-[var(--t-accent-soft)]]="isOverflowRouteActive()"
+                [class.text-[var(--t-accent)]]="isOverflowRouteActive()"
+                (click)="moreMenuOpen.set(!moreMenuOpen())"
+                aria-label="Open more navigation">
+                More
+                <span class="material-icons align-middle text-sm">expand_more</span>
+              </button>
+              @if (moreMenuOpen()) {
+                <div class="absolute right-0 top-full mt-3 w-56 border border-[var(--t-border)] bg-[var(--t-surface)] py-2 shadow-xl">
+                  @for (item of overflowNavItems; track item.path) {
+                    <a
+                      [routerLink]="item.path"
+                      routerLinkActive="bg-[var(--t-accent-soft)] text-[var(--t-accent)]"
+                      class="block px-4 py-2 text-[11px] font-black uppercase tracking-wide text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-raised)] hover:text-[var(--t-accent)]"
+                      (click)="moreMenuOpen.set(false)">
+                      {{ item.label }}
+                    </a>
+                  }
+                </div>
+              }
+            </div>
           }
         </nav>
 
@@ -70,13 +98,38 @@ interface Message {
           }
 
           <!-- User avatar -->
-          <button (click)="auth.logout()" class="w-9 h-9 text-white text-sm font-bold
-                         flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity" 
-                  aria-label="User menu"
-                  title="Logout"
-                  style="background:var(--t-primary); box-shadow:inset 0 -3px 0 var(--t-blue-light)">
-            {{ (auth.user()?.display_name || 'U').substring(0,1) }}
-          </button>
+          <div class="relative">
+            <button (click)="accountMenuOpen.set(!accountMenuOpen())" class="w-9 h-9 text-white text-sm font-bold
+                           flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity"
+                    aria-label="Open user menu"
+                    [attr.aria-expanded]="accountMenuOpen()"
+                    style="background:var(--t-primary); box-shadow:inset 0 -3px 0 var(--t-blue-light)">
+              {{ (auth.user()?.display_name || auth.user()?.email || 'U').substring(0,1) }}
+            </button>
+            @if (accountMenuOpen()) {
+              <div class="absolute right-0 top-full mt-3 w-64 border border-[var(--t-border)] bg-[var(--t-surface)] shadow-xl">
+                <div class="border-b border-[var(--t-border)] px-4 py-3">
+                  <p class="truncate text-xs font-black text-[var(--t-text-primary)]">{{ auth.user()?.display_name || auth.user()?.email || 'User' }}</p>
+                  <p class="mt-1 truncate text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">{{ auth.user()?.role || 'viewer' }}</p>
+                </div>
+                <a
+                  routerLink="/profile"
+                  class="flex items-center gap-3 px-4 py-3 text-xs font-black uppercase tracking-widest text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-raised)] hover:text-[var(--t-accent)]"
+                  (click)="accountMenuOpen.set(false)">
+                  <span class="material-icons text-sm">manage_accounts</span>
+                  Profile
+                </a>
+                <button
+                  type="button"
+                  class="flex w-full items-center gap-3 border-t border-[var(--t-border)] px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-raised)] hover:text-[var(--t-accent)]"
+                  aria-label="Logout"
+                  (click)="logoutFromMenu()">
+                  <span class="material-icons text-sm">logout</span>
+                  Logout
+                </button>
+              </div>
+            }
+          </div>
         </div>
       </header>
       }
@@ -85,6 +138,30 @@ interface Message {
       <main [class.pt-16]="showAppChrome()">
         <router-outlet />
       </main>
+
+      @if (showAppChrome() && loading.visible()) {
+        <div
+          class="fixed inset-0 z-[70] flex items-center justify-center bg-[var(--t-surface)]/92 backdrop-blur-sm"
+          role="status"
+          aria-live="polite"
+          [attr.aria-label]="loading.message()">
+          <div class="w-[min(520px,calc(100vw-48px))] border border-[var(--t-border)] bg-[var(--t-bg)] p-6 shadow-2xl">
+            <div class="flex items-center justify-between gap-6">
+              <div>
+                <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">Workspace sync</p>
+                <p class="mt-2 text-sm font-bold text-[var(--t-text-primary)]">{{ loading.message() }}</p>
+              </div>
+              <span class="font-mono text-xs font-black text-[var(--t-text-tertiary)]">{{ loading.progress() | number:'1.0-0' }}%</span>
+            </div>
+            <div class="mt-5 h-1.5 w-full overflow-hidden bg-[var(--t-surface-raised)]">
+              <div
+                class="h-full bg-[var(--t-accent)] transition-[width] duration-200 ease-out"
+                [style.width.%]="loading.progress()">
+              </div>
+            </div>
+          </div>
+        </div>
+      }
 
       <!-- AI Assistant Right Panel -->
       @if (aiPanelOpen()) {
@@ -191,12 +268,28 @@ export class App {
   protected readonly themeService = inject(ThemeService);
   protected readonly api = inject(ApiService);
   protected readonly auth = inject(AuthService);
+  protected readonly loading = inject(LoadingService);
   private readonly router = inject(Router);
 
   protected readonly aiPanelOpen = signal(false);
   protected readonly aiLoading = signal(false);
   protected readonly aiQueryText = signal('');
   protected readonly messages = signal<Message[]>([]);
+  protected readonly moreMenuOpen = signal(false);
+  protected readonly accountMenuOpen = signal(false);
+
+  constructor() {
+    this.router.events.subscribe(event => {
+      if (event instanceof NavigationStart) {
+        this.moreMenuOpen.set(false);
+        this.accountMenuOpen.set(false);
+        this.loading.beginNavigation();
+      }
+      if (event instanceof NavigationEnd || event instanceof NavigationCancel || event instanceof NavigationError) {
+        this.loading.endNavigation();
+      }
+    });
+  }
 
   protected get navItems(): NavItem[] {
     if (this.isPlatformAdmin()) {
@@ -206,12 +299,10 @@ export class App {
     }
     return [
     { label: 'Dashboard',        path: '/dashboard',          icon: 'grid' },
-    { label: 'Control Tower',    path: '/reports/control-tower', icon: 'monitoring' },
     { label: 'Financials',       path: '/financials',         icon: 'payments' },
     { label: 'Shared Costs',     path: '/shared-costs',       icon: 'account_balance' },
     { label: 'Initiatives',      path: '/initiatives/pipeline', icon: 'list' },
     { label: 'Progress Monitor', path: '/progress',           icon: 'bar-chart' },
-    { label: 'Roadmap Explorer', path: '/progress/roadmap',   icon: 'map' },
     { label: 'Governance',       path: '/pmo/governance',     icon: 'shield' },
     { label: 'KPIs',             path: '/pmo/kpis',           icon: 'bar-chart' },
     { label: 'Risks',            path: '/pmo/risks',          icon: 'alert' },
@@ -220,6 +311,16 @@ export class App {
     { label: 'People',           path: '/people',             icon: 'users' },
     ...(this.canManageTenant() ? [{ label: 'Admin', path: '/admin', icon: 'settings' }] : []),
     ];
+  }
+
+  protected get primaryNavItems(): NavItem[] {
+    const overflowPaths = new Set(['/meetings', '/people', '/admin']);
+    return this.navItems.filter(item => !overflowPaths.has(item.path));
+  }
+
+  protected get overflowNavItems(): NavItem[] {
+    const overflowPaths = new Set(['/meetings', '/people', '/admin']);
+    return this.navItems.filter(item => overflowPaths.has(item.path));
   }
 
   protected readonly suggestedPrompts = [
@@ -247,6 +348,16 @@ export class App {
 
   protected homeLink(): string {
     return this.isPlatformAdmin() ? '/platform' : '/dashboard';
+  }
+
+  protected isOverflowRouteActive(): boolean {
+    const currentPath = this.router.url.split('?')[0];
+    return this.overflowNavItems.some(item => currentPath === item.path || currentPath.startsWith(`${item.path}/`));
+  }
+
+  protected logoutFromMenu(): void {
+    this.accountMenuOpen.set(false);
+    this.auth.logout();
   }
 
   protected setQuery(prompt: string): void {

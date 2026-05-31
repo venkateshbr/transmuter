@@ -1,7 +1,15 @@
-# Transmuter API — Antigravity Backend Coding Rules
+# Transmuter API — Backend Coding Rules
 
 ## Stack
 FastAPI 0.115+ · Python 3.12+ · Pydantic v2 · PydanticAI · Supabase · Procrastinate · Langfuse
+
+## Required Context
+- Root rules: `../../AGENTS.md`
+- Durable context: `../../docs/team/CODEX_CONTEXT.md` for launch, billing, RBAC, deployment, dashboard, and release context.
+- Backend rules: `CLAUDE.md`
+- Architecture: `../../docs/team/ARCHITECTURE.md`
+- Backend review: `../../team/CODEBASE_REVIEW.md`
+- Karya skills: `../../agents/skills/karya_skills.md`
 
 ## Non-Negotiable Rules
 
@@ -39,6 +47,8 @@ Before writing any third-party import:
 uv run python -c "import <pkg>; print(<pkg>.__version__)"
 uv run python -c "from <pkg>.<sub> import <Class>; print('OK')"
 ```
+
+Use this protocol for observability, AI, cloud, auth, Stripe, Supabase, and any package whose local API you have not verified in the current environment.
 
 ## Linting
 ```bash

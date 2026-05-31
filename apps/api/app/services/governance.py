@@ -20,6 +20,7 @@ from app.domain.governance import (
     GovernanceStatusResponse,
     PortfolioGovernanceResponse,
 )
+from app.repositories.audit import AuditRepository
 from app.repositories.governance import GovernanceRepository
 
 
@@ -37,6 +38,7 @@ GATES_PATH = _find_gates_path()
 class GovernanceService:
     def __init__(self, client: Client, tenant_id: UUID, user_id: UUID) -> None:
         self._repo = GovernanceRepository(client, tenant_id)
+        self._audit = AuditRepository(client, tenant_id)
         self._tenant_id = tenant_id
         self._user_id = str(user_id)
 
@@ -142,7 +144,14 @@ class GovernanceService:
         payload["decision"] = "pending"
 
         row = self._repo.create_submission(payload)
-        return self._to_submission(row)
+        submission = self._to_submission(row)
+        self._audit_change(
+            "submit",
+            "gate_submission",
+            row["id"],
+            after_data=submission.model_dump(mode="json"),
+        )
+        return submission
 
     def record_decision(self, submission_id: str, data: GateDecisionPatch) -> GateSubmissionItem:
         sub = self._repo.get_submission(submission_id)
@@ -164,7 +173,15 @@ class GovernanceService:
             if gate:
                 self._repo.update_initiative_stage(sub["initiative_id"], gate.to_stage)
 
-        return self._to_submission(updated)
+        submission = self._to_submission(updated)
+        self._audit_change(
+            self._decision_action(data.decision),
+            "gate_submission",
+            submission_id,
+            before_data=sub,
+            after_data=submission.model_dump(mode="json"),
+        )
+        return submission
 
     # ── Helpers ──────────────────────────────────────────────────────
 
@@ -234,6 +251,32 @@ class GovernanceService:
                 }
             )
         return snapshot
+
+    def _audit_change(
+        self,
+        action: str,
+        entity_type: str,
+        entity_id: str,
+        *,
+        before_data: dict[str, Any] | None = None,
+        after_data: dict[str, Any] | None = None,
+    ) -> None:
+        self._audit.log_change(
+            action=action,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            actor_id=self._user_id,
+            before_data=before_data,
+            after_data=after_data,
+        )
+
+    @staticmethod
+    def _decision_action(decision: str) -> str:
+        if decision == "approved":
+            return "approve"
+        if decision == "rejected":
+            return "reject"
+        return "update"
 
     @staticmethod
     def _load_gate_pack() -> dict[str, Any]:

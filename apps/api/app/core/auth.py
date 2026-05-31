@@ -5,8 +5,10 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel
+from supabase import create_client
 
 from app.core.config import settings
+from app.core.database import get_supabase_admin
 
 bearer = HTTPBearer()
 
@@ -15,7 +17,6 @@ class CurrentUser(BaseModel):
     id: UUID
     tenant_id: UUID
     role: str
-    email: str
 
 
 async def get_current_user(
@@ -23,38 +24,84 @@ async def get_current_user(
 ) -> CurrentUser:
     token = credentials.credentials
 
+    legacy_user = _current_user_from_app_token(token)
+    if legacy_user:
+        return legacy_user
+
+    return _current_user_from_supabase_token(token)
+
+
+def _current_user_from_app_token(token: str) -> CurrentUser | None:
     try:
-        # Decode and verify using our own secret
         payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+    except JWTError:
+        return None
 
-        user_id = payload.get("sub")
-        tenant_id = payload.get("tenant_id")
-        role = payload.get("role")
-        email = payload.get("email")
+    user_id = payload.get("sub")
+    tenant_id = payload.get("tenant_id")
+    role = payload.get("role")
 
-        if not user_id or not tenant_id:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload"
+    if not user_id or not tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload"
+        )
+
+    return CurrentUser(
+        id=UUID(user_id),
+        tenant_id=UUID(tenant_id),
+        role=role or "viewer",
+    )
+
+
+def _current_user_from_supabase_token(token: str) -> CurrentUser:
+    try:
+        anon_client = create_client(settings.supabase_url, settings.supabase_anon_key)
+        auth_user = anon_client.auth.get_user(token).user
+        if not auth_user:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+        email = (auth_user.email or "").lower()
+        if email in _platform_admin_emails():
+            return CurrentUser(
+                id=UUID(str(auth_user.id)),
+                tenant_id=UUID("00000000-0000-0000-0000-000000000000"),
+                role="platform_admin",
             )
 
-        return CurrentUser(
-            id=UUID(user_id),
-            tenant_id=UUID(tenant_id),
-            role=role or "viewer",
-            email=email or "",
+        user_row = (
+            get_supabase_admin()
+            .table("users")
+            .select("id, tenant_id, role, status")
+            .eq("id", str(auth_user.id))
+            .maybe_single()
+            .execute()
         )
-    except JWTError as exc:
+        if not user_row.data:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User account not found in platform",
+            )
+        if user_row.data["status"] == "deactivated":
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account deactivated")
+        return CurrentUser(
+            id=UUID(user_row.data["id"]),
+            tenant_id=UUID(user_row.data["tenant_id"]),
+            role=user_row.data["role"],
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid JWT: {str(exc)}",
             headers={"WWW-Authenticate": "Bearer"},
-        )
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Auth failure: {str(exc)}",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from exc
+
+
+def _platform_admin_emails() -> set[str]:
+    return {
+        item.strip().lower() for item in settings.platform_admin_emails.split(",") if item.strip()
+    }
 
 
 def require_role(*roles: str):

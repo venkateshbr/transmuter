@@ -31,6 +31,7 @@ from app.domain.kpis import KPICreate
 from app.domain.milestones import MilestoneCreate
 from app.domain.risks import RiskCreate
 from app.domain.status_updates import StatusUpdateCreate
+from app.repositories.audit import AuditRepository
 from app.repositories.business_unit import BusinessUnitRepository
 from app.repositories.initiative import InitiativeRepository
 from app.repositories.people import PeopleRepository
@@ -52,18 +53,22 @@ from app.services.status_update import StatusUpdateService
 
 
 class InitiativeService:
-    def __init__(self, client: Client, tenant_id: UUID) -> None:
+    def __init__(self, client: Client, tenant_id: UUID, user_id: UUID | None = None) -> None:
         self._client = client
         self._repo = InitiativeRepository(client, tenant_id)
+        self._audit = AuditRepository(client, tenant_id)
         self._fin = FinancialService(client, tenant_id)
         self._tenant_id = tenant_id
+        self._user_id = str(user_id) if user_id else None
 
     def list_initiatives(
         self,
+        business_unit_id: str | None = None,
         workstream_id: str | None = None,
         rag_status: str | None = None,
         stage: str | None = None,
         priority: str | None = None,
+        tag: str | None = None,
         search: str | None = None,
         sort_by: str = "initiative_code",
         sort_desc: bool = False,
@@ -77,10 +82,12 @@ class InitiativeService:
             else None
         )
         rows, total = self._repo.list(
-            workstream_id=workstream_id,
-            rag_status=rag_status,
-            stage=stage,
-            priority=priority,
+            business_unit_ids=self._split_filter_values(business_unit_id),
+            workstream_ids=self._split_filter_values(workstream_id),
+            rag_statuses=self._split_filter_values(rag_status),
+            stages=self._split_filter_values(stage),
+            priorities=self._split_filter_values(priority),
+            tags=self._split_filter_values(tag),
             search=search,
             sort_by=sort_by,
             sort_desc=sort_desc,
@@ -90,6 +97,13 @@ class InitiativeService:
         )
         items = [self._to_list_item(r, self._fin.get_financial_summary(str(r["id"]))) for r in rows]
         return InitiativeListResponse(items=items, total=total, page=page, page_size=page_size)
+
+    @staticmethod
+    def _split_filter_values(value: str | None) -> list[str] | None:
+        if not value:
+            return None
+        values = [part.strip() for part in value.split(",") if part.strip()]
+        return values or None
 
     def get_initiative(
         self,
@@ -161,7 +175,12 @@ class InitiativeService:
         else:
             raise HTTPException(status_code=500, detail="Could not generate unique initiative code")
 
-        return self.get_initiative(row["id"])
+        self._fin.initialize_default_selections(row["id"])
+        initiative = self.get_initiative(row["id"])
+        self._audit_change(
+            "create", "initiative", row["id"], after_data=initiative.model_dump(mode="json")
+        )
+        return initiative
 
     def update_initiative(self, initiative_id: str, data: InitiativeUpdate) -> InitiativeDetail:
         existing = self._repo.get(initiative_id)
@@ -188,16 +207,33 @@ class InitiativeService:
             patch["benefit_confidence"] = str(patch["benefit_confidence"])
         patch["updated_at"] = datetime.now(UTC).isoformat()
         self._repo.update(initiative_id, patch)
-        return self.get_initiative(initiative_id)
+        initiative = self.get_initiative(initiative_id)
+        self._audit_change(
+            "update",
+            "initiative",
+            initiative_id,
+            before_data=existing,
+            after_data=initiative.model_dump(mode="json"),
+        )
+        return initiative
 
     def archive_initiative(self, initiative_id: str) -> InitiativeDetail:
-        self._assert_exists(initiative_id)
+        existing = self._assert_exists(initiative_id)
         self._repo.archive(initiative_id)
-        return self.get_initiative(initiative_id)
+        initiative = self.get_initiative(initiative_id)
+        self._audit_change(
+            "archive",
+            "initiative",
+            initiative_id,
+            before_data=existing,
+            after_data=initiative.model_dump(mode="json"),
+        )
+        return initiative
 
     def delete_initiative(self, initiative_id: str) -> None:
-        self._assert_exists(initiative_id)
+        existing = self._assert_exists(initiative_id)
         self._repo.delete(initiative_id)
+        self._audit_change("delete", "initiative", initiative_id, before_data=existing)
 
     def export_csv(self, current_user: CurrentUser | None = None) -> str:
         owner_user_id = (
@@ -694,6 +730,7 @@ class InitiativeService:
         fin: FinancialSummary | None = None,
     ) -> InitiativeListItem:
         ws = row.get("workstreams") or {}
+        bu = ws.get("business_units") if isinstance(ws, dict) else None
         owner = row.get("users") or {}
         return InitiativeListItem(
             id=row["id"],
@@ -701,6 +738,8 @@ class InitiativeService:
             name=row["name"],
             workstream_id=row.get("workstream_id"),
             workstream_name=ws.get("name") if isinstance(ws, dict) else None,
+            business_unit_id=ws.get("business_unit_id") if isinstance(ws, dict) else None,
+            business_unit_name=bu.get("name") if isinstance(bu, dict) else None,
             owner_id=row.get("owner_id"),
             owner_name=owner.get("display_name") if isinstance(owner, dict) else None,
             type=row.get("type"),
@@ -856,6 +895,26 @@ class InitiativeService:
         )
 
         return total_score.quantize(Decimal("0.1")), breakdown
+
+    def _audit_change(
+        self,
+        action: str,
+        entity_type: str,
+        entity_id: str,
+        *,
+        before_data: dict | None = None,  # type: ignore[type-arg]
+        after_data: dict | None = None,  # type: ignore[type-arg]
+    ) -> None:
+        if not self._user_id:
+            return
+        self._audit.log_change(
+            action=action,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            actor_id=self._user_id,
+            before_data=before_data,
+            after_data=after_data,
+        )
 
     def _get_team_members(self, initiative_id: str) -> list[InitiativeTeamMember]:
         rows = self._repo.get_team_members(initiative_id)

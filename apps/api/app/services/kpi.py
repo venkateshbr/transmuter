@@ -17,13 +17,16 @@ from app.domain.kpis import (
     KPIPulseSummary,
     KPIUpdate,
 )
+from app.repositories.audit import AuditRepository
 from app.repositories.kpi import KPIRepository
 
 
 class KPIService:
-    def __init__(self, client: Client, tenant_id: UUID) -> None:
+    def __init__(self, client: Client, tenant_id: UUID, user_id: UUID | None = None) -> None:
         self._repo = KPIRepository(client, tenant_id)
+        self._audit = AuditRepository(client, tenant_id)
         self._tenant_id = tenant_id
+        self._user_id = str(user_id) if user_id else None
 
     # ── List / Detail ────────────────────────────────────────────────
 
@@ -109,7 +112,7 @@ class KPIService:
 
     def create_kpi(self, initiative_id: str, data: KPICreate) -> KPIItem:
         row = self._repo.create(initiative_id, data.model_dump(exclude_none=True))
-        return KPIItem(
+        item = KPIItem(
             id=row["id"],
             initiative_id=row["initiative_id"],
             name=row["name"],
@@ -119,6 +122,8 @@ class KPIService:
             unit=row.get("unit"),
             entries=[],
         )
+        self._audit_change("create", "kpi", row["id"], after_data=item.model_dump(mode="json"))
+        return item
 
     def update_kpi(
         self,
@@ -127,6 +132,7 @@ class KPIService:
         data: KPIUpdate,
     ) -> KPIItem:
         self._assert_belongs_to_initiative(kpi_id, initiative_id)
+        existing = self._repo.get(kpi_id) or {}
         patch = data.model_dump(exclude_none=True)
         row = self._repo.update(kpi_id, patch)
 
@@ -149,7 +155,7 @@ class KPIService:
             for e in entries
         ]
 
-        return KPIItem(
+        item = KPIItem(
             id=row["id"],
             initiative_id=row["initiative_id"],
             name=row["name"],
@@ -159,10 +165,19 @@ class KPIService:
             unit=row.get("unit"),
             entries=entry_items,
         )
+        self._audit_change(
+            "update",
+            "kpi",
+            kpi_id,
+            before_data=existing,
+            after_data=item.model_dump(mode="json"),
+        )
+        return item
 
     def delete_kpi(self, initiative_id: str, kpi_id: str) -> None:
-        self._assert_belongs_to_initiative(kpi_id, initiative_id)
+        existing = self._assert_belongs_to_initiative(kpi_id, initiative_id)
         self._repo.delete(kpi_id)
+        self._audit_change("delete", "kpi", kpi_id, before_data=existing)
 
     # ── Entries ──────────────────────────────────────────────────────
 
@@ -297,3 +312,23 @@ class KPIService:
                 detail="KPI not found",
             )
         return row
+
+    def _audit_change(
+        self,
+        action: str,
+        entity_type: str,
+        entity_id: str,
+        *,
+        before_data: dict | None = None,  # type: ignore[type-arg]
+        after_data: dict | None = None,  # type: ignore[type-arg]
+    ) -> None:
+        if not self._user_id:
+            return
+        self._audit.log_change(
+            action=action,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            actor_id=self._user_id,
+            before_data=before_data,
+            after_data=after_data,
+        )

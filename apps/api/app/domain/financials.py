@@ -71,6 +71,18 @@ class FinancialMetricDeactivateRequest(BaseModel):
     metric_key: str = Field(..., min_length=1, max_length=120)
 
 
+class InitiativeFinancialSelections(BaseModel):
+    metric_keys: list[str] = Field(default_factory=list)
+    cost_category_keys: list[str] = Field(default_factory=list)
+
+
+class InitiativeFinancialSelectionsResponse(BaseModel):
+    available: FinancialConfigurationResponse
+    selected: InitiativeFinancialSelections
+    locked: bool = False
+    lock_reason: str | None = None
+
+
 # ── Financial entries (revenue uplift, gross margin per quarter) ──────────────
 
 
@@ -143,6 +155,7 @@ class FinancialGridUpdate(BaseModel):
 
     entries: list[FinancialEntryUpdate]
     cost_lines: list[CostLineCreate] | None = None
+    metric_values: list[FinancialMetricValueUpdate] | None = None
 
 
 class FinancialGridResponse(BaseModel):
@@ -150,6 +163,10 @@ class FinancialGridResponse(BaseModel):
 
     initiative_id: str
     entries: list[FinancialEntryRow]
+    metric_values: list[FinancialMetricValueRow] = Field(default_factory=list)
+    selections: InitiativeFinancialSelections = Field(default_factory=InitiativeFinancialSelections)
+    locked: bool = False
+    lock_reason: str | None = None
     summary: FinancialSummary
 
 
@@ -191,10 +208,6 @@ class FinancialSummary(BaseModel):
     # Run rates (annualised)
     benefit_run_rate: str = "0"
     cost_run_rate: str = "0"
-
-
-# Fix forward reference
-FinancialGridResponse.model_rebuild()
 
 
 # ── Cost lines ────────────────────────────────────────────────────────────────
@@ -319,6 +332,31 @@ class CostLineListResponse(BaseModel):
     total: int
 
 
+class FinancialMetricValueRow(BaseModel):
+    metric_key: str
+    year: int
+    quarter: int | None = None
+    month: int | None = None
+    value_base: str = "0"
+    value_high: str = "0"
+    value_actual: str | None = None
+
+
+class FinancialMetricValueUpdate(BaseModel):
+    metric_key: str = Field(..., min_length=1, max_length=120)
+    year: int = Field(..., ge=2020, le=2040)
+    quarter: Quarter | None = None
+    month: int | None = Field(None, ge=1, le=12)
+    value_base: Decimal = Decimal("0")
+    value_high: Decimal = Decimal("0")
+    value_actual: Decimal | None = None
+
+
+# Fix forward references
+FinancialGridUpdate.model_rebuild()
+FinancialGridResponse.model_rebuild()
+
+
 # ── Value Bridge ──────────────────────────────────────────────────────────────
 
 
@@ -328,6 +366,7 @@ class ValueBridgeCase(BaseModel):
     revenue_uplift: str = "0"
     gross_margin: str = "0"
     gm_uplift: str = "0"
+    cogs: str = "0"
     costs_recurring: str = "0"
     costs_one_off: str = "0"
     costs_total: str = "0"

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.core.agent_security import validate_agent_model_strings, validate_agent_text_list
 from app.domain.financials import CostLineCreate, FinancialEntryUpdate
 from app.domain.initiatives import InitiativeCreate
 from app.domain.kpis import KPICreate, KPIEntryUpsert
@@ -73,6 +74,16 @@ class SuggestedMilestone(MilestoneCreate, IntakeSuggestionState):
 class InitiativeIntakeRequest(BaseModel):
     initiative: InitiativeCreate
     conversation: list[str] = Field(default_factory=list)
+
+    @field_validator("conversation")
+    @classmethod
+    def validate_conversation(cls, value: list[str]) -> list[str]:
+        return validate_agent_text_list(value, "conversation")
+
+    @model_validator(mode="after")
+    def validate_agent_visible_fields(self) -> InitiativeIntakeRequest:
+        validate_agent_model_strings(self.initiative.model_dump(mode="json"))
+        return self
 
 
 class InitiativeIntakeSuggestions(BaseModel):

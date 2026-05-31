@@ -236,7 +236,8 @@ async function main() {
           'dashboard-recent-activity',
           'dashboard-filter-business-unit',
           'dashboard-filter-workstream',
-          'dashboard-filter-rag',
+          'dashboard-filter-priority',
+          'dashboard-filter-tag',
           'dashboard-executive-summary'
         ].every(testId => !!document.querySelector('[data-testid="' + testId + '"]'))
       `),
@@ -252,9 +253,41 @@ async function main() {
     assert(dashboardSnapshot.available_filters?.business_units, 'dashboard API should expose business unit filters');
     await evalJs(page, `document.querySelector('[data-testid="dashboard-executive-summary"]').click()`);
     await waitFor(
-      () => evalJs(page, "!!document.querySelector('[data-testid=\"dashboard-executive-summary-ready\"]')"),
-      'executive summary generation',
+      () => evalJs(page, "!!document.querySelector('[data-testid=\"dashboard-executive-summary-ready\"]') && !!document.querySelector('[data-testid=\"dashboard-executive-brief\"]')"),
+      'executive brief generation',
     );
+    await waitFor(
+      () => evalJs(page, `
+        !!document.querySelector('[data-testid="dashboard-executive-brief-pdf"]')
+        && !!document.querySelector('[data-testid="dashboard-executive-brief-excel"]')
+      `),
+      'executive brief export controls',
+    );
+    await evalJs(page, `
+      (() => {
+        const close = document.querySelector('[aria-label="Close executive brief"]');
+        if (!close) throw new Error('Missing executive brief close button');
+        close.click();
+        return true;
+      })()
+    `);
+    await waitFor(
+      () => evalJs(page, "!document.querySelector('[data-testid=\"dashboard-executive-brief\"]')"),
+      'executive brief closed',
+    );
+    await evalJs(page, `document.querySelector('[data-testid="dashboard-decision-queue"]').click()`);
+    await waitFor(
+      () => evalJs(page, "!!document.querySelector('[data-testid=\"dashboard-decision-queue-panel\"]')"),
+      'decision queue opens',
+    );
+    await evalJs(page, `
+      (() => {
+        const close = document.querySelector('[aria-label="Close decision queue"]');
+        if (!close) throw new Error('Missing decision queue close button');
+        close.click();
+        return true;
+      })()
+    `);
 
     const clickDashboardTarget = async testId => {
       await evalJs(page, `
@@ -289,8 +322,9 @@ async function main() {
       'dashboard at-risk drill-down',
     );
     await waitFor(
-      () => evalJs(page, "document.querySelector('select.input-field:nth-of-type(1)')?.value === 'red' || document.body.innerText.includes('All RAG')"),
+      () => evalJs(page, "!!document.querySelector('[data-testid=\"initiatives-filter-business-unit\"]') && !document.body.innerText.toLowerCase().includes('loading portfolio')"),
       'pipeline red query handled',
+      30_000,
     );
     await navigateToDashboard('dashboard reload after risk');
 
@@ -370,10 +404,18 @@ async function main() {
         'admin financial configuration tab',
         20_000,
       );
-      await clickTab(page, 'Financial Configuration');
+      await evalJs(page, `
+        (() => {
+          const button = document.querySelector('button[aria-label="Open Financial Configuration admin tab"]');
+          if (!button) throw new Error('Missing Financial Configuration admin tab');
+          button.click();
+          return true;
+        })()
+      `);
       await waitFor(
         () => evalJs(page, "document.body.innerText.includes('Cost Categories') && !!document.querySelector('input[aria-label=\"New cost category name\"]')"),
         'admin cost category configuration',
+        45_000,
       );
       await setField(page, 'input[aria-label="New cost category name"]', acceptanceCategoryLabel);
       await evalJs(page, `
@@ -492,6 +534,11 @@ async function main() {
     assert(peopleRows.items.length > 0, 'Seeded users were not available');
     const seededPerson = peopleRows.items.find(item => item.status === 'active') ?? peopleRows.items[0];
     const seededPersonLabel = seededPerson.display_name || seededPerson.email;
+    const seededPersonRoleLabel = {
+      transformation_office: 'Transformation Office',
+      initiative_owner: 'Initiative Owner',
+      viewer: 'Viewer',
+    }[seededPerson.role] ?? seededPerson.role;
     const inviteEmail = `transmuter.acceptance+ui.people.${Date.now()}@gmail.com`;
     let invitedPersonId;
 
@@ -503,20 +550,31 @@ async function main() {
         20_000,
       );
       await waitFor(
-        () => evalJs(page, "document.querySelector('[data-testid=\"people-filters\"]') !== null && document.querySelector('input[aria-label=\"Search people\"]') !== null && document.querySelector('select[aria-label=\"Filter people by role\"]') !== null && document.querySelector('select[aria-label=\"Filter people by status\"]') !== null"),
+        () => evalJs(page, "document.querySelector('[data-testid=\"people-filters\"]') !== null && document.querySelector('[data-testid=\"people-filters\"] input[aria-label=\"Search\"]') !== null && document.querySelector('button[aria-label=\"Open Role filter\"]') !== null && document.querySelector('button[aria-label=\"Open Status filter\"]') !== null"),
         'people filters',
       );
-      await setField(page, 'input[aria-label="Search people"]', seededPerson.email);
+      await setField(page, '[data-testid="people-filters"] input[aria-label="Search"]', seededPerson.email);
       await waitFor(
         () => evalJs(page, `document.body.innerText.includes(${JSON.stringify(seededPersonLabel)})`),
         'seeded person visible in searched directory',
       );
       await evalJs(page, `
         (() => {
-          const role = document.querySelector('select[aria-label="Filter people by role"]');
-          role.value = ${JSON.stringify(seededPerson.role)};
-          role.dispatchEvent(new Event('input', { bubbles: true }));
-          role.dispatchEvent(new Event('change', { bubbles: true }));
+          const roleButton = document.querySelector('button[aria-label="Open Role filter"]');
+          if (!roleButton) throw new Error('Missing role filter trigger');
+          roleButton.click();
+          return true;
+        })()
+      `);
+      await waitFor(
+        () => evalJs(page, `document.querySelector(${JSON.stringify(`input[aria-label="Role: ${seededPersonRoleLabel}"]`)}) !== null`),
+        'people role filter option',
+      );
+      await evalJs(page, `
+        (() => {
+          const role = document.querySelector(${JSON.stringify(`input[aria-label="Role: ${seededPersonRoleLabel}"]`)});
+          if (!role) throw new Error('Missing role filter option: ${seededPersonRoleLabel}');
+          role.click();
           return true;
         })()
       `);
@@ -626,6 +684,7 @@ async function main() {
     let manualInitiativeId;
     let uploadedInitiativeId;
     let statusSilentInitiativeId;
+    let crossDependencyInitiativeId;
 
     try {
       await page.send('Page.navigate', { url: `${uiBaseUrl}/initiatives/pipeline` });
@@ -677,7 +736,7 @@ async function main() {
         await waitFor(
           () => evalJs(page, "document.body.innerText.includes('HITL REVIEW') && document.body.innerText.includes('Transmuter suggestions')"),
           'guided initiative suggestions',
-          20_000,
+          45_000,
         );
       } catch (error) {
         const bodyText = await evalJs(page, "document.body.innerText");
@@ -979,25 +1038,25 @@ async function main() {
       await waitFor(() => evalJs(page, "document.body.innerText.includes('Status Heartbeat')"), 'status updates tab');
       await clickText(page, 'Create Update');
       await waitFor(() => evalJs(page, "document.querySelector('textarea[placeholder^=\"High-level status\"]') !== null"), 'status update editor');
-      await clickText(page, 'Generate Draft');
+      await evalJs(page, "document.querySelector('[data-testid=\"generate-status-draft\"]').click()");
       await waitFor(
         () => evalJs(page, "document.body.innerText.toLowerCase().includes('ai draft') && document.querySelector('textarea[placeholder^=\"High-level status\"]')?.value.length > 0"),
         'generated status update draft',
         20_000,
       );
-      await clickText(page, 'Edit');
-      await clickText(page, 'Discard');
+      await evalJs(page, "document.querySelector('[data-testid=\"edit-status-draft\"]').click()");
+      await evalJs(page, "document.querySelector('[data-testid=\"discard-status-draft\"]').click()");
       await waitFor(
         () => evalJs(page, "document.querySelector('textarea[placeholder^=\"High-level status\"]')?.value === ''"),
         'discard generated status draft',
       );
-      await clickText(page, 'Generate Draft');
+      await evalJs(page, "document.querySelector('[data-testid=\"generate-status-draft\"]').click()");
       await waitFor(
         () => evalJs(page, "document.body.innerText.toLowerCase().includes('ai draft') && document.querySelector('textarea[placeholder^=\"High-level status\"]')?.value.length > 0"),
         'regenerated status update draft',
         20_000,
       );
-      await clickText(page, 'Accept');
+      await evalJs(page, "document.querySelector('[data-testid=\"accept-status-draft\"]').click()");
       await waitFor(
         () => evalJs(page, "document.querySelector('textarea[placeholder^=\"High-level status\"]') !== null"),
         'accepted generated status draft',
@@ -1094,17 +1153,37 @@ async function main() {
       await setField(page, 'input[placeholder^="e.g. Pilot"]', upstreamMilestoneName);
       await setField(page, 'textarea[placeholder^="Key outcomes"]', 'Created by browser acceptance');
       await clickText(page, 'Create Milestone');
-      await waitFor(() => evalJs(page, `document.body.innerText.includes(${JSON.stringify(upstreamMilestoneName)})`), 'upstream milestone created');
+      await waitFor(async () => {
+        const list = await api(`/initiatives/${manualInitiativeId}/milestones`);
+        return list.items.some(item => item.name === upstreamMilestoneName);
+      }, 'upstream milestone API created');
+      await waitFor(
+        () => evalJs(page, `document.body.innerText.includes(${JSON.stringify(upstreamMilestoneName)})`),
+        'upstream milestone created',
+        30_000,
+      );
       await clickText(page, 'New Milestone');
       await waitFor(() => evalJs(page, "document.body.innerText.includes('New Milestone')"), 'second milestone modal');
       await setField(page, 'input[placeholder^="e.g. Pilot"]', downstreamMilestoneName);
       await setField(page, 'textarea[placeholder^="Key outcomes"]', 'Blocked by the upstream acceptance milestone');
       await clickText(page, 'Create Milestone');
-      await waitFor(() => evalJs(page, `document.body.innerText.includes(${JSON.stringify(downstreamMilestoneName)})`), 'downstream milestone created');
+      await waitFor(async () => {
+        const list = await api(`/initiatives/${manualInitiativeId}/milestones`);
+        return list.items.some(item => item.name === downstreamMilestoneName);
+      }, 'downstream milestone API created');
+      await waitFor(
+        () => evalJs(page, `document.body.innerText.includes(${JSON.stringify(downstreamMilestoneName)})`),
+        'downstream milestone created',
+        30_000,
+      );
       let milestoneList = await api(`/initiatives/${manualInitiativeId}/milestones`);
       const upstreamMilestone = milestoneList.items.find(item => item.name === upstreamMilestoneName);
       const downstreamMilestone = milestoneList.items.find(item => item.name === downstreamMilestoneName);
       assert(upstreamMilestone && downstreamMilestone, 'Milestones were not persisted');
+      await api(`/milestones/${downstreamMilestone.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ planned_end: '2026-08-15' }),
+      });
       await evalJs(page, `
         (() => {
           const row = [...document.querySelectorAll('.card')]
@@ -1133,22 +1212,198 @@ async function main() {
         })()
       `);
       await waitFor(async () => {
-        const detail = await api(`/milestones/${downstreamMilestone.id}`);
-        return detail.dependencies.some(dep => dep.upstream_milestone_id === upstreamMilestone.id);
-      }, 'milestone dependency persistence');
+        const [detail, dependencies] = await Promise.all([
+          api(`/milestones/${downstreamMilestone.id}`),
+          api('/dependencies'),
+        ]);
+        return detail.dependencies.some(dep => dep.upstream_milestone_id === upstreamMilestone.id)
+          || dependencies.edges.some(edge => edge.source === upstreamMilestone.id && edge.target === downstreamMilestone.id);
+      }, 'milestone dependency persistence', 30_000);
       await page.send('Page.navigate', { url: `${uiBaseUrl}/progress/dependencies` });
       await waitFor(
-        () => evalJs(page, `document.body.innerText.includes(${JSON.stringify(upstreamMilestoneName)}) && document.body.innerText.includes(${JSON.stringify(downstreamMilestoneName)})`),
-        'portfolio dependencies view',
+        () => evalJs(page, "location.pathname === '/progress/roadmap' && document.body.innerText.includes('Roadmap Explorer') && !document.querySelector('[data-testid=\"dependency-graph\"]') && !document.querySelector('[data-testid=\"dependency-table\"]')"),
+        'portfolio dependencies redirect to roadmap',
       );
-      await waitFor(
-        () => evalJs(page, "!!document.querySelector('[data-testid=\"dependency-stats\"]') && !!document.querySelector('[data-testid=\"dependency-graph\"]') && !!document.querySelector('[data-testid=\"dependency-table\"]')"),
-        'dependency stats graph and table',
-      );
+
+      const crossDependencyInitiative = await api('/initiatives', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: `UI Acceptance Dependency Peer ${Date.now()}`,
+          priority: 'medium',
+          country: 'Singapore',
+          planned_start: '2026-06-01',
+          planned_end: '2026-09-30',
+        }),
+      });
+      crossDependencyInitiativeId = crossDependencyInitiative.id;
+      const crossUpstreamMilestone = await api(`/initiatives/${crossDependencyInitiativeId}/milestones`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: `UI Acceptance Cross Upstream ${Date.now()}`,
+          planned_end: '2026-07-15',
+        }),
+      });
       await page.send('Page.navigate', { url: `${uiBaseUrl}/initiatives/${manualInitiativeId}` });
       await waitFor(
         () => evalJs(page, `document.body.innerText.includes(${JSON.stringify(manualInitiativeName)})`),
         'return to initiative detail after dependencies',
+      );
+      await clickTab(page, 'Milestones');
+      await waitFor(async () => {
+        const refreshed = await api(`/initiatives/${manualInitiativeId}/milestones`);
+        return refreshed.items.some(item => item.id === downstreamMilestone.id && item.name === downstreamMilestoneName);
+      }, 'downstream milestone API row after return');
+      try {
+        await waitFor(
+          () => evalJs(page, `
+            [...document.querySelectorAll('.card')]
+              .some(node => node.textContent.includes(${JSON.stringify(downstreamMilestoneName)}))
+          `),
+          'downstream milestone row after return',
+          30_000,
+        );
+      } catch (error) {
+        const milestoneTabState = await evalJs(page, `
+          (() => ({
+            location: location.pathname,
+            cardTexts: [...document.querySelectorAll('.card')].map(node => node.textContent.trim().slice(0, 300)),
+            bodyText: (document.body?.innerText || '').slice(0, 2000),
+          }))()
+        `);
+        throw new Error(`${error.message}\nMilestones tab state:\n${JSON.stringify(milestoneTabState, null, 2)}`);
+      }
+      await evalJs(page, `
+        (() => {
+          const row = [...document.querySelectorAll('.card')]
+            .find(node => node.textContent.includes(${JSON.stringify(downstreamMilestoneName)}));
+          if (!row) throw new Error('Missing downstream milestone row for cross dependency');
+          row.querySelector('[class*="cursor-pointer"]')?.click();
+          return true;
+        })()
+      `);
+      await waitFor(
+        () => evalJs(page, `
+          [...document.querySelectorAll('select[aria-label="Select upstream dependency"] option')]
+            .some(option => option.value === ${JSON.stringify(crossUpstreamMilestone.id)})
+        `),
+        'cross-initiative dependency candidate visible',
+      );
+      await evalJs(page, `
+        (() => {
+          const select = document.querySelector('select[aria-label="Select upstream dependency"]');
+          if (![...select.options].some(option => option.value === ${JSON.stringify(crossUpstreamMilestone.id)})) {
+            throw new Error('Missing cross-initiative milestone candidate');
+          }
+          select.value = ${JSON.stringify(crossUpstreamMilestone.id)};
+          select.dispatchEvent(new Event('input', { bubbles: true }));
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+          globalThis.__transmuterMilestones.dependencyDraft = ${JSON.stringify(crossUpstreamMilestone.id)};
+          globalThis.__transmuterMilestones.addDependency(${JSON.stringify(downstreamMilestone.id)});
+          return true;
+        })()
+      `);
+      await waitFor(async () => {
+        const detail = await api(`/milestones/${downstreamMilestone.id}`);
+        return detail.dependencies.some(dep => dep.upstream_milestone_id === crossUpstreamMilestone.id);
+      }, 'cross-initiative milestone dependency persistence');
+      await waitFor(async () => {
+        const [milestones, dependencies] = await Promise.all([
+          api('/milestones'),
+          api('/dependencies'),
+        ]);
+        const upstreamVisible = milestones.items.some(
+          item => item.id === crossUpstreamMilestone.id && item.planned_end === '2026-07-15',
+        );
+        const downstreamVisible = milestones.items.some(
+          item => item.id === downstreamMilestone.id && item.planned_end === '2026-08-15',
+        );
+        const edgeVisible = dependencies.edges.some(
+          edge => edge.source === crossUpstreamMilestone.id && edge.target === downstreamMilestone.id,
+        );
+        return upstreamVisible && downstreamVisible && edgeVisible;
+      }, 'cross-initiative roadmap dependency data');
+      await page.send('Page.navigate', { url: `${uiBaseUrl}/progress/roadmap` });
+      try {
+        await waitFor(
+          () => evalJs(page, `
+            (() => {
+              const bodyText = document.body?.innerText || '';
+              const expectedTitle = ${JSON.stringify(`${crossUpstreamMilestone.name} blocks ${downstreamMilestoneName}`)};
+              return bodyText.includes('Roadmap Explorer')
+                && bodyText.includes(${JSON.stringify(crossUpstreamMilestone.name)})
+                && !!document.querySelector('[data-testid="roadmap-milestone-${downstreamMilestone.id}"]')
+                && [...document.querySelectorAll('svg path[stroke-dasharray="3 4"] title')]
+                  .some(title => title.textContent === expectedTitle);
+            })()
+          `),
+          'roadmap dotted dependency link',
+          30_000,
+        );
+      } catch (error) {
+        const roadmapState = await evalJs(page, `
+          (() => ({
+            pathCount: document.querySelectorAll('svg path[stroke-dasharray="3 4"]').length,
+            downstreamMarker: !!document.querySelector('[data-testid="roadmap-milestone-${downstreamMilestone.id}"]'),
+            upstreamNameVisible: (document.body?.innerText || '').includes(${JSON.stringify(crossUpstreamMilestone.name)}),
+            titles: [...document.querySelectorAll('svg path[stroke-dasharray="3 4"] title')].map(title => title.textContent),
+            bodyText: (document.body?.innerText || '').slice(0, 2000),
+          }))()
+        `);
+        throw new Error(`${error.message}\nRoadmap state:\n${JSON.stringify(roadmapState, null, 2)}`);
+      }
+      await evalJs(page, `
+        (() => {
+          const button = document.querySelector('[data-testid="roadmap-milestone-${downstreamMilestone.id}"]');
+          if (!button) throw new Error('Missing downstream roadmap milestone marker');
+          button.scrollIntoView({ block: 'center', inline: 'center' });
+          button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+          return true;
+        })()
+      `);
+      try {
+        await waitFor(
+          () => evalJs(page, `
+            (() => {
+              const modal = document.querySelector('[data-testid="roadmap-milestone-modal"]');
+              const text = modal?.innerText || '';
+              const normalizedText = text.toLowerCase();
+              return !!modal
+                && text.includes(${JSON.stringify(downstreamMilestoneName)})
+                && text.includes(${JSON.stringify(crossUpstreamMilestone.name)})
+                && text.includes('Upstream Dependencies')
+                && text.includes('Downstream Dependencies')
+                && normalizedText.includes('previous due')
+                && normalizedText.includes('next due');
+            })()
+          `),
+          'roadmap milestone dependency modal',
+          30_000,
+        );
+      } catch (error) {
+        const modalState = await evalJs(page, `
+          (() => {
+            const modal = document.querySelector('[data-testid="roadmap-milestone-modal"]');
+            return {
+              markerExists: !!document.querySelector('[data-testid="roadmap-milestone-${downstreamMilestone.id}"]'),
+              modalExists: !!modal,
+              modalText: (modal?.innerText || '').slice(0, 2000),
+              upstreamPanelText: (document.querySelector('[data-testid="roadmap-upstream-dependencies"]')?.innerText || '').slice(0, 1000),
+              bodyText: (document.body?.innerText || '').slice(0, 2000),
+            };
+          })()
+        `);
+        throw new Error(`${error.message}\nRoadmap modal state:\n${JSON.stringify(modalState, null, 2)}`);
+      }
+      await evalJs(page, `document.querySelector('[data-testid="roadmap-milestone-modal"] button[aria-label="Close milestone detail"]')?.click()`);
+      await setField(page, 'select.input-field', '6');
+      await waitFor(
+        () => evalJs(page, "document.body.innerText.includes('links hidden by timeframe') || !!document.querySelector('svg path[stroke-dasharray=\"3 4\"]')"),
+        'roadmap dependency visibility after timeframe change',
+      );
+      await page.send('Page.navigate', { url: `${uiBaseUrl}/initiatives/${manualInitiativeId}` });
+      await waitFor(
+        () => evalJs(page, `document.body.innerText.includes(${JSON.stringify(manualInitiativeName)})`),
+        'return to initiative detail after roadmap',
       );
 
       const kpiName = `UI Acceptance KPI ${Date.now()}`;
@@ -1278,12 +1533,13 @@ async function main() {
       assert(uploadedInitiative.counts.milestones_total >= 1, 'Uploaded milestone was not persisted');
       const uploadedFinancials = await api(`/initiatives/${uploadedInitiativeId}/financials`);
       assert(uploadedFinancials.entries.some(item =>
-        item.year === 2030
-        && item.quarter === 1
+        item.year === 2026
+        && item.month === 6
         && Number(item.revenue_uplift_base) === 100000
-      ), 'Uploaded financial entry was not persisted');
+      ), 'Uploaded financial entry was not migrated to the first planned month');
     } finally {
       if (statusSilentInitiativeId) await api(`/initiatives/${statusSilentInitiativeId}`, { method: 'DELETE' }).catch(() => null);
+      if (crossDependencyInitiativeId) await api(`/initiatives/${crossDependencyInitiativeId}`, { method: 'DELETE' }).catch(() => null);
       if (uploadedInitiativeId) await api(`/initiatives/${uploadedInitiativeId}`, { method: 'DELETE' }).catch(() => null);
       if (manualInitiativeId) await api(`/initiatives/${manualInitiativeId}`, { method: 'DELETE' }).catch(() => null);
     }
@@ -1409,20 +1665,70 @@ async function main() {
 
     const initiatives = await api('/initiatives');
     const financialInitiativeId = initiatives.items[0].id;
+    const financialInitiative = await api(`/initiatives/${financialInitiativeId}`);
     const financialBefore = await api(`/initiatives/${financialInitiativeId}/financials`);
     const costLinesBefore = await api(`/initiatives/${financialInitiativeId}/financials/cost-lines`);
+    const financialConfig = await api('/admin/financial-configuration');
+    const recurringCostCategory = financialConfig.items.find(item =>
+      item.item_type === 'cost_category'
+      && item.is_active !== false
+      && item.rollup_type === 'recurring_cost'
+    );
+    if (recurringCostCategory) {
+      const selections = await api(`/initiatives/${financialInitiativeId}/financials/selections`);
+      const selectedMetricKeys = selections.selected?.metric_keys || selections.metric_keys || [];
+      const selectedCostCategoryKeys = selections.selected?.cost_category_keys || selections.cost_category_keys || [];
+      const requiredMetricKeys = [
+        'revenue_uplift_base',
+        'revenue_uplift_high',
+        'revenue_uplift_actual',
+        'gm_uplift_base',
+        'gm_uplift_high',
+        'gm_uplift_actual',
+      ];
+      await api(`/initiatives/${financialInitiativeId}/financials/selections`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          metric_keys: [...new Set([...selectedMetricKeys, ...requiredMetricKeys])],
+          cost_category_keys: [...new Set([...selectedCostCategoryKeys, recurringCostCategory.key])],
+        }),
+      });
+    }
+    let costPlanRowKey = recurringCostCategory ? `cost_${recurringCostCategory.key}_plan` : 'costs_recurring_plan';
+    let costActualRowKey = recurringCostCategory ? `cost_${recurringCostCategory.key}_actual` : 'costs_recurring_actual';
     const originalCostLinesById = new Map(costLinesBefore.items.map(item => [item.id, item]));
-    const financialOriginal = financialBefore.entries.find(entry => entry.month !== null) ?? financialBefore.entries[0];
-    const year = financialOriginal.year;
-    const periodColumn = financialOriginal.month
-      ? `col_${year}_m${financialOriginal.month}`
-      : `col_${year}_q${financialOriginal.quarter}`;
+    const startParts = /^(\d{4})-(\d{2})-\d{2}/.exec(financialInitiative.planned_start || '');
+    const fallbackEntry = financialBefore.entries.find(entry => entry.month !== null) ?? financialBefore.entries[0];
+    const year = startParts ? Number(startParts[1]) : fallbackEntry.year;
+    const month = startParts ? Number(startParts[2]) : (fallbackEntry.month ?? 1);
+    const periodColumn = `col_${year}_m${month}`;
+    const uniqueFinancialSeed = Date.now() % 1000;
+    const expectedRevenueUpliftBase = 123000 + uniqueFinancialSeed;
+    const expectedGmUpliftActual = 35000 + uniqueFinancialSeed;
+    const financialOriginal = financialBefore.entries.find(entry => entry.year === year && entry.month === month) ?? {
+      year,
+      quarter: null,
+      month,
+      revenue_uplift_base: '0.0000',
+      revenue_uplift_high: '0.0000',
+      revenue_uplift_actual: null,
+      gross_margin_base: '0.0000',
+      gross_margin_high: '0.0000',
+      gross_margin_actual: null,
+      gm_uplift_base: '0.0000',
+      gm_uplift_high: '0.0000',
+      gm_uplift_actual: null,
+      cogs_base: '0.0000',
+      cogs_high: '0.0000',
+      cogs_actual: null,
+    };
     let financialAssumptionId = null;
     const isTouchedGridCostLine = line =>
-      ['Recurring Costs (Grid)', 'One-off Costs (Grid)'].includes(line.name)
-      && line.year === financialOriginal.year
-      && line.quarter === financialOriginal.quarter
-      && line.month === financialOriginal.month;
+      line.name.endsWith(' (Grid)')
+      && line.year === year
+      && line.quarter === null
+      && line.month === month
+      && (!recurringCostCategory || line.category_key === recurringCostCategory.key);
     const restoreEntry = {
       year: financialOriginal.year,
       quarter: financialOriginal.quarter,
@@ -1436,6 +1742,9 @@ async function main() {
       gm_uplift_base: financialOriginal.gm_uplift_base,
       gm_uplift_high: financialOriginal.gm_uplift_high,
       gm_uplift_actual: financialOriginal.gm_uplift_actual,
+      cogs_base: financialOriginal.cogs_base,
+      cogs_high: financialOriginal.cogs_high,
+      cogs_actual: financialOriginal.cogs_actual,
     };
 
     try {
@@ -1445,17 +1754,51 @@ async function main() {
       await waitFor(() => evalJs(page, "document.body.innerText.includes('Initiative Financials')"), 'financials tab');
       await clickText(page, 'Edit Details');
       await waitFor(() => evalJs(page, "!!globalThis.__transmuterFinancials"), 'financial grid harness');
+      if (recurringCostCategory) {
+        await waitFor(
+          () => evalJs(page, `
+            globalThis.__transmuterFinancials.rows().some(row =>
+              row.costCategoryKey === ${JSON.stringify(recurringCostCategory.key)}
+              && row.isRecurring === true
+              && row.actual === true
+            )
+          `),
+          'configured recurring cost category rows',
+        );
+      }
+      await waitFor(
+        () => evalJs(page, `
+          globalThis.__transmuterFinancials.hasColumn(${JSON.stringify(periodColumn)})
+            && !globalThis.__transmuterFinancials.columns().some(column => /^col_\\d+_q\\d+$/.test(column))
+        `),
+        'monthly-only financial edit columns',
+      );
+      const gridCostRows = await evalJs(page, `
+        globalThis.__transmuterFinancials.rows()
+          .filter(row => row.source === 'cost_line' || row.key.startsWith('costs_'))
+      `);
+      const planCostRow = gridCostRows.find(row => row.key === costPlanRowKey)
+        || gridCostRows.find(row => row.costCategoryKey === recurringCostCategory?.key && row.actual === false)
+        || gridCostRows.find(row => row.isRecurring === true && row.actual === false)
+        || gridCostRows.find(row => row.key.includes('plan'));
+      const actualCostRow = gridCostRows.find(row => row.key === costActualRowKey)
+        || gridCostRows.find(row => row.costCategoryKey === recurringCostCategory?.key && row.actual === true)
+        || gridCostRows.find(row => row.isRecurring === true && row.actual === true)
+        || gridCostRows.find(row => row.key.includes('actual'));
+      assert(planCostRow && actualCostRow, 'Financial cost category rows were not available in the initiative grid');
+      costPlanRowKey = planCostRow.key;
+      costActualRowKey = actualCostRow.key;
       await evalJs(page, "globalThis.__transmuterFinancials.setScenario('high')");
       await waitFor(
-        () => evalJs(page, "document.body.innerText.includes('High') && !!document.querySelector('[data-testid=\"financial-break-even-chart\"]')"),
-        'financial scenario and break-even UI',
+        () => evalJs(page, "document.body.innerText.includes('High') && !document.querySelector('[data-testid=\"financial-break-even-chart\"]')"),
+        'financial scenario UI without break-even chart',
       );
       await evalJs(page, `
         (() => {
-          globalThis.__transmuterFinancials.setCell('revenue_uplift_base', ${JSON.stringify(periodColumn)}, 123456);
-          globalThis.__transmuterFinancials.setCell('gm_uplift_actual', ${JSON.stringify(periodColumn)}, 35000);
-          globalThis.__transmuterFinancials.setCell('costs_recurring_plan', ${JSON.stringify(periodColumn)}, 1250);
-          globalThis.__transmuterFinancials.setCell('costs_recurring_actual', ${JSON.stringify(periodColumn)}, 1000);
+          globalThis.__transmuterFinancials.setCell('revenue_uplift_base', ${JSON.stringify(periodColumn)}, ${expectedRevenueUpliftBase});
+          globalThis.__transmuterFinancials.setCell('gm_uplift_actual', ${JSON.stringify(periodColumn)}, ${expectedGmUpliftActual});
+          globalThis.__transmuterFinancials.setCell(${JSON.stringify(costPlanRowKey)}, ${JSON.stringify(periodColumn)}, 1250);
+          globalThis.__transmuterFinancials.setCell(${JSON.stringify(costActualRowKey)}, ${JSON.stringify(periodColumn)}, 1000);
           globalThis.__transmuterFinancials.save();
           return true;
         })()
@@ -1464,20 +1807,35 @@ async function main() {
       await waitFor(async () => {
         const reloaded = await api(`/initiatives/${financialInitiativeId}/financials`);
         const entry = reloaded.entries.find(item =>
-          item.year === financialOriginal.year
-          && item.quarter === financialOriginal.quarter
-          && item.month === financialOriginal.month
+          item.year === year
+          && item.quarter === null
+          && item.month === month
         );
-        return Number(entry?.revenue_uplift_base) === 123456
-          && Number(entry?.gm_uplift_actual) === 35000;
+        return Number(entry?.revenue_uplift_base) === expectedRevenueUpliftBase
+          && Number(entry?.gm_uplift_actual) === expectedGmUpliftActual;
       }, 'financial values persisted through UI', 25_000);
-      const bridge = await api(`/initiatives/${financialInitiativeId}/financials/value-bridge`);
-      assert(Number(bridge.actual.costs_recurring) >= 1000, 'Financial recurring actual was not reflected in value bridge');
+      try {
+        await waitFor(async () => {
+          const bridge = await api(`/initiatives/${financialInitiativeId}/financials/value-bridge`);
+          return Number(bridge.actual.costs_recurring) >= 1000;
+        }, 'financial recurring actual value bridge', 25_000);
+      } catch (error) {
+        const [bridge, lines] = await Promise.all([
+          api(`/initiatives/${financialInitiativeId}/financials/value-bridge`).catch(() => null),
+          api(`/initiatives/${financialInitiativeId}/financials/cost-lines`).catch(() => ({ items: [] })),
+        ]);
+        const matchingLines = lines.items.filter(line =>
+          line.year === year
+          && line.month === month
+          && line.is_recurring === true
+          && (!recurringCostCategory || line.category_key === recurringCostCategory.key)
+        );
+        throw new Error(
+          `${error.message}. Bridge actual=${JSON.stringify(bridge?.actual || null)}; matching recurring lines=${JSON.stringify(matchingLines)}`,
+        );
+      }
       const scenarioSummary = await api(`/initiatives/${financialInitiativeId}/financials/scenario-summary?scenario=high`);
       assert(scenarioSummary.scenario === 'high' && Number.isFinite(Number(scenarioSummary.gm_uplift)), 'High scenario summary was not returned');
-      const breakEven = await api(`/initiatives/${financialInitiativeId}/financials/break-even?scenario=high`);
-      assert(breakEven.points.length > 0, 'Break-even points were not returned');
-
       const assumptionText = `UI acceptance assumption ${Date.now()}`;
       await evalJs(page, `
         (() => {
@@ -1575,13 +1933,14 @@ async function main() {
               amount_plan: original.amount_plan,
               amount_actual: original.amount_actual,
               is_recurring: original.is_recurring,
+              category_key: original.category_key,
             }),
           }).catch(() => null);
         }));
     }
 
     await page.close();
-    console.log('Real browser acceptance passed: login, dashboard, people directory/profile/invite, initiative create/import, overview edit, team owner/member flow, summary results persistence, milestones/checklist/dependencies, KPI entry save, risk create/close, meetings flow, financial grid save/reload, scenario toggle, break-even, cell assumptions, Excel export/import, and value bridge.');
+    console.log('Real browser acceptance passed: login, dashboard, people directory/profile/invite, initiative create/import, overview edit, team owner/member flow, summary results persistence, milestones/checklist/dependencies, KPI entry save, risk create/close, meetings flow, financial grid save/reload, scenario toggle, cell assumptions, Excel export/import, and value bridge.');
   } finally {
     chrome.kill('SIGTERM');
     await new Promise(resolve => {

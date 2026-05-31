@@ -1,9 +1,10 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
+from supabase import Client
 
 from app.core.auth import CurrentUser, get_current_user
-from app.core.database import get_supabase_admin
+from app.core.database import get_supabase_request_client
 from app.domain.dashboard import DashboardResponse
 from app.repositories.dashboard import DashboardRepository
 from app.services.dashboard import DashboardService
@@ -11,8 +12,11 @@ from app.services.dashboard import DashboardService
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
-def _svc(current_user: Annotated[CurrentUser, Depends(get_current_user)]) -> DashboardService:
-    repo = DashboardRepository(get_supabase_admin(), current_user.tenant_id)
+def _svc(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
+) -> DashboardService:
+    repo = DashboardRepository(client, current_user.tenant_id)
     return DashboardService(repo)
 
 
@@ -23,6 +27,8 @@ async def get_dashboard(
     business_unit_id: str | None = None,
     workstream_id: str | None = None,
     rag_status: str | None = None,
+    priority: str | None = None,
+    tag: str | None = None,
     target_year: int | None = None,
 ):
     """Get aggregated dashboard data for the current user."""
@@ -32,5 +38,7 @@ async def get_dashboard(
         business_unit_id=business_unit_id,
         workstream_id=workstream_id,
         rag_status=rag_status,
+        priority=priority,
+        tag=tag,
         target_year=target_year,
     )

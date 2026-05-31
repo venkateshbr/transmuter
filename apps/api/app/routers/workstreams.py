@@ -1,16 +1,20 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
+from supabase import Client
 
 from app.core.auth import CurrentUser, get_current_user, require_role
-from app.core.database import get_supabase_admin
+from app.core.database import get_supabase_request_client
 from app.services.workstream import WorkstreamService
 
 router = APIRouter(prefix="/workstreams", tags=["workstreams"])
 
 
-def _svc(current_user: Annotated[CurrentUser, Depends(get_current_user)]) -> WorkstreamService:
-    return WorkstreamService(get_supabase_admin(), current_user.tenant_id)
+def _svc(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
+) -> WorkstreamService:
+    return WorkstreamService(client, current_user.tenant_id)
 
 
 @router.get("")

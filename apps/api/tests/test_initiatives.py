@@ -173,6 +173,50 @@ def test_delete_requires_admin_role(owner_token: str) -> None:
     assert resp.status_code == 403
 
 
+def test_initiative_owner_list_is_scoped_to_owned_initiatives(
+    admin_token: str,
+    owner_token: str,
+) -> None:
+    owner_profile = client.get("/auth/me", headers=auth(owner_token))
+    assert owner_profile.status_code == 200
+    owner_id = owner_profile.json()["id"]
+
+    owned = client.post(
+        "/initiatives",
+        json={
+            "name": "Owner scoped visible initiative",
+            "priority": "low",
+            "country": "Singapore",
+            "owner_id": owner_id,
+        },
+        headers=auth(admin_token),
+    )
+    assert owned.status_code == 201
+    owned_id = owned.json()["id"]
+
+    hidden = client.post(
+        "/initiatives",
+        json={
+            "name": "Owner scoped hidden initiative",
+            "priority": "low",
+            "country": "Singapore",
+        },
+        headers=auth(admin_token),
+    )
+    assert hidden.status_code == 201
+    hidden_id = hidden.json()["id"]
+
+    try:
+        resp = client.get("/initiatives?search=Owner+scoped", headers=auth(owner_token))
+        assert resp.status_code == 200
+        ids = {item["id"] for item in resp.json()["items"]}
+        assert owned_id in ids
+        assert hidden_id not in ids
+    finally:
+        client.delete(f"/initiatives/{owned_id}", headers=auth(admin_token))
+        client.delete(f"/initiatives/{hidden_id}", headers=auth(admin_token))
+
+
 # ── CSV Export ────────────────────────────────────────────────────────────────
 
 

@@ -29,6 +29,16 @@ interface FinancialSummary {
   cost_run_rate: string;
 }
 
+interface InitiativeFinancialSelections {
+  metric_keys: string[];
+  cost_category_keys: string[];
+}
+
+interface FinancialGrid {
+  summary: FinancialSummary;
+  selections?: InitiativeFinancialSelections;
+}
+
 interface PressureBreakdown {
   schedule: string | null;
   milestone_health: string | null;
@@ -545,7 +555,7 @@ export class OverviewTabComponent implements OnInit {
 
   loading = signal(true);
   detail = signal<InitiativeDetail | null>(null);
-  grid = signal<any | null>(null);
+  grid = signal<FinancialGrid | null>(null);
   valueBridge = signal<any | null>(null);
   workstreams = signal<WorkstreamOption[]>([]);
   businessUnits = signal<BusinessUnitOption[]>([]);
@@ -557,6 +567,15 @@ export class OverviewTabComponent implements OnInit {
   saving = signal(false);
   editData: any = {};
   private readonly defaultTags = ['automation', 'offshoring', 'commercial', 'other'];
+  private readonly defaultMetricKeys = [
+    'revenue_uplift_base',
+    'revenue_uplift_high',
+    'revenue_uplift_actual',
+    'gm_uplift_base',
+    'gm_uplift_high',
+    'gm_uplift_actual',
+  ];
+  private readonly defaultCostCategoryKeys = ['implementation', 'maintenance'];
 
   summaryCards = computed(() => {
     const s = this.grid()?.summary;
@@ -565,24 +584,54 @@ export class OverviewTabComponent implements OnInit {
     const gmRange = `${this.formatMoney(s.gm_uplift_plan_base)} - ${this.formatMoney(s.gm_uplift_plan_high)}`;
     const revRange = `${this.formatMoney(s.revenue_uplift_plan_base)} - ${this.formatMoney(s.revenue_uplift_plan_high)}`;
 
-    return [
-      { label: 'Revenue Uplift', plan: revRange, actual: s.revenue_uplift_actual ? this.formatMoney(s.revenue_uplift_actual) : '—', highlight: false },
-      { label: 'GM Uplift', plan: gmRange, actual: s.gm_uplift_actual ? this.formatMoney(s.gm_uplift_actual) : '—', highlight: false },
-      { label: 'Total Costs', plan: this.formatMoney(s.costs_plan), actual: s.costs_actual ? this.formatMoney(s.costs_actual) : '—', highlight: false },
-      { label: 'Net Value', plan: this.formatMoney(s.net_value_plan), actual: s.net_value_actual ? this.formatMoney(s.net_value_actual) : '—', highlight: true },
-    ];
+    const cards: Array<{ label: string; plan: string; actual: string; highlight: boolean }> = [];
+    if (this.hasSelectedMetric(['revenue_uplift_base', 'revenue_uplift_high', 'revenue_uplift_actual'])) {
+      cards.push({ label: 'Revenue Uplift', plan: revRange, actual: s.revenue_uplift_actual ? this.formatMoney(s.revenue_uplift_actual) : '—', highlight: false });
+    }
+    if (this.hasSelectedMetric(['gm_uplift_base', 'gm_uplift_high', 'gm_uplift_actual'])) {
+      cards.push({ label: 'GM Uplift', plan: gmRange, actual: s.gm_uplift_actual ? this.formatMoney(s.gm_uplift_actual) : '—', highlight: false });
+    }
+    if (this.hasSelectedCosts()) {
+      cards.push({ label: 'Total Costs', plan: this.formatMoney(s.costs_plan), actual: s.costs_actual ? this.formatMoney(s.costs_actual) : '—', highlight: false });
+    }
+    cards.push({ label: 'Net Value', plan: this.formatMoney(s.net_value_plan), actual: s.net_value_actual ? this.formatMoney(s.net_value_actual) : '—', highlight: true });
+    return cards;
   });
 
   financialSidebar = computed(() => {
     const s = this.grid()?.summary;
     if (!s) return [];
-    return [
+    const rows = [
       { label: 'Initiative Value', value: this.formatMoney(s.net_value_plan) },
-      { label: 'Benefit Run Rate', value: this.formatMoney(s.benefit_run_rate) },
-      { label: 'Cost Run Rate', value: this.formatMoney(s.cost_run_rate) },
-      { label: 'One-off Costs', value: this.formatMoney(s.costs_one_off_plan) },
     ];
+    if (this.hasSelectedMetric(['revenue_uplift_base', 'revenue_uplift_high', 'revenue_uplift_actual', 'gm_uplift_base', 'gm_uplift_high', 'gm_uplift_actual'])) {
+      rows.push({ label: 'Benefit Run Rate', value: this.formatMoney(s.benefit_run_rate) });
+    }
+    if (this.hasSelectedCosts()) {
+      rows.push({ label: 'Cost Run Rate', value: this.formatMoney(s.cost_run_rate) });
+      rows.push({ label: 'One-off Costs', value: this.formatMoney(s.costs_one_off_plan) });
+    }
+    return rows;
   });
+
+  private selectedMetricKeySet(): Set<string> {
+    const selections = this.grid()?.selections;
+    return new Set(selections ? selections.metric_keys : this.defaultMetricKeys);
+  }
+
+  private selectedCostCategoryKeySet(): Set<string> {
+    const selections = this.grid()?.selections;
+    return new Set(selections ? selections.cost_category_keys : this.defaultCostCategoryKeys);
+  }
+
+  private hasSelectedMetric(keys: string[]): boolean {
+    const selected = this.selectedMetricKeySet();
+    return keys.some(key => selected.has(key));
+  }
+
+  private hasSelectedCosts(): boolean {
+    return this.selectedCostCategoryKeySet().size > 0;
+  }
 
   pressureGauges = computed(() => {
     const b = this.detail()?.pressure_breakdown;
@@ -605,7 +654,7 @@ export class OverviewTabComponent implements OnInit {
     if (!this.initiativeId) return;
     this.loadDropdownData();
     this.loadDetail();
-    this.api.get<any>(`/initiatives/${this.initiativeId}/financials`).subscribe(g => this.grid.set(g));
+    this.api.get<FinancialGrid>(`/initiatives/${this.initiativeId}/financials`).subscribe(g => this.grid.set(g));
     this.api.get<any>(`/initiatives/${this.initiativeId}/financials/value-bridge`).subscribe(vb => this.valueBridge.set(vb));
   }
 

@@ -7,7 +7,8 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "e2e:real": "node ./e2e/real-ui-acceptance.mjs"
+    "e2e:real": "node ./e2e/real-ui-acceptance.mjs",
+    "e2e:signup-expired-session": "node ./e2e/signup-expired-session.mjs"
   },
   "private": true,
   "packageManager": "npm@11.9.0",
@@ -23,7 +24,9 @@
     "@angular/platform-browser": "^21.2.0",
     "@angular/router": "^21.2.0",
     "@handsontable/angular": "^16.2.0",
+    "@sentry/angular": "^10.53.1",
     "core-js": "^3.49.0",
+    "echarts": "^6.1.0",
     "handsontable": "^16.2.0",
     "lucide-angular": "^1.0.0",
     "rxjs": "~7.8.0",
@@ -35,6 +38,7 @@
     "@angular/compiler-cli": "^21.2.0",
     "@tailwindcss/postcss": "^4.2.4",
     "@tailwindcss/typography": "^0.5.19",
+    "@vitest/coverage-v8": "^4.1.7",
     "autoprefixer": "^10.5.0",
     "jsdom": "^28.0.0",
     "postcss": "^8.5.12",

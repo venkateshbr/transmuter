@@ -1,5 +1,6 @@
 import { Component, Input, OnInit, inject, signal, computed, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { RouterLink } from '@angular/router';
 import { ApiService } from '../../../../core/services/api.service';
 import { environment } from '../../../../../environments/environment';
 import { HotTableModule } from '@handsontable/angular';
@@ -14,15 +15,27 @@ interface FinancialEntry {
   revenue_uplift_base: string;
   revenue_uplift_high: string;
   revenue_uplift_actual: string | null;
+  revenue_uplift_pct_base: string;
+  revenue_uplift_pct_high: string;
+  revenue_uplift_pct_actual: string | null;
   gross_margin_base: string;
   gross_margin_high: string;
   gross_margin_actual: string | null;
+  gm_pct_base: string;
+  gm_pct_high: string;
+  gm_pct_actual: string | null;
   gm_uplift_base: string;
   gm_uplift_high: string;
+  gm_uplift_actual: string | null;
+  gm_uplift_pct_base: string;
+  gm_uplift_pct_high: string;
   gm_uplift_pct_actual: string | null;
   cogs_base: string;
   cogs_high: string;
   cogs_actual: string | null;
+  cogs_pct_base: string;
+  cogs_pct_high: string;
+  cogs_pct_actual: string | null;
 }
 
 interface FinancialSummary {
@@ -44,7 +57,26 @@ interface FinancialSummary {
 interface FinancialGrid {
   initiative_id: string;
   entries: FinancialEntry[];
+  metric_values: FinancialMetricValue[];
+  selections: InitiativeFinancialSelections;
+  locked: boolean;
+  lock_reason: string | null;
   summary: FinancialSummary;
+}
+
+interface FinancialMetricValue {
+  metric_key: string;
+  year: number;
+  quarter: number | null;
+  month: number | null;
+  value_base: string;
+  value_high: string;
+  value_actual: string | null;
+}
+
+interface InitiativeFinancialSelections {
+  metric_keys: string[];
+  cost_category_keys: string[];
 }
 
 interface CostLine {
@@ -71,26 +103,11 @@ interface ValueBridgeCase {
   revenue_uplift: string;
   gross_margin: string;
   gm_uplift: string;
+  cogs: string;
   costs_recurring: string;
   costs_one_off: string;
   costs_total: string;
   net: string;
-}
-
-interface BreakEvenPoint {
-  period: string;
-  cumulative_gm_uplift: string;
-  cumulative_costs: string;
-  cumulative_net: string;
-  run_rate_gm_uplift: string;
-  run_rate_costs: string;
-  is_break_even: boolean;
-}
-
-interface BreakEvenResponse {
-  scenario: FinancialScenario;
-  break_even_period: string | null;
-  points: BreakEvenPoint[];
 }
 
 interface CellAssumption {
@@ -136,10 +153,28 @@ interface FinancialConfiguration {
   items: FinancialConfigItem[];
 }
 
+interface FinancialPeriodMonth {
+  year: number;
+  month: number;
+  label: string;
+}
+
+interface GridMetric {
+  category: string;
+  label: string;
+  key: string;
+  source: 'financial_entry' | 'cost_line' | 'metric_value';
+  costCategoryKey?: string;
+  metricValueKey?: string;
+  metricScenario?: FinancialScenario;
+  isRecurring?: boolean;
+  actual?: boolean;
+}
+
 @Component({
   selector: 'app-financials-tab',
   standalone: true,
-  imports: [CommonModule, HotTableModule],
+  imports: [CommonModule, HotTableModule, RouterLink],
   template: `
     <div class="space-y-6">
       <div class="flex flex-wrap items-center justify-between gap-3">
@@ -157,12 +192,6 @@ interface FinancialConfiguration {
               {{ option.label }}
             </button>
           }
-        </div>
-        <div class="text-right">
-          <p class="text-[10px] font-bold uppercase tracking-wider" style="color:var(--t-text-secondary)">Break-even</p>
-          <p class="text-sm font-bold" style="color:var(--t-text-primary)" data-testid="financial-break-even-period">
-            {{ breakEven()?.break_even_period || 'Not reached' }}
-          </p>
         </div>
       </div>
 
@@ -199,6 +228,15 @@ interface FinancialConfiguration {
             <span class="badge-ghost text-[10px] uppercase font-bold">{{ isEditing() ? 'Detailed Entry View' : 'Quarterly Summary View' }}</span>
           </div>
           <div class="flex items-center gap-2">
+            <a
+              [routerLink]="['/initiatives', initiativeId, 'financial-scope']"
+              class="btn-secondary py-1.5 px-3 text-[10px] flex items-center gap-2"
+              aria-label="Configure initiative financial metrics and cost categories"
+              title="Configure financial metrics and cost categories"
+            >
+              <span class="material-icons text-sm">tune</span>
+              Configure Scope
+            </a>
             <input
               #financialWorkbookInput
               type="file"
@@ -222,16 +260,23 @@ interface FinancialConfiguration {
               aria-label="Import financial workbook"
               title="Import financial workbook"
               (click)="financialWorkbookInput.click()"
-              [disabled]="exporting() || importing()"
+              [disabled]="exporting() || importing() || isLocked()"
             >
               <span class="material-icons text-sm">upload_file</span>
             </button>
-            <button class="btn-ghost py-1.5 px-4 text-[10px] flex items-center gap-2" (click)="toggleEdit()">
+            <button class="btn-ghost py-1.5 px-4 text-[10px] flex items-center gap-2" [disabled]="isLocked()" (click)="toggleEdit()">
               <span class="material-icons text-sm">{{ isEditing() ? 'visibility' : 'edit' }}</span>
               {{ isEditing() ? 'View Summary' : 'Edit Details' }}
             </button>
           </div>
         </div>
+
+        @if (isLocked()) {
+          <div class="mb-4 border-l-4 border-[var(--t-accent)] bg-[var(--t-surface-raised)] px-4 py-3 text-sm" style="color:var(--t-text-secondary)">
+            <span class="font-bold" style="color:var(--t-text-primary)">Financials locked.</span>
+            {{ grid()?.lock_reason || 'Changes require transformation office approval.' }}
+          </div>
+        }
 
         <div class="handsontable-container overflow-hidden rounded-xl border bg-[var(--t-surface-raised)]" style="border-color:var(--t-border)">
           <hot-table
@@ -252,7 +297,7 @@ interface FinancialConfiguration {
 
         @if (isEditing()) {
           <div class="flex justify-end mt-4">
-            <button class="btn-primary flex items-center gap-2" [disabled]="saving()" (click)="saveGrid()">
+            <button class="btn-primary flex items-center gap-2" [disabled]="saving() || isLocked()" (click)="saveGrid()">
               @if (saving()) {
                 <span class="material-icons animate-spin text-sm">sync</span>
                 Saving...
@@ -262,45 +307,6 @@ interface FinancialConfiguration {
               }
             </button>
           </div>
-        }
-      </div>
-
-      <div class="card p-6" data-testid="financial-break-even-chart">
-        <div class="flex items-center justify-between mb-5">
-          <div>
-            <h3 class="text-base font-bold" style="color:var(--t-text-primary)">
-              Break-even & Run-rate<span style="color:var(--t-accent)">.</span>
-            </h3>
-          </div>
-          <span class="badge-ghost text-[10px] uppercase font-bold">{{ scenarioLabel() }}</span>
-        </div>
-        @if (breakEvenPoints().length) {
-          <div class="h-56 border-b border-l relative px-2" style="border-color:var(--t-border)">
-            @for (point of breakEvenPoints(); track point.period) {
-              <div
-                class="absolute bottom-0 w-2 rounded-t-sm bg-[var(--t-accent)] opacity-80"
-                [style.left.%]="point.x"
-                [style.height.%]="point.gmHeight"
-                [attr.title]="point.period + ' GM ' + formatMoney(point.gm)"
-              ></div>
-              <div
-                class="absolute bottom-0 w-2 rounded-t-sm bg-[var(--t-red)] opacity-55"
-                [style.left.%]="point.x + 1.1"
-                [style.height.%]="point.costHeight"
-                [attr.title]="point.period + ' Costs ' + formatMoney(point.costs)"
-              ></div>
-              @if (point.isBreakEven) {
-                <div class="absolute top-0 bottom-0 border-l-2 border-[var(--t-green)]" [style.left.%]="point.x + 1.1"></div>
-              }
-            }
-          </div>
-          <div class="mt-4 flex flex-wrap items-center justify-between gap-3 text-[10px] font-semibold uppercase" style="color:var(--t-text-secondary)">
-            <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm bg-[var(--t-accent)]"></span>Cumulative GM uplift</span>
-            <span class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm bg-[var(--t-red)] opacity-60"></span>Cumulative costs</span>
-            <span>Run-rate GM {{ formatMoney(latestRunRate().gm) }} / Costs {{ formatMoney(latestRunRate().costs) }}</span>
-          </div>
-        } @else {
-          <div class="h-40 flex items-center justify-center text-sm" style="color:var(--t-text-secondary)">No financial periods available.</div>
         }
       </div>
 
@@ -375,7 +381,6 @@ export class FinancialsTabComponent implements OnInit {
   importing = signal(false);
   grid = signal<FinancialGrid | null>(null);
   valueBridge = signal<any | null>(null);
-  breakEven = signal<BreakEvenResponse | null>(null);
   assumptions = signal<CellAssumption[]>([]);
   configuration = signal<FinancialConfiguration | null>(null);
   assumptionEditor = signal<(Partial<CellAssumption> & { row_key: string; column_key: string }) | null>(null);
@@ -390,40 +395,161 @@ export class FinancialsTabComponent implements OnInit {
     { id: 'actual', label: 'Actuals' },
   ];
   
-  readonly METRICS = [
-    { category: 'Revenue', label: 'Rev Uplift (Base)', key: 'revenue_uplift_base' },
-    { category: 'Revenue', label: 'Rev Uplift (High)', key: 'revenue_uplift_high' },
-    { category: 'Revenue', label: 'Rev Uplift (Actual)', key: 'revenue_uplift_actual' },
-    { category: 'COGS', label: 'COGS (Base)', key: 'cogs_base' },
-    { category: 'COGS', label: 'COGS (High)', key: 'cogs_high' },
-    { category: 'COGS', label: 'COGS (Actual)', key: 'cogs_actual' },
-    { category: 'Gross Margin', label: 'GM Uplift (Base)', key: 'gm_uplift_base' },
-    { category: 'Gross Margin', label: 'GM Uplift (High)', key: 'gm_uplift_high' },
-    { category: 'Gross Margin', label: 'GM Uplift (Actual)', key: 'gm_uplift_actual' },
-    { category: 'Costs', label: 'Recurring (Plan)', key: 'costs_recurring_plan' },
-    { category: 'Costs', label: 'Recurring (Actual)', key: 'costs_recurring_actual' },
-    { category: 'Costs', label: 'One-off (Plan)', key: 'costs_one_off_plan' },
-    { category: 'Costs', label: 'One-off (Actual)', key: 'costs_one_off_actual' },
+  readonly METRICS: GridMetric[] = [
+    { category: 'Revenue', label: 'Rev Uplift (Base)', key: 'revenue_uplift_base', source: 'financial_entry' },
+    { category: 'Revenue', label: 'Rev Uplift (High)', key: 'revenue_uplift_high', source: 'financial_entry' },
+    { category: 'Revenue', label: 'Rev Uplift (Actual)', key: 'revenue_uplift_actual', source: 'financial_entry' },
+    { category: 'Revenue', label: 'Rev Uplift % (Base)', key: 'revenue_uplift_pct_base', source: 'financial_entry' },
+    { category: 'Revenue', label: 'Rev Uplift % (High)', key: 'revenue_uplift_pct_high', source: 'financial_entry' },
+    { category: 'Revenue', label: 'Rev Uplift % (Actual)', key: 'revenue_uplift_pct_actual', source: 'financial_entry' },
+    { category: 'COGS', label: 'COGS (Base)', key: 'cogs_base', source: 'financial_entry' },
+    { category: 'COGS', label: 'COGS (High)', key: 'cogs_high', source: 'financial_entry' },
+    { category: 'COGS', label: 'COGS (Actual)', key: 'cogs_actual', source: 'financial_entry' },
+    { category: 'COGS', label: 'COGS % (Base)', key: 'cogs_pct_base', source: 'financial_entry' },
+    { category: 'COGS', label: 'COGS % (High)', key: 'cogs_pct_high', source: 'financial_entry' },
+    { category: 'COGS', label: 'COGS % (Actual)', key: 'cogs_pct_actual', source: 'financial_entry' },
+    { category: 'Gross Margin', label: 'Gross Margin (Base)', key: 'gross_margin_base', source: 'financial_entry' },
+    { category: 'Gross Margin', label: 'Gross Margin (High)', key: 'gross_margin_high', source: 'financial_entry' },
+    { category: 'Gross Margin', label: 'Gross Margin (Actual)', key: 'gross_margin_actual', source: 'financial_entry' },
+    { category: 'Gross Margin', label: 'Gross Margin % (Base)', key: 'gm_pct_base', source: 'financial_entry' },
+    { category: 'Gross Margin', label: 'Gross Margin % (High)', key: 'gm_pct_high', source: 'financial_entry' },
+    { category: 'Gross Margin', label: 'Gross Margin % (Actual)', key: 'gm_pct_actual', source: 'financial_entry' },
+    { category: 'Gross Margin', label: 'GM Uplift (Base)', key: 'gm_uplift_base', source: 'financial_entry' },
+    { category: 'Gross Margin', label: 'GM Uplift (High)', key: 'gm_uplift_high', source: 'financial_entry' },
+    { category: 'Gross Margin', label: 'GM Uplift (Actual)', key: 'gm_uplift_actual', source: 'financial_entry' },
+    { category: 'Gross Margin', label: 'GM Uplift % (Base)', key: 'gm_uplift_pct_base', source: 'financial_entry' },
+    { category: 'Gross Margin', label: 'GM Uplift % (High)', key: 'gm_uplift_pct_high', source: 'financial_entry' },
+    { category: 'Gross Margin', label: 'GM Uplift % (Actual)', key: 'gm_uplift_pct_actual', source: 'financial_entry' },
+    { category: 'Costs', label: 'Recurring (Plan)', key: 'costs_recurring_plan', source: 'cost_line', isRecurring: true, actual: false },
+    { category: 'Costs', label: 'Recurring (Actual)', key: 'costs_recurring_actual', source: 'cost_line', isRecurring: true, actual: true },
+    { category: 'Costs', label: 'One-off (Plan)', key: 'costs_one_off_plan', source: 'cost_line', isRecurring: false, actual: false },
+    { category: 'Costs', label: 'One-off (Actual)', key: 'costs_one_off_actual', source: 'cost_line', isRecurring: false, actual: true },
   ];
 
-  configuredMetrics = computed(() => {
+  readonly DEFAULT_METRIC_KEYS = new Set([
+    'revenue_uplift_base',
+    'revenue_uplift_high',
+    'revenue_uplift_actual',
+    'gm_uplift_base',
+    'gm_uplift_high',
+    'gm_uplift_actual',
+  ]);
+
+  readonly DEFAULT_COST_CATEGORY_KEYS = new Set(['implementation', 'maintenance']);
+
+  isLocked = computed(() => Boolean(this.grid()?.locked));
+
+  configuredMetrics = computed<GridMetric[]>(() => {
     const config = this.configuration();
-    if (!config) return this.METRICS;
+    const selectedMetrics = this.selectedMetricKeySet();
+    const selectedCosts = this.selectedCostCategoryKeySet();
+    if (!config) return this.METRICS.filter(metric => this.metricSelected(metric, selectedMetrics, selectedCosts));
     const groups = new Map(config.groups.map(group => [group.key, group]));
-    const configured = config.items
-      .filter(item => item.item_type === 'metric' && item.is_active && item.system_metric_key)
+    const configuredMetrics = config.items
+      .filter(item =>
+        item.item_type === 'metric'
+        && item.is_active
+        && selectedMetrics.has(item.system_metric_key || item.key)
+        && !this.isDuplicateCustomSystemMetric(item, config.items)
+      )
       .sort((a, b) => {
         const groupA = groups.get(a.group_key || '')?.display_order || 0;
         const groupB = groups.get(b.group_key || '')?.display_order || 0;
         return groupA - groupB || a.display_order - b.display_order || a.label.localeCompare(b.label);
       })
-      .map(item => ({
-        category: groups.get(item.group_key || '')?.label || 'Financials',
-        label: item.label,
-        key: item.system_metric_key || item.key,
-      }));
-    return configured.length ? configured : this.METRICS;
+      .flatMap((item): GridMetric[] => {
+        const category = groups.get(item.group_key || '')?.label || 'Financials';
+        if (item.system_metric_key) {
+          return [{
+            category,
+            label: item.label,
+            key: item.system_metric_key,
+            source: 'financial_entry' as const,
+          }];
+        }
+        return ([
+          ['base', 'Base'],
+          ['high', 'High'],
+          ['actual', 'Actual'],
+        ] as const).map(([scenario, label]) => ({
+          category,
+          label: `${item.label} (${label})`,
+          key: `custom_${item.key}_${scenario}`,
+          source: 'metric_value' as const,
+          metricValueKey: item.key,
+          metricScenario: scenario,
+        }));
+      });
+
+    const configuredCosts = config.items
+      .filter(item => item.item_type === 'cost_category' && item.is_active && selectedCosts.has(item.key))
+      .sort((a, b) => {
+        const groupA = groups.get(a.group_key || '')?.display_order || 0;
+        const groupB = groups.get(b.group_key || '')?.display_order || 0;
+        return groupA - groupB || a.display_order - b.display_order || a.label.localeCompare(b.label);
+      })
+      .flatMap(item => {
+        const isRecurring = item.rollup_type === 'recurring_cost';
+        const category = `Costs / ${this.costRollupLabel(item.rollup_type)}`;
+        return [
+          {
+            category,
+            label: `${item.label} (Plan)`,
+            key: `cost_${item.key}_plan`,
+            source: 'cost_line' as const,
+            costCategoryKey: item.key,
+            isRecurring,
+            actual: false,
+          },
+          {
+            category,
+            label: `${item.label} (Actual)`,
+            key: `cost_${item.key}_actual`,
+            source: 'cost_line' as const,
+            costCategoryKey: item.key,
+            isRecurring,
+            actual: true,
+          },
+        ];
+      });
+
+    const configured = [...configuredMetrics, ...configuredCosts];
+    return configured;
   });
+
+  private metricSelected(metric: GridMetric, selectedMetrics: Set<string>, selectedCosts: Set<string>): boolean {
+    if (metric.source === 'cost_line') {
+      if (!metric.costCategoryKey) return true;
+      return selectedCosts.has(metric.costCategoryKey);
+    }
+    return selectedMetrics.has(metric.metricValueKey || metric.key);
+  }
+
+  private isDuplicateCustomSystemMetric(item: FinancialConfigItem, items: FinancialConfigItem[]): boolean {
+    if (item.item_type !== 'metric' || item.is_system || item.system_metric_key) return false;
+    return items.some(candidate =>
+      candidate.item_type === 'metric'
+      && candidate.is_active
+      && candidate.is_system
+      && Boolean(candidate.system_metric_key)
+      && candidate.label === item.label
+    );
+  }
+
+  private selectedMetricKeySet(): Set<string> {
+    const selections = this.grid()?.selections;
+    return new Set(selections ? selections.metric_keys : Array.from(this.DEFAULT_METRIC_KEYS));
+  }
+
+  private selectedCostCategoryKeySet(): Set<string> {
+    const selections = this.grid()?.selections;
+    return new Set(selections ? selections.cost_category_keys : Array.from(this.DEFAULT_COST_CATEGORY_KEYS));
+  }
+
+  private hasSelectedMetric(keys: string[]): boolean {
+    const selected = this.selectedMetricKeySet();
+    return keys.some(key => selected.has(key));
+  }
 
   defaultCategoryKey(recurring: boolean): string {
     const items = this.configuration()?.items || [];
@@ -435,18 +561,31 @@ export class FinancialsTabComponent implements OnInit {
     return match?.key || 'other';
   }
 
+  costRollupLabel(rollupType?: string | null): string {
+    if (rollupType === 'recurring_cost') return 'Recurring';
+    if (rollupType === 'one_off_cost') return 'One-time';
+    return 'Unclassified';
+  }
+
   summaryCards = computed(() => {
     const s = this.selectedScenarioCase();
     if (!s) return [];
-    const cogs = this.parseMoney(s.revenue_uplift) - this.parseMoney(s.gross_margin);
 
-    return [
-      { label: 'Revenue Uplift', plan: this.formatMoney(s.revenue_uplift), actual: this.scenarioLabel(), highlight: false },
-      { label: 'GM Uplift', plan: this.formatMoney(s.gm_uplift), actual: this.scenarioLabel(), highlight: false },
-      { label: 'COGS', plan: this.formatMoney(cogs), actual: this.scenarioLabel(), highlight: false },
-      { label: 'Total Costs', plan: this.formatMoney(s.costs_total), actual: this.scenarioLabel(), highlight: false },
-      { label: 'Net Value', plan: this.formatMoney(s.net), actual: this.scenarioLabel(), highlight: true },
-    ];
+    const cards: Array<{ label: string; plan: string; actual: string; highlight: boolean }> = [];
+    if (this.hasSelectedMetric(['revenue_uplift_base', 'revenue_uplift_high', 'revenue_uplift_actual'])) {
+      cards.push({ label: 'Revenue Uplift', plan: this.formatMoney(s.revenue_uplift), actual: this.scenarioLabel(), highlight: false });
+    }
+    if (this.hasSelectedMetric(['gm_uplift_base', 'gm_uplift_high', 'gm_uplift_actual'])) {
+      cards.push({ label: 'GM Uplift', plan: this.formatMoney(s.gm_uplift), actual: this.scenarioLabel(), highlight: false });
+    }
+    if (this.hasSelectedMetric(['cogs_base', 'cogs_high', 'cogs_actual'])) {
+      cards.push({ label: 'COGS', plan: this.formatMoney(s.cogs), actual: this.scenarioLabel(), highlight: false });
+    }
+    if (this.selectedCostCategoryKeySet().size > 0) {
+      cards.push({ label: 'Total Costs', plan: this.formatMoney(s.costs_total), actual: this.scenarioLabel(), highlight: false });
+    }
+    cards.push({ label: 'Net Value', plan: this.formatMoney(s.net), actual: this.scenarioLabel(), highlight: true });
+    return cards;
   });
 
   selectedScenarioCase = computed<ValueBridgeCase | null>(() => {
@@ -457,44 +596,30 @@ export class FinancialsTabComponent implements OnInit {
     return bridge.base_case;
   });
 
-  breakEvenPoints = computed(() => {
-    const points = this.breakEven()?.points || [];
-    const max = Math.max(
-      1,
-      ...points.map(point => Math.max(this.parseMoney(point.cumulative_gm_uplift), this.parseMoney(point.cumulative_costs))),
-    );
-    return points.map((point, index) => {
-      const gm = this.parseMoney(point.cumulative_gm_uplift);
-      const costs = this.parseMoney(point.cumulative_costs);
-      return {
-        period: point.period,
-        x: points.length === 1 ? 48 : (index / Math.max(1, points.length - 1)) * 94,
-        gm,
-        costs,
-        gmHeight: Math.max(3, (gm / max) * 100),
-        costHeight: Math.max(3, (costs / max) * 100),
-        isBreakEven: point.is_break_even,
-      };
-    });
-  });
-
-  latestRunRate = computed(() => {
-    const point = (this.breakEven()?.points || []).at(-1);
-    return {
-      gm: this.parseMoney(point?.run_rate_gm_uplift || '0'),
-      costs: this.parseMoney(point?.run_rate_costs || '0'),
-    };
-  });
-
   dynamicYears = computed(() => {
-    const init = this.initiative();
-    if (!init || !init.planned_start || !init.planned_end) return [2026, 2027];
-    const startYear = new Date(init.planned_start).getFullYear();
-    const endYear = new Date(init.planned_end).getFullYear();
-    const years = [];
+    const planned = this.plannedMonthRange();
+    const valueYears = this.valueBearingMonths().map(period => period.year);
+    const minYear = Math.min(...planned.map(period => period.year), ...valueYears);
+    const maxYear = Math.max(...planned.map(period => period.year), ...valueYears);
+    if (!Number.isFinite(minYear) || !Number.isFinite(maxYear)) return [2026, 2027];
+    const years: number[] = [];
+    const startYear = Math.min(minYear, maxYear);
+    const endYear = Math.max(minYear, maxYear);
     for (let y = startYear; y <= endYear; y++) years.push(y);
     return years;
   });
+
+  editableMonths = computed<FinancialPeriodMonth[]>(() => {
+    const byKey = new Map<string, FinancialPeriodMonth>();
+    for (const period of [...this.plannedMonthRange(), ...this.valueBearingMonths()]) {
+      byKey.set(`${period.year}-${period.month}`, period);
+    }
+    return Array.from(byKey.values()).sort((a, b) => a.year - b.year || a.month - b.month);
+  });
+
+  editableMonthsForYear(year: number): FinancialPeriodMonth[] {
+    return this.editableMonths().filter(period => period.year === year);
+  }
 
   hotNestedHeaders = computed(() => {
     const years = this.dynamicYears();
@@ -503,9 +628,10 @@ export class FinancialsTabComponent implements OnInit {
 
     for (const year of years) {
       if (this.isEditing()) {
-        top.push({ label: year.toString(), colspan: 16 });
-        for (let m = 1; m <= 12; m++) bottom.push({ label: `M${m}`, colspan: 1 });
-        for (let q = 1; q <= 4; q++) bottom.push({ label: `Q${q}`, colspan: 1 });
+        const months = this.editableMonthsForYear(year);
+        if (!months.length) continue;
+        top.push({ label: year.toString(), colspan: months.length });
+        for (const period of months) bottom.push({ label: period.label, colspan: 1 });
       } else {
         top.push({ label: year.toString(), colspan: 4 });
         for (let q = 1; q <= 4; q++) bottom.push({ label: `Q${q}`, colspan: 1 });
@@ -521,15 +647,18 @@ export class FinancialsTabComponent implements OnInit {
     ];
     for (const year of this.dynamicYears()) {
       if (this.isEditing()) {
-        for (let m = 1; m <= 12; m++) cols.push({ data: `col_${year}_m${m}`, type: 'numeric', numericFormat: { pattern: '$0,0' } });
-      }
-      for (let q = 1; q <= 4; q++) {
-        cols.push({ 
-          data: `col_${year}_q${q}`, 
-          type: 'numeric', 
-          numericFormat: { pattern: '$0,0' },
-          readOnly: !this.isEditing() // In summary mode, it's read only
-        });
+        for (const period of this.editableMonthsForYear(year)) {
+          cols.push({ data: `col_${year}_m${period.month}`, type: 'numeric', numericFormat: { pattern: '$0,0' } });
+        }
+      } else {
+        for (let q = 1; q <= 4; q++) {
+          cols.push({
+            data: `col_${year}_q${q}`,
+            type: 'numeric',
+            numericFormat: { pattern: '$0,0' },
+            readOnly: true,
+          });
+        }
       }
     }
     return cols;
@@ -537,21 +666,31 @@ export class FinancialsTabComponent implements OnInit {
 
   hotData = computed(() => {
     const entries = this.grid()?.entries || [];
+    const metricValues = this.grid()?.metric_values || [];
     const costs = this.costLines();
     const years = this.dynamicYears();
     
     return this.configuredMetrics().map(m => {
-      const row: any = { category: m.category, metric: m.label, key: m.key };
+      const row: any = {
+        category: m.category,
+        metric: m.label,
+        key: m.key,
+        source: m.source,
+        costCategoryKey: m.costCategoryKey,
+        isRecurring: m.isRecurring,
+        actual: m.actual,
+      };
       for (const year of years) {
         if (this.isEditing()) {
-          for (let mon = 1; mon <= 12; mon++) {
-            const e = entries.find(x => x.year === year && x.month === mon);
-            row[`col_${year}_m${mon}`] = this._getVal(m, year, mon, null, e, entries, costs);
+          for (const period of this.editableMonthsForYear(year)) {
+            const e = entries.find(x => x.year === year && x.month === period.month);
+            row[`col_${year}_m${period.month}`] = this._getVal(m, year, period.month, null, e, entries, costs, metricValues);
           }
-        }
-        for (let q = 1; q <= 4; q++) {
-          const e = entries.find(x => x.year === year && x.quarter === q);
-          row[`col_${year}_q${q}`] = this._getVal(m, year, null, q, e, entries, costs);
+        } else {
+          for (let q = 1; q <= 4; q++) {
+            const e = entries.find(x => x.year === year && x.quarter === q);
+            row[`col_${year}_q${q}`] = this._getVal(m, year, null, q, e, entries, costs, metricValues);
+          }
         }
       }
       return row;
@@ -581,7 +720,6 @@ export class FinancialsTabComponent implements OnInit {
 
   setScenario(next: FinancialScenario): void {
     this.scenario.set(next);
-    this._loadBreakEven();
   }
 
   scenarioLabel(): string {
@@ -589,6 +727,7 @@ export class FinancialsTabComponent implements OnInit {
   }
 
   toggleEdit(): void {
+    if (this.isLocked()) return;
     this.isEditing.set(!this.isEditing());
     setTimeout(() => this.exposeAcceptanceHarness());
   }
@@ -611,6 +750,18 @@ export class FinancialsTabComponent implements OnInit {
       },
       save: () => this.saveGrid(),
       setScenario: (scenario: FinancialScenario) => this.setScenario(scenario),
+      columns: () => this.hotColumns().map(column => column.data),
+      rows: () => this.hotData().map(row => ({
+        category: row.category,
+        metric: row.metric,
+        key: row.key,
+        source: row.source,
+        costCategoryKey: row.costCategoryKey,
+        isRecurring: row.isRecurring,
+        actual: row.actual,
+      })),
+      editableMonths: () => this.editableMonths(),
+      hasColumn: (columnKey: string) => this.hotColumns().some(column => column.data === columnKey),
       openAssumption: (rowKey: string, columnKey: string) => {
         this.openAssumption(rowKey, columnKey);
         return true;
@@ -624,6 +775,7 @@ export class FinancialsTabComponent implements OnInit {
   }
 
   saveGrid(): void {
+    if (this.isLocked()) return;
     const hotInstance = this.hotComponent.hotInstance;
     if (!hotInstance) return;
     
@@ -639,60 +791,63 @@ export class FinancialsTabComponent implements OnInit {
     }
     const entryMap = new Map<string, any>();
     const costMap = new Map<string, any>();
+    const metricValueMap = new Map<string, any>();
 
     pivotedData.forEach((row: any) => {
       const metricKey = row.key;
-      this.dynamicYears().forEach(year => {
-        // Months
-        for (let m = 1; m <= 12; m++) {
-          const val = row[`col_${year}_m${m}`] || 0;
-          if (metricKey.startsWith('costs_')) {
-            const isRecurring = metricKey.includes('recurring');
-            const key = `${year}_${m}_null_${isRecurring}`;
-            if (!costMap.has(key)) {
-              costMap.set(key, {
-                name: isRecurring ? 'Recurring Costs (Grid)' : 'One-off Costs (Grid)',
-                category_key: this.defaultCategoryKey(isRecurring),
-                year, month: m, quarter: null, amount_plan: '0', amount_actual: null, is_recurring: isRecurring
-              });
-            }
-            const cost = costMap.get(key);
-            if (metricKey.includes('actual')) cost.amount_actual = val.toString();
-            else cost.amount_plan = val.toString();
-          } else {
-            const key = `${year}_${m}_null`;
-            if (!entryMap.has(key)) entryMap.set(key, { year, month: m, quarter: null });
-            entryMap.get(key)[metricKey] = val.toString();
+      this.editableMonths().forEach(period => {
+        const val = row[`col_${period.year}_m${period.month}`] || 0;
+        const numericVal = this.parseMoney(val);
+        if (row.source === 'metric_value') {
+          const customMetricKey = row.metricValueKey || metricKey;
+          const scenario = row.metricScenario || 'base';
+          const key = `${customMetricKey}_${period.year}_${period.month}_null`;
+          if (!numericVal && !this.hasExistingMetricValue(period.year, period.month, customMetricKey)) return;
+          if (!metricValueMap.has(key)) {
+            metricValueMap.set(key, {
+              metric_key: customMetricKey,
+              year: period.year,
+              month: period.month,
+              quarter: null,
+              value_base: '0',
+              value_high: '0',
+              value_actual: null,
+            });
           }
-        }
-        // Quarters
-        for (let q = 1; q <= 4; q++) {
-          const val = row[`col_${year}_q${q}`] || 0;
-          if (metricKey.startsWith('costs_')) {
-            const isRecurring = metricKey.includes('recurring');
-            const key = `${year}_null_${q}_${isRecurring}`;
-            if (!costMap.has(key)) {
-              costMap.set(key, {
-                name: isRecurring ? 'Recurring Costs (Grid)' : 'One-off Costs (Grid)',
-                category_key: this.defaultCategoryKey(isRecurring),
-                year, month: null, quarter: q, amount_plan: '0', amount_actual: null, is_recurring: isRecurring
-              });
-            }
-            const cost = costMap.get(key);
-            if (metricKey.includes('actual')) cost.amount_actual = val.toString();
-            else cost.amount_plan = val.toString();
-          } else {
-            const key = `${year}_null_${q}`;
-            if (!entryMap.has(key)) entryMap.set(key, { year, month: null, quarter: q });
-            entryMap.get(key)[metricKey] = val.toString();
+          const metricValue = metricValueMap.get(key);
+          if (scenario === 'actual') metricValue.value_actual = numericVal.toString();
+          else if (scenario === 'high') metricValue.value_high = numericVal.toString();
+          else metricValue.value_base = numericVal.toString();
+        } else if (row.source === 'cost_line' || metricKey.startsWith('costs_')) {
+          const isRecurring = row.isRecurring ?? metricKey.includes('recurring');
+          const categoryKey = row.costCategoryKey || this.defaultCategoryKey(isRecurring);
+          const key = `${period.year}_${period.month}_null_${isRecurring}_${categoryKey}`;
+          const hasExisting = this.hasExistingCostLine(period.year, period.month, categoryKey, isRecurring);
+          if (!numericVal && !hasExisting) return;
+          if (!costMap.has(key)) {
+            costMap.set(key, {
+              name: row.costCategoryKey ? `${row.metric.replace(/\s+\((Plan|Actual)\)$/i, '')} (Grid)` : (isRecurring ? 'Recurring Costs (Grid)' : 'One-off Costs (Grid)'),
+              category_key: categoryKey,
+              year: period.year, month: period.month, quarter: null, amount_plan: '0', amount_actual: null, is_recurring: isRecurring
+            });
           }
+          const cost = costMap.get(key);
+          if (row.actual ?? metricKey.includes('actual')) cost.amount_actual = numericVal.toString();
+          else cost.amount_plan = numericVal.toString();
+        } else {
+          const key = `${period.year}_${period.month}_null`;
+          const hasExisting = this.hasExistingEntry(period.year, period.month);
+          if (!numericVal && !hasExisting) return;
+          if (!entryMap.has(key)) entryMap.set(key, { year: period.year, month: period.month, quarter: null });
+          entryMap.get(key)[metricKey] = numericVal.toString();
         }
       });
     });
 
     this.api.put(`/initiatives/${this.initiativeId}/financials`, { 
       entries: Array.from(entryMap.values()), 
-      cost_lines: Array.from(costMap.values()) 
+      cost_lines: Array.from(costMap.values()),
+      metric_values: Array.from(metricValueMap.values()),
     }).subscribe({
       next: () => {
         this.saving.set(false);
@@ -731,7 +886,7 @@ export class FinancialsTabComponent implements OnInit {
   importWorkbook(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
-    if (!file || this.importing()) return;
+    if (!file || this.importing() || this.isLocked()) return;
     this.importing.set(true);
     const body = new FormData();
     body.append('file', file);
@@ -750,26 +905,43 @@ export class FinancialsTabComponent implements OnInit {
     });
   }
 
-  private _getVal(m: any, year: number, mon: number | null, q: number | null, e: any, entries: any[], costs: any[]): number {
-    const isCost = m.key.startsWith('costs_');
-    const recurring = m.key.includes('recurring');
-    const actual = m.key.includes('actual');
+  private _getVal(m: GridMetric, year: number, mon: number | null, q: number | null, e: any, entries: any[], costs: any[], metricValues: FinancialMetricValue[]): number {
+    const isCost = m.source === 'cost_line' || m.key.startsWith('costs_');
+    const recurring = m.isRecurring ?? m.key.includes('recurring');
+    const actual = m.actual ?? m.key.includes('actual');
+    const metricValueKey = m.metricValueKey || m.key;
+    const metricValueField = m.metricScenario === 'actual' ? 'value_actual' : (m.metricScenario === 'high' ? 'value_high' : 'value_base');
+    const costMatchesMetric = (cost: any) =>
+      cost.is_recurring === recurring
+      && (!m.costCategoryKey || cost.category_key === m.costCategoryKey);
 
     if (q && !this.isEditing()) {
        let sum = 0;
        const months = [(q-1)*3+1, (q-1)*3+2, (q-1)*3+3];
-       if (isCost) {
-         sum = costs
-           .filter(c => c.year === year && (months.includes(c.month!) || c.quarter === q) && c.is_recurring === recurring)
+       if (m.source === 'metric_value') {
+         const monthlyValues = metricValues.filter(x => x.metric_key === metricValueKey && x.year === year && months.includes(x.month!) && this.metricValueHasValue(x));
+         const periodValues = monthlyValues.length
+           ? monthlyValues
+           : metricValues.filter(x => x.metric_key === metricValueKey && x.year === year && x.month === null && x.quarter === q);
+         sum = periodValues.reduce((s, x) => s + parseFloat((x as any)[metricValueField] || '0'), 0);
+         sum += metricValues
+           .filter(x => x.metric_key === metricValueKey && x.year === year && x.month === null && x.quarter === null)
+           .reduce((s, x) => s + (parseFloat((x as any)[metricValueField] || '0') / 4), 0);
+       } else if (isCost) {
+         const monthlyCosts = costs.filter(c => c.year === year && months.includes(c.month!) && costMatchesMetric(c) && this.costLineHasValue(c));
+         const periodCosts = monthlyCosts.length
+           ? monthlyCosts
+           : costs.filter(c => c.year === year && c.month === null && c.quarter === q && costMatchesMetric(c));
+         sum = periodCosts
            .reduce((s, c) => s + parseFloat(actual ? (c.amount_actual || '0') : c.amount_plan), 0);
          sum += costs
-           .filter(c => c.year === year && c.month === null && c.quarter === null && c.is_recurring === recurring)
+           .filter(c => c.year === year && c.month === null && c.quarter === null && costMatchesMetric(c))
            .reduce((s, c) => s + (parseFloat(actual ? (c.amount_actual || '0') : c.amount_plan) / 4), 0);
        } else {
-         sum = entries
-           .filter(x => x.year === year && months.includes(x.month!))
-           .reduce((s, x) => s + parseFloat((x as any)[m.key] || '0'), 0);
-         sum += parseFloat((e as any)?.[m.key] || '0');
+         const monthlyEntries = entries.filter(x => x.year === year && months.includes(x.month!) && this.entryHasValue(x));
+         sum = monthlyEntries.length
+           ? monthlyEntries.reduce((s, x) => s + parseFloat((x as any)[m.key] || '0'), 0)
+           : parseFloat((e as any)?.[m.key] || '0');
          sum += entries
            .filter(x => x.year === year && x.month === null && x.quarter === null)
            .reduce((s, x) => s + (parseFloat((x as any)[m.key] || '0') / 4), 0);
@@ -777,20 +949,220 @@ export class FinancialsTabComponent implements OnInit {
        return sum;
     }
 
-    if (isCost) {
-       const exact = costs
-         .filter(c => c.year === year && c.month === mon && c.quarter === q && c.is_recurring === recurring)
-         .reduce((sum, c) => sum + parseFloat(actual ? (c.amount_actual || '0') : c.amount_plan), 0);
-       if (exact) return exact;
-       return costs
-         .filter(c => c.year === year && c.month === null && c.quarter === null && c.is_recurring === recurring)
-         .reduce((sum, c) => sum + (parseFloat(actual ? (c.amount_actual || '0') : c.amount_plan) / (mon ? 12 : 4)), 0);
+    if (m.source === 'metric_value') {
+      const exactRows = metricValues
+        .filter(x => x.metric_key === metricValueKey && x.year === year && x.month === mon && x.quarter === q);
+      if (exactRows.length) {
+        return exactRows.reduce((sum, x) => sum + parseFloat((x as any)[metricValueField] || '0'), 0);
+      }
+
+      if (mon) {
+        const quarter = this.quarterForMonth(mon);
+        const quarterTotal = metricValues
+          .filter(x => x.metric_key === metricValueKey && x.year === year && x.month === null && x.quarter === quarter)
+          .reduce((sum, x) => sum + parseFloat((x as any)[metricValueField] || '0'), 0);
+        if (quarterTotal) return quarterTotal / this.editableMonthCountInQuarter(year, quarter);
+      }
+
+      return metricValues
+        .filter(x => x.metric_key === metricValueKey && x.year === year && x.month === null && x.quarter === null)
+        .reduce((sum, x) => sum + (parseFloat((x as any)[metricValueField] || '0') / (mon ? this.editableMonthCountInYear(year) : 4)), 0);
     }
-    const exact = parseFloat((e as any)?.[m.key] || '0');
-    if (exact) return exact;
+
+    if (isCost) {
+       const exactRows = costs
+         .filter(c => c.year === year && c.month === mon && c.quarter === q && costMatchesMetric(c));
+       if (exactRows.length) {
+         return exactRows.reduce((sum, c) => sum + parseFloat(actual ? (c.amount_actual || '0') : c.amount_plan), 0);
+       }
+
+       if (mon) {
+         const quarter = this.quarterForMonth(mon);
+         const quarterTotal = costs
+           .filter(c => c.year === year && c.month === null && c.quarter === quarter && costMatchesMetric(c))
+           .reduce((sum, c) => sum + parseFloat(actual ? (c.amount_actual || '0') : c.amount_plan), 0);
+         if (quarterTotal) return quarterTotal / this.editableMonthCountInQuarter(year, quarter);
+       }
+
+       return costs
+         .filter(c => c.year === year && c.month === null && c.quarter === null && costMatchesMetric(c))
+         .reduce((sum, c) => sum + (parseFloat(actual ? (c.amount_actual || '0') : c.amount_plan) / (mon ? this.editableMonthCountInYear(year) : 4)), 0);
+    }
+    if (e) return parseFloat((e as any)?.[m.key] || '0');
+
+    if (mon) {
+      const quarter = this.quarterForMonth(mon);
+      const quarterEntry = entries.find(x => x.year === year && x.month === null && x.quarter === quarter);
+      const quarterTotal = parseFloat((quarterEntry as any)?.[m.key] || '0');
+      if (quarterTotal) return quarterTotal / this.editableMonthCountInQuarter(year, quarter);
+    }
+
     return entries
       .filter(x => x.year === year && x.month === null && x.quarter === null)
-      .reduce((sum, x) => sum + (parseFloat((x as any)[m.key] || '0') / (mon ? 12 : 4)), 0);
+      .reduce((sum, x) => sum + (parseFloat((x as any)[m.key] || '0') / (mon ? this.editableMonthCountInYear(year) : 4)), 0);
+  }
+
+  private plannedMonthRange(): FinancialPeriodMonth[] {
+    const init = this.initiative();
+    if (!init?.planned_start || !init?.planned_end) {
+      return [2026, 2027].flatMap(year =>
+        Array.from({ length: 12 }, (_, index) => this.periodMonth(year, index + 1)),
+      );
+    }
+
+    const start = this.parseDateParts(init.planned_start);
+    const end = this.parseDateParts(init.planned_end);
+    if (!start || !end || start.year > end.year || (start.year === end.year && start.month > end.month)) {
+      return [2026, 2027].flatMap(year =>
+        Array.from({ length: 12 }, (_, index) => this.periodMonth(year, index + 1)),
+      );
+    }
+
+    const periods: FinancialPeriodMonth[] = [];
+    let year = start.year;
+    let month = start.month;
+    while (year < end.year || (year === end.year && month <= end.month)) {
+      periods.push(this.periodMonth(year, month));
+      month += 1;
+      if (month > 12) {
+        month = 1;
+        year += 1;
+      }
+    }
+    return periods;
+  }
+
+  private valueBearingMonths(): FinancialPeriodMonth[] {
+    const byKey = new Map<string, FinancialPeriodMonth>();
+    const addMonth = (year: number, month: number) => {
+      byKey.set(`${year}-${month}`, this.periodMonth(year, month));
+    };
+
+    for (const entry of this.grid()?.entries || []) {
+      if (!this.entryHasValue(entry)) continue;
+      if (entry.month) {
+        addMonth(entry.year, entry.month);
+      } else if (entry.quarter) {
+        for (const month of this.monthsForQuarter(entry.quarter)) addMonth(entry.year, month);
+      }
+    }
+
+    for (const cost of this.costLines()) {
+      if (!this.costLineHasValue(cost)) continue;
+      if (cost.month) {
+        addMonth(cost.year, cost.month);
+      } else if (cost.quarter) {
+        for (const month of this.monthsForQuarter(cost.quarter)) addMonth(cost.year, month);
+      }
+    }
+
+    for (const metric of this.grid()?.metric_values || []) {
+      if (!this.metricValueHasValue(metric)) continue;
+      if (metric.month) {
+        addMonth(metric.year, metric.month);
+      } else if (metric.quarter) {
+        for (const month of this.monthsForQuarter(metric.quarter)) addMonth(metric.year, month);
+      }
+    }
+
+    return Array.from(byKey.values()).sort((a, b) => a.year - b.year || a.month - b.month);
+  }
+
+  private entryHasValue(entry: Partial<FinancialEntry>): boolean {
+    return [
+      entry.revenue_uplift_base,
+      entry.revenue_uplift_high,
+      entry.revenue_uplift_actual,
+      entry.revenue_uplift_pct_base,
+      entry.revenue_uplift_pct_high,
+      entry.revenue_uplift_pct_actual,
+      entry.gross_margin_base,
+      entry.gross_margin_high,
+      entry.gross_margin_actual,
+      entry.gm_pct_base,
+      entry.gm_pct_high,
+      entry.gm_pct_actual,
+      entry.gm_uplift_base,
+      entry.gm_uplift_high,
+      entry.gm_uplift_actual,
+      entry.gm_uplift_pct_base,
+      entry.gm_uplift_pct_high,
+      entry.gm_uplift_pct_actual,
+      entry.cogs_base,
+      entry.cogs_high,
+      entry.cogs_actual,
+      entry.cogs_pct_base,
+      entry.cogs_pct_high,
+      entry.cogs_pct_actual,
+    ].some(value => this.parseMoney(value) !== 0);
+  }
+
+  private costLineHasValue(cost: Partial<CostLine>): boolean {
+    return this.parseMoney(cost.amount_plan) !== 0 || this.parseMoney(cost.amount_actual) !== 0;
+  }
+
+  private metricValueHasValue(metric: Partial<FinancialMetricValue>): boolean {
+    return this.parseMoney(metric.value_base) !== 0
+      || this.parseMoney(metric.value_high) !== 0
+      || this.parseMoney(metric.value_actual) !== 0;
+  }
+
+  private hasExistingEntry(year: number, month: number): boolean {
+    return (this.grid()?.entries || []).some(entry => entry.year === year && entry.month === month);
+  }
+
+  private hasExistingCostLine(year: number, month: number, categoryKey: string, isRecurring: boolean): boolean {
+    return this.costLines().some(cost =>
+      cost.year === year
+      && cost.month === month
+      && cost.category_key === categoryKey
+      && cost.is_recurring === isRecurring
+    );
+  }
+
+  private hasExistingMetricValue(year: number, month: number, metricKey: string): boolean {
+    return (this.grid()?.metric_values || []).some(metric =>
+      metric.metric_key === metricKey
+      && metric.year === year
+      && metric.month === month
+    );
+  }
+
+  private quarterForMonth(month: number): number {
+    return Math.floor((month - 1) / 3) + 1;
+  }
+
+  private monthsForQuarter(quarter: number): number[] {
+    const first = (quarter - 1) * 3 + 1;
+    return [first, first + 1, first + 2];
+  }
+
+  private editableMonthCountInQuarter(year: number, quarter: number): number {
+    return Math.max(
+      1,
+      this.editableMonths().filter(period => period.year === year && this.quarterForMonth(period.month) === quarter).length,
+    );
+  }
+
+  private editableMonthCountInYear(year: number): number {
+    return Math.max(1, this.editableMonths().filter(period => period.year === year).length);
+  }
+
+  private periodMonth(year: number, month: number): FinancialPeriodMonth {
+    return {
+      year,
+      month,
+      label: new Intl.DateTimeFormat('en-US', { month: 'short' }).format(new Date(year, month - 1, 1)),
+    };
+  }
+
+  private parseDateParts(value: string): { year: number; month: number } | null {
+    const match = /^(\d{4})-(\d{2})-\d{2}/.exec(value);
+    if (!match) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) return null;
+    return { year, month };
   }
 
   formatMoney(val: string | number | null): string {
@@ -875,18 +1247,12 @@ export class FinancialsTabComponent implements OnInit {
     });
     this.api.get<FinancialGrid>(base).subscribe(g => this.grid.set(g));
     this.api.get<any>(`${base}/value-bridge`).subscribe(v => this.valueBridge.set(v));
-    this._loadBreakEven();
     this._loadAssumptions();
     this.api.get<CostLineListResponse>(`${base}/cost-lines`).subscribe(r => {
       this.costLines.set(r.items);
       this.loading.set(false);
       setTimeout(() => this.exposeAcceptanceHarness());
     });
-  }
-
-  private _loadBreakEven(): void {
-    const base = `/initiatives/${this.initiativeId}/financials`;
-    this.api.get<BreakEvenResponse>(`${base}/break-even?scenario=${this.scenario()}`).subscribe(data => this.breakEven.set(data));
   }
 
   private _loadAssumptions(): void {

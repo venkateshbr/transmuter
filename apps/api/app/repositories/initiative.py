@@ -42,11 +42,12 @@ class InitiativeRepository:
     def list(
         self,
         *,
-        workstream_id: str | None = None,
-        business_unit_id: str | None = None,
-        rag_status: str | None = None,
-        stage: str | None = None,
-        priority: str | None = None,
+        workstream_ids: list[str] | None = None,
+        business_unit_ids: list[str] | None = None,
+        rag_statuses: list[str] | None = None,
+        stages: list[str] | None = None,
+        priorities: list[str] | None = None,
+        tags: list[str] | None = None,
         search: str | None = None,
         sort_by: str = "initiative_code",
         sort_desc: bool = False,
@@ -60,7 +61,7 @@ class InitiativeRepository:
             .select(
                 "id, initiative_code, name, priority, rag_status, stage, "
                 "country, tag, planned_start, planned_end, pressure_score, archived_at, "
-                "workstream_id, workstreams(name), "
+                "workstream_id, workstreams(name, business_unit_id, business_units(name)), "
                 "owner_id, users!initiatives_owner_id_fkey(display_name)",
                 count="exact",
             )
@@ -69,14 +70,31 @@ class InitiativeRepository:
 
         if not include_archived:
             q = q.is_("archived_at", "null")
-        if workstream_id:
-            q = q.eq("workstream_id", workstream_id)
-        if rag_status:
-            q = q.eq("rag_status", rag_status)
-        if stage:
-            q = q.eq("stage", stage)
-        if priority:
-            q = q.eq("priority", priority)
+        if business_unit_ids:
+            workstream_result = (
+                self._c.table("workstreams")
+                .select("id")
+                .eq("tenant_id", self._tid)
+                .in_("business_unit_id", business_unit_ids)
+                .execute()
+            )
+            bu_workstream_ids = [row["id"] for row in workstream_result.data or []]
+            if workstream_ids:
+                workstream_ids = [ws_id for ws_id in workstream_ids if ws_id in bu_workstream_ids]
+            else:
+                workstream_ids = bu_workstream_ids
+            if not workstream_ids:
+                return [], 0
+        if workstream_ids:
+            q = q.in_("workstream_id", workstream_ids)
+        if rag_statuses:
+            q = q.in_("rag_status", rag_statuses)
+        if stages:
+            q = q.in_("stage", stages)
+        if priorities:
+            q = q.in_("priority", priorities)
+        if tags:
+            q = q.in_("tag", tags)
         if search:
             q = q.ilike("name", f"%{search}%")
         if owner_user_id:
@@ -234,6 +252,14 @@ class InitiativeRepository:
         return self.update(initiative_id, {"archived_at": datetime.now(UTC).isoformat()})
 
     def delete(self, initiative_id: str) -> None:
+        for table in ("action_items", "agenda_items"):
+            (
+                self._c.table(table)
+                .delete()
+                .eq("tenant_id", self._tid)
+                .eq("initiative_id", initiative_id)
+                .execute()
+            )
         self._c.table("initiatives").delete().eq("tenant_id", self._tid).eq(
             "id", initiative_id
         ).execute()

@@ -41,6 +41,11 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra dev
 
+      - name: Python dependency audit
+        run: |
+          uv export --extra dev --format requirements-txt --no-hashes --no-emit-project --output-file /tmp/transmuter-api-requirements.txt
+          uvx --python 3.12 pip-audit --strict -r /tmp/transmuter-api-requirements.txt
+
       - name: Ruff lint
         run: uv run ruff check app tests
 
@@ -55,17 +60,25 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
           LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
         run: |
           if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_ANON_KEY" ] && [ -n "$SUPABASE_SERVICE_KEY" ]; then
-            uv run pytest tests --ignore=tests/acceptance -v --tb=short
+            uv run pytest tests --ignore=tests/acceptance -v --tb=short --cov=app/routers --cov-report=xml --cov-report=term-missing --cov-fail-under=80
           else
             echo "::notice::Supabase CI secrets are not configured; running deterministic local API tests only."
-            uv run pytest tests/test_health.py tests/test_pressure.py tests/test_dashboard_value_matrix.py -v --tb=short
+            uv run pytest tests/test_health.py tests/test_pressure.py tests/test_dashboard_value_matrix.py -v --tb=short --cov=app/routers --cov-report=xml --cov-report=term-missing
           fi
+
+      - name: Upload backend coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage
+          path: apps/api/coverage.xml
 
   frontend:
     name: Frontend lint and production build
@@ -80,12 +93,15 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
 
       - name: Install dependencies
         run: npm ci
+
+      - name: npm critical vulnerability audit
+        run: npm audit --audit-level=critical
 
       - name: Angular lint or TypeScript lint fallback
         run: |
@@ -98,6 +114,16 @@ jobs:
 
       - name: Angular production build
         run: npx ng build --configuration=production
+
+      - name: Angular unit coverage
+        run: npx ng test --watch=false --coverage
+
+      - name: Upload frontend coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-coverage
+          path: apps/web/coverage
 
   validate-specs:
     name: Validate agent and workflow specs
@@ -117,12 +143,27 @@ jobs:
       - name: Validate YAML specs against JSON schemas
         run: python scripts/validate_specs.py
 
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   evals:
     name: Agent eval suite
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs:
       - backend
+      - secret-scan
       - validate-specs
     defaults:
       run:
@@ -164,6 +205,7 @@ jobs:
     needs:
       - backend
       - frontend
+      - secret-scan
       - validate-specs
     steps:
       - name: Comment eval policy on PR
@@ -177,7 +219,7 @@ jobs:
               "",
               "- Backend, frontend, and schema checks completed in CI.",
               "- The full agent eval suite is configured to run on pushes to `main`.",
-              "- `tests/evals` currently has no committed datasets, so the main-branch eval job will report a notice until datasets are added."
+              "- `tests/evals` contains committed deterministic intake and agent-safety evals."
             ].join("\n");
             const comments = await github.paginate(github.rest.issues.listComments, {
               owner: context.repo.owner,
@@ -211,6 +253,7 @@ jobs:
     needs:
       - backend
       - frontend
+      - secret-scan
       - validate-specs
       - evals
     environment: staging

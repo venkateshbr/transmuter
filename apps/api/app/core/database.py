@@ -1,8 +1,13 @@
 from functools import lru_cache
+from typing import Annotated
 
+from fastapi import Depends
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from supabase import Client, create_client
 
 from app.core.config import settings
+
+bearer = HTTPBearer()
 
 
 @lru_cache
@@ -16,5 +21,11 @@ def get_supabase_admin() -> Client:
 def get_supabase_user(user_jwt: str) -> Client:
     """User-scoped client. RLS is enforced automatically via the user's JWT."""
     client = create_client(settings.supabase_url, settings.supabase_anon_key)
-    client.auth.set_session(user_jwt, "")
+    client.postgrest.auth(user_jwt)
     return client
+
+
+def get_supabase_request_client(
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer)],
+) -> Client:
+    return get_supabase_user(credentials.credentials)

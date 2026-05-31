@@ -2,11 +2,14 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ApiService } from '../../core/services/api.service';
 import { FormsModule } from '@angular/forms';
+import { CompactFilterToolbarComponent, type CompactFilterGroup } from '../../shared/components/compact-filter-toolbar/compact-filter-toolbar.component';
+
+const PEOPLE_FILTER_STATE_KEY = 'transmuter.filters.people.directory';
 
 @Component({
   selector: 'app-people',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, CompactFilterToolbarComponent],
   template: `
     <div class="p-8 space-y-8 animate-fade-in" style="background:var(--t-bg)">
       
@@ -49,30 +52,15 @@ import { FormsModule } from '@angular/forms';
 
       <!-- Directory View -->
       @if (activeTab === 'directory') {
-        <div class="flex flex-wrap items-center gap-3 rounded-lg border border-[var(--t-border)] bg-[var(--t-surface)] p-4" data-testid="people-filters">
-          <div class="relative">
-            <span class="material-icons absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--t-text-tertiary)]">search</span>
-            <input
-              [(ngModel)]="search"
-              (ngModelChange)="loadPeople()"
-              class="input-field h-10 w-64 pl-9 text-sm"
-              placeholder="Search people"
-              aria-label="Search people"
-            />
-          </div>
-          <select [(ngModel)]="roleFilter" (ngModelChange)="loadPeople()" class="input-field h-10 w-48 text-sm" aria-label="Filter people by role">
-            <option value="">All roles</option>
-            <option value="transformation_office">Transformation Office</option>
-            <option value="initiative_owner">Initiative Owner</option>
-            <option value="viewer">Viewer</option>
-          </select>
-          <select [(ngModel)]="statusFilter" (ngModelChange)="loadPeople()" class="input-field h-10 w-40 text-sm" aria-label="Filter people by status">
-            <option value="active">Active</option>
-            <option value="ghost">Ghost</option>
-            <option value="deactivated">Deactivated</option>
-            <option value="">All status</option>
-          </select>
-        </div>
+        <app-compact-filter-toolbar
+          toolbarTestId="people-filters"
+          [searchValue]="search"
+          searchPlaceholder="Search people"
+          [groups]="peopleFilterGroups()"
+          [hasFilters]="hasDirectoryFilters()"
+          (searchValueChange)="onSearchChange($event)"
+          (groupSelectionChange)="onFilterGroupChange($event)"
+          (clearFilters)="clearDirectoryFilters()" />
 
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
           @for (p of people(); track p.id) {
@@ -336,11 +324,13 @@ export class PeopleComponent implements OnInit {
   };
 
   ngOnInit() {
+    this.restoreDirectoryFilters();
     this.loadPeople();
     this.loadInvites();
   }
 
   loadPeople() {
+    this.persistDirectoryFilters();
     this.api.get<any>('/people', {
       status: this.statusFilter,
       role: this.roleFilter,
@@ -348,6 +338,76 @@ export class PeopleComponent implements OnInit {
     }).subscribe(res => {
       this.people.set(res.items || []);
     });
+  }
+
+  peopleFilterGroups(): CompactFilterGroup[] {
+    return [
+      {
+        key: 'role',
+        label: 'Role',
+        mode: 'single',
+        selected: this.roleFilter ? [this.roleFilter] : [],
+        options: [
+          { id: 'transformation_office', name: 'Transformation Office' },
+          { id: 'initiative_owner', name: 'Initiative Owner' },
+          { id: 'viewer', name: 'Viewer' },
+        ],
+      },
+      {
+        key: 'status',
+        label: 'Status',
+        mode: 'single',
+        selected: this.statusFilter ? [this.statusFilter] : [],
+        options: [
+          { id: 'active', name: 'Active' },
+          { id: 'ghost', name: 'Ghost' },
+          { id: 'deactivated', name: 'Deactivated' },
+        ],
+      },
+    ];
+  }
+
+  onSearchChange(value: string): void {
+    this.search = value;
+    this.loadPeople();
+  }
+
+  onFilterGroupChange(change: { key: string; selected: string[] }): void {
+    if (change.key === 'role') this.roleFilter = change.selected[0] || '';
+    if (change.key === 'status') this.statusFilter = change.selected[0] || 'active';
+    this.loadPeople();
+  }
+
+  clearDirectoryFilters(): void {
+    this.search = '';
+    this.roleFilter = '';
+    this.statusFilter = 'active';
+    this.loadPeople();
+  }
+
+  hasDirectoryFilters(): boolean {
+    return Boolean(this.search.trim() || this.roleFilter || this.statusFilter !== 'active');
+  }
+
+  private persistDirectoryFilters(): void {
+    localStorage.setItem(PEOPLE_FILTER_STATE_KEY, JSON.stringify({
+      search: this.search,
+      roleFilter: this.roleFilter,
+      statusFilter: this.statusFilter,
+    }));
+  }
+
+  private restoreDirectoryFilters(): void {
+    try {
+      const raw = localStorage.getItem(PEOPLE_FILTER_STATE_KEY);
+      if (!raw) return;
+      const state = JSON.parse(raw) as Record<string, string>;
+      this.search = typeof state['search'] === 'string' ? state['search'] : '';
+      this.roleFilter = typeof state['roleFilter'] === 'string' ? state['roleFilter'] : '';
+      this.statusFilter = typeof state['statusFilter'] === 'string' ? state['statusFilter'] : 'active';
+    } catch {
+      localStorage.removeItem(PEOPLE_FILTER_STATE_KEY);
+    }
   }
 
   loadInvites() {

@@ -3,6 +3,7 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
+import { PortfolioFinancialTrendComponent } from './portfolio-financial-trend.component';
 
 type Granularity = 'monthly' | 'quarterly' | 'yearly';
 
@@ -88,7 +89,7 @@ interface FinancialConfiguration {
 @Component({
   selector: 'app-portfolio-financials',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, PortfolioFinancialTrendComponent],
   template: `
     <div class="min-h-screen p-8 space-y-8" style="background:var(--t-bg)">
       <header class="flex flex-wrap items-end justify-between gap-5 border-b border-[var(--t-border)] pb-6">
@@ -169,6 +170,12 @@ interface FinancialConfiguration {
           </div>
         }
       </section>
+
+      <app-portfolio-financial-trend
+        [rows]="response()?.periods || []"
+        [granularity]="granularity()"
+        [showActuals]="showActuals()"
+        (periodSelected)="openTrendPeriod($event)" />
 
       <section class="grid gap-6 xl:grid-cols-[1.4fr_0.8fr]">
         <div class="card overflow-hidden">
@@ -486,6 +493,11 @@ export class PortfolioFinancialsComponent implements OnInit {
           this.contributorsLoading.set(false);
         },
       });
+  }
+
+  openTrendPeriod(row: { period: string }): void {
+    const period = (this.response()?.periods || []).find(item => item.period === row.period);
+    if (period) this.openPeriod(period);
   }
 
   closeDrawer(): void {

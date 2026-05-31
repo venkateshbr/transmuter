@@ -11,6 +11,11 @@ export const authGuard: CanActivateFn = (route) => {
     return false;
   }
 
+  if (authService.isTokenExpired()) {
+    authService.handleSessionExpired();
+    return false;
+  }
+
   const allowedRoles = route.data?.['roles'] as string[] | undefined;
   if (allowedRoles?.length && !allowedRoles.includes(authService.getRole() ?? '')) {
     router.navigate([authService.getRole() === 'platform_admin' ? '/platform' : '/dashboard']);
