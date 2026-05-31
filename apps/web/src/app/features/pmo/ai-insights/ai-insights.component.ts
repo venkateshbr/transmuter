@@ -7,6 +7,19 @@ interface Message {
   role: 'user' | 'ai';
   content: string;
   timestamp: Date;
+  sources?: { label: string; source_type: string; record_id?: string; url?: string }[];
+  tool_trace?: { tool_name: string; status: string; summary: string; source_type: string }[];
+  confidence?: number;
+  proposed_actions?: ProposedAction[];
+}
+
+interface ProposedAction {
+  id: string;
+  action_type: string;
+  title: string;
+  description: string;
+  payload: Record<string, unknown>;
+  status: string;
 }
 
 @Component({
@@ -77,8 +90,47 @@ interface Message {
                        [class.rounded-tr-none]="msg.role === 'user'"
                        [innerHTML]="msg.content">
                   </div>
+                  @if (msg.role === 'ai' && msg.sources?.length) {
+                    <div class="flex flex-wrap gap-1 px-1">
+                      @for (source of msg.sources; track source.label) {
+                        <span class="border border-[var(--t-border)] bg-[var(--t-surface)] px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-[var(--t-text-secondary)]">
+                          {{ source.label }}
+                        </span>
+                      }
+                    </div>
+                  }
+                  @if (msg.role === 'ai' && msg.tool_trace?.length) {
+                    <div class="space-y-1 border-l-2 border-[var(--t-border)] pl-3">
+                      @for (trace of msg.tool_trace; track trace.tool_name) {
+                        <p class="text-[10px] font-bold uppercase tracking-wide text-[var(--t-text-tertiary)]">
+                          {{ trace.tool_name }} · {{ trace.summary }}
+                        </p>
+                      }
+                    </div>
+                  }
+                  @if (msg.role === 'ai' && msg.proposed_actions?.length) {
+                    <div class="space-y-2">
+                      @for (action of msg.proposed_actions; track action.id) {
+                        <div class="border border-[var(--t-border)] bg-[var(--t-bg)] p-4">
+                          <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">Confirmation required</p>
+                          <p class="mt-1 text-sm font-black text-[var(--t-text-primary)]">{{ action.title }}</p>
+                          <p class="mt-1 text-xs text-[var(--t-text-secondary)]">{{ action.description }}</p>
+                          <button
+                            type="button"
+                            class="btn-primary mt-3 text-xs"
+                            [disabled]="isTyping() || action.status !== 'draft'"
+                            (click)="confirmAction(action)">
+                            Confirm action
+                          </button>
+                        </div>
+                      }
+                    </div>
+                  }
                   <p class="text-[10px] text-[var(--t-text-tertiary)] px-1" [class.text-right]="msg.role === 'user'">
                     {{ msg.timestamp | date:'HH:mm' }}
+                    @if (msg.confidence) {
+                      · {{ msg.confidence | percent:'1.0-0' }}
+                    }
                   </p>
                 </div>
               </div>
@@ -163,7 +215,11 @@ export class AIInsightsComponent implements AfterViewChecked {
         this.messages.update(prev => [...prev, {
           role: 'ai',
           content: res.response || 'No insight generated.',
-          timestamp: new Date()
+          timestamp: new Date(),
+          sources: res.sources || [],
+          tool_trace: res.tool_trace || [],
+          confidence: res.confidence,
+          proposed_actions: res.proposed_actions || []
         }]);
         this.isTyping.set(false);
       },
@@ -180,5 +236,38 @@ export class AIInsightsComponent implements AfterViewChecked {
 
   clearChat() {
     this.messages.set([]);
+  }
+
+  confirmAction(action: ProposedAction) {
+    if (this.isTyping() || action.status !== 'draft') return;
+    this.isTyping.set(true);
+    this.api.post<any>(`/ai/actions/${action.id}/confirm`, {}).subscribe({
+      next: (res) => {
+        action.status = res.status || 'confirmed';
+        this.messages.update(prev => [...prev, {
+          role: 'ai',
+          content: res.message || 'Action confirmed.',
+          timestamp: new Date(),
+          sources: [{ label: 'Confirmed action', source_type: action.action_type }],
+          tool_trace: [{
+            tool_name: action.action_type,
+            status: 'confirmed',
+            summary: 'Executed through the underlying Transmuter API.',
+            source_type: action.action_type
+          }],
+          confidence: 1
+        }]);
+        this.isTyping.set(false);
+      },
+      error: () => {
+        this.messages.update(prev => [...prev, {
+          role: 'ai',
+          content: '<span class="text-red-500 font-bold">Error:</span> Failed to confirm action.',
+          timestamp: new Date(),
+          confidence: 0.4
+        }]);
+        this.isTyping.set(false);
+      }
+    });
   }
 }
