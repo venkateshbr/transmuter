@@ -242,9 +242,7 @@ async def change_password(
     email = _email_for_current_user(current_user)
     anon_client = create_client(settings.supabase_url, settings.supabase_anon_key)
     try:
-        anon_client.auth.sign_in_with_password(
-            {"email": email, "password": body.current_password}
-        )
+        anon_client.auth.sign_in_with_password({"email": email, "password": body.current_password})
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
