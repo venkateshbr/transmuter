@@ -1,0 +1,54 @@
+apiVersion: agentic/v1
+kind: SkillSpec
+metadata:
+  name: kpi_suggestion
+  version: 0.1.0
+  owner_agent: netra
+  description: Suggest domain-relevant KPIs for an initiative intake draft.
+contract:
+  input_schema:
+    type: object
+    properties:
+      initiative_type:
+        type:
+          - string
+          - "null"
+      initiative_name:
+        type:
+          - string
+          - "null"
+      value_logic:
+        type:
+          - string
+          - "null"
+  output_schema:
+    type: object
+    required:
+      - suggestions
+    properties:
+      suggestions:
+        type: array
+        minItems: 3
+        maxItems: 5
+        items:
+          type: object
+behavior:
+  deterministic: true
+  idempotent: true
+  side_effects:
+    - none
+  retries:
+    max: 0
+    backoff: none
+  timeout_ms: 1000
+security:
+  scopes_required:
+    - initiatives:read
+  pii_sensitivity: low
+  audit_required: true
+telemetry:
+  trace_provider: langfuse
+  metric_name: kpi_suggestion
+implementation:
+  handler: apps/api/app/agents/initiative_intake_agent.py::suggest_kpis
+  fallback: Deterministic domain pattern library.

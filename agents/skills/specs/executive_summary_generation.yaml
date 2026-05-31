@@ -1,0 +1,67 @@
+apiVersion: agentic/v1
+kind: SkillSpec
+metadata:
+  name: executive_summary_generation
+  version: 0.1.0
+  owner_agent: netra
+  description: Generate a grounded portfolio executive summary from tenant-scoped dashboard context.
+contract:
+  input_schema:
+    type: object
+    required:
+      - dashboard_context
+    properties:
+      dashboard_context:
+        type: object
+      filters:
+        type: object
+  output_schema:
+    type: object
+    required:
+      - portfolio_health
+      - top_initiatives
+      - at_risk_items
+      - financial_overview
+      - recommended_actions
+    properties:
+      portfolio_health:
+        type: object
+      top_initiatives:
+        type: array
+        items:
+          type: object
+      at_risk_items:
+        type: array
+        items:
+          type: object
+      financial_overview:
+        type: object
+      key_risks:
+        type: array
+        items:
+          type: object
+      recommended_actions:
+        type: array
+        items:
+          type: object
+behavior:
+  deterministic: false
+  idempotent: true
+  side_effects:
+    - external_api
+  retries:
+    max: 0
+    backoff: none
+  timeout_ms: 8000
+security:
+  scopes_required:
+    - dashboard:read
+    - initiatives:read
+  pii_sensitivity: low
+  audit_required: true
+telemetry:
+  trace_provider: langfuse
+  metric_name: executive_summary_generation
+implementation:
+  handler: apps/api/app/agents/executive_summary_agent.py::generate_executive_summary
+  fallback: Return a deterministic template from dashboard aggregates only.
