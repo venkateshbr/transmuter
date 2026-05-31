@@ -1,6 +1,6 @@
 # Codex Context - Transmuter
 
-Last updated: 2026-05-08
+Last updated: 2026-05-31
 
 This file captures durable working context for future Codex sessions. It supplements
 `AGENTS.md`, `docs/team/SDLC_PROTOCOL.md`, and `team/DESIGN_SYSTEM.md`; it does not
@@ -21,6 +21,19 @@ replace them.
 - Cloudflare tunnel hostnames:
   - Frontend: `https://transmuter.ishirock.com`
   - Optional direct API: `https://transmuter-api.ishirock.com`
+- Hostinger VPS / domain context:
+  - Primary domain owned for the VPS: `ishirock.tech`.
+  - VPS hostname: `srv1695814.hstgr.cloud`.
+  - VPS public IP: `76.13.208.106`.
+  - Public app hostname: `https://transmuter.ishirock.tech`, expected to be
+    routed through Traefik to the Hostinger web container.
+  - Local Supabase Docker instance is exposed at `https://supabase.ishirock.tech`.
+  - Hostinger deployment runbook: `docs/team/HOSTINGER_VPS_DEPLOYMENT.md`.
+  - Hostinger deployment directory: `infra/hostinger/`.
+  - Hostinger app compose file: `infra/hostinger/docker-compose.yml`.
+  - Hostinger deploy script: `infra/hostinger/deploy.sh`.
+  - Cloud-to-local Supabase schema migration script:
+    `infra/hostinger/migrate_supabase_schema_to_transmuter.sh`.
 - Frontend runtime config should point to `/api`; the web nginx container proxies
   that path to the Docker Compose API service at `http://api:8001`.
 
