@@ -17,7 +17,19 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  sources?: { label: string; source_type: string }[];
+  sources?: { label: string; source_type: string; record_id?: string; url?: string }[];
+  tool_trace?: { tool_name: string; status: string; summary: string; source_type: string }[];
+  confidence?: number;
+  proposed_actions?: ProposedAction[];
+}
+
+interface ProposedAction {
+  id: string;
+  action_type: string;
+  title: string;
+  description: string;
+  payload: Record<string, unknown>;
+  status: string;
 }
 
 @Component({
@@ -217,9 +229,39 @@ interface Message {
                       }
                     </div>
                   }
+                  @if (msg.role === 'assistant' && msg.tool_trace?.length) {
+                    <div class="mt-2 border-t border-[var(--t-border)] pt-2">
+                      @for (trace of msg.tool_trace; track trace.tool_name) {
+                        <p class="text-[10px] font-bold uppercase tracking-wide text-[var(--t-text-tertiary)]">
+                          {{ trace.tool_name }} · {{ trace.summary }}
+                        </p>
+                      }
+                    </div>
+                  }
+                  @if (msg.role === 'assistant' && msg.proposed_actions?.length) {
+                    <div class="mt-3 space-y-2 border-t border-[var(--t-border)] pt-3">
+                      @for (action of msg.proposed_actions; track action.id) {
+                        <div class="border border-[var(--t-border)] bg-[var(--t-bg)] p-3">
+                          <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">Confirmation required</p>
+                          <p class="mt-1 text-xs font-black text-[var(--t-text-primary)]">{{ action.title }}</p>
+                          <p class="mt-1 text-[11px] text-[var(--t-text-secondary)]">{{ action.description }}</p>
+                          <button
+                            type="button"
+                            class="btn-primary mt-3 w-full text-[10px]"
+                            [disabled]="aiLoading() || action.status !== 'draft'"
+                            (click)="confirmAction(action)">
+                            Confirm
+                          </button>
+                        </div>
+                      }
+                    </div>
+                  }
                 </div>
                 <span class="text-[9px] text-[var(--t-text-tertiary)] mt-1 px-2">
                   {{ msg.timestamp | date:'shortTime' }}
+                  @if (msg.confidence) {
+                    · {{ msg.confidence | percent:'1.0-0' }}
+                  }
                 </span>
               </div>
             }
@@ -385,7 +427,10 @@ export class App {
           role: 'assistant',
           content: res.response,
           timestamp: new Date(),
-          sources: res.sources || []
+          sources: res.sources || [],
+          tool_trace: res.tool_trace || [],
+          confidence: res.confidence,
+          proposed_actions: res.proposed_actions || []
         };
         this.messages.update(msgs => [...msgs, aiMsg]);
         this.aiLoading.set(false);
@@ -393,6 +438,39 @@ export class App {
       error: () => {
         this.aiLoading.set(false);
         // Error handling
+      }
+    });
+  }
+
+  protected confirmAction(action: ProposedAction): void {
+    if (this.aiLoading() || action.status !== 'draft') return;
+    this.aiLoading.set(true);
+    this.api.post<any>(`/ai/actions/${action.id}/confirm`, {}).subscribe({
+      next: (res) => {
+        action.status = res.status || 'confirmed';
+        this.messages.update(msgs => [...msgs, {
+          role: 'assistant',
+          content: res.message || 'Action confirmed.',
+          timestamp: new Date(),
+          sources: [{ label: 'Confirmed action', source_type: action.action_type }],
+          tool_trace: [{
+            tool_name: action.action_type,
+            status: 'confirmed',
+            summary: 'Executed through the underlying Transmuter API.',
+            source_type: action.action_type
+          }],
+          confidence: 1
+        }]);
+        this.aiLoading.set(false);
+      },
+      error: () => {
+        this.messages.update(msgs => [...msgs, {
+          role: 'assistant',
+          content: 'I could not confirm that action. Please check your permissions and the target record.',
+          timestamp: new Date(),
+          confidence: 0.4
+        }]);
+        this.aiLoading.set(false);
       }
     });
   }
