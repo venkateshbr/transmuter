@@ -241,7 +241,9 @@ async def test_copilot_answers_portfolio_financial_milestone_and_risk_queries() 
 
 
 @pytest.mark.asyncio
-async def test_copilot_drafts_and_confirms_initiative_write(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_copilot_drafts_and_confirms_initiative_write(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     service, client = _service()
     name = f"Copilot Initiative {uuid4().hex[:8]}"
 

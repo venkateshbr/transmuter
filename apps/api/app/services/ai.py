@@ -285,7 +285,11 @@ class CopilotToolRegistry:
                 "read",
                 "viewer",
                 "milestones, milestone_dependencies",
-                {"initiative": "optional string", "owner": "optional string", "date_range": "optional"},
+                {
+                    "initiative": "optional string",
+                    "owner": "optional string",
+                    "date_range": "optional",
+                },
                 ["What milestones are due this month?", "Pending milestones for Alex Chen"],
             ),
             CopilotTool(
@@ -451,22 +455,30 @@ class AIService:
         action_type = draft.action_type
         payload = draft.payload
         if action_type == "create_initiative":
-            result = InitiativeService(self.client, self.current_user.tenant_id, self.current_user.id).create_initiative(
+            result = InitiativeService(
+                self.client, self.current_user.tenant_id, self.current_user.id
+            ).create_initiative(
                 InitiativeCreate(**payload),
                 self.current_user.id,
             )
         elif action_type == "create_milestone":
-            result = MilestoneService(self.client, self.current_user.tenant_id, self.current_user.id).create_milestone(
+            result = MilestoneService(
+                self.client, self.current_user.tenant_id, self.current_user.id
+            ).create_milestone(
                 payload["initiative_id"],
                 MilestoneCreate(**payload["data"]),
             )
         elif action_type == "create_risk":
-            result = RiskService(self.client, self.current_user.tenant_id, self.current_user.id).create_risk(
+            result = RiskService(
+                self.client, self.current_user.tenant_id, self.current_user.id
+            ).create_risk(
                 payload["initiative_id"],
                 RiskCreate(**payload["data"]),
             )
         elif action_type == "create_kpi":
-            result = KPIService(self.client, self.current_user.tenant_id, self.current_user.id).create_kpi(
+            result = KPIService(
+                self.client, self.current_user.tenant_id, self.current_user.id
+            ).create_kpi(
                 payload["initiative_id"],
                 KPICreate(**payload["data"]),
             )
@@ -477,12 +489,16 @@ class AIService:
             )
         elif action_type == "update_financial_entry":
             entry = FinancialEntryUpdate(**payload["data"])
-            result = FinancialService(self.client, self.current_user.tenant_id).update_financial_grid(
+            result = FinancialService(
+                self.client, self.current_user.tenant_id
+            ).update_financial_grid(
                 payload["initiative_id"],
                 FinancialGridUpdate(entries=[entry]),
             )
         else:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported action")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported action"
+            )
 
         draft.status = "confirmed"
         draft.confirmed_at = datetime.now(UTC)
@@ -521,7 +537,12 @@ class AIService:
         elif "milestone" in query_l or "due" in query_l or "deadline" in query_l:
             source_types = ["milestones", "initiatives", "users"]
             response = self._milestone_answer(query, snapshot, context)
-        elif "risk" in query_l or "at-risk" in query_l or "at risk" in query_l or "escalat" in query_l:
+        elif (
+            "risk" in query_l
+            or "at-risk" in query_l
+            or "at risk" in query_l
+            or "escalat" in query_l
+        ):
             source_types = ["risks", "initiatives"]
             response = self._risk_answer(query, snapshot, context)
         elif "kpi" in query_l or "metric" in query_l:
@@ -570,7 +591,8 @@ class AIService:
             payload = {
                 "name": name or "New AI drafted initiative",
                 "priority": self._extract_priority(query_l),
-                "summary": self._extract_after(query, "summary") or "Drafted by Transmuter Copilot.",
+                "summary": self._extract_after(query, "summary")
+                or "Drafted by Transmuter Copilot.",
             }
             draft = self._store_action(
                 "create_initiative",
@@ -601,7 +623,9 @@ class AIService:
                     plan,
                 )
             elif "risk" in query_l:
-                description = self._extract_after(query, "risk") or self._extract_after(query, "about")
+                description = self._extract_after(query, "risk") or self._extract_after(
+                    query, "about"
+                )
                 payload = {
                     "initiative_id": initiative["id"],
                     "data": {
@@ -643,7 +667,8 @@ class AIService:
                 payload = {
                     "initiative_id": initiative["id"],
                     "data": {
-                        "name": self._extract_name(query, ("called", "named", "cost", "line")) or "AI drafted cost line",
+                        "name": self._extract_name(query, ("called", "named", "cost", "line"))
+                        or "AI drafted cost line",
                         "category_key": "other",
                         "year": self._extract_year(query) or date.today().year,
                         "quarter": self._extract_quarter(query),
@@ -658,7 +683,12 @@ class AIService:
                     payload,
                     plan,
                 )
-            elif "financial" in query_l or "gm" in query_l or "uplift" in query_l or "value" in query_l:
+            elif (
+                "financial" in query_l
+                or "gm" in query_l
+                or "uplift" in query_l
+                or "value" in query_l
+            ):
                 amount = self._extract_amount(query)
                 payload = {
                     "initiative_id": initiative["id"],
@@ -681,7 +711,9 @@ class AIService:
             return {
                 "response": "I can help draft initiatives, milestones, risks, KPIs, cost lines, and financial entries. Please include the target initiative and the item to add.",
                 "sources": self._sources(["ai_tools"], snapshot, "Unsupported draft request."),
-                "tool_trace": self._trace(["ai_tools"], snapshot, plan, rejected="unsupported_action_guardrail"),
+                "tool_trace": self._trace(
+                    ["ai_tools"], snapshot, plan, rejected="unsupported_action_guardrail"
+                ),
                 "confidence": 0.72,
                 "proposed_actions": [],
                 "plan": plan.__dict__,
@@ -701,7 +733,9 @@ class AIService:
         amber = [row for row in active if row.get("rag_status") == "amber"]
         stages = self._counts(active, "stage")
         open_risks = [row for row in snapshot.risks if row.get("status") == "open"]
-        open_actions = [row for row in snapshot.action_items if row.get("status") in {"open", "in_progress"}]
+        open_actions = [
+            row for row in snapshot.action_items if row.get("status") in {"open", "in_progress"}
+        ]
         return (
             f"The portfolio has {len(active)} active initiatives: {len(red)} red, {len(amber)} amber, "
             f"and {len(active) - len(red) - len(amber)} green. Stage mix: {self._count_text(stages)}. "
@@ -720,10 +754,14 @@ class AIService:
         if initiative:
             risks = [row for row in risks if row.get("initiative_id") == initiative["id"]]
         if "high" in query.lower():
-            risks = [row for row in risks if row.get("rating") == "high" or row.get("impact") == "high"]
+            risks = [
+                row for row in risks if row.get("rating") == "high" or row.get("impact") == "high"
+            ]
         open_risks = [row for row in risks if row.get("status") == "open"]
         escalated = [row for row in open_risks if row.get("escalated")]
-        top = sorted(open_risks, key=lambda r: (r.get("rating") != "high", r.get("created_at") or ""))[:5]
+        top = sorted(
+            open_risks, key=lambda r: (r.get("rating") != "high", r.get("created_at") or "")
+        )[:5]
         lines = [
             f"{self._initiative_label(row.get('initiative_id'), snapshot)}: {row.get('description')} ({row.get('rating') or row.get('impact') or 'unrated'})"
             for row in top
@@ -753,7 +791,9 @@ class AIService:
         if "this week" in query_l:
             start = date.today()
             end = start + timedelta(days=7)
-            milestones = [row for row in milestones if self._date_between(row.get("planned_end"), start, end)]
+            milestones = [
+                row for row in milestones if self._date_between(row.get("planned_end"), start, end)
+            ]
         elif "this month" in query_l or "month" in query_l:
             today = date.today()
             milestones = [
@@ -767,9 +807,10 @@ class AIService:
             f"{row.get('name')} ({self._initiative_label(row.get('initiative_id'), snapshot)}, due {row.get('planned_end') or 'not set'}, {row.get('status')})"
             for row in sorted(milestones, key=lambda r: r.get("planned_end") or "9999-12-31")[:8]
         ]
-        return (
-            f"I found {len(milestones)} matching milestones. "
-            + ("Key items: " + "; ".join(lines) + "." if lines else "No matching milestone records found.")
+        return f"I found {len(milestones)} matching milestones. " + (
+            "Key items: " + "; ".join(lines) + "."
+            if lines
+            else "No matching milestone records found."
         )
 
     def _financial_answer(
@@ -779,8 +820,12 @@ class AIService:
         context: dict[str, Any],
     ) -> str:
         initiative = self._find_initiative(query, snapshot, context)
-        initiative_ids = {initiative["id"]} if initiative else {row["id"] for row in snapshot.initiatives}
-        entries = [row for row in snapshot.financial_entries if row.get("initiative_id") in initiative_ids]
+        initiative_ids = (
+            {initiative["id"]} if initiative else {row["id"] for row in snapshot.initiatives}
+        )
+        entries = [
+            row for row in snapshot.financial_entries if row.get("initiative_id") in initiative_ids
+        ]
         costs = [row for row in snapshot.cost_lines if row.get("initiative_id") in initiative_ids]
         year = self._extract_year(query)
         if year:
@@ -790,7 +835,9 @@ class AIService:
         gm_base = sum(_d(row.get("gm_uplift_base")) for row in entries)
         gm_actual = sum(_d(row.get("gm_uplift_actual")) for row in entries)
         recurring_cost = sum(_d(row.get("amount_plan")) for row in costs if row.get("is_recurring"))
-        one_off_cost = sum(_d(row.get("amount_plan")) for row in costs if not row.get("is_recurring"))
+        one_off_cost = sum(
+            _d(row.get("amount_plan")) for row in costs if not row.get("is_recurring")
+        )
         net_value = gm_base - recurring_cost
         scope = initiative["initiative_code"] if initiative else "the portfolio"
         year_text = f" in {year}" if year else ""
@@ -813,7 +860,11 @@ class AIService:
         entries_by_kpi: dict[str, list[dict[str, Any]]] = {}
         for entry in snapshot.kpi_entries:
             entries_by_kpi.setdefault(entry.get("kpi_id"), []).append(entry)
-        no_actuals = [row for row in kpis if not any(e.get("value_actual") is not None for e in entries_by_kpi.get(row["id"], []))]
+        no_actuals = [
+            row
+            for row in kpis
+            if not any(e.get("value_actual") is not None for e in entries_by_kpi.get(row["id"], []))
+        ]
         lines = [
             f"{row.get('name')} ({self._initiative_label(row.get('initiative_id'), snapshot)}, {row.get('frequency')}, {row.get('unit') or 'unitless'})"
             for row in kpis[:6]
@@ -840,7 +891,10 @@ class AIService:
             milestones = [row for row in milestones if row.get("owner_id") == owner["id"]]
         open_actions = [row for row in actions if row.get("status") in {"open", "in_progress"}]
         overdue_actions = [
-            row for row in open_actions if self._parse_date(row.get("due_date")) and self._parse_date(row.get("due_date")) < date.today()
+            row
+            for row in open_actions
+            if self._parse_date(row.get("due_date"))
+            and self._parse_date(row.get("due_date")) < date.today()
         ]
         open_milestones = [row for row in milestones if row.get("status") != "complete"]
         name = owner.get("display_name") if owner else "the portfolio"
@@ -859,13 +913,20 @@ class AIService:
         if not initiative:
             return self._portfolio_answer(snapshot)
         open_milestones = [
-            row for row in snapshot.milestones if row.get("initiative_id") == initiative["id"] and row.get("status") != "complete"
+            row
+            for row in snapshot.milestones
+            if row.get("initiative_id") == initiative["id"] and row.get("status") != "complete"
         ]
         open_risks = [
-            row for row in snapshot.risks if row.get("initiative_id") == initiative["id"] and row.get("status") == "open"
+            row
+            for row in snapshot.risks
+            if row.get("initiative_id") == initiative["id"] and row.get("status") == "open"
         ]
         open_actions = [
-            row for row in snapshot.action_items if row.get("initiative_id") == initiative["id"] and row.get("status") in {"open", "in_progress"}
+            row
+            for row in snapshot.action_items
+            if row.get("initiative_id") == initiative["id"]
+            and row.get("status") in {"open", "in_progress"}
         ]
         owner = self._user_label(initiative.get("owner_id"), snapshot)
         return (
@@ -936,7 +997,12 @@ class AIService:
             operation = "read"
             risk_level = "low"
             tools = ["milestone_lookup", "portfolio_snapshot"]
-        elif "risk" in query_l or "at-risk" in query_l or "at risk" in query_l or "escalat" in query_l:
+        elif (
+            "risk" in query_l
+            or "at-risk" in query_l
+            or "at risk" in query_l
+            or "escalat" in query_l
+        ):
             intent = "answer"
             operation = "read"
             risk_level = "medium"
@@ -1136,7 +1202,10 @@ class AIService:
             checks.append(
                 {
                     "name": "decimal_money",
-                    "passed": all(str(_d(data.get(key))) == str(_d(str(data.get(key)))) for key in amount_fields),
+                    "passed": all(
+                        str(_d(data.get(key))) == str(_d(str(data.get(key))))
+                        for key in amount_fields
+                    ),
                     "message": "Financial amounts are Decimal-compatible strings.",
                 }
             )
@@ -1245,8 +1314,19 @@ class AIService:
     @staticmethod
     def _looks_like_write(query_l: str) -> bool:
         write_verbs = ("create", "add", "update", "set", "change", "draft", "new")
-        write_nouns = ("initiative", "milestone", "risk", "kpi", "metric", "financial", "cost", "uplift")
-        return any(verb in query_l for verb in write_verbs) and any(noun in query_l for noun in write_nouns)
+        write_nouns = (
+            "initiative",
+            "milestone",
+            "risk",
+            "kpi",
+            "metric",
+            "financial",
+            "cost",
+            "uplift",
+        )
+        return any(verb in query_l for verb in write_verbs) and any(
+            noun in query_l for noun in write_nouns
+        )
 
     def _find_initiative(
         self,
@@ -1343,7 +1423,10 @@ class AIService:
 
     @staticmethod
     def _count_text(counts: dict[str, int]) -> str:
-        return ", ".join(f"{count} {key.replace('_', ' ')}" for key, count in sorted(counts.items())) or "none"
+        return (
+            ", ".join(f"{count} {key.replace('_', ' ')}" for key, count in sorted(counts.items()))
+            or "none"
+        )
 
     @staticmethod
     def _parse_date(value: object) -> date | None:
@@ -1392,7 +1475,9 @@ class AIService:
         for marker in markers:
             match = re.search(rf"\b{re.escape(marker)}\b\s+['\"]?([^'\".;]+)", text, re.IGNORECASE)
             if match:
-                value = re.split(r"\b(to|for|by|with|on|in)\b", match.group(1), flags=re.IGNORECASE)[0]
+                value = re.split(
+                    r"\b(to|for|by|with|on|in)\b", match.group(1), flags=re.IGNORECASE
+                )[0]
                 return value.strip(" .:-")[:300] or None
         return None
 
