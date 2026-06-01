@@ -1,0 +1,115 @@
+name: transmuter-hostinger
+
+x-api-environment: &api-environment
+  APP_NAME: ${APP_NAME:-Transmuter API}
+  VERSION: ${VERSION:-0.1.0}
+  DEBUG: "false"
+  ENVIRONMENT: ${TRANSMUTER_ENVIRONMENT:-production}
+  SUPABASE_URL: ${SUPABASE_URL}
+  SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+  SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY}
+  DATABASE_URL: ${DATABASE_URL}
+  JWT_SECRET: ${JWT_SECRET}
+  JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+  JWT_EXPIRY_MINUTES: ${JWT_EXPIRY_MINUTES:-60}
+  AI_ENABLED: ${AI_ENABLED:-true}
+  OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+  OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
+  DEFAULT_MODEL: ${DEFAULT_MODEL:-anthropic/claude-sonnet-4-6}
+  LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+  LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+  LANGFUSE_HOST: ${LANGFUSE_HOST:-https://cloud.langfuse.com}
+  LOGFIRE_TOKEN: ${LOGFIRE_TOKEN:-}
+  SENTRY_DSN: ${SENTRY_DSN:-}
+  SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.1}
+  ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+  RESEND_API_KEY: ${RESEND_API_KEY:-}
+  RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL:-}
+  PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-stripe}
+  STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+  STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+  STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+  STRIPE_PRICE_TEAM_MONTHLY: ${STRIPE_PRICE_TEAM_MONTHLY:-}
+  STRIPE_PRICE_TEAM_ANNUAL: ${STRIPE_PRICE_TEAM_ANNUAL:-}
+  STRIPE_PRICE_BUSINESS_MONTHLY: ${STRIPE_PRICE_BUSINESS_MONTHLY:-}
+  STRIPE_PRICE_BUSINESS_ANNUAL: ${STRIPE_PRICE_BUSINESS_ANNUAL:-}
+  ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+  PLATFORM_ADMIN_EMAILS: ${PLATFORM_ADMIN_EMAILS:-}
+
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile.prod
+    image: transmuter-api:hostinger
+    environment:
+      <<: *api-environment
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile.prod
+    image: transmuter-api:hostinger
+    environment:
+      <<: *api-environment
+    command: ["uv", "run", "python", "-m", "procrastinate", "--app=app.worker.app", "worker"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - app
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "print('ok')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../../apps/web
+      dockerfile: Dockerfile
+    image: transmuter-web:hostinger
+    environment:
+      TRANSMUTER_API_URL: ${TRANSMUTER_API_URL:-/api}
+      TRANSMUTER_ENVIRONMENT: ${TRANSMUTER_ENVIRONMENT:-production}
+      TRANSMUTER_SENTRY_DSN: ${TRANSMUTER_SENTRY_DSN:-}
+    ports:
+      - "${TRANSMUTER_WEB_BIND:-127.0.0.1:4301}:80"
+    networks:
+      - app
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.transmuter-web.rule=Host(`${TRAEFIK_HOSTNAME:-transmuter.ishirock.tech}`)"
+      - "traefik.http.routers.transmuter-web.entrypoints=${TRAEFIK_HTTPS_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.transmuter-web.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}"
+      - "traefik.http.routers.transmuter-web.service=transmuter-web"
+      - "traefik.http.services.transmuter-web.loadbalancer.server.port=80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+networks:
+  app:
+    driver: bridge
