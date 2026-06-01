@@ -36,6 +36,7 @@ from app.domain.meetings import (
 )
 from app.domain.risks import RiskCreate, RiskUpdate
 from app.repositories.meeting import MeetingRepository
+from app.services.email_delivery import EmailDeliveryService
 from app.services.risk import RiskService
 
 
@@ -44,6 +45,7 @@ class MeetingService:
         self._client = client
         self._repo = MeetingRepository(client, tenant_id)
         self._tenant_id = tenant_id
+        self._email = EmailDeliveryService()
 
     def list_meetings(self) -> list[dict]:
         return self._repo.list()
@@ -293,6 +295,33 @@ class MeetingService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Generate and review minutes before sending.",
             )
+        meeting_id = session["meeting_id"]
+        attendees = self._repo.get_attendees(meeting_id)
+        recipients = self._attendee_emails(attendees)
+        if not recipients:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Add at least one attendee with an email address before sending minutes.",
+            )
+
+        meeting = session.get("meetings") or {}
+        subject = f"Minutes: {self._mask_pii(meeting.get('name') or 'Meeting')}"
+        delivery = self._email.deliver(
+            to=recipients,
+            subject=subject,
+            text=self._minutes_email_text(session, minutes),
+        )
+        if delivery.status == "queued" and delivery.detail == "email_not_configured":
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Email delivery is not configured.",
+            )
+        if delivery.status != "sent":
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Minutes email could not be sent.",
+            )
+
         return self._repo.update_session(
             session_id,
             {
@@ -465,6 +494,31 @@ class MeetingService:
         text = re.sub(r"[\w.+-]+@[\w-]+\.[\w.-]+", "[email]", text)
         text = re.sub(r"\+?\d[\d\s().-]{7,}\d", "[phone]", text)
         return text
+
+    @staticmethod
+    def _attendee_emails(attendees: list[dict]) -> list[str]:
+        recipients: list[str] = []
+        for attendee in attendees:
+            user = attendee.get("users") if isinstance(attendee.get("users"), dict) else {}
+            email = user.get("email") if isinstance(user, dict) else None
+            if isinstance(email, str):
+                recipients.append(email)
+        return recipients
+
+    def _minutes_email_text(self, session: dict, minutes: str) -> str:
+        meeting = session.get("meetings") or {}
+        meeting_name = self._mask_pii(meeting.get("name") or "Meeting")
+        session_date = session.get("session_date") or "not recorded"
+        return "\n".join(
+            [
+                f"Minutes for {meeting_name}",
+                f"Session date: {session_date}",
+                "",
+                minutes,
+                "",
+                "Sent from Transmuter.",
+            ]
+        )
 
     def _create_graph_calendar_event(
         self,
