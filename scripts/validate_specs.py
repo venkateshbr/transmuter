@@ -9,11 +9,11 @@ from typing import Any
 import yaml
 from jsonschema import Draft202012Validator
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 SPEC_GROUPS = [
     ("AgentSpec", ROOT / "schemas" / "agent_spec.json", ROOT / "agents" / "specs"),
+    ("SkillSpec", ROOT / "schemas" / "skill_spec.json", ROOT / "agents" / "skills" / "specs"),
     ("WorkflowSpec", ROOT / "schemas" / "workflow_spec.json", ROOT / "workflows"),
 ]
 

@@ -1,0 +1,62 @@
+apiVersion: agentic/v1
+kind: SkillSpec
+metadata:
+  name: status_update_drafting
+  version: 0.1.0
+  owner_agent: netra
+  description: Draft a grounded initiative status update from initiative_context_pull output.
+contract:
+  input_schema:
+    type: object
+    required:
+      - initiative_context
+    properties:
+      initiative_context:
+        type: object
+  output_schema:
+    type: object
+    required:
+      - rag_status
+      - summary
+      - achievements
+      - issues
+      - next_steps
+      - confidence
+    properties:
+      rag_status:
+        type: string
+        enum:
+          - red
+          - amber
+          - green
+      summary:
+        type: string
+      achievements:
+        type: string
+      issues:
+        type: string
+      next_steps:
+        type: string
+      confidence:
+        type: number
+behavior:
+  deterministic: false
+  idempotent: true
+  side_effects:
+    - external_api
+  retries:
+    max: 0
+    backoff: none
+  timeout_ms: 8000
+security:
+  scopes_required:
+    - initiatives:read
+    - status_updates:read
+  pii_sensitivity: low
+  audit_required: true
+telemetry:
+  trace_provider: langfuse
+  metric_name: status_update_drafting
+implementation:
+  handler: apps/api/app/agents/status_update_agent.py::draft_status_update
+  fallback: Deterministic summary from milestone, KPI, risk, and financial context.

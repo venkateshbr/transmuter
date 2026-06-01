@@ -35,6 +35,7 @@ from app.routers import (
     people,
     platform,
     risks,
+    search,
     status_updates,
     team,
     workstreams,
@@ -159,6 +160,7 @@ app.include_router(financials.router)
 app.include_router(milestones.router)
 app.include_router(kpis.router)
 app.include_router(risks.router)
+app.include_router(search.router)
 app.include_router(status_updates.router)
 app.include_router(governance.router)
 app.include_router(team.router)

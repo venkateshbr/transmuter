@@ -1,0 +1,62 @@
+apiVersion: agentic/v1
+kind: SkillSpec
+metadata:
+  name: initiative_field_extraction
+  version: 0.1.0
+  owner_agent: netra
+  description: Extract conservative structured initiative draft fields from raw intake text.
+contract:
+  input_schema:
+    type: object
+    required:
+      - text
+    properties:
+      text:
+        type: string
+        minLength: 1
+        maxLength: 12000
+  output_schema:
+    type: object
+    required:
+      - trace_id
+      - agent_status
+      - confidence
+      - draft
+    properties:
+      trace_id:
+        type: string
+      trace_url:
+        type:
+          - string
+          - "null"
+      agent_status:
+        type: string
+        enum:
+          - generated
+          - deterministic_fallback
+      confidence:
+        type: number
+        minimum: 0
+        maximum: 1
+      draft:
+        type: object
+behavior:
+  deterministic: false
+  idempotent: true
+  side_effects:
+    - external_api
+  retries:
+    max: 0
+    backoff: none
+  timeout_ms: 8000
+security:
+  scopes_required:
+    - initiatives:read
+  pii_sensitivity: medium
+  audit_required: true
+telemetry:
+  trace_provider: langfuse
+  metric_name: initiative_field_extraction
+implementation:
+  handler: apps/api/app/agents/initiative_intake_agent.py::extract_initiative_fields
+  fallback: Deterministic conservative parser returns null for unsupported fields.
