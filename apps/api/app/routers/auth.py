@@ -1,3 +1,4 @@
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 from uuid import UUID, uuid4
@@ -58,6 +59,7 @@ class RegisterRequest(BaseModel):
     admin_display_name: str = Field(..., min_length=1, max_length=200)
     admin_email: EmailStr
     admin_password: str = Field(..., min_length=12, max_length=256)
+    invite_token: str | None = Field(None, max_length=256)
 
 
 class ChangePasswordRequest(BaseModel):
@@ -96,6 +98,20 @@ def _platform_admin_profile_email() -> str:
     return configured[0] if configured else "platform-admin@transmuter.local"
 
 
+def _auth_metadata(user: Any, key: str) -> dict[str, Any]:
+    value = getattr(user, key, None) or {}
+    return value if isinstance(value, dict) else {}
+
+
+def _is_platform_admin_auth_user(user: Any, email: str | None) -> bool:
+    if (email or "").lower() not in _platform_admin_emails():
+        return False
+    app_metadata = _auth_metadata(user, "app_metadata")
+    return (
+        app_metadata.get("role") == "platform_admin" or app_metadata.get("platform_admin") is True
+    )
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 
@@ -123,6 +139,24 @@ async def login(body: LoginRequest) -> TokenResponse:
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def register_blank_tenant(body: RegisterRequest) -> TokenResponse:
     """Create a blank tenant and first transformation-office admin."""
+    if not settings.public_registration_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Registration is not enabled",
+        )
+    if (
+        settings.registration_invite_token
+        and body.invite_token != settings.registration_invite_token
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Registration invite token is invalid",
+        )
+    if str(body.admin_email).lower() in _platform_admin_emails():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This email cannot be used for tenant registration",
+        )
     _validate_new_password(body.admin_password)
     admin = get_supabase_admin()
     existing_org = (
@@ -150,8 +184,14 @@ async def register_blank_tenant(body: RegisterRequest) -> TokenResponse:
             status_code=status.HTTP_409_CONFLICT,
             detail="Admin email is already registered",
         )
+    if _find_auth_user_by_email(str(body.admin_email)):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Admin email is already registered",
+        )
 
     tenant_id = str(uuid4())
+    auth_user_id: str | None = None
     admin.table("organizations").insert(
         {
             "id": tenant_id,
@@ -160,33 +200,44 @@ async def register_blank_tenant(body: RegisterRequest) -> TokenResponse:
             "settings": {},
         }
     ).execute()
-    auth_user = admin.auth.admin.create_user(
-        {
-            "email": str(body.admin_email),
-            "password": body.admin_password,
-            "email_confirm": True,
-            "user_metadata": {
+    try:
+        auth_user = admin.auth.admin.create_user(
+            {
+                "email": str(body.admin_email),
+                "password": body.admin_password,
+                "email_confirm": True,
+                "user_metadata": {
+                    "tenant_id": tenant_id,
+                    "role": "transformation_office",
+                    "display_name": body.admin_display_name,
+                },
+            }
+        )
+        auth_user_id = str(auth_user.user.id)
+        admin.table("users").insert(
+            {
+                "id": auth_user_id,
                 "tenant_id": tenant_id,
-                "role": "transformation_office",
+                "email": str(body.admin_email),
                 "display_name": body.admin_display_name,
-            },
-        }
-    )
-    admin.table("users").insert(
-        {
-            "id": str(auth_user.user.id),
-            "tenant_id": tenant_id,
-            "email": str(body.admin_email),
-            "display_name": body.admin_display_name,
-            "title": "Organization Admin",
-            "role": "transformation_office",
-            "status": "active",
-            "must_change_password": False,
-            "onboarding_completed": False,
-            "updated_at": datetime.now(UTC).isoformat(),
-        }
-    ).execute()
-    TenantBootstrapService(admin).bootstrap_tenant(tenant_id)
+                "title": "Organization Admin",
+                "role": "transformation_office",
+                "status": "active",
+                "must_change_password": False,
+                "onboarding_completed": False,
+                "updated_at": datetime.now(UTC).isoformat(),
+            }
+        ).execute()
+        TenantBootstrapService(admin).bootstrap_tenant(tenant_id)
+    except Exception as exc:
+        if auth_user_id:
+            with suppress(Exception):
+                admin.auth.admin.delete_user(auth_user_id)
+        _cleanup_failed_registration(admin, tenant_id, auth_user_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Tenant registration could not be completed",
+        ) from exc
 
     anon_client = create_client(settings.supabase_url, settings.supabase_anon_key)
     try:
@@ -224,7 +275,7 @@ async def refresh_session(body: RefreshRequest) -> TokenResponse:
 def _token_response_for_session(
     supabase_user: Any, session: Any, email: str | None
 ) -> TokenResponse:
-    if (email or "").lower() in _platform_admin_emails():
+    if _is_platform_admin_auth_user(supabase_user, email):
         return TokenResponse(
             access_token=session.access_token,
             refresh_token=session.refresh_token,
@@ -267,6 +318,38 @@ def _token_response_for_session(
         status=u["status"],
         must_change_password=bool(u.get("must_change_password")),
     )
+
+
+def _find_auth_user_by_email(email: str) -> str | None:
+    page = 1
+    per_page = 100
+    admin = get_supabase_admin()
+    while True:
+        users = admin.auth.admin.list_users(page=page, per_page=per_page)
+        for user in users:
+            if (getattr(user, "email", "") or "").lower() == email.lower():
+                return str(user.id)
+        if len(users) < per_page:
+            return None
+        page += 1
+
+
+def _cleanup_failed_registration(admin: Any, tenant_id: str, auth_user_id: str | None) -> None:
+    tenant_tables = [
+        "user_workstreams",
+        "users",
+        "gate_criteria",
+        "financial_config_items",
+        "financial_config_groups",
+    ]
+    for table in tenant_tables:
+        with suppress(Exception):
+            query = admin.table(table).delete().eq("tenant_id", tenant_id)
+            if table == "users" and auth_user_id:
+                query = query.eq("id", auth_user_id)
+            query.execute()
+    with suppress(Exception):
+        admin.table("organizations").delete().eq("id", tenant_id).execute()
 
 
 @router.get("/me", response_model=UserProfile)

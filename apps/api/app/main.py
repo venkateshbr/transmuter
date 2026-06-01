@@ -66,7 +66,11 @@ async def enforce_api_security_controls(
             content={"detail": "Request body exceeds the 10 MB limit"},
         )
 
-    if request.method == "POST" and request.url.path in {"/auth/login", "/auth/change-password"}:
+    if request.method == "POST" and request.url.path in {
+        "/auth/login",
+        "/auth/change-password",
+        "/auth/register",
+    }:
         now = monotonic()
         client_ip = request.client.host if request.client else "unknown"
         attempts = _login_attempts[f"{request.url.path}:{client_ip}"]

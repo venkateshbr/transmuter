@@ -5,10 +5,9 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query
-from supabase import Client
 
 from app.core.auth import CurrentUser, get_current_user, require_role
-from app.core.database import get_supabase_request_client
+from app.core.database import get_supabase_admin
 from app.domain.people import InviteCreate, UserCreate, UserUpdate, WorkstreamAssignment
 from app.services.people import PeopleService
 
@@ -17,9 +16,8 @@ router = APIRouter(tags=["people"])
 
 def _svc(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
-    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> PeopleService:
-    return PeopleService(client, current_user.tenant_id)
+    return PeopleService(get_supabase_admin(), current_user.tenant_id)
 
 
 @router.get("/people")

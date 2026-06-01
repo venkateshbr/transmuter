@@ -89,6 +89,24 @@ class _SummaryRepo:
         return []
 
 
+def test_default_financial_scope_includes_all_system_cost_categories() -> None:
+    assert set(FinancialService._default_cost_category_keys()) >= {
+        "implementation",
+        "technology_tooling",
+        "external_consultants",
+        "training_change",
+        "other_one_off",
+        "software_subscriptions",
+        "support_maintenance",
+        "additional_headcount",
+        "run_rate_operating",
+        "maintenance",
+        "software",
+        "labor",
+        "other",
+    }
+
+
 def test_financial_summary_cogs_does_not_double_count_quarters_with_monthly_rows() -> None:
     service = FinancialService.__new__(FinancialService)
     service._repo = _SummaryRepo()

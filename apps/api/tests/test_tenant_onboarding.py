@@ -5,7 +5,7 @@ from uuid import UUID
 import pytest
 from fastapi import HTTPException
 
-from app.domain.people import UserCreate
+from app.domain.people import InviteCreate, UserCreate
 from app.services.people import PeopleService
 
 TENANT_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -95,3 +95,40 @@ def test_create_user_rejects_weak_temporary_password(monkeypatch) -> None:
 
     assert exc.value.status_code == 400
     assert "uppercase" in exc.value.detail
+
+
+def test_create_user_rejects_existing_orphan_auth_account(monkeypatch) -> None:
+    service = PeopleService(client=object(), tenant_id=TENANT_ID)  # type: ignore[arg-type]
+    service._repo = FakePeopleRepository()
+    monkeypatch.setattr(service, "_find_auth_user_id", lambda email: USER_ID)
+
+    with pytest.raises(HTTPException) as exc:
+        service.create_user(
+            UserCreate(
+                email="orphan@example.com",
+                display_name="Orphan User",
+                role="viewer",
+                temporary_password="Transmuter2026!",
+            )
+        )
+
+    assert exc.value.status_code == 409
+    assert "auth account already exists" in exc.value.detail
+
+
+def test_invite_user_rejects_existing_orphan_auth_account(monkeypatch) -> None:
+    service = PeopleService(client=object(), tenant_id=TENANT_ID)  # type: ignore[arg-type]
+    service._repo = FakePeopleRepository()
+    monkeypatch.setattr(service, "_find_auth_user_id", lambda email: USER_ID)
+
+    with pytest.raises(HTTPException) as exc:
+        service.invite_user(
+            InviteCreate(
+                email="orphan@example.com",
+                display_name="Orphan User",
+                role="viewer",
+            )
+        )
+
+    assert exc.value.status_code == 409
+    assert "auth account already exists" in exc.value.detail

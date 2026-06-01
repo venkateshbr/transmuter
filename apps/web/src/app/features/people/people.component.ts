@@ -165,8 +165,11 @@ const PEOPLE_FILTER_STATE_KEY = 'transmuter.filters.people.directory';
                 <option value="initiative_owner">Initiative Owner</option>
                 <option value="viewer">Viewer</option>
               </select>
-              <div class="grid grid-cols-[1fr_auto] gap-2">
-                <input [(ngModel)]="inviteForm.temporary_password" class="input-field w-full" placeholder="Temporary password" aria-label="Temporary password" />
+              <div class="grid grid-cols-[1fr_auto_auto] gap-2">
+                <input [type]="showTemporaryPassword() ? 'text' : 'password'" [(ngModel)]="inviteForm.temporary_password" class="input-field w-full" placeholder="Temporary password" aria-label="Temporary password" />
+                <button type="button" (click)="showTemporaryPassword.set(!showTemporaryPassword())" class="btn-secondary px-4 text-xs" aria-label="Toggle temporary password visibility">
+                  <span class="material-icons text-sm">{{ showTemporaryPassword() ? 'visibility_off' : 'visibility' }}</span>
+                </button>
                 <button type="button" (click)="generateTemporaryPassword()" class="btn-secondary px-4 text-xs" aria-label="Generate temporary password">Generate</button>
               </div>
               @if (workstreams().length) {
@@ -334,6 +337,7 @@ export class PeopleComponent implements OnInit {
   activeTab: 'directory' | 'pending' = 'directory';
   selectedUser = signal<any | null>(null);
   showInvite = signal(false);
+  showTemporaryPassword = signal(false);
   search = '';
   roleFilter = '';
   statusFilter = 'active';
@@ -479,7 +483,9 @@ export class PeopleComponent implements OnInit {
   }
 
   generateTemporaryPassword() {
-    const token = Math.random().toString(36).slice(2, 10);
+    const bytes = new Uint8Array(8);
+    crypto.getRandomValues(bytes);
+    const token = Array.from(bytes, byte => byte.toString(36).padStart(2, '0')).join('').slice(0, 12);
     this.inviteForm.temporary_password = `Transmuter${token}2026!`;
   }
 

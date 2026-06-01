@@ -207,7 +207,10 @@ class PeopleService:
     def _ensure_auth_invite_user(self, data: InviteCreate) -> str:
         existing_id = self._find_auth_user_id(str(data.email))
         if existing_id:
-            return existing_id
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An auth account already exists for this email",
+            )
 
         try:
             response = get_supabase_admin().auth.admin.invite_user_by_email(
@@ -267,11 +270,10 @@ class PeopleService:
                     status_code=status.HTTP_409_CONFLICT,
                     detail="Email already belongs to another tenant",
                 )
-            get_supabase_admin().auth.admin.update_user_by_id(
-                existing_id,
-                {"password": data.temporary_password, "user_metadata": metadata},
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An auth account already exists for this email",
             )
-            return existing_id
 
         response = get_supabase_admin().auth.admin.create_user(
             {
