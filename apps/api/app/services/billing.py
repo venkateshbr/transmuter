@@ -12,6 +12,7 @@ from pydantic import EmailStr, TypeAdapter
 from supabase import Client
 
 from app.core.config import settings
+from app.services.tenant_bootstrap import TenantBootstrapService
 
 
 @dataclass(frozen=True)
@@ -263,6 +264,7 @@ class BillingProvisioningService:
             signup_intent=intent,
             planned_user_count=planned_user_count,
         )
+        TenantBootstrapService(self._client).bootstrap_tenant(org["id"])
         if intent:
             self._client.table("signup_intents").update(
                 {
@@ -561,6 +563,7 @@ class BillingProvisioningService:
                     "display_name": display_name,
                     "role": "transformation_office",
                     "status": "active",
+                    "must_change_password": False,
                     "onboarding_completed": False,
                     "updated_at": datetime.now(UTC).isoformat(),
                 }
@@ -595,6 +598,7 @@ class BillingProvisioningService:
                 "title": "Initial Admin",
                 "role": "transformation_office",
                 "status": "active",
+                "must_change_password": False,
                 "onboarding_completed": False,
                 "updated_at": datetime.now(UTC).isoformat(),
             }

@@ -11,6 +11,8 @@ interface AuthResponse {
   user_id: string;
   tenant_id: string;
   role: string;
+  status: string;
+  must_change_password: boolean;
 }
 
 export interface UserProfile {
@@ -22,6 +24,7 @@ export interface UserProfile {
   title: string | null;
   status: string;
   onboarding_completed: boolean;
+  must_change_password: boolean;
 }
 
 type CurrentAuthUser = Partial<UserProfile> & { id?: string; tenant_id?: string; role?: string };
@@ -35,6 +38,12 @@ export class AuthService {
   readonly user = signal<CurrentAuthUser | null>(null);
   readonly isAuthenticated = signal<boolean>(this.hasValidStoredToken());
 
+  constructor() {
+    if (this.isAuthenticated()) {
+      this.loadProfile().subscribe();
+    }
+  }
+
   login(email: string, password: string): Observable<AuthResponse> {
     return this.api.post<AuthResponse>('/auth/login', { email, password }).pipe(
       tap((resp) => {
@@ -45,6 +54,8 @@ export class AuthService {
           id: resp.user_id,
           tenant_id: resp.tenant_id,
           role: resp.role,
+          status: resp.status,
+          must_change_password: resp.must_change_password,
         });
         this.isAuthenticated.set(true);
         this.loadProfile().subscribe();
@@ -63,8 +74,35 @@ export class AuthService {
           id: resp.user_id,
           tenant_id: resp.tenant_id,
           role: resp.role,
+          status: resp.status,
+          must_change_password: resp.must_change_password,
         });
         this.isAuthenticated.set(true);
+      })
+    );
+  }
+
+  registerBlankTenant(data: {
+    organization_name: string;
+    organization_slug: string;
+    admin_display_name: string;
+    admin_email: string;
+    admin_password: string;
+  }): Observable<AuthResponse> {
+    return this.api.post<AuthResponse>('/auth/register', data).pipe(
+      tap((resp) => {
+        localStorage.setItem('access_token', resp.access_token);
+        this.storeRefreshToken(resp.refresh_token);
+        this.sessionExpiryHandled = false;
+        this.user.set({
+          id: resp.user_id,
+          tenant_id: resp.tenant_id,
+          role: resp.role,
+          status: resp.status,
+          must_change_password: resp.must_change_password,
+        });
+        this.isAuthenticated.set(true);
+        this.loadProfile().subscribe();
       })
     );
   }
@@ -86,7 +124,7 @@ export class AuthService {
       current_password: currentPassword,
       new_password: newPassword,
       confirm_password: confirmPassword,
-    });
+    }).pipe(tap(() => this.loadProfile().subscribe()));
   }
 
   logout() {

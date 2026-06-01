@@ -2,7 +2,7 @@ import { inject } from '@angular/core';
 import { Router, type CanActivateFn } from '@angular/router';
 import { AuthService } from '../services/auth.service';
 
-export const authGuard: CanActivateFn = (route) => {
+export const authGuard: CanActivateFn = (route, state) => {
   const authService = inject(AuthService);
   const router = inject(Router);
 
@@ -13,6 +13,11 @@ export const authGuard: CanActivateFn = (route) => {
 
   if (authService.isTokenExpired()) {
     authService.handleSessionExpired();
+    return false;
+  }
+
+  if (authService.user()?.must_change_password && state.url !== '/auth/change-password') {
+    router.navigate(['/auth/change-password']);
     return false;
   }
 
