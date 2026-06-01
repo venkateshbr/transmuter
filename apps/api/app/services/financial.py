@@ -157,7 +157,9 @@ class FinancialService:
         selections = self._resolve_selections(initiative_id, rows, costs, metric_values, config)
         scoped_rows, scoped_costs = self._apply_financial_scope(rows, costs, selections)
         scoped_metric_values = self._scope_metric_values(metric_values, selections)
-        return self._compute_summary(scoped_rows, initiative_id, scoped_costs, scoped_metric_values, config)
+        return self._compute_summary(
+            scoped_rows, initiative_id, scoped_costs, scoped_metric_values, config
+        )
 
     def update_financial_grid(
         self, initiative_id: str, data: FinancialGridUpdate
@@ -467,7 +469,9 @@ class FinancialService:
             if row.get("initiative_id") in initiatives and (year is None or row.get("year") == year)
         ]
         config = self.get_configuration()
-        return self._compute_portfolio_financials(entries, costs, metric_values, config, granularity)
+        return self._compute_portfolio_financials(
+            entries, costs, metric_values, config, granularity
+        )
 
     def get_portfolio_financial_contributors(
         self,
@@ -567,7 +571,9 @@ class FinancialService:
         scoped_metric_values = self._scope_metric_values(metric_values, selections)
         entries = self._reporting_rows(scoped_entries)
         cost_lines = self._reporting_cost_lines(scoped_cost_lines)
-        return self._compute_scenario_summary(entries, cost_lines, scoped_metric_values, config, scenario)
+        return self._compute_scenario_summary(
+            entries, cost_lines, scoped_metric_values, config, scenario
+        )
 
     def get_break_even(
         self,
@@ -1910,7 +1916,12 @@ class FinancialService:
             totals["one_off_costs_actual"] += _dec(row.one_off_costs_actual)
         total_period = cls._to_portfolio_period(totals)
         summary = [
-            ("benefits", "Total Benefits", total_period.benefits_plan, total_period.benefits_actual),
+            (
+                "benefits",
+                "Total Benefits",
+                total_period.benefits_plan,
+                total_period.benefits_actual,
+            ),
             (
                 "recurring_costs",
                 "Recurring Costs",
