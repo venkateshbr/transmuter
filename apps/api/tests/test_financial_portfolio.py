@@ -37,6 +37,14 @@ def _config() -> FinancialConfigurationResponse:
                 display_order=2,
                 is_system=True,
             ),
+            FinancialConfigGroup(
+                id="g3",
+                key="savings",
+                label="Savings",
+                kind="metric",
+                display_order=3,
+                is_system=True,
+            ),
         ],
         items=[
             FinancialConfigItem(
@@ -58,6 +66,17 @@ def _config() -> FinancialConfigurationResponse:
                 label="Software",
                 item_type="cost_category",
                 rollup_type="recurring_cost",
+                display_order=1,
+                is_system=True,
+            ),
+            FinancialConfigItem(
+                id="m2",
+                group_id="g3",
+                group_key="savings",
+                key="cost_savings",
+                label="Cost Savings ($)",
+                item_type="metric",
+                rollup_type="benefit",
                 display_order=1,
                 is_system=True,
             ),
@@ -237,10 +256,26 @@ def test_value_bridge_uses_explicit_cogs_instead_of_deriving_from_revenue() -> N
         ],
         [],
         "initiative-1",
+        [
+            {
+                "tenant_id": "t1",
+                "initiative_id": "initiative-1",
+                "metric_key": "cost_savings",
+                "year": 2026,
+                "quarter": None,
+                "month": 1,
+                "value_base": "5000.0000",
+                "value_high": "7500.0000",
+                "value_actual": None,
+            }
+        ],
+        _config(),
     )
 
     assert bridge.base_case.revenue_uplift == "10000.0000"
     assert bridge.base_case.cogs == "0.0000"
+    assert bridge.base_case.benefits_total == "25000.0000"
+    assert bridge.base_case.net == "25000.0000"
 
 
 def test_scenario_summary_uses_explicit_cogs_instead_of_deriving_from_revenue() -> None:
@@ -259,6 +294,8 @@ def test_scenario_summary_uses_explicit_cogs_instead_of_deriving_from_revenue() 
             }
         ],
         [],
+        [],
+        None,
         "base",
     )
 
@@ -351,6 +388,17 @@ def test_portfolio_financials_keeps_broader_periods_separate_for_monthly_view() 
                 "tenant_id": "t1",
                 "initiative_id": "i1",
                 "year": 2026,
+                "month": 1,
+                "quarter": None,
+                "amount_plan": "200.0000",
+                "amount_actual": "180.0000",
+                "is_recurring": False,
+                "category_key": "implementation",
+            },
+            {
+                "tenant_id": "t1",
+                "initiative_id": "i1",
+                "year": 2026,
                 "month": None,
                 "quarter": 1,
                 "amount_plan": "300.0000",
@@ -359,6 +407,7 @@ def test_portfolio_financials_keeps_broader_periods_separate_for_monthly_view() 
                 "category_key": "software",
             },
         ],
+        metric_values=[],
         config=_config(),
         granularity="monthly",
     )
@@ -366,6 +415,8 @@ def test_portfolio_financials_keeps_broader_periods_separate_for_monthly_view() 
     assert response.periods[0].period == "2026-M01"
     assert response.periods[0].benefits_plan == "1000.0000"
     assert response.periods[0].recurring_costs_actual == "90.0000"
+    assert response.periods[0].one_off_costs_plan == "200.0000"
+    assert response.periods[0].net_value_plan == "900.0000"
     assert response.broader_period_totals[0].period == "2026-Q1"
     assert response.broader_period_totals[0].benefits_plan == "3000.0000"
     assert response.broader_period_totals[0].recurring_costs_actual == "275.0000"
@@ -414,6 +465,18 @@ def test_portfolio_contributors_group_period_values_by_initiative() -> None:
                 "category_key": "software",
             },
         ],
+        metric_values=[
+            {
+                "tenant_id": "t1",
+                "initiative_id": "i1",
+                "metric_key": "cost_savings",
+                "year": 2026,
+                "month": 6,
+                "quarter": None,
+                "value_base": "15000.0000",
+                "value_actual": "12000.0000",
+            }
+        ],
         initiatives={"i1": {"id": "i1", "name": "ERP modernization"}},
         config=_config(),
         granularity="monthly",
@@ -425,11 +488,13 @@ def test_portfolio_contributors_group_period_values_by_initiative() -> None:
     assert len(response.contributors) == 1
     contributor = response.contributors[0]
     assert contributor.initiative_name == "ERP modernization"
-    assert contributor.benefits_plan == "60000.0000"
+    assert contributor.benefits_plan == "75000.0000"
+    assert contributor.benefits_actual == "57000.0000"
     assert contributor.one_off_costs_actual == "125000.0000"
     assert contributor.recurring_costs_plan == "10000.0000"
     assert contributor.total_costs_plan == "190000.0000"
-    assert contributor.net_value_plan == "-130000.0000"
+    assert contributor.net_value_plan == "65000.0000"
+    assert contributor.net_value_actual == "47500.0000"
     assert contributor.cost_lines[0].category_label == "Software"
 
 

@@ -103,6 +103,8 @@ interface ValueBridgeCase {
   revenue_uplift: string;
   gross_margin: string;
   gm_uplift: string;
+  other_benefits?: string;
+  benefits_total?: string;
   cogs: string;
   costs_recurring: string;
   costs_one_off: string;
@@ -396,9 +398,9 @@ export class FinancialsTabComponent implements OnInit {
   ];
   
   readonly METRICS: GridMetric[] = [
-    { category: 'Revenue', label: 'Rev Uplift (Base)', key: 'revenue_uplift_base', source: 'financial_entry' },
-    { category: 'Revenue', label: 'Rev Uplift (High)', key: 'revenue_uplift_high', source: 'financial_entry' },
-    { category: 'Revenue', label: 'Rev Uplift (Actual)', key: 'revenue_uplift_actual', source: 'financial_entry' },
+    { category: 'Revenue', label: 'Revenue Uplift ($) (Base)', key: 'revenue_uplift_base', source: 'financial_entry' },
+    { category: 'Revenue', label: 'Revenue Uplift ($) (High)', key: 'revenue_uplift_high', source: 'financial_entry' },
+    { category: 'Revenue', label: 'Revenue Uplift ($) (Actual)', key: 'revenue_uplift_actual', source: 'financial_entry' },
     { category: 'Revenue', label: 'Rev Uplift % (Base)', key: 'revenue_uplift_pct_base', source: 'financial_entry' },
     { category: 'Revenue', label: 'Rev Uplift % (High)', key: 'revenue_uplift_pct_high', source: 'financial_entry' },
     { category: 'Revenue', label: 'Rev Uplift % (Actual)', key: 'revenue_uplift_pct_actual', source: 'financial_entry' },
@@ -414,9 +416,9 @@ export class FinancialsTabComponent implements OnInit {
     { category: 'Gross Margin', label: 'Gross Margin % (Base)', key: 'gm_pct_base', source: 'financial_entry' },
     { category: 'Gross Margin', label: 'Gross Margin % (High)', key: 'gm_pct_high', source: 'financial_entry' },
     { category: 'Gross Margin', label: 'Gross Margin % (Actual)', key: 'gm_pct_actual', source: 'financial_entry' },
-    { category: 'Gross Margin', label: 'GM Uplift (Base)', key: 'gm_uplift_base', source: 'financial_entry' },
-    { category: 'Gross Margin', label: 'GM Uplift (High)', key: 'gm_uplift_high', source: 'financial_entry' },
-    { category: 'Gross Margin', label: 'GM Uplift (Actual)', key: 'gm_uplift_actual', source: 'financial_entry' },
+    { category: 'Gross Margin', label: 'Gross Margin Uplift ($) (Base)', key: 'gm_uplift_base', source: 'financial_entry' },
+    { category: 'Gross Margin', label: 'Gross Margin Uplift ($) (High)', key: 'gm_uplift_high', source: 'financial_entry' },
+    { category: 'Gross Margin', label: 'Gross Margin Uplift ($) (Actual)', key: 'gm_uplift_actual', source: 'financial_entry' },
     { category: 'Gross Margin', label: 'GM Uplift % (Base)', key: 'gm_uplift_pct_base', source: 'financial_entry' },
     { category: 'Gross Margin', label: 'GM Uplift % (High)', key: 'gm_uplift_pct_high', source: 'financial_entry' },
     { category: 'Gross Margin', label: 'GM Uplift % (Actual)', key: 'gm_uplift_pct_actual', source: 'financial_entry' },
@@ -433,9 +435,15 @@ export class FinancialsTabComponent implements OnInit {
     'gm_uplift_base',
     'gm_uplift_high',
     'gm_uplift_actual',
+    'cost_savings',
   ]);
 
-  readonly DEFAULT_COST_CATEGORY_KEYS = new Set(['implementation', 'maintenance']);
+  readonly DEFAULT_COST_CATEGORY_KEYS = new Set([
+    'implementation',
+    'software_subscriptions',
+    'support_maintenance',
+    'maintenance',
+  ]);
 
   isLocked = computed(() => Boolean(this.grid()?.locked));
 
@@ -578,13 +586,16 @@ export class FinancialsTabComponent implements OnInit {
     if (this.hasSelectedMetric(['gm_uplift_base', 'gm_uplift_high', 'gm_uplift_actual'])) {
       cards.push({ label: 'GM Uplift', plan: this.formatMoney(s.gm_uplift), actual: this.scenarioLabel(), highlight: false });
     }
+    if (Number(s.other_benefits || '0') !== 0) {
+      cards.push({ label: 'Total Benefits', plan: this.formatMoney(s.benefits_total || s.gm_uplift), actual: this.scenarioLabel(), highlight: false });
+    }
     if (this.hasSelectedMetric(['cogs_base', 'cogs_high', 'cogs_actual'])) {
       cards.push({ label: 'COGS', plan: this.formatMoney(s.cogs), actual: this.scenarioLabel(), highlight: false });
     }
     if (this.selectedCostCategoryKeySet().size > 0) {
       cards.push({ label: 'Total Costs', plan: this.formatMoney(s.costs_total), actual: this.scenarioLabel(), highlight: false });
     }
-    cards.push({ label: 'Net Value', plan: this.formatMoney(s.net), actual: this.scenarioLabel(), highlight: true });
+    cards.push({ label: 'Net Run-rate Impact', plan: this.formatMoney(s.net), actual: this.scenarioLabel(), highlight: true });
     return cards;
   });
 

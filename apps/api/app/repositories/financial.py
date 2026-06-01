@@ -448,6 +448,21 @@ class FinancialRepository:
         )
         return result.data or []
 
+    def get_all_metric_values(self) -> list[dict]:  # type: ignore[type-arg]
+        """Return all custom financial metric values for the tenant."""
+        try:
+            result = (
+                self._c.table("financial_metric_values")
+                .select("*")
+                .eq("tenant_id", self._tid)
+                .execute()
+            )
+            return result.data or []
+        except Exception as exc:
+            if self._is_missing_table(exc, "financial_metric_values"):
+                return []
+            raise
+
     # ── Cell Assumptions ──────────────────────────────────────────────────────
 
     def list_cell_assumptions(self, initiative_id: str) -> list[dict]:  # type: ignore[type-arg]

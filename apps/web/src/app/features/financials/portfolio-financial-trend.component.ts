@@ -119,9 +119,9 @@ export class PortfolioFinancialTrendComponent implements AfterViewInit, OnChange
 
   readonly metric = signal<FinancialTrendMetric>('net_value');
   readonly metricOptions: TrendMetricOption[] = [
-    { id: 'net_value', label: 'Net Value', planKey: 'net_value_plan', actualKey: 'net_value_actual' },
+    { id: 'net_value', label: 'Net Run-rate Impact', planKey: 'net_value_plan', actualKey: 'net_value_actual' },
     { id: 'total_costs', label: 'Costs', planKey: 'total_costs_plan', actualKey: 'total_costs_actual' },
-    { id: 'benefits', label: 'Benefits', planKey: 'benefits_plan', actualKey: 'benefits_actual' },
+    { id: 'benefits', label: 'Total Benefits', planKey: 'benefits_plan', actualKey: 'benefits_actual' },
   ];
 
   ngAfterViewInit(): void {
