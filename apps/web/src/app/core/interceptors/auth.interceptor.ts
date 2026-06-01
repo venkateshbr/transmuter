@@ -52,6 +52,7 @@ function isAuthOptionalRequest(url: string): boolean {
   const path = requestPath(url);
   return [
     '/auth/login',
+    '/auth/register',
     '/auth/refresh',
     '/billing/config',
     '/billing/checkout-session',

@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     max_request_body_bytes: int = 10 * 1024 * 1024
     auth_login_rate_limit: int = 10
     auth_login_rate_window_seconds: int = 60
+    public_registration_enabled: bool = False
+    registration_invite_token: str = ""
 
     # LLM
     openrouter_api_key: str

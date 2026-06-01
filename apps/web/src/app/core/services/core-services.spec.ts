@@ -132,10 +132,10 @@ describe('AuthService', () => {
     const service = TestBed.inject(AuthService);
 
     await firstValueFrom(service.updateProfile({ display_name: 'Updated' }));
-    await firstValueFrom(service.changePassword('CurrentPassword1!', 'NewPassword2026!', 'NewPassword2026!'));
-
     expect(api.patch).toHaveBeenCalledWith('/auth/me', { display_name: 'Updated' });
     expect(service.user()?.display_name).toBe('Updated');
+
+    await firstValueFrom(service.changePassword('CurrentPassword1!', 'NewPassword2026!', 'NewPassword2026!'));
     expect(api.post).toHaveBeenCalledWith('/auth/change-password', {
       current_password: 'CurrentPassword1!',
       new_password: 'NewPassword2026!',

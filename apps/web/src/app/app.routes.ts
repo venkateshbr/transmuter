@@ -24,6 +24,17 @@ export const routes: Routes = [
       import('./features/auth/login/login.component').then(m => m.LoginComponent),
   },
   {
+    path: 'auth/register',
+    loadComponent: () =>
+      import('./features/auth/register/register.component').then(m => m.RegisterComponent),
+  },
+  {
+    path: 'auth/change-password',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/auth/force-password-change/force-password-change.component').then(m => m.ForcePasswordChangeComponent),
+  },
+  {
     path: '',
     canActivate: [authGuard],
     children: [

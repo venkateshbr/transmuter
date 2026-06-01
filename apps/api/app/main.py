@@ -66,7 +66,11 @@ async def enforce_api_security_controls(
             content={"detail": "Request body exceeds the 10 MB limit"},
         )
 
-    if request.method == "POST" and request.url.path in {"/auth/login", "/auth/change-password"}:
+    if request.method == "POST" and request.url.path in {
+        "/auth/login",
+        "/auth/change-password",
+        "/auth/register",
+    }:
         now = monotonic()
         client_ip = request.client.host if request.client else "unknown"
         attempts = _login_attempts[f"{request.url.path}:{client_ip}"]
@@ -133,6 +137,7 @@ app.add_middleware(
         "http://127.0.0.1:4303",
         "http://localhost:4304",
         "http://127.0.0.1:4304",
+        "https://transmuter.ishirock.tech",
         "https://transmuter.ishirock.com",
     ],
     allow_credentials=True,

@@ -229,6 +229,56 @@ class AdminService:
             "checks": checks,
         }
 
+    def get_setup_status(self) -> dict[str, Any]:
+        counts = {
+            "business_units": self._count_tenant_rows("business_units"),
+            "workstreams": self._count_tenant_rows("workstreams"),
+            "users": self._count_users(),
+            "financial_config_items": self._count_tenant_rows("financial_config_items"),
+            "gate_criteria": self._count_tenant_rows("gate_criteria"),
+            "initiatives": self._count_tenant_rows("initiatives"),
+        }
+        checks = [
+            {
+                "key": "organization",
+                "label": "Organization settings",
+                "complete": bool(self._org_repo.get_organization()),
+            },
+            {
+                "key": "business_units",
+                "label": "Business units",
+                "complete": counts["business_units"] > 0,
+            },
+            {
+                "key": "workstreams",
+                "label": "Workstreams",
+                "complete": counts["workstreams"] > 0,
+            },
+            {
+                "key": "financial_config",
+                "label": "Financial configuration",
+                "complete": counts["financial_config_items"] > 0,
+            },
+            {
+                "key": "gate_criteria",
+                "label": "Gate criteria",
+                "complete": counts["gate_criteria"] > 0,
+            },
+            {
+                "key": "users",
+                "label": "Users",
+                "complete": counts["users"] > 0,
+            },
+        ]
+        completed = len([check for check in checks if check["complete"]])
+        return {
+            "complete": completed == len(checks),
+            "completed": completed,
+            "total": len(checks),
+            "counts": counts,
+            "checks": checks,
+        }
+
     def update_settings(self, data: dict[str, Any]) -> dict[str, Any]:
         patch = {}
         if "name" in data:
@@ -387,6 +437,16 @@ class AdminService:
     def _count_tenant_rows(self, table: str) -> int:
         response = (
             self._c.table(table).select("id", count="exact").eq("tenant_id", self._tid).execute()
+        )
+        return response.count or 0
+
+    def _count_users(self) -> int:
+        response = (
+            self._c.table("users")
+            .select("id", count="exact")
+            .eq("tenant_id", self._tid)
+            .neq("status", "deactivated")
+            .execute()
         )
         return response.count or 0
 

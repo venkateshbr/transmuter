@@ -112,7 +112,11 @@ export class LoginComponent {
     this.sessionExpired.set(false);
 
     this.auth.login(this.email, this.password).subscribe({
-      next: () => {
+      next: (resp) => {
+        if (resp.must_change_password) {
+          this.router.navigate(['/auth/change-password']);
+          return;
+        }
         this.router.navigate([this.auth.getRole() === 'platform_admin' ? '/platform' : '/dashboard']);
       },
       error: (err) => {

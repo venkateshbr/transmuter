@@ -45,6 +45,12 @@ async def get_launch_readiness(svc: Annotated[AdminService, Depends(_svc)]) -> d
     return svc.get_launch_readiness()
 
 
+@router.get("/setup-status")
+async def get_setup_status(svc: Annotated[AdminService, Depends(_svc)]) -> dict[str, object]:
+    """Get first-run tenant setup checklist status."""
+    return svc.get_setup_status()
+
+
 @router.get("/portfolio-cleanup-preview")
 async def get_portfolio_cleanup_preview(
     svc: Annotated[AdminService, Depends(_svc)],

@@ -894,9 +894,17 @@ class FinancialService:
     def _default_cost_category_keys() -> list[str]:
         return [
             "implementation",
+            "technology_tooling",
+            "external_consultants",
+            "training_change",
+            "other_one_off",
             "software_subscriptions",
             "support_maintenance",
+            "additional_headcount",
+            "run_rate_operating",
             "maintenance",
+            "software",
+            "labor",
             "other",
         ]
 

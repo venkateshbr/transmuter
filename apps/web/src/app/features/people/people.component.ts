@@ -26,8 +26,8 @@ const PEOPLE_FILTER_STATE_KEY = 'transmuter.filters.people.directory';
             <span class="material-icons text-xs">group</span>
             <span class="text-[10px] font-black uppercase tracking-widest">{{ people().length }} ACTIVE PLATFORM USERS</span>
           </div>
-          <button (click)="showInvite.set(true)" class="btn-primary text-sm flex items-center gap-2 h-10">
-            <span>+</span> Invite Member
+          <button (click)="openUserModal()" class="btn-primary text-sm flex items-center gap-2 h-10">
+            <span>+</span> Add User
           </button>
         </div>
       </div>
@@ -151,7 +151,7 @@ const PEOPLE_FILTER_STATE_KEY = 'transmuter.filters.people.directory';
         <div class="overlay flex items-center justify-center p-6">
           <div class="card w-full max-w-lg p-8 bg-[var(--t-surface)]">
             <div class="flex items-center justify-between mb-6">
-              <h2 class="text-xl font-black text-[var(--t-text-primary)]">Invite Platform User</h2>
+              <h2 class="text-xl font-black text-[var(--t-text-primary)]">Add Platform User</h2>
               <button (click)="showInvite.set(false)" class="w-9 h-9 rounded-full hover:bg-[var(--t-surface-raised)]">
                 <span class="material-icons text-sm">close</span>
               </button>
@@ -165,7 +165,30 @@ const PEOPLE_FILTER_STATE_KEY = 'transmuter.filters.people.directory';
                 <option value="initiative_owner">Initiative Owner</option>
                 <option value="viewer">Viewer</option>
               </select>
-              <button (click)="createInvite()" class="btn-primary w-full h-11 rounded-xl">Send Invite</button>
+              <div class="grid grid-cols-[1fr_auto_auto] gap-2">
+                <input [type]="showTemporaryPassword() ? 'text' : 'password'" [(ngModel)]="inviteForm.temporary_password" class="input-field w-full" placeholder="Temporary password" aria-label="Temporary password" />
+                <button type="button" (click)="showTemporaryPassword.set(!showTemporaryPassword())" class="btn-secondary px-4 text-xs" aria-label="Toggle temporary password visibility">
+                  <span class="material-icons text-sm">{{ showTemporaryPassword() ? 'visibility_off' : 'visibility' }}</span>
+                </button>
+                <button type="button" (click)="generateTemporaryPassword()" class="btn-secondary px-4 text-xs" aria-label="Generate temporary password">Generate</button>
+              </div>
+              @if (workstreams().length) {
+                <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-3">
+                  <p class="mb-2 text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Workstreams</p>
+                  <div class="grid gap-2">
+                    @for (ws of workstreams(); track ws.id) {
+                      <label class="flex items-center gap-2 text-xs font-bold text-[var(--t-text-secondary)]">
+                        <input type="checkbox" [checked]="inviteForm.workstream_ids.includes(ws.id)" (change)="toggleInviteWorkstream(ws.id)" [attr.aria-label]="'Assign ' + ws.name">
+                        <span>{{ ws.name }}</span>
+                      </label>
+                    }
+                  </div>
+                </div>
+              }
+              <div class="grid grid-cols-2 gap-3">
+                <button (click)="createUser()" class="btn-primary h-11 rounded-xl">Create User</button>
+                <button (click)="createInvite()" class="btn-secondary h-11 rounded-xl">Send Invite</button>
+              </div>
             </div>
           </div>
         </div>
@@ -309,10 +332,12 @@ export class PeopleComponent implements OnInit {
   private readonly api = inject(ApiService);
   people = signal<any[]>([]);
   invites = signal<any[]>([]);
+  workstreams = signal<any[]>([]);
   
   activeTab: 'directory' | 'pending' = 'directory';
   selectedUser = signal<any | null>(null);
   showInvite = signal(false);
+  showTemporaryPassword = signal(false);
   search = '';
   roleFilter = '';
   statusFilter = 'active';
@@ -321,12 +346,15 @@ export class PeopleComponent implements OnInit {
     display_name: '',
     title: '',
     role: 'initiative_owner',
+    temporary_password: '',
+    workstream_ids: [] as string[],
   };
 
   ngOnInit() {
     this.restoreDirectoryFilters();
     this.loadPeople();
     this.loadInvites();
+    this.loadWorkstreams();
   }
 
   loadPeople() {
@@ -360,6 +388,7 @@ export class PeopleComponent implements OnInit {
         selected: this.statusFilter ? [this.statusFilter] : [],
         options: [
           { id: 'active', name: 'Active' },
+          { id: 'pending', name: 'Pending' },
           { id: 'ghost', name: 'Ghost' },
           { id: 'deactivated', name: 'Deactivated' },
         ],
@@ -416,6 +445,17 @@ export class PeopleComponent implements OnInit {
     });
   }
 
+  loadWorkstreams() {
+    this.api.get<any>('/workstreams').subscribe(res => {
+      this.workstreams.set(res.items || []);
+    });
+  }
+
+  openUserModal() {
+    if (!this.inviteForm.temporary_password) this.generateTemporaryPassword();
+    this.showInvite.set(true);
+  }
+
   openProfile(user: any) {
     this.api.get<any>(`/users/${user.id}`).subscribe(profile => {
       this.selectedUser.set(profile);
@@ -425,11 +465,49 @@ export class PeopleComponent implements OnInit {
   createInvite() {
     this.api.post<any>('/invites', this.inviteForm).subscribe(invite => {
       this.showInvite.set(false);
-      this.inviteForm = { email: '', display_name: '', title: '', role: 'initiative_owner' };
+      this.resetInviteForm();
       this.loadPeople();
       this.loadInvites();
       this.openProfile(invite);
     });
+  }
+
+  createUser() {
+    this.api.post<any>('/users', this.inviteForm).subscribe(user => {
+      this.showInvite.set(false);
+      this.resetInviteForm();
+      this.loadPeople();
+      this.loadInvites();
+      this.openProfile(user);
+    });
+  }
+
+  generateTemporaryPassword() {
+    const bytes = new Uint8Array(8);
+    crypto.getRandomValues(bytes);
+    const token = Array.from(bytes, byte => byte.toString(36).padStart(2, '0')).join('').slice(0, 12);
+    this.inviteForm.temporary_password = `Transmuter${token}2026!`;
+  }
+
+  toggleInviteWorkstream(workstreamId: string) {
+    const next = new Set(this.inviteForm.workstream_ids);
+    if (next.has(workstreamId)) {
+      next.delete(workstreamId);
+    } else {
+      next.add(workstreamId);
+    }
+    this.inviteForm.workstream_ids = Array.from(next);
+  }
+
+  private resetInviteForm() {
+    this.inviteForm = {
+      email: '',
+      display_name: '',
+      title: '',
+      role: 'initiative_owner',
+      temporary_password: '',
+      workstream_ids: [],
+    };
   }
 
   makeGhost(user: any) {
