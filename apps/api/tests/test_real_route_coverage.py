@@ -288,6 +288,45 @@ def test_real_initiative_template_preview_and_intake_routes() -> None:
         suggestion_payload = suggestions.json()
         assert suggestion_payload["financial_entries"]
 
+        extracted = client.post(
+            "/initiatives/intake/extract",
+            headers=headers,
+            json={
+                "text": (
+                    "Initiative: Route coverage extraction. Type: cost reduction. "
+                    "Priority: medium. Market: Singapore. Complete by September 2026."
+                )
+            },
+        )
+        extracted.raise_for_status()
+        assert extracted.json()["draft"]["type"] == "cost_reduction"
+
+        kpis = client.post(
+            "/initiatives/intake/kpis",
+            headers=headers,
+            json={
+                "initiative_type": "cost_reduction",
+                "initiative_name": "Route coverage extraction",
+                "value_logic": "Reduce operating cost with reviewable evidence.",
+            },
+        )
+        kpis.raise_for_status()
+        assert kpis.json()["suggestions"]
+
+        risks = client.post(
+            "/initiatives/intake/risks",
+            headers=headers,
+            json={
+                "initiative_draft": {
+                    "name": "Route coverage extraction",
+                    "type": "cost_reduction",
+                    "dependencies": "Finance validation",
+                }
+            },
+        )
+        risks.raise_for_status()
+        assert risks.json()["risks"]
+
         created_from_intake = client.post(
             "/initiatives/intake/create",
             headers=headers,
@@ -361,6 +400,10 @@ def test_real_initiative_crud_summary_export_and_status_update_routes() -> None:
         )
         draft_suggestion.raise_for_status()
         assert draft_suggestion.json()["sources"]
+
+        ai_context = client.get(f"/initiatives/{initiative_id}/ai-context", headers=headers)
+        ai_context.raise_for_status()
+        assert ai_context.json()["initiative_id"] == initiative_id
 
         created_update = client.post(
             f"/initiatives/{initiative_id}/status-updates",

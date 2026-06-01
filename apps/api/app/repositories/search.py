@@ -27,3 +27,43 @@ class SearchRepository:
             query = query.or_(f"owner_id.eq.{owner_user_id},group_owner_id.eq.{owner_user_id}")
         result = query.execute()
         return result.data or []
+
+    def list_milestone_search_rows(self, owner_user_id: str | None = None) -> list[dict[str, Any]]:
+        query = (
+            self._client.table("milestones")
+            .select(
+                "id, name, description, status, priority, planned_end, initiative_id, owner_id, "
+                "initiatives!inner(id, name, initiative_code, owner_id, group_owner_id)"
+            )
+            .eq("tenant_id", self._tenant_id)
+            .order("planned_end")
+            .limit(1000)
+        )
+        result = query.execute()
+        return result.data or []
+
+    def list_risk_search_rows(self, owner_user_id: str | None = None) -> list[dict[str, Any]]:
+        query = (
+            self._client.table("risks")
+            .select(
+                "id, description, type, impact, likelihood, rating, status, initiative_id, owner_id, "
+                "initiatives!inner(id, name, initiative_code, owner_id, group_owner_id)"
+            )
+            .eq("tenant_id", self._tenant_id)
+            .order("created_at", desc=True)
+            .limit(1000)
+        )
+        result = query.execute()
+        return result.data or []
+
+    def list_user_search_rows(self) -> list[dict[str, Any]]:
+        result = (
+            self._client.table("users")
+            .select("id, display_name, title, department, market, role, status")
+            .eq("tenant_id", self._tenant_id)
+            .eq("status", "active")
+            .order("display_name")
+            .limit(1000)
+            .execute()
+        )
+        return result.data or []

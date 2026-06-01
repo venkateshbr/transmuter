@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, HostListener, inject, signal } from '@angular/core';
 import { NavigationCancel, NavigationEnd, NavigationError, NavigationStart, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { ThemeService } from './core/services/theme.service';
 import { ApiService } from './core/services/api.service';
@@ -30,6 +30,17 @@ interface ProposedAction {
   description: string;
   payload: Record<string, unknown>;
   status: string;
+}
+
+interface GlobalSearchResult {
+  id: string;
+  result_type: string;
+  label: string;
+  name: string;
+  description?: string | null;
+  url: string;
+  initiative_code?: string | null;
+  category?: string | null;
 }
 
 @Component({
@@ -92,6 +103,48 @@ interface ProposedAction {
             </div>
           }
         </nav>
+
+        @if (!isPlatformAdmin()) {
+          <div class="relative hidden min-w-[18rem] max-w-sm flex-1 xl:block">
+            <span class="material-icons pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--t-text-tertiary)]">search</span>
+            <input
+              type="search"
+              class="h-9 w-full border border-[var(--t-border)] bg-[var(--t-bg)] pl-9 pr-3 text-xs font-bold text-[var(--t-text-primary)] outline-none focus:border-[var(--t-accent)]"
+              placeholder="Search portfolio"
+              aria-label="Global portfolio search"
+              data-testid="global-search-input"
+              [ngModel]="globalSearchQuery()"
+              (ngModelChange)="onGlobalSearchChange($event)"
+              (focus)="globalSearchOpen.set(true)"
+              (keyup.escape)="closeGlobalSearch()"
+            />
+            @if (globalSearchOpen()) {
+              <div class="absolute left-0 right-0 top-full z-[60] mt-2 max-h-[70vh] overflow-auto border border-[var(--t-border)] bg-[var(--t-surface)] shadow-2xl" data-testid="global-search-results">
+                @if (globalSearchLoading()) {
+                  <p class="px-4 py-3 text-xs font-bold text-[var(--t-text-secondary)]">Searching...</p>
+                } @else if (globalSearchQuery().trim().length < 2) {
+                  <p class="px-4 py-3 text-xs font-bold text-[var(--t-text-secondary)]">Type at least two characters.</p>
+                } @else if (!globalSearchResults().length) {
+                  <p class="px-4 py-3 text-xs font-bold text-[var(--t-text-secondary)]">No matching portfolio records.</p>
+                } @else {
+                  @for (item of globalSearchResults(); track item.result_type + item.id) {
+                    <button
+                      type="button"
+                      class="grid w-full grid-cols-[auto_1fr] gap-3 border-b border-[var(--t-border)] px-4 py-3 text-left hover:bg-[var(--t-surface-raised)]"
+                      [attr.aria-label]="'Open ' + item.label"
+                      (click)="openGlobalSearchResult(item)">
+                      <span class="material-icons mt-0.5 text-base text-[var(--t-accent)]">{{ searchIcon(item.result_type) }}</span>
+                      <span class="min-w-0">
+                        <span class="block truncate text-xs font-black uppercase text-[var(--t-text-primary)]">{{ item.label }}</span>
+                        <span class="mt-1 block truncate text-[11px] font-medium text-[var(--t-text-secondary)]">{{ item.description || item.category || item.result_type }}</span>
+                      </span>
+                    </button>
+                  }
+                }
+              </div>
+            }
+          </div>
+        }
 
         <!-- Right controls -->
         <div class="flex items-center gap-2 shrink-0">
@@ -319,6 +372,11 @@ export class App {
   protected readonly messages = signal<Message[]>([]);
   protected readonly moreMenuOpen = signal(false);
   protected readonly accountMenuOpen = signal(false);
+  protected readonly globalSearchQuery = signal('');
+  protected readonly globalSearchResults = signal<GlobalSearchResult[]>([]);
+  protected readonly globalSearchOpen = signal(false);
+  protected readonly globalSearchLoading = signal(false);
+  private globalSearchTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     this.router.events.subscribe(event => {
@@ -400,6 +458,64 @@ export class App {
   protected logoutFromMenu(): void {
     this.accountMenuOpen.set(false);
     this.auth.logout();
+  }
+
+  @HostListener('window:keydown', ['$event'])
+  protected handleGlobalShortcut(event: KeyboardEvent): void {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k' && this.showAppChrome()) {
+      event.preventDefault();
+      const input = document.querySelector<HTMLInputElement>('[data-testid="global-search-input"]');
+      input?.focus();
+      this.globalSearchOpen.set(true);
+    }
+  }
+
+  protected onGlobalSearchChange(value: string): void {
+    this.globalSearchQuery.set(value);
+    this.globalSearchOpen.set(true);
+    if (this.globalSearchTimer) clearTimeout(this.globalSearchTimer);
+    this.globalSearchTimer = setTimeout(() => this.runGlobalSearch(), 180);
+  }
+
+  protected closeGlobalSearch(): void {
+    this.globalSearchOpen.set(false);
+  }
+
+  protected openGlobalSearchResult(item: GlobalSearchResult): void {
+    this.closeGlobalSearch();
+    this.globalSearchQuery.set('');
+    this.globalSearchResults.set([]);
+    this.router.navigateByUrl(item.url);
+  }
+
+  protected searchIcon(type: string): string {
+    const icons: Record<string, string> = {
+      initiative: 'flag',
+      milestone: 'event',
+      risk: 'warning',
+      user: 'person',
+    };
+    return icons[type] || 'search';
+  }
+
+  private runGlobalSearch(): void {
+    const q = this.globalSearchQuery().trim();
+    if (q.length < 2) {
+      this.globalSearchResults.set([]);
+      this.globalSearchLoading.set(false);
+      return;
+    }
+    this.globalSearchLoading.set(true);
+    this.api.get<{ items: GlobalSearchResult[] }>('/search', { q, limit: 8 }).subscribe({
+      next: response => {
+        this.globalSearchResults.set(response.items || []);
+        this.globalSearchLoading.set(false);
+      },
+      error: () => {
+        this.globalSearchResults.set([]);
+        this.globalSearchLoading.set(false);
+      },
+    });
   }
 
   protected setQuery(prompt: string): void {

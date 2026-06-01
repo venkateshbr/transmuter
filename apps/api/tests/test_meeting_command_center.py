@@ -150,9 +150,25 @@ def test_meeting_artifacts_actions_risks_carry_forward_and_minutes(admin_token: 
 
     client.patch(
         f"/meetings/sessions/{session['id']}",
-        json={"notes": "Discussed owner alignment and delivery risk. Contact [email] was masked."},
+        json={
+            "notes": (
+                "Rupa Menon: Action: confirm benefits owner by 2026-06-10. "
+                "Vishwa Rao: Decision: keep delivery risk under weekly review. "
+                "Meeting Command Center Initiative is amber until owner alignment is complete."
+            )
+        },
         headers=auth(admin_token),
     )
+    extraction_response = client.post(
+        f"/meetings/sessions/{session['id']}/ai/extract",
+        json={},
+        headers=auth(admin_token),
+    )
+    assert extraction_response.status_code == 200, extraction_response.text
+    extraction = extraction_response.json()
+    assert extraction["status"] == "pending_review"
+    assert extraction["action_items"]
+
     minutes_response = client.post(
         f"/meetings/sessions/{session['id']}/minutes/generate",
         json={"force": True},

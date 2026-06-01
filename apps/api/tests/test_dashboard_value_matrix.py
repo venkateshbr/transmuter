@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from app.services.dashboard import DashboardService
 
 
@@ -153,3 +155,44 @@ def test_value_matrix_uses_latest_available_year_when_target_missing() -> None:
 
     assert matrix["selected_year"] == 2027
     assert matrix["totals"]["total"]["base"] == "100.0000"
+
+
+def test_executive_summary_pdf_uses_dashboard_context() -> None:
+    service = DashboardService(_Repo())  # type: ignore[arg-type]
+
+    def fake_dashboard_data(**_: object) -> dict[str, object]:
+        return {
+            "summary": {"total_initiatives": 3, "at_risk": 1, "pending_approvals": 2},
+            "value_bridge": {
+                "benefits_base": "100.0000",
+                "benefits_high": "150.0000",
+                "benefits_actual": "80.0000",
+                "costs_plan": "25.0000",
+                "costs_actual": "30.0000",
+                "net_base": "75.0000",
+                "net_actual": "50.0000",
+            },
+            "kpi_pulse": {"health_score": "66.7", "missing_base": 1},
+            "risk_heatmap": {"high_medium": 1},
+            "recent_activity": [{"initiative_id": "init-1", "rag_status": "red"}],
+            "value_matrix": {
+                "totals": {
+                    "total": {
+                        "initiatives": [
+                            {"id": "init-1", "name": "Korea pricing launch", "actual": "80.0000"}
+                        ]
+                    }
+                }
+            },
+        }
+
+    service.get_dashboard_data = fake_dashboard_data  # type: ignore[method-assign]
+
+    pdf = service.generate_executive_summary_pdf(
+        user_id=UUID("22222222-2222-2222-2222-222222222222"),
+        role="transformation_office",
+    )
+
+    assert pdf.startswith(b"%PDF-1.4")
+    assert b"Transmuter Executive Summary" in pdf
+    assert b"Resolve 2 pending gate approvals" in pdf

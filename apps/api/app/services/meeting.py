@@ -1,11 +1,21 @@
 import re
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
 from fastapi import HTTPException, status
 from supabase import Client
 
+from app.agents.meeting_notes_agent import (
+    chunk_transcript,
+    extract_action_items,
+    extract_meeting_decisions,
+)
 from app.core.config import settings
+from app.domain.meeting_notes import (
+    LinkedInitiativeContext,
+    MeetingAttendeeContext,
+    MeetingNotesWorkflowReview,
+)
 from app.domain.meetings import (
     ActionItemCreate,
     ActionItemListResponse,
@@ -217,6 +227,45 @@ class MeetingService:
                 "transcript_source": data.transcript_source,
                 "has_transcript": bool(transcript),
             },
+        )
+
+    def extract_meeting_notes(self, session_id: str) -> MeetingNotesWorkflowReview:
+        detail = self.get_session_detail(session_id)
+        transcript = detail.get("transcript_text") or detail.get("notes") or ""
+        if not transcript.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Import a transcript or add session notes before extraction.",
+            )
+        chunks = chunk_transcript(transcript).chunks
+        meeting_id = detail["meeting_id"]
+        attendees = [
+            MeetingAttendeeContext(
+                user_id=row["user_id"],
+                display_name=(row.get("users") or {}).get("display_name"),
+            )
+            for row in self._repo.get_attendees(meeting_id)
+        ]
+        linked = [
+            LinkedInitiativeContext(
+                id=(row.get("initiatives") or {}).get("id") or row.get("initiative_id"),
+                name=(row.get("initiatives") or {}).get("name") or "Initiative",
+                initiative_code=(row.get("initiatives") or {}).get("initiative_code"),
+            )
+            for row in self._repo.get_initiatives(meeting_id)
+            if row.get("initiative_id") or (row.get("initiatives") or {}).get("id")
+        ]
+        actions = extract_action_items(chunks, attendees).action_items
+        decisions = extract_meeting_decisions(chunks, linked)
+        return MeetingNotesWorkflowReview(
+            workflow_run_id=f"deterministic-meeting-notes-{session_id}",
+            status="pending_review",
+            expires_at=(datetime.now(UTC) + timedelta(hours=24)).isoformat(),
+            session_id=session_id,
+            meeting_id=meeting_id,
+            action_items=actions,
+            decisions=decisions.decisions,
+            initiative_updates=decisions.initiative_updates,
         )
 
     def generate_minutes(

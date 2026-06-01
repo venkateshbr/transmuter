@@ -1,6 +1,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import Response
 from supabase import Client
 
 from app.core.auth import CurrentUser, get_current_user
@@ -41,4 +42,32 @@ async def get_dashboard(
         priority=priority,
         tag=tag,
         target_year=target_year,
+    )
+
+
+@router.get("/executive-summary.pdf")
+async def get_executive_summary_pdf(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[DashboardService, Depends(_svc)],
+    business_unit_id: str | None = None,
+    workstream_id: str | None = None,
+    rag_status: str | None = None,
+    priority: str | None = None,
+    tag: str | None = None,
+    target_year: int | None = None,
+) -> Response:
+    content = svc.generate_executive_summary_pdf(
+        user_id=current_user.id,
+        role=current_user.role,
+        business_unit_id=business_unit_id,
+        workstream_id=workstream_id,
+        rag_status=rag_status,
+        priority=priority,
+        tag=tag,
+        target_year=target_year,
+    )
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="transmuter-executive-summary.pdf"'},
     )

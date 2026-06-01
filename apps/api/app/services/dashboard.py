@@ -142,6 +142,116 @@ class DashboardService:
             },
         }
 
+    def generate_executive_summary(
+        self,
+        user_id: UUID,
+        role: str,
+        business_unit_id: str | None = None,
+        workstream_id: str | None = None,
+        rag_status: str | None = None,
+        priority: str | None = None,
+        tag: str | None = None,
+        target_year: int | None = None,
+    ) -> dict[str, Any]:
+        data = self.get_dashboard_data(
+            user_id=user_id,
+            role=role,
+            business_unit_id=business_unit_id,
+            workstream_id=workstream_id,
+            rag_status=rag_status,
+            priority=priority,
+            tag=tag,
+            target_year=target_year,
+        )
+        summary = data["summary"]
+        value = data["value_bridge"]
+        kpi = data["kpi_pulse"]
+        risks = data["risk_heatmap"]
+        at_risk_items = [
+            item
+            for item in data.get("recent_activity", [])
+            if item.get("rag_status") in {"red", "amber"}
+        ][:5]
+        actions = []
+        if summary["at_risk"]:
+            actions.append(
+                f"Review {summary['at_risk']} red initiatives before the next steering forum."
+            )
+        if summary["pending_approvals"]:
+            actions.append(f"Resolve {summary['pending_approvals']} pending gate approvals.")
+        if kpi.get("missing_base"):
+            actions.append(
+                f"Refresh recovery actions for {kpi['missing_base']} KPIs missing base case."
+            )
+        if not actions:
+            actions.append("Continue weekly portfolio cadence and refresh value evidence.")
+        return {
+            "portfolio_health": {
+                "total_initiatives": summary["total_initiatives"],
+                "at_risk": summary["at_risk"],
+                "pending_approvals": summary["pending_approvals"],
+                "kpi_health_score": kpi.get("health_score", "0.0"),
+            },
+            "financial_overview": {
+                "benefits_base": value.get("benefits_base", "0.0000"),
+                "benefits_high": value.get("benefits_high", "0.0000"),
+                "benefits_actual": value.get("benefits_actual", "0.0000"),
+                "costs_plan": value.get("costs_plan", "0.0000"),
+                "costs_actual": value.get("costs_actual", "0.0000"),
+                "net_base": value.get("net_base", "0.0000"),
+                "net_actual": value.get("net_actual", "0.0000"),
+            },
+            "top_initiatives": data.get("value_matrix", {})
+            .get("totals", {})
+            .get("total", {})
+            .get("initiatives", [])[:5],
+            "at_risk_items": at_risk_items,
+            "key_risks": risks,
+            "recommended_actions": actions,
+        }
+
+    def generate_executive_summary_pdf(
+        self,
+        user_id: UUID,
+        role: str,
+        business_unit_id: str | None = None,
+        workstream_id: str | None = None,
+        rag_status: str | None = None,
+        priority: str | None = None,
+        tag: str | None = None,
+        target_year: int | None = None,
+    ) -> bytes:
+        summary = self.generate_executive_summary(
+            user_id=user_id,
+            role=role,
+            business_unit_id=business_unit_id,
+            workstream_id=workstream_id,
+            rag_status=rag_status,
+            priority=priority,
+            tag=tag,
+            target_year=target_year,
+        )
+        self._trace_executive_summary(summary)
+        return _simple_pdf(_summary_lines(summary))
+
+    def _trace_executive_summary(self, summary: dict[str, Any]) -> None:
+        try:
+            from app.core.observability import get_langfuse
+
+            langfuse = get_langfuse()
+            if not langfuse:
+                return
+            with langfuse.start_as_current_observation(
+                name="executive_summary_generation",
+                as_type="agent",
+                input={"dashboard_context": summary["portfolio_health"]},
+                metadata={"source": "dashboard_export"},
+            ):
+                langfuse.update_current_span(output=summary)
+            langfuse.flush()
+        except Exception:
+            return
+
     def _matches_filters(
         self,
         row: dict[str, Any],
@@ -527,3 +637,60 @@ class DashboardService:
                 "net_value_actual",
             ):
                 initiative[field] = money_formatter(Decimal(str(initiative[field])))
+
+
+def _summary_lines(summary: dict[str, Any]) -> list[str]:
+    health = summary["portfolio_health"]
+    financial = summary["financial_overview"]
+    lines = [
+        "Transmuter Executive Summary",
+        f"Initiatives: {health['total_initiatives']}",
+        f"At risk: {health['at_risk']}",
+        f"Pending approvals: {health['pending_approvals']}",
+        f"KPI health score: {health['kpi_health_score']}%",
+        f"Benefits base: {financial['benefits_base']}",
+        f"Benefits high: {financial['benefits_high']}",
+        f"Benefits actual: {financial['benefits_actual']}",
+        f"Costs plan: {financial['costs_plan']}",
+        f"Net base: {financial['net_base']}",
+        f"Net actual: {financial['net_actual']}",
+        "Recommended actions:",
+    ]
+    lines.extend(f"- {item}" for item in summary["recommended_actions"])
+    return lines
+
+
+def _simple_pdf(lines: list[str]) -> bytes:
+    content_lines = ["BT", "/F1 18 Tf", "72 760 Td", f"({_pdf_escape(lines[0])}) Tj"]
+    content_lines.extend(["/F1 11 Tf"])
+    for line in lines[1:]:
+        content_lines.append("0 -18 Td")
+        content_lines.append(f"({_pdf_escape(line[:110])}) Tj")
+    content_lines.append("ET")
+    stream = "\n".join(content_lines).encode()
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream",
+    ]
+    pdf = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for index, obj in enumerate(objects, start=1):
+        offsets.append(len(pdf))
+        pdf.extend(f"{index} 0 obj\n".encode())
+        pdf.extend(obj)
+        pdf.extend(b"\nendobj\n")
+    xref = len(pdf)
+    pdf.extend(f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode())
+    for offset in offsets[1:]:
+        pdf.extend(f"{offset:010d} 00000 n \n".encode())
+    pdf.extend(
+        f"trailer << /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    )
+    return bytes(pdf)
+
+
+def _pdf_escape(text: str) -> str:
+    return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")

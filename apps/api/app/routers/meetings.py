@@ -11,6 +11,7 @@ from app.core.rbac import (
     assert_can_view_portfolio,
     assert_can_view_session,
 )
+from app.domain.meeting_notes import MeetingNotesWorkflowReview
 from app.domain.meetings import (
     ActionItemCreate,
     AgendaItemCreate,
@@ -148,6 +149,16 @@ async def generate_session_minutes(
 ) -> dict:
     assert_can_manage_initiatives(current_user)
     return svc.generate_minutes(session_id, body)
+
+
+@router.post("/sessions/{session_id}/ai/extract", response_model=MeetingNotesWorkflowReview)
+async def extract_session_ai_notes(
+    session_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[MeetingService, Depends(_svc)],
+) -> MeetingNotesWorkflowReview:
+    assert_can_manage_initiatives(current_user)
+    return svc.extract_meeting_notes(session_id)
 
 
 @router.post("/sessions/{session_id}/minutes/send")

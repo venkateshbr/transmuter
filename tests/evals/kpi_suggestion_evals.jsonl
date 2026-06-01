@@ -1,0 +1,10 @@
+{"id":"kpi-001","initiative_type":"revenue_growth","name":"Korea pricing launch","value_logic":"incremental gross margin from pricing governance","expected_any":["Incremental gross margin","Qualified pipeline created","Value delivered"]}
+{"id":"kpi-002","initiative_type":"cost_reduction","name":"AP automation","value_logic":"reduce cycle time and manual effort","expected_any":["Run-rate savings realized","Process cycle time reduction","Value delivered"]}
+{"id":"kpi-003","initiative_type":"cost_avoidance","name":"License overrun prevention","value_logic":"avoid unplanned true-up costs","expected_any":["Avoided cost exposure","Control exception rate","Value delivered"]}
+{"id":"kpi-004","initiative_type":"compliance","name":"Controls evidence uplift","value_logic":"improve audit evidence freshness","expected_any":["Control evidence completion","Open remediation age","Value delivered"]}
+{"id":"kpi-005","initiative_type":"capability_building","name":"Analytics academy launch","value_logic":"increase self-service analytics adoption","expected_any":["Capability adoption rate","Training completion","Adoption rate"]}
+{"id":"kpi-006","initiative_type":"revenue_growth","name":"Renewal uplift engine","value_logic":"improve renewal conversion","expected_any":["Incremental gross margin","Qualified pipeline created"]}
+{"id":"kpi-007","initiative_type":"cost_reduction","name":"Cloud spend governance","value_logic":"reduce idle capacity","expected_any":["Run-rate savings realized","Process cycle time reduction"]}
+{"id":"kpi-008","initiative_type":"cost_avoidance","name":"Warranty claim prevention","value_logic":"reduce recurring claim exposure","expected_any":["Avoided cost exposure","Control exception rate"]}
+{"id":"kpi-009","initiative_type":"compliance","name":"Data privacy remediation","value_logic":"close privacy control gaps","expected_any":["Control evidence completion","Open remediation age"]}
+{"id":"kpi-010","initiative_type":"capability_building","name":"Commercial forecast academy","value_logic":"improve forecast confidence","expected_any":["Capability adoption rate","Training completion"]}
