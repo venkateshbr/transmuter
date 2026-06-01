@@ -133,6 +133,7 @@ app.add_middleware(
         "http://127.0.0.1:4303",
         "http://localhost:4304",
         "http://127.0.0.1:4304",
+        "https://transmuter.ishirock.tech",
         "https://transmuter.ishirock.com",
     ],
     allow_credentials=True,

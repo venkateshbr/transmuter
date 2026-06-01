@@ -50,6 +50,25 @@ import { FormsModule } from '@angular/forms';
           
           @if (activeTab === 'General') {
             <div class="card p-8 space-y-8">
+               <section class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-5">
+                 <div class="flex items-start justify-between gap-4">
+                   <div>
+                     <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">First-run setup</p>
+                     <h3 class="mt-1 text-xl font-black text-[var(--t-text-primary)]">{{ setupStatus().completed || 0 }}/{{ setupStatus().total || 0 }} complete</h3>
+                   </div>
+                   <button type="button" (click)="loadSetupStatus()" class="btn-secondary px-4 py-2 text-xs" aria-label="Refresh setup status">Refresh</button>
+                 </div>
+                 <div class="mt-5 grid gap-3 md:grid-cols-3">
+                   @for (check of setupStatus().checks || []; track check.key) {
+                     <div class="border border-[var(--t-border)] bg-[var(--t-surface)] p-3">
+                       <p class="text-[9px] font-black uppercase tracking-widest" [class.text-emerald-500]="check.complete" [class.text-amber-500]="!check.complete">
+                         {{ check.complete ? 'Complete' : 'Open' }}
+                       </p>
+                       <p class="mt-1 text-xs font-black text-[var(--t-text-primary)]">{{ check.label }}</p>
+                     </div>
+                   }
+                 </div>
+               </section>
                <section>
                  <div class="flex justify-between items-center mb-6">
                    <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Organization Identity</h3>
@@ -827,6 +846,7 @@ export class AdminComponent implements OnInit {
   themes = signal<string[]>([]);
   tags = signal<string[]>([]);
   billing = signal<any>({});
+  setupStatus = signal<any>({ checks: [], completed: 0, total: 0 });
   billingError = signal<string | null>(null);
   cleanupPreview = signal<any>({ object_counts: {}, preserved_objects: [] });
   cleanupResult = signal<any | null>(null);
@@ -868,6 +888,7 @@ export class AdminComponent implements OnInit {
     this.loadUsers();
     this.loadSettings();
     this.loadBilling();
+    this.loadSetupStatus();
     this.loadCleanupPreview();
     this.loadInitiativeDeleteCandidates();
     this.loadGateCriteria();
@@ -899,6 +920,10 @@ export class AdminComponent implements OnInit {
 
   loadBilling() {
     this.api.get<any>('/admin/billing').subscribe(res => this.billing.set(res));
+  }
+
+  loadSetupStatus() {
+    this.api.get<any>('/admin/setup-status').subscribe(res => this.setupStatus.set(res));
   }
 
   openBillingPortal() {

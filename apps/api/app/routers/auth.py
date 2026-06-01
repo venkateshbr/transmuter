@@ -1,15 +1,16 @@
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from jose import jwt
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from supabase import create_client
 
 from app.core.auth import CurrentUser, get_current_user
 from app.core.config import settings
 from app.core.database import get_supabase_admin
+from app.services.tenant_bootstrap import TenantBootstrapService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 PLATFORM_TENANT_ID = UUID("00000000-0000-0000-0000-000000000000")
@@ -31,6 +32,8 @@ class TokenResponse(BaseModel):
     user_id: str
     tenant_id: str
     role: str
+    status: str = "active"
+    must_change_password: bool = False
 
 
 class RefreshRequest(BaseModel):
@@ -46,6 +49,15 @@ class UserProfile(BaseModel):
     title: str | None
     status: str
     onboarding_completed: bool
+    must_change_password: bool = False
+
+
+class RegisterRequest(BaseModel):
+    organization_name: str = Field(..., min_length=2, max_length=200)
+    organization_slug: str = Field(..., min_length=2, max_length=80, pattern=r"^[a-z0-9-]+$")
+    admin_display_name: str = Field(..., min_length=1, max_length=200)
+    admin_email: EmailStr
+    admin_password: str = Field(..., min_length=12, max_length=256)
 
 
 class ChangePasswordRequest(BaseModel):
@@ -108,6 +120,87 @@ async def login(body: LoginRequest) -> TokenResponse:
     return _token_response_for_session(supabase_user, resp.session, str(body.email))
 
 
+@router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+async def register_blank_tenant(body: RegisterRequest) -> TokenResponse:
+    """Create a blank tenant and first transformation-office admin."""
+    _validate_new_password(body.admin_password)
+    admin = get_supabase_admin()
+    existing_org = (
+        admin.table("organizations")
+        .select("id")
+        .eq("slug", body.organization_slug)
+        .maybe_single()
+        .execute()
+    )
+    if existing_org and existing_org.data:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Organization slug is already in use",
+        )
+
+    existing_user = (
+        admin.table("users")
+        .select("id,tenant_id")
+        .eq("email", str(body.admin_email))
+        .maybe_single()
+        .execute()
+    )
+    if existing_user and existing_user.data:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Admin email is already registered",
+        )
+
+    tenant_id = str(uuid4())
+    admin.table("organizations").insert(
+        {
+            "id": tenant_id,
+            "name": body.organization_name,
+            "slug": body.organization_slug,
+            "settings": {},
+        }
+    ).execute()
+    auth_user = admin.auth.admin.create_user(
+        {
+            "email": str(body.admin_email),
+            "password": body.admin_password,
+            "email_confirm": True,
+            "user_metadata": {
+                "tenant_id": tenant_id,
+                "role": "transformation_office",
+                "display_name": body.admin_display_name,
+            },
+        }
+    )
+    admin.table("users").insert(
+        {
+            "id": str(auth_user.user.id),
+            "tenant_id": tenant_id,
+            "email": str(body.admin_email),
+            "display_name": body.admin_display_name,
+            "title": "Organization Admin",
+            "role": "transformation_office",
+            "status": "active",
+            "must_change_password": False,
+            "onboarding_completed": False,
+            "updated_at": datetime.now(UTC).isoformat(),
+        }
+    ).execute()
+    TenantBootstrapService(admin).bootstrap_tenant(tenant_id)
+
+    anon_client = create_client(settings.supabase_url, settings.supabase_anon_key)
+    try:
+        resp = anon_client.auth.sign_in_with_password(
+            {"email": str(body.admin_email), "password": body.admin_password}
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Tenant created, but automatic sign-in failed. Please sign in manually.",
+        ) from exc
+    return _token_response_for_session(resp.user, resp.session, str(body.admin_email))
+
+
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_session(body: RefreshRequest) -> TokenResponse:
     """Rotate a Supabase refresh token and return the refreshed session."""
@@ -139,13 +232,15 @@ def _token_response_for_session(
             user_id=str(supabase_user.id),
             tenant_id=str(PLATFORM_TENANT_ID),
             role="platform_admin",
+            status="active",
+            must_change_password=False,
         )
 
     # Use admin client (service role) to fetch platform user — bypasses RLS.
     admin = get_supabase_admin()
     user_row = (
         admin.table("users")
-        .select("id, tenant_id, role, status")
+        .select("id, tenant_id, role, status, must_change_password")
         .eq("id", str(supabase_user.id))
         .maybe_single()
         .execute()
@@ -159,6 +254,8 @@ def _token_response_for_session(
     u = user_row.data
     if u["status"] == "deactivated":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account deactivated")
+    if u["status"] == "ghost":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is not active")
 
     return TokenResponse(
         access_token=session.access_token,
@@ -167,6 +264,8 @@ def _token_response_for_session(
         user_id=u["id"],
         tenant_id=u["tenant_id"],
         role=u["role"],
+        status=u["status"],
+        must_change_password=bool(u.get("must_change_password")),
     )
 
 
@@ -183,12 +282,16 @@ async def me(current_user: Annotated[CurrentUser, Depends(get_current_user)]) ->
             title="SaaS Operator",
             status="active",
             onboarding_completed=True,
+            must_change_password=False,
         )
 
     client = get_supabase_admin()
     row = (
         client.table("users")
-        .select("id, tenant_id, email, role, display_name, title, status, onboarding_completed")
+        .select(
+            "id, tenant_id, email, role, display_name, title, status, "
+            "onboarding_completed, must_change_password"
+        )
         .eq("id", str(current_user.id))
         .single()
         .execute()
@@ -205,6 +308,7 @@ async def me(current_user: Annotated[CurrentUser, Depends(get_current_user)]) ->
         title=d.get("title"),
         status=d["status"],
         onboarding_completed=d.get("onboarding_completed", False),
+        must_change_password=bool(d.get("must_change_password")),
     )
 
 
@@ -250,10 +354,18 @@ async def change_password(
         ) from exc
 
     try:
-        get_supabase_admin().auth.admin.update_user_by_id(
+        admin = get_supabase_admin()
+        admin.auth.admin.update_user_by_id(
             str(current_user.id),
             {"password": body.new_password},
         )
+        admin.table("users").update(
+            {
+                "must_change_password": False,
+                "status": "active",
+                "updated_at": datetime.now(tz=UTC).isoformat(),
+            }
+        ).eq("id", str(current_user.id)).eq("tenant_id", str(current_user.tenant_id)).execute()
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -261,6 +373,29 @@ async def change_password(
         ) from exc
 
     return ChangePasswordResponse(status="password_changed")
+
+
+def _validate_new_password(password: str) -> None:
+    if len(password) < 12:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 12 characters",
+        )
+    if not any(ch.islower() for ch in password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must include a lowercase letter",
+        )
+    if not any(ch.isupper() for ch in password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must include an uppercase letter",
+        )
+    if not any(ch.isdigit() for ch in password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must include a number",
+        )
 
 
 def _validate_password_change_body(body: ChangePasswordRequest) -> None:

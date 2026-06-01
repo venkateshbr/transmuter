@@ -14,7 +14,7 @@ from supabase_auth.errors import AuthApiError
 
 from app.core.database import get_supabase_admin
 from app.core.rbac import assert_valid_role
-from app.domain.people import InviteCreate, UserUpdate, WorkstreamAssignment
+from app.domain.people import InviteCreate, UserCreate, UserUpdate, WorkstreamAssignment
 from app.repositories.people import PeopleRepository
 
 
@@ -51,7 +51,7 @@ class PeopleService:
         }
 
     def update_profile(self, user_id: str, data: UserUpdate) -> dict[str, Any]:
-        self._assert_user(user_id)
+        user = self._assert_user(user_id)
         patch = data.model_dump(exclude_none=True)
         if not patch:
             return self.get_profile(user_id)
@@ -59,6 +59,14 @@ class PeopleService:
             assert_valid_role(str(patch["role"]))
         patch["updated_at"] = datetime.now(UTC).isoformat()
         self._repo.update_user(user_id, patch)
+        self._sync_auth_metadata(
+            user_id,
+            {
+                "tenant_id": self._tenant_id,
+                "role": patch.get("role", user.get("role")),
+                "display_name": patch.get("display_name", user.get("display_name")),
+            },
+        )
         return self.get_profile(user_id)
 
     def ghost_user(self, user_id: str) -> dict[str, Any]:
@@ -103,10 +111,42 @@ class PeopleService:
             self._repo.replace_user_workstreams(row["id"], data.workstream_ids)
         return self.get_profile(row["id"])
 
+    def create_user(self, data: UserCreate) -> dict[str, Any]:
+        assert_valid_role(data.role)
+        self._validate_temporary_password(data.temporary_password)
+        existing = self._repo.get_user_by_email(str(data.email))
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A user with this email already exists in this tenant",
+            )
+
+        auth_user_id = self._ensure_auth_password_user(data)
+        row = self._repo.upsert_user(
+            {
+                "id": auth_user_id,
+                "tenant_id": self._tenant_id,
+                "email": str(data.email),
+                "display_name": data.display_name,
+                "role": data.role,
+                "title": data.title,
+                "department": data.department,
+                "market": data.market,
+                "status": "pending",
+                "must_change_password": True,
+                "onboarding_completed": False,
+                "updated_at": datetime.now(UTC).isoformat(),
+            }
+        )
+        if data.workstream_ids:
+            self._repo.replace_user_workstreams(row["id"], data.workstream_ids)
+        return self.get_profile(row["id"])
+
     def list_invites(self) -> dict[str, Any]:
         invites = [
             row
-            for row in self._repo.list_users(status="ghost")
+            for status_value in ("ghost", "pending")
+            for row in self._repo.list_users(status=status_value)
             if row.get("onboarding_completed") is not True
         ]
         return {"items": invites, "total": len(invites)}
@@ -205,6 +245,53 @@ class PeopleService:
         )
         return str(response.user.id)
 
+    def _ensure_auth_password_user(self, data: UserCreate) -> str:
+        existing_id = self._find_auth_user_id(str(data.email))
+        metadata = {
+            "tenant_id": self._tenant_id,
+            "role": data.role,
+            "display_name": data.display_name,
+            "must_change_password": True,
+        }
+        if existing_id:
+            owner = (
+                get_supabase_admin()
+                .table("users")
+                .select("id,tenant_id")
+                .eq("id", existing_id)
+                .maybe_single()
+                .execute()
+            )
+            if owner and owner.data and owner.data.get("tenant_id") != self._tenant_id:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Email already belongs to another tenant",
+                )
+            get_supabase_admin().auth.admin.update_user_by_id(
+                existing_id,
+                {"password": data.temporary_password, "user_metadata": metadata},
+            )
+            return existing_id
+
+        response = get_supabase_admin().auth.admin.create_user(
+            {
+                "email": str(data.email),
+                "password": data.temporary_password,
+                "email_confirm": True,
+                "user_metadata": metadata,
+            }
+        )
+        return str(response.user.id)
+
+    def _sync_auth_metadata(self, user_id: str, metadata: dict[str, Any]) -> None:
+        try:
+            get_supabase_admin().auth.admin.update_user_by_id(
+                user_id,
+                {"user_metadata": metadata},
+            )
+        except Exception:
+            return
+
     def _find_auth_user_id(self, email: str) -> str | None:
         page = 1
         per_page = 100
@@ -216,6 +303,29 @@ class PeopleService:
             if len(users) < per_page:
                 return None
             page += 1
+
+    @staticmethod
+    def _validate_temporary_password(password: str) -> None:
+        if len(password) < 12:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Temporary password must be at least 12 characters",
+            )
+        if not any(ch.islower() for ch in password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Temporary password must include a lowercase letter",
+            )
+        if not any(ch.isupper() for ch in password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Temporary password must include an uppercase letter",
+            )
+        if not any(ch.isdigit() for ch in password):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Temporary password must include a number",
+            )
 
     @staticmethod
     def _decimal(value: object) -> Decimal:

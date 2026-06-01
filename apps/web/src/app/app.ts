@@ -435,6 +435,8 @@ export class App {
       && path !== '/'
       && path !== '/get-started'
       && path !== '/auth/login'
+      && path !== '/auth/register'
+      && path !== '/auth/change-password'
       && path !== '/subscription/success';
   }
 

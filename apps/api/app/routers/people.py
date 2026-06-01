@@ -9,7 +9,7 @@ from supabase import Client
 
 from app.core.auth import CurrentUser, get_current_user, require_role
 from app.core.database import get_supabase_request_client
-from app.domain.people import InviteCreate, UserUpdate, WorkstreamAssignment
+from app.domain.people import InviteCreate, UserCreate, UserUpdate, WorkstreamAssignment
 from app.services.people import PeopleService
 
 router = APIRouter(tags=["people"])
@@ -39,6 +39,15 @@ async def get_user_profile(
     svc: Annotated[PeopleService, Depends(_svc)],
 ) -> dict[str, Any]:
     return svc.get_profile(user_id)
+
+
+@router.post("/users", status_code=201)
+async def create_user(
+    body: UserCreate,
+    svc: Annotated[PeopleService, Depends(_svc)],
+    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+) -> dict[str, Any]:
+    return svc.create_user(body)
 
 
 @router.put("/users/{user_id}")
