@@ -26,11 +26,14 @@ class StatusUpdatePatch(BaseModel):
 
 
 class StatusUpdateDraftSuggestion(BaseModel):
+    trace_id: str | None = None
+    trace_url: str | None = None
     rag_status: Literal["red", "amber", "green"]
     summary: str
     achievements: str | None = None
     issues: str | None = None
     next_steps: str | None = None
+    confidence: float = Field(0.75, ge=0, le=1)
     agent_status: Literal["generated", "deterministic_fallback"] = "deterministic_fallback"
     sources: list[str] = Field(default_factory=list)
 

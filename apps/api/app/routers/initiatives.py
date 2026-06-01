@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from typing import Annotated
 
@@ -9,15 +10,27 @@ from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from supabase import Client
 
-from app.agents.initiative_intake_agent import generate_intake_suggestions
+from app.agents.initiative_intake_agent import (
+    extract_initiative_fields,
+    generate_intake_suggestions,
+    scan_risk_patterns,
+    suggest_kpis,
+)
 from app.core.auth import CurrentUser, RequireAdmin, get_current_user
 from app.core.database import get_supabase_request_client
-from app.core.rbac import assert_can_manage_initiatives
+from app.core.rbac import assert_can_manage_initiatives, assert_can_view_initiative
+from app.domain.initiative_context import InitiativeContextPullResult
 from app.domain.initiative_intake import (
+    InitiativeFieldExtractionRequest,
+    InitiativeFieldExtractionResult,
     InitiativeIntakeCreate,
     InitiativeIntakeRequest,
     InitiativeIntakeSuggestions,
     InitiativeWorkbookPreview,
+    KPISuggestionRequest,
+    KPISuggestionResult,
+    RiskPatternScanRequest,
+    RiskPatternScanResult,
 )
 from app.domain.initiatives import (
     InitiativeCreate,
@@ -26,6 +39,7 @@ from app.domain.initiatives import (
     InitiativeUpdate,
 )
 from app.services.initiative import InitiativeService
+from app.services.initiative_context import InitiativeContextService
 
 router = APIRouter(prefix="/initiatives", tags=["initiatives"])
 
@@ -126,6 +140,33 @@ async def create_intake_suggestions(
     return await generate_intake_suggestions(body)
 
 
+@router.post("/intake/extract", response_model=InitiativeFieldExtractionResult)
+async def extract_intake_fields(
+    body: InitiativeFieldExtractionRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> InitiativeFieldExtractionResult:
+    assert_can_manage_initiatives(current_user)
+    return await extract_initiative_fields(body.text)
+
+
+@router.post("/intake/kpis", response_model=KPISuggestionResult)
+async def create_kpi_suggestions(
+    body: KPISuggestionRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> KPISuggestionResult:
+    assert_can_manage_initiatives(current_user)
+    return suggest_kpis(body.initiative_type, body.initiative_name, body.value_logic)
+
+
+@router.post("/intake/risks", response_model=RiskPatternScanResult)
+async def create_risk_pattern_suggestions(
+    body: RiskPatternScanRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> RiskPatternScanResult:
+    assert_can_manage_initiatives(current_user)
+    return scan_risk_patterns(body.initiative_draft)
+
+
 @router.post("/intake/create", response_model=InitiativeDetail, status_code=201)
 async def create_initiative_from_intake(
     body: InitiativeIntakeCreate,
@@ -134,6 +175,22 @@ async def create_initiative_from_intake(
 ) -> InitiativeDetail:
     assert_can_manage_initiatives(current_user)
     return svc.create_from_intake(body, current_user.id)
+
+
+@router.get("/{initiative_id}/ai-context", response_model=InitiativeContextPullResult)
+async def get_initiative_ai_context(
+    initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
+    period_start: date | None = Query(None),
+    period_end: date | None = Query(None),
+) -> InitiativeContextPullResult:
+    assert_can_view_initiative(client, current_user, initiative_id)
+    return InitiativeContextService(client, current_user.tenant_id).pull_context(
+        initiative_id,
+        period_start=period_start,
+        period_end=period_end,
+    )
 
 
 # ── Create ────────────────────────────────────────────────────────────────────

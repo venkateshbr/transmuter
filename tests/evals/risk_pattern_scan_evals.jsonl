@@ -1,0 +1,10 @@
+{"id":"risk-001","draft":{"name":"Korea pricing launch","type":"revenue_growth","dependencies":"pricing governance approval"},"expected_any":["Revenue timing risk","Adoption friction"]}
+{"id":"risk-002","draft":{"name":"AP automation","type":"cost_reduction","dependencies":"ERP connector"},"expected_any":["Savings leakage","Operating disruption"]}
+{"id":"risk-003","draft":{"name":"License overrun prevention","type":"cost_avoidance","dependencies":"usage reporting"},"expected_any":["Exposure underestimation","Control bypass"]}
+{"id":"risk-004","draft":{"name":"Controls evidence uplift","type":"compliance","dependencies":"policy owner review"},"expected_any":["Evidence quality risk","Regulatory interpretation"]}
+{"id":"risk-005","draft":{"name":"Analytics academy launch","type":"capability_building","dependencies":"manager nominations"},"expected_any":["Adoption risk","Capacity risk"]}
+{"id":"risk-006","draft":{"name":"Vendor consolidation sprint","type":"cost_reduction"},"expected_any":["Savings leakage","Operating disruption"]}
+{"id":"risk-007","draft":{"name":"Distributor margin reset","type":"revenue_growth"},"expected_any":["Revenue timing risk","Adoption friction"]}
+{"id":"risk-008","draft":{"name":"Data privacy remediation","type":"compliance"},"expected_any":["Evidence quality risk","Regulatory interpretation"]}
+{"id":"risk-009","draft":{"name":"Warranty claim prevention","type":"cost_avoidance"},"expected_any":["Exposure underestimation","Control bypass"]}
+{"id":"risk-010","draft":{"name":"Commercial forecast academy","type":"capability_building"},"expected_any":["Adoption risk","Capacity risk"]}

@@ -14,6 +14,10 @@ class StatusUpdateRepository:
         self._c = client
         self._tid = str(tenant_id)
 
+    @property
+    def client(self) -> Client:
+        return self._c
+
     def list_history(self, initiative_id: str) -> list[dict[str, Any]]:
         """Returns all submitted status updates for an initiative, most recent first."""
         result = (

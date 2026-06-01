@@ -17,8 +17,11 @@ export class ApiService {
     return this.http.get<T>(`${this.base}${path}`, { params: httpParams });
   }
 
-  getBlob(path: string): Observable<Blob> {
-    return this.http.get(`${this.base}${path}`, { responseType: 'blob' });
+  getBlob(path: string, params?: Record<string, string | number | boolean>): Observable<Blob> {
+    const httpParams = params
+      ? new HttpParams({ fromObject: params as Record<string, string> })
+      : undefined;
+    return this.http.get(`${this.base}${path}`, { params: httpParams, responseType: 'blob' });
   }
 
   post<T>(path: string, body: unknown): Observable<T> {

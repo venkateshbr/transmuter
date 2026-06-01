@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
@@ -104,6 +106,31 @@ INTAKE_SCENARIOS = [
         planned_end=date(2027, 12, 31),
     ),
 ]
+
+
+def _jsonl_rows(name: str) -> list[dict[str, object]]:
+    path = Path(__file__).with_name(name)
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+@pytest.mark.parametrize(
+    ("filename", "minimum_rows"),
+    [
+        ("initiative_intake_evals.jsonl", 20),
+        ("kpi_suggestion_evals.jsonl", 10),
+        ("risk_pattern_scan_evals.jsonl", 10),
+        ("meeting_transcript_evals.jsonl", 10),
+    ],
+)
+def test_committed_jsonl_eval_datasets_are_well_formed(
+    filename: str,
+    minimum_rows: int,
+) -> None:
+    rows = _jsonl_rows(filename)
+
+    assert len(rows) >= minimum_rows
+    assert all(row.get("id") for row in rows)
+    assert len({row["id"] for row in rows}) == len(rows)
 
 
 @pytest.mark.parametrize("scenario", INTAKE_SCENARIOS)

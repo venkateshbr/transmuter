@@ -1184,23 +1184,10 @@ export class DashboardComponent implements OnInit {
   }
 
   exportExecutiveBriefPdf(): void {
-    const report = this.executiveReport();
-    if (!report) return;
-
-    const popup = window.open('', '_blank');
-    if (!popup) {
-      this.downloadBlob(
-        this.printableExecutiveBriefHtml(),
-        `transmuter-executive-brief-${this.exportDateStamp()}.html`,
-        'text/html;charset=utf-8'
-      );
-      return;
-    }
-    popup.document.open();
-    popup.document.write(this.printableExecutiveBriefHtml());
-    popup.document.close();
-    popup.focus();
-    popup.print();
+    this.api.getBlob('/dashboard/executive-summary.pdf', this.executiveReportParams()).subscribe({
+      next: blob => this.downloadBlobObject(blob, `transmuter-executive-summary-${this.exportDateStamp()}.pdf`),
+      error: () => this.executiveReportError.set('Executive summary PDF could not be prepared.'),
+    });
   }
 
   private printableExecutiveBriefHtml(): string {
@@ -1268,6 +1255,10 @@ export class DashboardComponent implements OnInit {
 
   private downloadBlob(content: string, filename: string, type: string): void {
     const blob = new Blob([content], { type });
+    this.downloadBlobObject(blob, filename);
+  }
+
+  private downloadBlobObject(blob: Blob, filename: string): void {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
