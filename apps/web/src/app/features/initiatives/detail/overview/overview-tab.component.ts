@@ -594,7 +594,7 @@ export class OverviewTabComponent implements OnInit {
     if (this.hasSelectedCosts()) {
       cards.push({ label: 'Total Costs', plan: this.formatMoney(s.costs_plan), actual: s.costs_actual ? this.formatMoney(s.costs_actual) : '—', highlight: false });
     }
-    cards.push({ label: 'Net Value', plan: this.formatMoney(s.net_value_plan), actual: s.net_value_actual ? this.formatMoney(s.net_value_actual) : '—', highlight: true });
+    cards.push({ label: 'Net Run-rate Impact', plan: this.formatMoney(s.net_value_plan), actual: s.net_value_actual ? this.formatMoney(s.net_value_actual) : '—', highlight: true });
     return cards;
   });
 
@@ -602,7 +602,7 @@ export class OverviewTabComponent implements OnInit {
     const s = this.grid()?.summary;
     if (!s) return [];
     const rows = [
-      { label: 'Initiative Value', value: this.formatMoney(s.net_value_plan) },
+      { label: 'Net Run-rate Impact', value: this.formatMoney(s.net_value_plan) },
     ];
     if (this.hasSelectedMetric(['revenue_uplift_base', 'revenue_uplift_high', 'revenue_uplift_actual', 'gm_uplift_base', 'gm_uplift_high', 'gm_uplift_actual'])) {
       rows.push({ label: 'Benefit Run Rate', value: this.formatMoney(s.benefit_run_rate) });

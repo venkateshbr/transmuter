@@ -211,10 +211,10 @@ interface FinancialConfiguration {
                     <th class="px-4 py-3">Total Var</th>
                   }
                   @if (showBenefits()) {
-                    <th class="px-4 py-3">Net Plan</th>
+                    <th class="px-4 py-3">Net Run-rate Plan</th>
                     @if (showActuals()) {
-                      <th class="px-4 py-3">Net Actual</th>
-                      <th class="px-4 py-3">Net Var</th>
+                      <th class="px-4 py-3">Net Run-rate Actual</th>
+                      <th class="px-4 py-3">Net Run-rate Var</th>
                     }
                   }
                 </tr>

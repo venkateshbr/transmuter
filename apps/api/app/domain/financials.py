@@ -173,7 +173,7 @@ class FinancialGridResponse(BaseModel):
 class FinancialSummary(BaseModel):
     """Header summary cards — aggregated across all years.
 
-    Net Value = GM Uplift − Recurring Costs (one-off costs shown separately).
+    Net Run-rate Impact = Total Benefits − Recurring Costs (one-off costs shown separately).
     """
 
     # Revenue uplift
@@ -202,7 +202,7 @@ class FinancialSummary(BaseModel):
     costs_one_off_actual: str | None = None
     costs_plan: str = "0"  # total
     costs_actual: str | None = None  # total
-    # Net value = GM Uplift - Recurring Costs
+    # Net run-rate impact = total benefits - recurring costs
     net_value_plan: str = "0"
     net_value_actual: str | None = None
     # Run rates (annualised)
@@ -366,11 +366,13 @@ class ValueBridgeCase(BaseModel):
     revenue_uplift: str = "0"
     gross_margin: str = "0"
     gm_uplift: str = "0"
+    other_benefits: str = "0"
+    benefits_total: str = "0"
     cogs: str = "0"
     costs_recurring: str = "0"
     costs_one_off: str = "0"
     costs_total: str = "0"
-    net: str = "0"  # GM Uplift - Recurring Costs
+    net: str = "0"  # Total benefits - recurring costs
 
 
 class ValueBridgeResponse(BaseModel):
@@ -387,6 +389,8 @@ class ScenarioFinancialSummary(BaseModel):
     revenue_uplift: str = "0"
     gross_margin: str = "0"
     gm_uplift: str = "0"
+    other_benefits: str = "0"
+    benefits_total: str = "0"
     cogs: str = "0"
     costs_recurring: str = "0"
     costs_one_off: str = "0"

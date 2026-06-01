@@ -304,14 +304,16 @@ BEGIN
 
   INSERT INTO financial_config_groups (tenant_id, key, label, kind, rollup_type, display_order, is_system)
   VALUES
-    (pilot_tenant_id, 'benefits', 'Benefits', 'calculation', 'benefit', 10, TRUE),
+    (pilot_tenant_id, 'benefits', 'Total Benefits', 'calculation', 'benefit', 10, TRUE),
     (pilot_tenant_id, 'recurring_costs', 'Recurring Costs', 'calculation', 'recurring_cost', 20, TRUE),
-    (pilot_tenant_id, 'one_off_costs', 'One-time Costs', 'calculation', 'one_off_cost', 30, TRUE),
-    (pilot_tenant_id, 'net_value', 'Net Value', 'calculation', 'net_value', 40, TRUE),
+    (pilot_tenant_id, 'one_off_costs', 'One-off Costs', 'calculation', 'one_off_cost', 30, TRUE),
+    (pilot_tenant_id, 'net_value', 'Net Run-rate Impact', 'calculation', 'net_value', 40, TRUE),
+    (pilot_tenant_id, 'payback_period', 'Payback Period', 'calculation', NULL, 50, TRUE),
     (pilot_tenant_id, 'revenue', 'Revenue', 'metric', NULL, 10, TRUE),
     (pilot_tenant_id, 'gross_margin', 'Gross Margin', 'metric', NULL, 20, TRUE),
-    (pilot_tenant_id, 'implementation', 'Implementation Costs', 'cost_category', NULL, 10, TRUE),
-    (pilot_tenant_id, 'operating', 'Operating Costs', 'cost_category', NULL, 20, TRUE),
+    (pilot_tenant_id, 'savings', 'Savings', 'metric', NULL, 30, TRUE),
+    (pilot_tenant_id, 'implementation', 'One-off Costs', 'cost_category', NULL, 10, TRUE),
+    (pilot_tenant_id, 'operating', 'Recurring Costs', 'cost_category', NULL, 20, TRUE),
     (pilot_tenant_id, 'uncategorized', 'Uncategorized', 'cost_category', NULL, 99, TRUE);
 
   INSERT INTO financial_config_items (
@@ -329,13 +331,16 @@ BEGIN
   FROM financial_config_groups grp
   JOIN (
     VALUES
-      ('revenue', 'revenue_uplift_base', 'Revenue Uplift (Base)', 'metric', 'revenue_uplift_base', 'benefit', 10),
-      ('revenue', 'revenue_uplift_actual', 'Revenue Uplift (Actual)', 'metric', 'revenue_uplift_actual', 'benefit', 20),
-      ('gross_margin', 'gm_uplift_base', 'GM Uplift (Base)', 'metric', 'gm_uplift_base', 'benefit', 30),
-      ('gross_margin', 'gm_uplift_actual', 'GM Uplift (Actual)', 'metric', 'gm_uplift_actual', 'benefit', 40),
-      ('implementation', 'implementation', 'Implementation', 'cost_category', NULL, 'one_off_cost', 10),
-      ('operating', 'software', 'Software / Licenses', 'cost_category', NULL, 'recurring_cost', 20),
-      ('operating', 'labor', 'Labor / Operations', 'cost_category', NULL, 'recurring_cost', 30),
+      ('revenue', 'revenue_uplift_base', 'Revenue Uplift ($) (Base)', 'metric', 'revenue_uplift_base', 'benefit', 10),
+      ('revenue', 'revenue_uplift_actual', 'Revenue Uplift ($) (Actual)', 'metric', 'revenue_uplift_actual', 'benefit', 20),
+      ('gross_margin', 'gm_uplift_base', 'Gross Margin Uplift ($) (Base)', 'metric', 'gm_uplift_base', 'benefit', 30),
+      ('gross_margin', 'gm_uplift_actual', 'Gross Margin Uplift ($) (Actual)', 'metric', 'gm_uplift_actual', 'benefit', 40),
+      ('savings', 'cost_savings', 'Cost Savings ($)', 'metric', NULL, 'benefit', 50),
+      ('implementation', 'implementation', 'Implementation / Project Cost', 'cost_category', NULL, 'one_off_cost', 10),
+      ('implementation', 'other_one_off', 'Other One-off Cost', 'cost_category', NULL, 'one_off_cost', 90),
+      ('operating', 'software_subscriptions', 'Software Subscriptions', 'cost_category', NULL, 'recurring_cost', 20),
+      ('operating', 'support_maintenance', 'Support / Maintenance', 'cost_category', NULL, 'recurring_cost', 30),
+      ('operating', 'labor', 'Labor / Operations', 'cost_category', NULL, 'recurring_cost', 40),
       ('uncategorized', 'other', 'Other', 'cost_category', NULL, NULL, 99)
   ) AS item(group_key, key, label, item_type, system_metric_key, rollup_type, display_order)
     ON item.group_key = grp.key
