@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "../../../.env"))
 
 from app.main import app
+from app.services.email_delivery import EmailDeliveryResult
 
 client = TestClient(app, raise_server_exceptions=True)
 
@@ -77,9 +78,28 @@ def create_meeting_with_session(token: str, initiative_id: str) -> tuple[dict, d
     return meeting, agenda, session_response.json()
 
 
-def test_meeting_artifacts_actions_risks_carry_forward_and_minutes(admin_token: str) -> None:
+def test_meeting_artifacts_actions_risks_carry_forward_and_minutes(
+    admin_token: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fake_deliver(self, *, to, subject, text, html=None):  # noqa: ANN001, ARG001
+        assert to
+        assert subject.startswith("Minutes:")
+        assert "## Actions" in text
+        return EmailDeliveryResult(status="sent", detail="email", recipient_count=len(to))
+
+    monkeypatch.setattr("app.services.email_delivery.EmailDeliveryService.deliver", fake_deliver)
+
     initiative = create_initiative(admin_token)
     meeting, agenda, session = create_meeting_with_session(admin_token, initiative["id"])
+    profile_response = client.get("/auth/me", headers=auth(admin_token))
+    assert profile_response.status_code == 200, profile_response.text
+    attendee_response = client.post(
+        f"/meetings/{meeting['id']}/attendees",
+        json={"user_id": profile_response.json()["id"]},
+        headers=auth(admin_token),
+    )
+    assert attendee_response.status_code == 201, attendee_response.text
 
     action_response = client.post(
         f"/meetings/sessions/{session['id']}/artifacts",
