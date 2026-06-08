@@ -177,6 +177,66 @@ class FinancialRepository:
         plans = self.list_bankable_plans(initiative_id)
         return plans[-1] if plans else None
 
+    # ── Benefit Realization Ledger ────────────────────────────────────────────
+
+    def list_benefit_ledger_entries(self, initiative_id: str) -> list[dict]:  # type: ignore[type-arg]
+        try:
+            result = (
+                self._c.table("benefit_realization_ledger")
+                .select("*")
+                .eq("tenant_id", self._tid)
+                .eq("initiative_id", initiative_id)
+                .order("period_start")
+                .order("created_at")
+                .execute()
+            )
+            return result.data or []
+        except Exception as exc:
+            if self._is_missing_table(exc, "benefit_realization_ledger"):
+                return []
+            raise
+
+    def create_benefit_ledger_entry(self, initiative_id: str, data: dict) -> dict:  # type: ignore[type-arg]
+        payload = {
+            **data,
+            "id": data.get("id") or str(uuid4()),
+            "tenant_id": self._tid,
+            "initiative_id": initiative_id,
+            "created_at": data.get("created_at") or datetime.now(UTC).isoformat(),
+            "updated_at": data.get("updated_at") or datetime.now(UTC).isoformat(),
+        }
+        result = self._c.table("benefit_realization_ledger").insert(payload).execute()
+        return result.data[0]
+
+    def update_benefit_ledger_entry(
+        self,
+        initiative_id: str,
+        entry_id: str,
+        data: dict,  # type: ignore[type-arg]
+    ) -> dict:  # type: ignore[type-arg]
+        data["updated_at"] = datetime.now(UTC).isoformat()
+        result = (
+            self._c.table("benefit_realization_ledger")
+            .update(data)
+            .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
+            .eq("id", entry_id)
+            .execute()
+        )
+        if not result.data:
+            return {}
+        return result.data[0]
+
+    def delete_benefit_ledger_entry(self, initiative_id: str, entry_id: str) -> None:
+        (
+            self._c.table("benefit_realization_ledger")
+            .delete()
+            .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
+            .eq("id", entry_id)
+            .execute()
+        )
+
     def replace_financial_selections(
         self,
         initiative_id: str,

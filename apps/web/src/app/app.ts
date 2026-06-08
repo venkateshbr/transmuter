@@ -11,6 +11,7 @@ interface NavItem {
   label: string;
   path: string;
   icon: string;
+  children?: NavItem[];
 }
 
 interface Message {
@@ -52,8 +53,8 @@ interface GlobalSearchResult {
 
       <!-- Top Navigation Bar -->
       @if (showAppChrome()) {
-      <header class="fixed top-0 left-0 right-0 z-50 h-16 border-b border-[var(--t-border)]
-                     bg-[var(--t-surface)]/95 backdrop-blur-sm flex items-center px-5 gap-5 shadow-[0_2px_16px_rgba(7,31,60,0.06)]">
+      <header class="fixed top-0 left-0 right-0 z-50 flex h-auto flex-wrap items-start gap-3 border-b border-[var(--t-border)]
+                     bg-[var(--t-surface)]/95 px-5 py-3 shadow-[0_2px_16px_rgba(7,31,60,0.06)] backdrop-blur-sm xl:h-16 xl:flex-nowrap xl:items-center xl:py-0">
 
         <!-- Logo -->
         <a [routerLink]="homeLink()" class="flex items-center gap-3 shrink-0" aria-label="Transmuter home">
@@ -70,10 +71,39 @@ interface GlobalSearchResult {
         <!-- Primary Nav -->
         <nav class="flex min-w-0 flex-1 items-center gap-0.5 overflow-visible">
           @for (item of primaryNavItems; track item.path) {
-            <a [routerLink]="item.path" routerLinkActive="bg-[var(--t-accent-soft)] text-[var(--t-accent)]"
-               class="nav-item whitespace-nowrap px-2 text-[11px] font-bold uppercase">
-              {{ item.label }}
-            </a>
+            @if (item.children?.length) {
+              <div class="relative shrink-0">
+                <button
+                  type="button"
+                  class="nav-item whitespace-nowrap px-2 text-[11px] font-bold uppercase"
+                  [class.bg-[var(--t-accent-soft)]]="isNavGroupActive(item)"
+                  [class.text-[var(--t-accent)]]="isNavGroupActive(item)"
+                  [attr.aria-expanded]="navMenuOpen() === item.path"
+                  [attr.aria-label]="'Open ' + item.label + ' navigation'"
+                  (click)="toggleNavMenu(item.path)">
+                  {{ item.label }}
+                  <span class="material-icons align-middle text-sm">expand_more</span>
+                </button>
+                @if (navMenuOpen() === item.path) {
+                  <div class="absolute left-0 top-full z-[60] mt-3 w-60 border border-[var(--t-border)] bg-[var(--t-surface)] py-2 shadow-xl">
+                    @for (child of item.children; track child.path) {
+                      <a
+                        [routerLink]="child.path"
+                        routerLinkActive="bg-[var(--t-accent-soft)] text-[var(--t-accent)]"
+                        class="block px-4 py-2 text-[11px] font-black uppercase tracking-wide text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-raised)] hover:text-[var(--t-accent)]"
+                        (click)="navMenuOpen.set(null)">
+                        {{ child.label }}
+                      </a>
+                    }
+                  </div>
+                }
+              </div>
+            } @else {
+              <a [routerLink]="item.path" routerLinkActive="bg-[var(--t-accent-soft)] text-[var(--t-accent)]"
+                 class="nav-item whitespace-nowrap px-2 text-[11px] font-bold uppercase">
+                {{ item.label }}
+              </a>
+            }
           }
           @if (overflowNavItems.length) {
             <div class="relative shrink-0">
@@ -104,62 +134,29 @@ interface GlobalSearchResult {
           }
         </nav>
 
-        @if (!isPlatformAdmin()) {
-          <div class="relative hidden min-w-[18rem] max-w-sm flex-1 xl:block">
-            <span class="material-icons pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--t-text-tertiary)]">search</span>
-            <input
-              type="search"
-              class="h-9 w-full border border-[var(--t-border)] bg-[var(--t-bg)] pl-9 pr-3 text-xs font-bold text-[var(--t-text-primary)] outline-none focus:border-[var(--t-accent)]"
-              placeholder="Search portfolio"
-              aria-label="Global portfolio search"
-              data-testid="global-search-input"
-              [ngModel]="globalSearchQuery()"
-              (ngModelChange)="onGlobalSearchChange($event)"
-              (focus)="globalSearchOpen.set(true)"
-              (keyup.escape)="closeGlobalSearch()"
-            />
-            @if (globalSearchOpen()) {
-              <div class="absolute left-0 right-0 top-full z-[60] mt-2 max-h-[70vh] overflow-auto border border-[var(--t-border)] bg-[var(--t-surface)] shadow-2xl" data-testid="global-search-results">
-                @if (globalSearchLoading()) {
-                  <p class="px-4 py-3 text-xs font-bold text-[var(--t-text-secondary)]">Searching...</p>
-                } @else if (globalSearchQuery().trim().length < 2) {
-                  <p class="px-4 py-3 text-xs font-bold text-[var(--t-text-secondary)]">Type at least two characters.</p>
-                } @else if (!globalSearchResults().length) {
-                  <p class="px-4 py-3 text-xs font-bold text-[var(--t-text-secondary)]">No matching portfolio records.</p>
-                } @else {
-                  @for (item of globalSearchResults(); track item.result_type + item.id) {
-                    <button
-                      type="button"
-                      class="grid w-full grid-cols-[auto_1fr] gap-3 border-b border-[var(--t-border)] px-4 py-3 text-left hover:bg-[var(--t-surface-raised)]"
-                      [attr.aria-label]="'Open ' + item.label"
-                      (click)="openGlobalSearchResult(item)">
-                      <span class="material-icons mt-0.5 text-base text-[var(--t-accent)]">{{ searchIcon(item.result_type) }}</span>
-                      <span class="min-w-0">
-                        <span class="block truncate text-xs font-black uppercase text-[var(--t-text-primary)]">{{ item.label }}</span>
-                        <span class="mt-1 block truncate text-[11px] font-medium text-[var(--t-text-secondary)]">{{ item.description || item.category || item.result_type }}</span>
-                      </span>
-                    </button>
-                  }
-                }
-              </div>
-            }
-          </div>
-        }
-
-        <!-- Right controls -->
-        <div class="flex items-center gap-2 shrink-0">
+        <div class="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2 xl:flex-nowrap">
           <!-- Theme toggle -->
           <button (click)="themeService.toggle()" class="btn-ghost flex h-9 w-9 items-center justify-center border border-[var(--t-border)] text-sm" aria-label="Toggle theme">
             <span class="material-icons text-base">{{ themeService.isDark() ? 'light_mode' : 'dark_mode' }}</span>
           </button>
 
-          <!-- + Transmuter AI button -->
+          <!-- Transmuter assistant -->
           @if (!isPlatformAdmin()) {
           <button (click)="aiPanelOpen.set(!aiPanelOpen())"
-                  class="btn-primary flex items-center gap-2 text-[11px]"
+                  class="btn-primary flex h-9 w-9 items-center justify-center p-0"
                   aria-label="Open Transmuter assistant">
-            <span class="material-icons text-sm">auto_awesome</span> Transmuter
+            <span class="material-icons text-base">auto_awesome</span>
           </button>
+          }
+
+          @if (canManageTenant()) {
+          <a
+            routerLink="/admin"
+            class="btn-ghost flex items-center gap-2 border border-[var(--t-border)] px-3 py-2 text-[11px] font-black uppercase tracking-widest text-[var(--t-text-secondary)] hover:text-[var(--t-accent)]"
+            aria-label="Open admin console">
+            <span class="material-icons text-sm">settings</span>
+            Admin
+          </a>
           }
 
           <!-- User avatar -->
@@ -179,28 +176,67 @@ interface GlobalSearchResult {
                 </div>
                 <a
                   routerLink="/profile"
-                  class="flex items-center gap-3 px-4 py-3 text-xs font-black uppercase tracking-widest text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-raised)] hover:text-[var(--t-accent)]"
+                  class="block px-4 py-3 text-xs font-bold uppercase tracking-wide text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-raised)] hover:text-[var(--t-accent)]"
                   (click)="accountMenuOpen.set(false)">
-                  <span class="material-icons text-sm">manage_accounts</span>
                   Profile
                 </a>
                 <button
                   type="button"
-                  class="flex w-full items-center gap-3 border-t border-[var(--t-border)] px-4 py-3 text-left text-xs font-black uppercase tracking-widest text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-raised)] hover:text-[var(--t-accent)]"
-                  aria-label="Logout"
+                  class="block w-full px-4 py-3 text-left text-xs font-bold uppercase tracking-wide text-[var(--t-text-secondary)] hover:bg-[var(--t-surface-raised)] hover:text-[var(--t-accent)]"
                   (click)="logoutFromMenu()">
-                  <span class="material-icons text-sm">logout</span>
                   Logout
                 </button>
               </div>
             }
           </div>
+
+          @if (!isPlatformAdmin()) {
+            <div class="relative basis-full min-w-0 xl:basis-[18rem] xl:flex-none">
+              <span class="material-icons pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--t-text-tertiary)]">search</span>
+              <input
+                type="search"
+                class="h-9 w-full border border-[var(--t-border)] bg-[var(--t-bg)] pl-9 pr-3 text-xs font-bold text-[var(--t-text-primary)] outline-none focus:border-[var(--t-accent)]"
+                placeholder="Search portfolio"
+                aria-label="Global portfolio search"
+                data-testid="global-search-input"
+                [ngModel]="globalSearchQuery()"
+                (ngModelChange)="onGlobalSearchChange($event)"
+                (focus)="globalSearchOpen.set(true)"
+                (keyup.escape)="closeGlobalSearch()"
+              />
+              @if (globalSearchOpen()) {
+                <div class="absolute left-0 right-0 top-full z-[60] mt-2 max-h-[70vh] overflow-auto border border-[var(--t-border)] bg-[var(--t-surface)] shadow-2xl" data-testid="global-search-results">
+                  @if (globalSearchLoading()) {
+                    <p class="px-4 py-3 text-xs font-bold text-[var(--t-text-secondary)]">Searching...</p>
+                  } @else if (globalSearchQuery().trim().length < 2) {
+                    <p class="px-4 py-3 text-xs font-bold text-[var(--t-text-secondary)]">Type at least two characters.</p>
+                  } @else if (!globalSearchResults().length) {
+                    <p class="px-4 py-3 text-xs font-bold text-[var(--t-text-secondary)]">No matching portfolio records.</p>
+                  } @else {
+                    @for (item of globalSearchResults(); track item.result_type + item.id) {
+                      <button
+                        type="button"
+                        class="grid w-full grid-cols-[auto_1fr] gap-3 border-b border-[var(--t-border)] px-4 py-3 text-left hover:bg-[var(--t-surface-raised)]"
+                        [attr.aria-label]="'Open ' + item.label"
+                        (click)="openGlobalSearchResult(item)">
+                        <span class="material-icons mt-0.5 text-base text-[var(--t-accent)]">{{ searchIcon(item.result_type) }}</span>
+                        <span class="min-w-0">
+                          <span class="block truncate text-xs font-black uppercase text-[var(--t-text-primary)]">{{ item.label }}</span>
+                          <span class="mt-1 block truncate text-[11px] font-medium text-[var(--t-text-secondary)]">{{ item.description || item.category || item.result_type }}</span>
+                        </span>
+                      </button>
+                    }
+                  }
+                </div>
+              }
+            </div>
+          }
         </div>
       </header>
       }
 
       <!-- Main Content -->
-      <main [class.pt-16]="showAppChrome()">
+      <main [ngClass]="showAppChrome() ? 'pt-28 xl:pt-16' : ''">
         <router-outlet />
       </main>
 
@@ -230,8 +266,8 @@ interface GlobalSearchResult {
 
       <!-- AI Assistant Right Panel -->
       @if (aiPanelOpen()) {
-        <aside class="fixed top-16 right-0 bottom-0 w-96 border-l border-[var(--t-border)]
-                      bg-[var(--t-surface)] z-40 flex flex-col shadow-2xl animate-slide-in-right">
+        <aside class="fixed top-28 right-0 bottom-0 w-96 border-l border-[var(--t-border)]
+                      bg-[var(--t-surface)] z-40 flex flex-col shadow-2xl animate-slide-in-right xl:top-16">
           <div class="flex items-center justify-between px-5 py-4 border-b border-[var(--t-border)]">
             <div>
               <p class="text-[13px] font-black uppercase text-[var(--t-text-primary)]">Ask Transmuter</p>
@@ -370,6 +406,7 @@ export class App {
   protected readonly aiLoading = signal(false);
   protected readonly aiQueryText = signal('');
   protected readonly messages = signal<Message[]>([]);
+  protected readonly navMenuOpen = signal<string | null>(null);
   protected readonly moreMenuOpen = signal(false);
   protected readonly accountMenuOpen = signal(false);
   protected readonly globalSearchQuery = signal('');
@@ -381,6 +418,7 @@ export class App {
   constructor() {
     this.router.events.subscribe(event => {
       if (event instanceof NavigationStart) {
+        this.navMenuOpen.set(null);
         this.moreMenuOpen.set(false);
         this.accountMenuOpen.set(false);
         this.loading.beginNavigation();
@@ -399,14 +437,31 @@ export class App {
     }
     return [
     { label: 'Dashboard',        path: '/dashboard',          icon: 'grid' },
-    { label: 'Financials',       path: '/financials',         icon: 'payments' },
+    {
+      label: 'Financials',
+      path: '/financials',
+      icon: 'payments',
+      children: [
+        { label: 'Overview', path: '/financials', icon: 'payments' },
+        { label: 'Bankable Plan', path: '/financials/bankable-plan', icon: 'account_balance' },
+        { label: 'Benefit Tracking', path: '/financials/benefit-tracking', icon: 'trending_up' },
+        { label: 'Waterline', path: '/financials/waterline', icon: 'water_drop' },
+      ],
+    },
     { label: 'Shared Costs',     path: '/shared-costs',       icon: 'account_balance' },
     { label: 'Initiatives',      path: '/initiatives/pipeline', icon: 'list' },
     { label: 'Progress Monitor', path: '/progress',           icon: 'bar-chart' },
     { label: 'Governance',       path: '/pmo/governance',     icon: 'shield' },
     { label: 'KPIs',             path: '/pmo/kpis',           icon: 'bar-chart' },
     { label: 'Risks',            path: '/pmo/risks',          icon: 'alert' },
-    { label: 'AI Insights',      path: '/pmo/ai-insights',    icon: 'cpu' },
+    {
+      label: 'Reports',
+      path: '/reports/control-tower',
+      icon: 'summarize',
+      children: [
+        { label: 'Control Tower', path: '/reports/control-tower', icon: 'summarize' },
+      ],
+    },
     { label: 'Meetings',         path: '/meetings',           icon: 'calendar' },
     { label: 'People',           path: '/people',             icon: 'users' },
     ...(this.canManageTenant() ? [{ label: 'Admin', path: '/admin', icon: 'settings' }] : []),
@@ -455,6 +510,15 @@ export class App {
   protected isOverflowRouteActive(): boolean {
     const currentPath = this.router.url.split('?')[0];
     return this.overflowNavItems.some(item => currentPath === item.path || currentPath.startsWith(`${item.path}/`));
+  }
+
+  protected toggleNavMenu(path: string): void {
+    this.navMenuOpen.set(this.navMenuOpen() === path ? null : path);
+  }
+
+  protected isNavGroupActive(item: NavItem): boolean {
+    const currentPath = this.router.url.split('?')[0];
+    return currentPath === item.path || !!item.children?.some(child => currentPath === child.path || currentPath.startsWith(`${child.path}/`));
   }
 
   protected logoutFromMenu(): void {

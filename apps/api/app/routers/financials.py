@@ -19,6 +19,11 @@ from app.domain.financials import (
     BankablePlanRebaselineRequest,
     BankablePlanResponse,
     BankablePlanVersion,
+    BenefitLedgerEntry,
+    BenefitLedgerEntryCreate,
+    BenefitLedgerEntryUpdate,
+    BenefitLedgerGranularity,
+    BenefitLedgerSummaryResponse,
     BreakEvenResponse,
     CostLineCreate,
     CostLineItem,
@@ -126,6 +131,79 @@ async def rebaseline_bankable_plan(
         str(current_user.id),
         reason=body.reason if body else None,
     )
+
+
+@router.get(
+    "/initiatives/{initiative_id}/benefit-ledger",
+    response_model=list[BenefitLedgerEntry],
+)
+async def list_benefit_ledger_entries(
+    initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
+) -> list[BenefitLedgerEntry]:
+    assert_can_view_initiative(client, current_user, initiative_id)
+    return svc.list_benefit_ledger_entries(initiative_id)
+
+
+@router.post(
+    "/initiatives/{initiative_id}/benefit-ledger",
+    response_model=BenefitLedgerEntry,
+    status_code=201,
+)
+async def create_benefit_ledger_entry(
+    initiative_id: str,
+    body: BenefitLedgerEntryCreate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> BenefitLedgerEntry:
+    assert_can_manage_initiatives(current_user)
+    return svc.create_benefit_ledger_entry(initiative_id, body)
+
+
+@router.put(
+    "/initiatives/{initiative_id}/benefit-ledger/{entry_id}",
+    response_model=BenefitLedgerEntry,
+)
+async def update_benefit_ledger_entry(
+    initiative_id: str,
+    entry_id: str,
+    body: BenefitLedgerEntryUpdate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> BenefitLedgerEntry:
+    assert_can_manage_initiatives(current_user)
+    return svc.update_benefit_ledger_entry(initiative_id, entry_id, body)
+
+
+@router.delete(
+    "/initiatives/{initiative_id}/benefit-ledger/{entry_id}",
+    status_code=204,
+)
+async def delete_benefit_ledger_entry(
+    initiative_id: str,
+    entry_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> None:
+    assert_can_manage_initiatives(current_user)
+    svc.delete_benefit_ledger_entry(initiative_id, entry_id)
+
+
+@router.get(
+    "/initiatives/{initiative_id}/benefit-ledger/summary",
+    response_model=BenefitLedgerSummaryResponse,
+)
+async def get_benefit_ledger_summary(
+    initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
+    granularity: BenefitLedgerGranularity = Query("monthly"),
+) -> BenefitLedgerSummaryResponse:
+    assert_can_view_initiative(client, current_user, initiative_id)
+    return svc.get_benefit_ledger_summary(initiative_id, granularity)
 
 
 @router.get(

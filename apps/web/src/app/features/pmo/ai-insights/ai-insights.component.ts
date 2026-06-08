@@ -33,7 +33,7 @@ interface ProposedAction {
       <div class="flex justify-between items-end shrink-0">
         <div>
           <h1 class="text-3xl font-bold tracking-tight text-[var(--t-text-primary)]">
-            AI Portfolio Assistant<span class="text-[var(--t-accent)]">.</span>
+            Transmuter<span class="text-[var(--t-accent)]">.</span>
           </h1>
           <p class="text-[var(--t-text-secondary)] mt-1">Intelligent insights, scenario analysis, and compliance audit powered by PydanticAI.</p>
         </div>

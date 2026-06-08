@@ -3,6 +3,7 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
+import { financialModeUsesActuals, resolveFinancialMode, type FinancialModeDescriptor } from '../financials/financials-view.models';
 
 type Persona = 'management' | 'investor' | 'owner';
 
@@ -19,6 +20,13 @@ type Persona = 'management' | 'investor' | 'owner';
           <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--t-text-secondary)]">
             Dependency risk, burdened value, and persona-ready governance signals from live portfolio data.
           </p>
+          <div class="mt-3 inline-flex flex-wrap items-center gap-2 border border-[var(--t-border)] bg-[var(--t-surface-raised)] px-3 py-2 text-[10px] font-black uppercase tracking-widest">
+            <span class="text-[var(--t-text-tertiary)]">Mode</span>
+            <span class="text-[var(--t-accent)]">{{ modeLabel() }}</span>
+            @if (modeDescription()) {
+              <span class="text-[var(--t-text-secondary)] normal-case tracking-normal">{{ modeDescription() }}</span>
+            }
+          </div>
         </div>
         <div class="flex flex-wrap items-center gap-3">
           <div class="inline-flex border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-1">
@@ -58,7 +66,11 @@ type Persona = 'management' | 'investor' | 'owner';
             @for (row of valueRows(); track row.label) {
               <div class="bg-[var(--t-surface)] p-5">
                 <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">{{ row.label }}</p>
-                <p class="mt-3 text-xl font-black text-[var(--t-text-primary)]">{{ formatMoney(row.value) }}</p>
+                <p class="mt-3 text-xl font-black text-[var(--t-text-primary)]">{{ formatMoney(row.plan) }}</p>
+                @if (showActuals() && row.actual !== null) {
+                  <p class="mt-1 text-xs font-bold text-[var(--t-accent)]">Actual {{ formatMoney(row.actual) }}</p>
+                  <p class="mt-1 text-[10px] font-black uppercase tracking-widest" [class.text-emerald-600]="row.variance >= 0" [class.text-red-500]="row.variance < 0">Variance {{ formatMoney(row.variance) }}</p>
+                }
               </div>
             }
           </div>
@@ -108,8 +120,17 @@ type Persona = 'management' | 'investor' | 'owner';
                   <th class="px-4 py-3">RAG</th>
                   <th class="px-4 py-3">Realization</th>
                   <th class="px-4 py-3 text-right">Benefits</th>
+                  @if (showActuals()) {
+                    <th class="px-4 py-3 text-right">Benefits Actual</th>
+                  }
                   <th class="px-4 py-3 text-right">Burdened Cost</th>
+                  @if (showActuals()) {
+                    <th class="px-4 py-3 text-right">Burdened Actual</th>
+                  }
                   <th class="px-4 py-3 text-right">Net After Allocation</th>
+                  @if (showActuals()) {
+                    <th class="px-4 py-3 text-right">Net Actual</th>
+                  }
                 </tr>
               </thead>
               <tbody>
@@ -121,8 +142,17 @@ type Persona = 'management' | 'investor' | 'owner';
                     <td class="px-4 py-4 uppercase">{{ row.rag_status }}</td>
                     <td class="px-4 py-4 uppercase">{{ row.realization_status?.replace('_', ' ') }}</td>
                     <td class="px-4 py-4 text-right">{{ formatMoney(row.benefits_plan) }}</td>
+                    @if (showActuals()) {
+                      <td class="px-4 py-4 text-right">{{ formatMoney(row.benefits_actual) }}</td>
+                    }
                     <td class="px-4 py-4 text-right">{{ formatMoney(row.total_burdened_costs_plan) }}</td>
+                    @if (showActuals()) {
+                      <td class="px-4 py-4 text-right">{{ formatMoney(row.total_burdened_costs_actual) }}</td>
+                    }
                     <td class="px-4 py-4 text-right font-black">{{ formatMoney(row.net_after_allocation_plan) }}</td>
+                    @if (showActuals()) {
+                      <td class="px-4 py-4 text-right font-black">{{ formatMoney(row.net_after_allocation_actual) }}</td>
+                    }
                   </tr>
                 }
               </tbody>
@@ -138,6 +168,8 @@ export class ExecutiveControlTowerComponent implements OnInit {
   data = signal<any | null>(null);
   persona = signal<Persona>('management');
   targetYear = signal<number | null>(new Date().getFullYear());
+  financialMode = computed<FinancialModeDescriptor>(() => resolveFinancialMode(this.data()?.financial_mode, this.data()?.value_bridge, this.data()?.summary, this.data()));
+  showActuals = computed(() => financialModeUsesActuals(this.financialMode()) || Boolean(this.data()?.value_bridge?.benefits_actual || this.data()?.value_bridge?.net_actual || this.data()?.initiatives?.some?.((row: any) => row?.benefits_actual !== undefined || row?.total_burdened_costs_actual !== undefined || row?.net_after_allocation_actual !== undefined)));
   readonly personas: { id: Persona; label: string }[] = [
     { id: 'management', label: 'Management' },
     { id: 'investor', label: 'Investor' },
@@ -158,12 +190,12 @@ export class ExecutiveControlTowerComponent implements OnInit {
   valueRows = computed(() => {
     const bridge = this.data()?.value_bridge || {};
     return [
-      { label: 'Benefits Plan', value: bridge.benefits_plan },
-      { label: 'Direct Costs', value: bridge.direct_costs_plan },
-      { label: 'Allocated Costs', value: bridge.allocated_costs_plan },
-      { label: 'Burdened Costs', value: bridge.total_burdened_costs_plan },
-      { label: 'Net Before Allocation', value: bridge.net_before_allocation_plan },
-      { label: 'Net After Allocation', value: bridge.net_after_allocation_plan },
+      { label: 'Benefits', plan: bridge.benefits_plan, actual: this.showActuals() ? (bridge.benefits_actual ?? bridge.actual?.benefits_total ?? null) : null, variance: Number(bridge.benefits_actual ?? bridge.actual?.benefits_total ?? bridge.benefits_plan ?? 0) - Number(bridge.benefits_plan ?? 0) },
+      { label: 'Direct Costs', plan: bridge.direct_costs_plan, actual: this.showActuals() ? (bridge.direct_costs_actual ?? bridge.actual?.direct_costs_total ?? null) : null, variance: Number(bridge.direct_costs_actual ?? bridge.actual?.direct_costs_total ?? bridge.direct_costs_plan ?? 0) - Number(bridge.direct_costs_plan ?? 0) },
+      { label: 'Allocated Costs', plan: bridge.allocated_costs_plan, actual: this.showActuals() ? (bridge.allocated_costs_actual ?? bridge.actual?.allocated_costs_total ?? null) : null, variance: Number(bridge.allocated_costs_actual ?? bridge.actual?.allocated_costs_total ?? bridge.allocated_costs_plan ?? 0) - Number(bridge.allocated_costs_plan ?? 0) },
+      { label: 'Burdened Costs', plan: bridge.total_burdened_costs_plan, actual: this.showActuals() ? (bridge.total_burdened_costs_actual ?? bridge.actual?.costs_total ?? null) : null, variance: Number(bridge.total_burdened_costs_actual ?? bridge.actual?.costs_total ?? bridge.total_burdened_costs_plan ?? 0) - Number(bridge.total_burdened_costs_plan ?? 0) },
+      { label: 'Net Before Allocation', plan: bridge.net_before_allocation_plan, actual: this.showActuals() ? (bridge.net_before_allocation_actual ?? bridge.actual?.net_before_allocation ?? null) : null, variance: Number(bridge.net_before_allocation_actual ?? bridge.actual?.net_before_allocation ?? bridge.net_before_allocation_plan ?? 0) - Number(bridge.net_before_allocation_plan ?? 0) },
+      { label: 'Net After Allocation', plan: bridge.net_after_allocation_plan, actual: this.showActuals() ? (bridge.net_after_allocation_actual ?? bridge.actual?.net_after_allocation ?? null) : null, variance: Number(bridge.net_after_allocation_actual ?? bridge.actual?.net_after_allocation ?? bridge.net_after_allocation_plan ?? 0) - Number(bridge.net_after_allocation_plan ?? 0) },
     ];
   });
 
@@ -178,6 +210,14 @@ export class ExecutiveControlTowerComponent implements OnInit {
       { label: 'Resolved', value: rollups.resolved || 0 },
     ];
   });
+
+  modeLabel(): string {
+    return this.financialMode().label;
+  }
+
+  modeDescription(): string | null {
+    return this.financialMode().description || null;
+  }
 
   ngOnInit(): void {
     this.load();

@@ -3,6 +3,7 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
+import { financialModeUsesActuals, resolveFinancialMode, type FinancialModeDescriptor } from './financials-view.models';
 import { PortfolioFinancialTrendComponent } from './portfolio-financial-trend.component';
 
 type Granularity = 'monthly' | 'quarterly' | 'yearly';
@@ -48,6 +49,7 @@ interface PortfolioFinancialsResponse {
   broader_period_totals: PeriodRow[];
   cost_breakdown: BreakdownRow[];
   metric_breakdown: BreakdownRow[];
+  financial_mode?: unknown;
 }
 
 interface CostLineContribution {
@@ -99,6 +101,13 @@ interface FinancialConfiguration {
           <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--t-text-secondary)]">
             Tenant-wide planned costs, optional benefits, and actual performance drilldowns by period.
           </p>
+          <div class="mt-3 inline-flex items-center gap-2 border border-[var(--t-border)] bg-[var(--t-surface-raised)] px-3 py-2">
+            <span class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Mode</span>
+            <span class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">{{ financialMode().label }}</span>
+            @if (financialMode().description) {
+              <span class="text-[10px] font-semibold text-[var(--t-text-secondary)]">{{ financialMode().description }}</span>
+            }
+          </div>
         </div>
         <div class="flex flex-wrap items-center justify-end gap-3">
           <div class="inline-flex border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-1">
@@ -135,9 +144,12 @@ interface FinancialConfiguration {
             [class.text-[var(--t-accent)]]="showActuals()"
             [class.border-[var(--t-border)]]="!showActuals()"
             [class.text-[var(--t-text-secondary)]]="!showActuals()"
+            [class.opacity-50]="!actualsAvailable()"
+            [class.cursor-not-allowed]="!actualsAvailable()"
             [attr.aria-pressed]="showActuals()"
+            [disabled]="!actualsAvailable()"
             (click)="showActuals.set(!showActuals())">
-            Actuals {{ showActuals() ? 'On' : 'Off' }}
+            Actuals {{ actualsAvailable() ? (showActuals() ? 'On' : 'Off') : 'Unavailable' }}
           </button>
           <input class="input-field w-28 py-2 text-xs" type="number" [ngModel]="year()" (ngModelChange)="setYear($event)" aria-label="Filter financial year">
           <select class="input-field w-48 py-2 text-xs" [ngModel]="categoryKey()" (ngModelChange)="setCategory($event)" aria-label="Filter cost category">
@@ -175,6 +187,7 @@ interface FinancialConfiguration {
         [rows]="response()?.periods || []"
         [granularity]="granularity()"
         [showActuals]="showActuals()"
+        [financialMode]="financialMode()"
         (periodSelected)="openTrendPeriod($event)" />
 
       <section class="grid gap-6 xl:grid-cols-[1.4fr_0.8fr]">
@@ -421,6 +434,8 @@ export class PortfolioFinancialsComponent implements OnInit {
   categoryKey = signal('');
   showBenefits = signal(false);
   showActuals = signal(false);
+  financialMode = computed(() => resolveFinancialMode(this.response()?.financial_mode, this.response(), this.configuration()));
+  actualsAvailable = computed(() => financialModeUsesActuals(this.financialMode()) || (this.response()?.periods || []).some(row => this.parseMoney(row.benefits_actual) !== 0 || this.parseMoney(row.total_costs_actual) !== 0 || this.parseMoney(row.net_value_actual) !== 0));
 
   readonly granularities: { id: Granularity; label: string }[] = [
     { id: 'monthly', label: 'Monthly' },

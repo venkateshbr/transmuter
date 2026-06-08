@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { echarts, type ECElementEvent, type EChartsCoreOption, type EChartsType } from '../../shared/charts/echarts-runtime';
+import { financialModeHasScenario, financialModeUsesActuals, resolveFinancialMode, type FinancialModeDescriptor } from '../financials/financials-view.models';
 
 type DashboardChartKind = 'stage' | 'rag' | 'pressure' | 'valueBridge' | 'riskHeatmap';
 
@@ -87,9 +88,14 @@ interface RiskHeatmapPoint {
       }
 
       @if (kind === 'valueBridge') {
-        <a routerLink="/initiatives/pipeline" class="mt-4 inline-flex text-xs font-bold text-[var(--t-accent)]">
-          Open financial initiatives
-        </a>
+        <div class="mt-4 flex items-center justify-between gap-3">
+          <a routerLink="/initiatives/pipeline" class="inline-flex text-xs font-bold text-[var(--t-accent)]">
+            Open financial initiatives
+          </a>
+          <span class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">
+            {{ valueBridgeModeLabel() }}
+          </span>
+        </div>
       }
 
       @if (kind === 'riskHeatmap') {
@@ -116,6 +122,7 @@ export class DashboardEchartCardComponent implements AfterViewInit, OnChanges, O
   @Input() data: any = null;
   @Input() stages: StageDefinition[] = [];
   @Input() heatmapLevels: string[] = ['high', 'medium', 'low'];
+  @Input() financialMode: FinancialModeDescriptor | null = null;
 
   @ViewChild('chartHost') private chartHost?: ElementRef<HTMLDivElement>;
 
@@ -191,6 +198,60 @@ export class DashboardEchartCardComponent implements AfterViewInit, OnChanges, O
 
   chartAriaLabel(): string {
     return `${this.title()} chart`;
+  }
+
+  valueBridgeModeLabel(): string {
+    const mode = this.activeFinancialMode();
+    if (mode.key === 'multi_scenario') return `${mode.label} · base/high/actual`;
+    if (mode.key === 'bankable_locked') return `${mode.label} · locked`;
+    if (financialModeUsesActuals(mode)) return `${mode.label} · plan/actual`;
+    return mode.label;
+  }
+
+  private activeFinancialMode(): FinancialModeDescriptor {
+    return resolveFinancialMode(this.financialMode, this.data?.financial_mode, this.data?.value_bridge, this.data?.summary, this.data);
+  }
+
+  private hasMultiScenarioBridge(): boolean {
+    const bridge = this.data?.value_bridge || {};
+    return Boolean(bridge.benefits_base !== undefined || bridge.net_base !== undefined || bridge.base_case || bridge.high_case);
+  }
+
+  private bridgeSeries(): Array<{ name: string; value: number; itemStyle: { color: string } }> {
+    const bridge = this.data?.value_bridge || {};
+    const mode = this.activeFinancialMode();
+    const accent = this.cssVar('--t-accent');
+    const blueLight = this.cssVar('--t-blue-light');
+    const green = this.cssVar('--t-green');
+    const red = this.cssVar('--t-red');
+
+    if (this.hasMultiScenarioBridge() || mode.key === 'multi_scenario' || mode.key === 'bankable_locked') {
+      return [
+        { name: 'Benefits Base', value: this.money(bridge.benefits_base ?? bridge.base_case?.benefits_total ?? bridge.benefits_plan), itemStyle: { color: blueLight } },
+        { name: 'Benefits High', value: this.money(bridge.benefits_high ?? bridge.high_case?.benefits_total ?? bridge.benefits_plan), itemStyle: { color: accent } },
+        { name: 'Costs Plan', value: -Math.abs(this.money(bridge.costs_plan ?? bridge.base_case?.costs_total ?? bridge.total_costs_plan)), itemStyle: { color: red } },
+        { name: 'Net Base', value: this.money(bridge.net_base ?? bridge.base_case?.net ?? bridge.net_value_plan), itemStyle: { color: green } },
+        { name: 'Net High', value: this.money(bridge.net_high ?? bridge.high_case?.net ?? bridge.net_value_plan), itemStyle: { color: accent } },
+        { name: 'Net Actual', value: this.money(bridge.net_actual ?? bridge.actual?.net ?? bridge.net_value_actual), itemStyle: { color: blueLight } },
+      ];
+    }
+
+    if (financialModeUsesActuals(mode) || bridge.benefits_actual !== undefined || bridge.net_actual !== undefined) {
+      return [
+        { name: 'Benefits Plan', value: this.money(bridge.benefits_plan ?? bridge.base_case?.benefits_total ?? bridge.benefits_base), itemStyle: { color: blueLight } },
+        { name: 'Benefits Actual', value: this.money(bridge.benefits_actual ?? bridge.actual?.benefits_total ?? bridge.benefits_base), itemStyle: { color: accent } },
+        { name: 'Costs Plan', value: -Math.abs(this.money(bridge.costs_plan ?? bridge.base_case?.costs_total ?? bridge.total_costs_plan)), itemStyle: { color: red } },
+        { name: 'Costs Actual', value: -Math.abs(this.money(bridge.costs_actual ?? bridge.actual?.costs_total ?? bridge.total_costs_actual)), itemStyle: { color: red } },
+        { name: 'Net Plan', value: this.money(bridge.net_plan ?? bridge.net_value_plan ?? bridge.base_case?.net ?? bridge.benefits_plan), itemStyle: { color: green } },
+        { name: 'Net Actual', value: this.money(bridge.net_actual ?? bridge.actual?.net ?? bridge.net_value_actual), itemStyle: { color: accent } },
+      ];
+    }
+
+    return [
+      { name: 'Benefits Plan', value: this.money(bridge.benefits_plan ?? bridge.base_case?.benefits_total ?? bridge.benefits_base), itemStyle: { color: blueLight } },
+      { name: 'Costs Plan', value: -Math.abs(this.money(bridge.costs_plan ?? bridge.base_case?.costs_total ?? bridge.total_costs_plan)), itemStyle: { color: red } },
+      { name: 'Net Plan', value: this.money(bridge.net_plan ?? bridge.net_value_plan ?? bridge.base_case?.net ?? bridge.benefits_plan), itemStyle: { color: green } },
+    ];
   }
 
   openPressure(): void {
@@ -345,23 +406,10 @@ export class DashboardEchartCardComponent implements AfterViewInit, OnChanges, O
   }
 
   private valueBridgeOption(): EChartsCoreOption {
-    const accent = this.cssVar('--t-accent');
-    const blueLight = this.cssVar('--t-blue-light');
-    const green = this.cssVar('--t-green');
-    const red = this.cssVar('--t-red');
     const border = this.cssVar('--t-border');
     const textSecondary = this.cssVar('--t-text-secondary');
     const textTertiary = this.cssVar('--t-text-tertiary');
-    const bridge = this.data?.value_bridge || {};
-
-    const values = [
-      { name: 'Benefits Base', value: this.money(bridge.benefits_base), itemStyle: { color: blueLight } },
-      { name: 'Benefits High', value: this.money(bridge.benefits_high), itemStyle: { color: accent } },
-      { name: 'Costs Plan', value: -Math.abs(this.money(bridge.costs_plan)), itemStyle: { color: red } },
-      { name: 'Net Base', value: this.money(bridge.net_base), itemStyle: { color: green } },
-      { name: 'Net High', value: this.money(bridge.net_high), itemStyle: { color: accent } },
-      { name: 'Net Actual', value: this.money(bridge.net_actual), itemStyle: { color: blueLight } },
-    ];
+    const values = this.bridgeSeries();
 
     return {
       animationDuration: 320,

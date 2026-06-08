@@ -55,6 +55,7 @@ class Settings(BaseSettings):
 
     # Feature flags
     ai_enabled: bool = True
+    bootstrap_demo_data_on_registration: bool = False
 
     # Billing / payments
     payment_provider: str = ""

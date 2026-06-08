@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any, cast
+
 import pytest
 from fastapi import HTTPException
 
@@ -258,7 +260,10 @@ def test_reporting_cost_lines_do_not_double_count_quarter_with_monthly_lines() -
 
 
 def test_value_bridge_uses_explicit_cogs_instead_of_deriving_from_revenue() -> None:
-    bridge = FinancialService._compute_value_bridge(
+    service = cast(Any, FinancialService.__new__(FinancialService))
+    service._repo = _ModeRepo()
+
+    bridge = service._compute_value_bridge(
         [
             {
                 "tenant_id": "t1",
@@ -297,7 +302,10 @@ def test_value_bridge_uses_explicit_cogs_instead_of_deriving_from_revenue() -> N
 
 
 def test_scenario_summary_uses_explicit_cogs_instead_of_deriving_from_revenue() -> None:
-    summary = FinancialService._compute_scenario_summary(
+    service = cast(Any, FinancialService.__new__(FinancialService))
+    service._repo = _ModeRepo()
+
+    summary = service._compute_scenario_summary(
         [
             {
                 "tenant_id": "t1",
@@ -665,10 +673,105 @@ def test_update_configuration_rejects_cross_tenant_group_id() -> None:
     assert exc.value.status_code == 400
 
 
+class _ModeRepo:
+    def __init__(self, latest_plan: dict[str, object] | None = None) -> None:
+        self.latest_plan = latest_plan
+
+    def initiative_exists(self, _initiative_id: str) -> bool:
+        return True
+
+    def get_latest_bankable_plan(self, _initiative_id: str) -> dict[str, object] | None:
+        return self.latest_plan
+
+
+def test_financial_mode_descriptor_uses_multi_scenario_when_base_high_and_actual_exist() -> None:
+    service = cast(Any, FinancialService.__new__(FinancialService))
+    service._repo = _ModeRepo()
+
+    descriptor = service._financial_mode_descriptor(
+        "initiative-1",
+        [
+            {
+                "year": 2026,
+                "quarter": 1,
+                "month": None,
+                "revenue_uplift_base": "100.0000",
+                "revenue_uplift_high": "150.0000",
+                "gross_margin_base": "80.0000",
+                "gross_margin_high": "120.0000",
+                "gm_uplift_base": "80.0000",
+                "gm_uplift_high": "120.0000",
+                "cogs_base": "20.0000",
+                "cogs_high": "30.0000",
+            }
+        ],
+        [],
+        [
+            {
+                "metric_key": "cost_savings",
+                "year": 2026,
+                "quarter": 1,
+                "month": None,
+                "value_base": "10.0000",
+                "value_high": "20.0000",
+                "value_actual": "15.0000",
+            }
+        ],
+        config=_config(),
+    )
+
+    assert descriptor.key == "multi_scenario"
+    assert descriptor.scenarios == ["base", "high", "actual"]
+    assert descriptor.locked is False
+
+
+def test_financial_mode_descriptor_falls_back_to_planned_vs_actual_when_only_actual_signals_exist() -> None:
+    service = cast(Any, FinancialService.__new__(FinancialService))
+    service._repo = _ModeRepo()
+
+    descriptor = service._financial_mode_descriptor(
+        "initiative-1",
+        [
+            {
+                "year": 2026,
+                "quarter": 1,
+                "month": None,
+                "revenue_uplift_base": "100.0000",
+                "revenue_uplift_high": "100.0000",
+                "revenue_uplift_actual": "110.0000",
+                "gross_margin_base": "80.0000",
+                "gross_margin_high": "80.0000",
+                "gross_margin_actual": "90.0000",
+                "gm_uplift_base": "80.0000",
+                "gm_uplift_high": "80.0000",
+                "gm_uplift_actual": "90.0000",
+                "cogs_base": "20.0000",
+                "cogs_high": "20.0000",
+                "cogs_actual": "18.0000",
+            }
+        ],
+        [],
+        [
+            {
+                "metric_key": "cost_savings",
+                "year": 2026,
+                "quarter": 1,
+                "month": None,
+                "value_base": "10.0000",
+                "value_high": "10.0000",
+                "value_actual": "12.0000",
+            }
+        ],
+        config=_config(),
+    )
+
+    assert descriptor.key == "planned_vs_actual"
+    assert descriptor.scenarios == ["planned", "actual"]
+
+
 class _MissingInitiativeRepo:
     def initiative_exists(self, initiative_id: str) -> bool:
         return False
-
 
 def test_create_cost_line_rejects_missing_tenant_initiative() -> None:
     service = FinancialService.__new__(FinancialService)
@@ -1048,22 +1151,21 @@ def test_explicit_financial_selection_does_not_reenable_hidden_data_bearing_rows
     assert selected.cost_category_keys == []
 
 
-def test_financial_selection_updates_are_allowed_after_financial_values_lock() -> None:
+def test_financial_selection_updates_raise_conflict_after_financial_values_lock() -> None:
     repo = _SelectionRepo(stage="in_progress")
     service = FinancialService.__new__(FinancialService)
     service._repo = repo
 
-    response = service.update_initiative_selections(
-        "initiative-1",
-        InitiativeFinancialSelections(
-            metric_keys=["gm_pct_base"],
-            cost_category_keys=["maintenance"],
-        ),
-    )
+    with pytest.raises(HTTPException) as exc:
+        service.update_initiative_selections(
+            "initiative-1",
+            InitiativeFinancialSelections(
+                metric_keys=["gm_pct_base"],
+                cost_category_keys=["maintenance"],
+            ),
+        )
 
-    assert repo.saved_metric_keys == ["gm_pct_base"]
-    assert response.locked is True
-    assert response.selected.metric_keys == ["gm_pct_base"]
+    assert exc.value.status_code == 409
 
 
 class _ExistingMigrationRepo:
