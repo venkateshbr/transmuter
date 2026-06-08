@@ -55,13 +55,19 @@ import { ApiService } from '../../../core/services/api.service';
                 class="input-field w-full"
                 name="organizationSlug"
                 [(ngModel)]="form.organization_slug"
+                #organizationSlug="ngModel"
                 required
                 pattern="[a-z0-9-]+"
-                aria-describedby="organization-short-name-help"
+                aria-describedby="organization-short-name-help organization-short-name-error"
               >
               <p id="organization-short-name-help" class="mt-2 text-xs font-medium text-[var(--t-text-tertiary)]">
                 Used as the unique workspace identifier. Lowercase letters, numbers, and hyphens only.
               </p>
+              @if (organizationSlug.invalid && (organizationSlug.dirty || organizationSlug.touched || submitted())) {
+                <p id="organization-short-name-error" class="mt-2 text-xs font-bold text-[var(--t-red)]">
+                  Organization short name can only include lowercase letters, numbers, and hyphens.
+                </p>
+              }
             </label>
             <label class="block">
               <span class="field-label">Initial admin name</span>
@@ -230,9 +236,48 @@ export class GetStartedComponent {
         window.location.href = response.checkout_url;
       },
       error: (err) => {
-        this.error.set(err.error?.detail || 'Could not start checkout');
+        this.error.set(this.formatCheckoutError(err));
         this.loading.set(false);
       },
     });
+  }
+
+  protected formatCheckoutError(err: unknown): string {
+    const fallback = 'Could not start checkout';
+    if (!err || typeof err !== 'object') {
+      return fallback;
+    }
+
+    const error = (err as { error?: unknown }).error;
+    if (typeof error === 'string') {
+      return error;
+    }
+
+    if (!error || typeof error !== 'object') {
+      return fallback;
+    }
+
+    const detail = (error as { detail?: unknown; message?: unknown }).detail ?? (error as { message?: unknown }).message;
+    if (typeof detail === 'string') {
+      return detail;
+    }
+
+    if (Array.isArray(detail)) {
+      const messages = detail
+        .map((item) => (item && typeof item === 'object' && 'msg' in item ? String((item as { msg?: unknown }).msg ?? '') : ''))
+        .filter(Boolean);
+      if (messages.length > 0) {
+        return messages.join(', ');
+      }
+    }
+
+    if (detail && typeof detail === 'object') {
+      const nestedMessage = (detail as { message?: unknown }).message;
+      if (typeof nestedMessage === 'string' && nestedMessage.trim()) {
+        return nestedMessage;
+      }
+    }
+
+    return fallback;
   }
 }

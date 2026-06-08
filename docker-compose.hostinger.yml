@@ -1,3 +1,11 @@
+# Hostinger deploy bundle compose file.
+#
+# This file is staged by infra/hostinger/deploy.sh to:
+#   /docker/transmuter/docker-compose.yml
+#
+# The staged bundle intentionally contains only the repo subsets required to
+# build and run the Hostinger stack; it is not a full repository checkout.
+
 name: transmuter-hostinger
 
 x-api-environment: &api-environment
@@ -39,7 +47,7 @@ x-api-environment: &api-environment
 services:
   api:
     build:
-      context: ../..
+      context: .
       dockerfile: apps/api/Dockerfile.prod
     image: transmuter-api:hostinger
     environment:
@@ -58,7 +66,7 @@ services:
 
   worker:
     build:
-      context: ../..
+      context: .
       dockerfile: apps/api/Dockerfile.prod
     image: transmuter-api:hostinger
     environment:
@@ -81,7 +89,7 @@ services:
 
   web:
     build:
-      context: ../../apps/web
+      context: ./apps/web
       dockerfile: Dockerfile
     image: transmuter-web:hostinger
     environment:

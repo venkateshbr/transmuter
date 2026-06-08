@@ -1,35 +1,66 @@
 # Hostinger Deployment
 
-This directory contains the Hostinger-specific Transmuter deployment assets:
+This directory contains the Hostinger-specific deployment assets and the
+operational notes for the staged bundle.
 
-- `docker-compose.yml`: app, worker, and web containers with Traefik labels.
-- `.env.example`: uncommitted `.env` template for VPS secrets and routing.
-- `deploy.sh`: SSH/rsync deployment script for `srv1695814.hstgr.cloud`.
-- `migrate_supabase_schema_to_transmuter.sh`: schema-only Supabase Cloud to local Supabase migration.
+## What gets deployed
 
-The public app hostname is `transmuter.ishirock.tech`. Traefik runs on the host
-network for this VPS. The web container binds to `127.0.0.1:4301` on the host and
-listens on port `80` inside the container. The router/service label names are
-`transmuter-web`.
+`infra/hostinger/deploy.sh` stages only the files needed to build and run the
+Hostinger stack into `/docker/transmuter` on the VPS.
 
-The API is not exposed through Traefik. The web nginx container proxies `/api` to
-`http://api:8001` on the private Compose network.
+The staged bundle contains:
 
-## Setup
+- `docker-compose.yml` at the bundle root
+- `.env` at the bundle root
+- `apps/api/`
+- `apps/web/`
+- `domain_packs/`
+- `infra/hostinger/`
+
+The compose file that gets staged to the bundle root is the repo-root template:
+
+- `docker-compose.hostinger.yml`
+
+## Runtime shape
+
+- Public app hostname: `transmuter.ishirock.tech`
+- Traefik runs on the host network
+- The web container binds to `127.0.0.1:4301` on the host
+- The web container listens on port `80` internally
+- The web nginx container proxies `/api` to `http://api:8001` on the private
+  Docker network
+- The API and worker are not publicly exposed
+
+## Environment
+
+Copy the template, fill in real secrets, and keep it uncommitted:
 
 ```bash
 cp infra/hostinger/.env.example infra/hostinger/.env
 ```
 
-Fill in real secrets and deployment values, then run:
+## Deploy
 
 ```bash
 ./infra/hostinger/deploy.sh
 ```
 
-To also migrate the Supabase Cloud schema into local Supabase schema
-`transmuter` before recreating containers:
+To run the schema migration on the VPS before rebuilding containers:
 
 ```bash
 RUN_DB_SCHEMA_MIGRATION=1 ./infra/hostinger/deploy.sh
 ```
+
+## SRE handoff notes
+
+- Treat `/docker/transmuter` as the deployment bundle root, not a full repo
+  checkout.
+- Do not expect hPanel to use `/opt/transmuter`.
+- Do not copy secrets into version control.
+- If the bundle is rebuilt manually, the compose file must remain at the bundle
+  root as `docker-compose.yml`.
+- If any env value contains spaces or shell-special characters, quote it before
+  the deploy script sources `infra/hostinger/.env`.
+- The deploy script sets the remote `.env` to mode `600` after copying it.
+- If the bundle needs to be refreshed, stage only changed repo subsets rather
+  than cloning the whole repository.
