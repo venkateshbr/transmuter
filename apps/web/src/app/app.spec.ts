@@ -228,7 +228,7 @@ describe('App', () => {
     compiled.querySelector<HTMLButtonElement>('button[aria-label="Open user menu"]')?.click();
     fixture.detectChanges();
     expect(compiled.textContent).toContain('Profile');
-    compiled.querySelector<HTMLButtonElement>('button[aria-label="Logout"]')?.click();
+    Array.from(compiled.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent?.includes('Logout'))?.click();
 
     expect(themeToggleCalled).toBe(true);
     expect(logoutCalled).toBe(true);

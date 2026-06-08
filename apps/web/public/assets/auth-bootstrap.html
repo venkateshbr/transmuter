@@ -2,9 +2,12 @@
 <html><head><meta charset="utf-8"><title>Auth Bootstrap</title></head>
 <body>
 <script>
-  localStorage.setItem('access_token', "eyJhbGciOiJFUzI1NiIsImtpZCI6IjUxZGMzNzU4LTE4ZDEtNDFmNy1iNGU0LTdmYjg1YjU0MGJhZSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2tkdHl0cW5ueHh3ZGFzYXF3emxnLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiJkOGRmNmFmZi0wYzIwLTRjM2MtOGU2Mi0wNDcyMzNiYjhkMjUiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzgwOTA5NjkxLCJpYXQiOjE3ODA5MDYwOTEsImVtYWlsIjoiYWRtaW5AaXNoaXJvY2suZGV2IiwicGhvbmUiOiIiLCJhcHBfbWV0YWRhdGEiOnsicHJvdmlkZXIiOiJlbWFpbCIsInByb3ZpZGVycyI6WyJlbWFpbCJdfSwidXNlcl9tZXRhZGF0YSI6eyJkaXNwbGF5X25hbWUiOiJBbGV4IENoZW4iLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwicm9sZSI6InRyYW5zZm9ybWF0aW9uX29mZmljZSIsInRlbmFudF9pZCI6ImJkZmRkNDA0LWQ4MGEtNDY0Yi1hNDQ4LTJlZWQyYzEyYzFjNiJ9LCJyb2xlIjoiYXV0aGVudGljYXRlZCIsImFhbCI6ImFhbDEiLCJhbXIiOlt7Im1ldGhvZCI6InBhc3N3b3JkIiwidGltZXN0YW1wIjoxNzgwOTA2MDkxfV0sInNlc3Npb25faWQiOiIyZWFhZWFlNC0yYzJhLTQwNTMtOThiYi0yNzM1NWQyN2Y5ZWYiLCJpc19hbm9ueW1vdXMiOmZhbHNlfQ.m4nDgLKaiPrHSUasVLLVb5XD1eDPyFDKWQSHB-nfqFEdwzSFomEh2u8h7Qxx8j3r8M7ARUPt3gdjmEpKBL55hQ");
-  localStorage.setItem('refresh_token', "u5jpjdwk5uif");
-  document.body.textContent = 'token stored';
-  setTimeout(() => { location.href = '/dashboard'; }, 50);
+  const params = new URLSearchParams(location.search);
+  const accessToken = params.get('access_token');
+  const refreshToken = params.get('refresh_token');
+  if (accessToken) localStorage.setItem('access_token', accessToken);
+  if (refreshToken) localStorage.setItem('refresh_token', refreshToken);
+  document.body.textContent = accessToken ? 'token stored' : 'missing access_token';
+  if (accessToken) setTimeout(() => { location.href = '/dashboard'; }, 50);
 </script>
 </body></html>

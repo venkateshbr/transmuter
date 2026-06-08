@@ -11,8 +11,8 @@ from supabase import create_client
 from app.core.auth import CurrentUser, get_current_user
 from app.core.config import settings
 from app.core.database import get_supabase_admin
-from app.services.tenant_bootstrap import TenantBootstrapService
 from app.services.demo_portfolio_bootstrap import bootstrap_demo_portfolio
+from app.services.tenant_bootstrap import TenantBootstrapService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 PLATFORM_TENANT_ID = UUID("00000000-0000-0000-0000-000000000000")
