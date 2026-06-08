@@ -134,12 +134,12 @@ async def test_platform_tenant_delete_cleans_bootstrap_financial_config_before_o
     assert data["deleted_rows"]["financial_config_items"] == 20
     assert data["deleted_rows"]["financial_config_groups"] == 10
     assert data["object_counts"]["financials"] == 30
-    assert fake_admin.deleted_tables.index("financial_config_items") < fake_admin.deleted_tables.index(
+    assert fake_admin.deleted_tables.index(
+        "financial_config_items"
+    ) < fake_admin.deleted_tables.index("financial_config_groups")
+    assert fake_admin.deleted_tables.index(
         "financial_config_groups"
-    )
-    assert fake_admin.deleted_tables.index("financial_config_groups") < fake_admin.deleted_tables.index(
-        "organizations"
-    )
+    ) < fake_admin.deleted_tables.index("organizations")
 
 
 def test_billing_config_and_checkout_guards(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -235,7 +235,9 @@ def test_checkout_session_resolves_redirect_urls_from_request_origin(
     fake_stripe = _FakeStripeAsyncClient(
         response_payload={"id": "cs_test_123", "url": "https://stripe.example/session"}
     )
-    monkeypatch.setattr("app.routers.billing.BillingProvisioningService", lambda client: fake_service)
+    monkeypatch.setattr(
+        "app.routers.billing.BillingProvisioningService", lambda client: fake_service
+    )
     monkeypatch.setattr("app.routers.billing.httpx.AsyncClient", lambda timeout: fake_stripe)
 
     response = client.post(
@@ -249,10 +251,15 @@ def test_checkout_session_resolves_redirect_urls_from_request_origin(
     )
 
     assert response.status_code == 200
-    assert response.json() == {"checkout_url": "https://stripe.example/session", "session_id": "cs_test_123"}
+    assert response.json() == {
+        "checkout_url": "https://stripe.example/session",
+        "session_id": "cs_test_123",
+    }
     assert fake_stripe.last_request is not None
     sent = parse_qs(str(fake_stripe.last_request["content"]))
-    assert sent["success_url"] == ["https://demo.transmuter.test/billing/checkout/success?source=demo"]
+    assert sent["success_url"] == [
+        "https://demo.transmuter.test/billing/checkout/success?source=demo"
+    ]
     assert sent["cancel_url"] == ["https://example.com/cancel"]
 
 
@@ -349,7 +356,9 @@ class _FakeSupabaseQuery:
 
 
 class _FakeSupabaseAdmin:
-    def __init__(self, *, org_data: dict[str, object], subscription_data: dict[str, object]) -> None:
+    def __init__(
+        self, *, org_data: dict[str, object], subscription_data: dict[str, object]
+    ) -> None:
         self.org_data = org_data
         self.subscription_data = subscription_data
 
@@ -404,7 +413,11 @@ class _FakePlatformQuery:
     def execute(self) -> SimpleNamespace:
         if self._table_name == "organizations":
             return self._execute_organizations()
-        if self._table_name == "users" and self._operation == "select" and not self._count_requested:
+        if (
+            self._table_name == "users"
+            and self._operation == "select"
+            and not self._count_requested
+        ):
             return SimpleNamespace(data=[], count=0)
         if self._operation == "delete":
             count = self._admin.counts.get(self._table_name, 0)
@@ -412,15 +425,17 @@ class _FakePlatformQuery:
             self._admin.deleted_tables.append(self._table_name)
             return SimpleNamespace(data=[{} for _ in range(count)], count=count)
         count = self._admin.counts.get(self._table_name, 0)
-        return SimpleNamespace(data=[{"id": f"{self._table_name}-row"}] if count else [], count=count)
+        return SimpleNamespace(
+            data=[{"id": f"{self._table_name}-row"}] if count else [], count=count
+        )
 
     def _execute_organizations(self) -> SimpleNamespace:
         if self._operation != "delete":
-            return SimpleNamespace(data=self._admin.org if self._single else [self._admin.org], count=1)
+            return SimpleNamespace(
+                data=self._admin.org if self._single else [self._admin.org], count=1
+            )
         remaining = {
-            table_name: count
-            for table_name, count in self._admin.counts.items()
-            if count > 0
+            table_name: count for table_name, count in self._admin.counts.items() if count > 0
         }
         if remaining:
             raise AssertionError(f"organization deleted before tenant tables: {remaining}")
@@ -439,7 +454,9 @@ def test_platform_overview_requires_platform_role() -> None:
     headers = {
         "Authorization": (
             "Bearer "
-            + _mint_token("11111111-1111-1111-1111-111111111111", user["tenant_id"], "transformation_office")
+            + _mint_token(
+                "11111111-1111-1111-1111-111111111111", user["tenant_id"], "transformation_office"
+            )
         )
     }
 
