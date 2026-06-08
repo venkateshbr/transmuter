@@ -146,6 +146,37 @@ class FinancialRepository:
                 return []
             raise
 
+    def list_bankable_plans(self, initiative_id: str) -> list[dict]:  # type: ignore[type-arg]
+        try:
+            result = (
+                self._c.table("bankable_plans")
+                .select("*")
+                .eq("tenant_id", self._tid)
+                .eq("initiative_id", initiative_id)
+                .order("version")
+                .execute()
+            )
+            return result.data or []
+        except Exception as exc:
+            if self._is_missing_table(exc, "bankable_plans"):
+                return []
+            raise
+
+    def create_bankable_plan(self, data: dict) -> dict:  # type: ignore[type-arg]
+        payload = {
+            **data,
+            "id": data.get("id") or str(uuid4()),
+            "tenant_id": self._tid,
+            "created_at": data.get("created_at") or datetime.now(UTC).isoformat(),
+            "updated_at": data.get("updated_at") or datetime.now(UTC).isoformat(),
+        }
+        result = self._c.table("bankable_plans").insert(payload).execute()
+        return result.data[0]
+
+    def get_latest_bankable_plan(self, initiative_id: str) -> dict | None:  # type: ignore[type-arg]
+        plans = self.list_bankable_plans(initiative_id)
+        return plans[-1] if plans else None
+
     def replace_financial_selections(
         self,
         initiative_id: str,

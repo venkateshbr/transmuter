@@ -16,6 +16,9 @@ from app.core.rbac import (
     assert_can_view_portfolio,
 )
 from app.domain.financials import (
+    BankablePlanRebaselineRequest,
+    BankablePlanResponse,
+    BankablePlanVersion,
     BreakEvenResponse,
     CostLineCreate,
     CostLineItem,
@@ -77,6 +80,52 @@ async def update_financials(
     """Upsert the full financial grid for an initiative."""
     assert_can_manage_initiatives(current_user)
     return svc.update_financial_grid(initiative_id, body)
+
+
+@router.get(
+    "/initiatives/{initiative_id}/bankable-plan",
+    response_model=BankablePlanResponse,
+)
+async def get_bankable_plan(
+    initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
+) -> BankablePlanResponse:
+    assert_can_view_initiative(client, current_user, initiative_id)
+    return svc.get_bankable_plan_history(initiative_id)
+
+
+@router.get(
+    "/initiatives/{initiative_id}/bankable-plan/history",
+    response_model=list[BankablePlanVersion],
+)
+async def list_bankable_plan_history(
+    initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
+) -> list[BankablePlanVersion]:
+    assert_can_view_initiative(client, current_user, initiative_id)
+    return svc.list_bankable_plan_history(initiative_id)
+
+
+@router.post(
+    "/initiatives/{initiative_id}/bankable-plan/rebaseline",
+    response_model=BankablePlanVersion,
+)
+async def rebaseline_bankable_plan(
+    initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+    body: BankablePlanRebaselineRequest | None = None,
+) -> BankablePlanVersion:
+    assert_can_manage_initiatives(current_user)
+    return svc.rebaseline_bankable_plan(
+        initiative_id,
+        str(current_user.id),
+        reason=body.reason if body else None,
+    )
 
 
 @router.get(

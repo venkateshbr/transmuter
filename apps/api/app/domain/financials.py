@@ -352,7 +352,38 @@ class FinancialMetricValueUpdate(BaseModel):
     value_actual: Decimal | None = None
 
 
+class BankablePlanSnapshot(BaseModel):
+    entries: list[FinancialEntryRow] = Field(default_factory=list)
+    cost_lines: list[CostLineItem] = Field(default_factory=list)
+    metric_values: list[FinancialMetricValueRow] = Field(default_factory=list)
+    selections: InitiativeFinancialSelections = Field(default_factory=InitiativeFinancialSelections)
+    summary: FinancialSummary
+
+
+class BankablePlanVersion(BaseModel):
+    id: str
+    initiative_id: str
+    version: int
+    trigger_type: Literal["approval", "rebaseline"]
+    trigger_submission_id: str | None = None
+    locked_by_id: str | None = None
+    locked_at: str
+    locked_reason: str | None = None
+    snapshot: BankablePlanSnapshot
+
+
+class BankablePlanResponse(BaseModel):
+    current: BankablePlanVersion | None = None
+    history: list[BankablePlanVersion] = Field(default_factory=list)
+
+
+class BankablePlanRebaselineRequest(BaseModel):
+    reason: str | None = None
+
+
 # Fix forward references
+BankablePlanSnapshot.model_rebuild()
+BankablePlanVersion.model_rebuild()
 FinancialGridUpdate.model_rebuild()
 FinancialGridResponse.model_rebuild()
 

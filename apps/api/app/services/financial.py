@@ -5,7 +5,7 @@ All financial calculations use Decimal arithmetic. Never float.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -13,6 +13,9 @@ from fastapi import HTTPException, status
 from supabase import Client
 
 from app.domain.financials import (
+    BankablePlanResponse,
+    BankablePlanSnapshot,
+    BankablePlanVersion,
     BreakEvenPoint,
     BreakEvenResponse,
     CostLineCreate,
@@ -432,6 +435,122 @@ class FinancialService:
             sorted(valid_cost_keys),
         )
         return self.get_initiative_selections(initiative_id)
+
+    def get_current_bankable_plan(self, initiative_id: str) -> BankablePlanVersion | None:
+        self._ensure_tenant_initiative(initiative_id)
+        row = self._repo.get_latest_bankable_plan(initiative_id)
+        return self._to_bankable_plan_version(row) if row else None
+
+    def list_bankable_plan_history(self, initiative_id: str) -> list[BankablePlanVersion]:
+        self._ensure_tenant_initiative(initiative_id)
+        return [
+            self._to_bankable_plan_version(row)
+            for row in self._repo.list_bankable_plans(initiative_id)
+        ]
+
+    def get_bankable_plan_history(self, initiative_id: str) -> BankablePlanResponse:
+        history = self.list_bankable_plan_history(initiative_id)
+        return BankablePlanResponse(current=history[-1] if history else None, history=history)
+
+    def lock_bankable_plan_from_approval(
+        self,
+        initiative_id: str,
+        submission_id: str,
+        locked_by_id: str,
+        locked_reason: str | None = None,
+    ) -> BankablePlanVersion:
+        self._ensure_tenant_initiative(initiative_id)
+        latest = self._repo.get_latest_bankable_plan(initiative_id)
+        if latest and latest.get("trigger_type") == "approval" and latest.get("trigger_submission_id") == submission_id:
+            return self._to_bankable_plan_version(latest)
+
+        snapshot = self._build_bankable_plan_snapshot(initiative_id)
+        version = int(latest["version"]) + 1 if latest else 1
+        row = self._repo.create_bankable_plan(
+            {
+                "initiative_id": initiative_id,
+                "version": version,
+                "trigger_type": "approval",
+                "trigger_submission_id": submission_id,
+                "locked_by_id": locked_by_id,
+                "locked_at": datetime.now(UTC).isoformat(),
+                "locked_reason": locked_reason,
+                "snapshot": snapshot.model_dump(mode="json"),
+            }
+        )
+        return self._to_bankable_plan_version(row)
+
+    def rebaseline_bankable_plan(
+        self,
+        initiative_id: str,
+        locked_by_id: str,
+        reason: str | None = None,
+    ) -> BankablePlanVersion:
+        self._ensure_tenant_initiative(initiative_id)
+        latest = self._repo.get_latest_bankable_plan(initiative_id)
+        if not latest:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No bankable plan exists for this initiative.",
+            )
+
+        snapshot = self._build_bankable_plan_snapshot(initiative_id)
+        row = self._repo.create_bankable_plan(
+            {
+                "initiative_id": initiative_id,
+                "version": int(latest["version"]) + 1,
+                "trigger_type": "rebaseline",
+                "trigger_submission_id": latest.get("trigger_submission_id"),
+                "locked_by_id": locked_by_id,
+                "locked_at": datetime.now(UTC).isoformat(),
+                "locked_reason": reason or latest.get("locked_reason"),
+                "snapshot": snapshot.model_dump(mode="json"),
+            }
+        )
+        return self._to_bankable_plan_version(row)
+
+    def get_bankable_plan_snapshot(self, initiative_id: str) -> BankablePlanSnapshot:
+        self._ensure_tenant_initiative(initiative_id)
+        return self._build_bankable_plan_snapshot(initiative_id)
+
+    def _build_bankable_plan_snapshot(self, initiative_id: str) -> BankablePlanSnapshot:
+        entries = self._repo.get_entries(initiative_id)
+        costs = self._repo.list_cost_lines(initiative_id)
+        metric_values = self._repo.list_metric_values(initiative_id)
+        config = self.get_configuration()
+        selections = self._resolve_selections(initiative_id, entries, costs, metric_values, config)
+        scoped_rows, scoped_costs = self._apply_financial_scope(entries, costs, selections)
+        scoped_metric_values = self._scope_metric_values(metric_values, selections)
+        summary = self._compute_summary(
+            scoped_rows,
+            initiative_id,
+            scoped_costs,
+            scoped_metric_values,
+            config,
+        )
+        return BankablePlanSnapshot(
+            entries=[self._to_entry_row(row) for row in entries],
+            cost_lines=[self._to_cost_line(row) for row in costs],
+            metric_values=[self._to_metric_value_row(row) for row in metric_values],
+            selections=selections,
+            summary=summary,
+        )
+
+    @staticmethod
+    def _to_bankable_plan_version(row: dict) -> BankablePlanVersion:  # type: ignore[type-arg]
+        return BankablePlanVersion(
+            id=row["id"],
+            initiative_id=row["initiative_id"],
+            version=row["version"],
+            trigger_type=row["trigger_type"],
+            trigger_submission_id=row.get("trigger_submission_id"),
+            locked_by_id=row.get("locked_by_id"),
+            locked_at=row["locked_at"],
+            locked_reason=row.get("locked_reason"),
+            snapshot=BankablePlanSnapshot.model_validate(row["snapshot"]),
+        )
+
+    # ── Portfolio financials ─────────────────────────────────────────────────
 
     def get_portfolio_financials(
         self,
