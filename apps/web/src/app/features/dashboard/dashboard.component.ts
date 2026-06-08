@@ -5,6 +5,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DashboardEchartCardComponent } from './dashboard-echart-card.component';
 import { CompactFilterToolbarComponent, type CompactFilterGroup } from '../../shared/components/compact-filter-toolbar/compact-filter-toolbar.component';
+import { resolveFinancialMode, type FinancialModeDescriptor } from '../financials/financials-view.models';
 
 type DashboardMultiFilterKey = 'business_unit_id' | 'workstream_id' | 'priority' | 'tag';
 type ExecutiveBriefPersona = 'management' | 'investor' | 'owner';
@@ -352,7 +353,7 @@ const DASHBOARD_FILTER_STATE_KEY = 'transmuter.filters.dashboard';
           </div>
         </section>
 
-        <app-dashboard-echart-card kind="valueBridge" [data]="data()" />
+        <app-dashboard-echart-card kind="valueBridge" [data]="data()" [financialMode]="financialMode()" />
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -866,6 +867,7 @@ export class DashboardComponent implements OnInit {
   reportReady = signal(false);
   showWelcome = signal(false);
   selectedMatrixCell = signal<any>(null);
+  financialMode = computed<FinancialModeDescriptor>(() => resolveFinancialMode(this.data()?.financial_mode, this.data()?.value_bridge, this.data()?.summary, this.data()));
   executiveBriefOpen = signal(false);
   decisionQueueOpen = signal(false);
   executiveReport = signal<any | null>(null);

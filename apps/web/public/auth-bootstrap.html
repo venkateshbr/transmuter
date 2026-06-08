@@ -1,0 +1,13 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Auth Bootstrap</title></head>
+<body>
+<script>
+  const params = new URLSearchParams(location.search);
+  const accessToken = params.get('access_token');
+  const refreshToken = params.get('refresh_token');
+  if (accessToken) localStorage.setItem('access_token', accessToken);
+  if (refreshToken) localStorage.setItem('refresh_token', refreshToken);
+  document.body.textContent = accessToken ? 'token stored' : 'missing access_token';
+  if (accessToken) setTimeout(() => { location.href = '/dashboard'; }, 50);
+</script>
+</body></html>

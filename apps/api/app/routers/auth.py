@@ -11,6 +11,7 @@ from supabase import create_client
 from app.core.auth import CurrentUser, get_current_user
 from app.core.config import settings
 from app.core.database import get_supabase_admin
+from app.services.demo_portfolio_bootstrap import bootstrap_demo_portfolio
 from app.services.tenant_bootstrap import TenantBootstrapService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -229,6 +230,8 @@ async def register_blank_tenant(body: RegisterRequest) -> TokenResponse:
             }
         ).execute()
         TenantBootstrapService(admin).bootstrap_tenant(tenant_id)
+        if settings.bootstrap_demo_data_on_registration:
+            bootstrap_demo_portfolio(admin, tenant_id, auth_user_id)
     except Exception as exc:
         if auth_user_id:
             with suppress(Exception):

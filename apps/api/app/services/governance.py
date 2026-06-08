@@ -22,6 +22,7 @@ from app.domain.governance import (
 )
 from app.repositories.audit import AuditRepository
 from app.repositories.governance import GovernanceRepository
+from app.services.financial import FinancialService
 
 
 def _find_gates_path() -> Path:
@@ -37,6 +38,7 @@ GATES_PATH = _find_gates_path()
 
 class GovernanceService:
     def __init__(self, client: Client, tenant_id: UUID, user_id: UUID) -> None:
+        self._client = client
         self._repo = GovernanceRepository(client, tenant_id)
         self._audit = AuditRepository(client, tenant_id)
         self._tenant_id = tenant_id
@@ -172,6 +174,15 @@ class GovernanceService:
             gate = self._get_gate(sub["initiative_id"], sub["gate_number"])
             if gate:
                 self._repo.update_initiative_stage(sub["initiative_id"], gate.to_stage)
+            FinancialService(
+                self._client,
+                self._tenant_id,
+            ).lock_bankable_plan_from_approval(
+                sub["initiative_id"],
+                submission_id,
+                self._user_id,
+                locked_reason=data.commentary,
+            )
 
         submission = self._to_submission(updated)
         self._audit_change(

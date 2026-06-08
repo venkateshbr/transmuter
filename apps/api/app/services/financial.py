@@ -5,7 +5,7 @@ All financial calculations use Decimal arithmetic. Never float.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID
 
@@ -13,6 +13,15 @@ from fastapi import HTTPException, status
 from supabase import Client
 
 from app.domain.financials import (
+    BankablePlanResponse,
+    BankablePlanSnapshot,
+    BankablePlanVersion,
+    BenefitLedgerEntry,
+    BenefitLedgerEntryCreate,
+    BenefitLedgerEntryUpdate,
+    BenefitLedgerGranularity,
+    BenefitLedgerPeriodSummary,
+    BenefitLedgerSummaryResponse,
     BreakEvenPoint,
     BreakEvenResponse,
     CostLineCreate,
@@ -35,6 +44,7 @@ from app.domain.financials import (
     FinancialMetricDeactivateRequest,
     FinancialMetricValueRow,
     FinancialMetricValueUpdate,
+    FinancialModeDescriptor,
     FinancialScenario,
     FinancialSummary,
     InitiativeFinancialSelections,
@@ -138,6 +148,14 @@ class FinancialService:
             scoped_metric_values,
             config,
         )
+        financial_mode = self._financial_mode_descriptor(
+            initiative_id,
+            rows,
+            costs,
+            raw_metric_values,
+            config=config,
+            bankable_plan=self.get_current_bankable_plan(initiative_id),
+        )
         return FinancialGridResponse(
             initiative_id=initiative_id,
             entries=entries,
@@ -145,6 +163,7 @@ class FinancialService:
             selections=selections,
             locked=locked,
             lock_reason=lock_reason,
+            financial_mode=financial_mode,
             summary=summary,
         )
 
@@ -420,6 +439,7 @@ class FinancialService:
         selections: InitiativeFinancialSelections,
     ) -> InitiativeFinancialSelectionsResponse:
         self._ensure_tenant_initiative(initiative_id)
+        self._assert_financials_editable(initiative_id)
         config = self.get_configuration()
         valid_metric_keys, valid_cost_keys = self._active_selection_keys(config)
         metric_keys = [key for key in selections.metric_keys if key in valid_metric_keys]
@@ -432,6 +452,330 @@ class FinancialService:
             sorted(valid_cost_keys),
         )
         return self.get_initiative_selections(initiative_id)
+
+    def get_current_bankable_plan(self, initiative_id: str) -> BankablePlanVersion | None:
+        self._ensure_tenant_initiative(initiative_id)
+        row = self._repo.get_latest_bankable_plan(initiative_id)
+        return self._to_bankable_plan_version(row) if row else None
+
+    def list_bankable_plan_history(self, initiative_id: str) -> list[BankablePlanVersion]:
+        self._ensure_tenant_initiative(initiative_id)
+        return [
+            self._to_bankable_plan_version(row)
+            for row in self._repo.list_bankable_plans(initiative_id)
+        ]
+
+    def get_bankable_plan_history(self, initiative_id: str) -> BankablePlanResponse:
+        history = self.list_bankable_plan_history(initiative_id)
+        return BankablePlanResponse(current=history[-1] if history else None, history=history)
+
+    # ── Benefit realization ledger ───────────────────────────────────────────
+
+    def list_benefit_ledger_entries(self, initiative_id: str) -> list[BenefitLedgerEntry]:
+        self._ensure_tenant_initiative(initiative_id)
+        return [
+            self._to_benefit_ledger_entry(row)
+            for row in self._repo.list_benefit_ledger_entries(initiative_id)
+        ]
+
+    def create_benefit_ledger_entry(
+        self,
+        initiative_id: str,
+        data: BenefitLedgerEntryCreate,
+    ) -> BenefitLedgerEntry:
+        self._ensure_tenant_initiative(initiative_id)
+        row = self._repo.create_benefit_ledger_entry(
+            initiative_id,
+            self._benefit_entry_payload(data),
+        )
+        return self._to_benefit_ledger_entry(row)
+
+    def update_benefit_ledger_entry(
+        self,
+        initiative_id: str,
+        entry_id: str,
+        data: BenefitLedgerEntryUpdate,
+    ) -> BenefitLedgerEntry:
+        self._ensure_tenant_initiative(initiative_id)
+        patch: dict[str, object] = {}
+        for field in ("period_granularity", "period_start", "period_end", "description"):
+            val = getattr(data, field)
+            if val is not None:
+                patch[field] = val.isoformat() if isinstance(val, date) else val
+        if data.bankable_plan_amount is not None:
+            patch["bankable_plan_amount"] = _money(data.bankable_plan_amount)
+        if data.actual_amount is not None:
+            patch["actual_amount"] = _money(data.actual_amount)
+        row = self._repo.update_benefit_ledger_entry(initiative_id, entry_id, patch)
+        if not row:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Benefit ledger entry not found"
+            )
+        return self._to_benefit_ledger_entry(row)
+
+    def delete_benefit_ledger_entry(self, initiative_id: str, entry_id: str) -> None:
+        self._ensure_tenant_initiative(initiative_id)
+        self._repo.delete_benefit_ledger_entry(initiative_id, entry_id)
+
+    def get_benefit_ledger_summary(
+        self,
+        initiative_id: str,
+        granularity: BenefitLedgerGranularity,
+    ) -> BenefitLedgerSummaryResponse:
+        self._ensure_tenant_initiative(initiative_id)
+        rows = self._repo.list_benefit_ledger_entries(initiative_id)
+        locked_plan = self.get_current_bankable_plan(initiative_id)
+        if not rows:
+            return BenefitLedgerSummaryResponse(
+                initiative_id=initiative_id,
+                granularity=granularity,
+                locked_bankable_plan_version=locked_plan.version if locked_plan else None,
+                bankable_plan_amount="0.0000",
+                actual_amount="0.0000",
+                variance="0.0000",
+            )
+
+        periods = self._benefit_ledger_period_summaries(rows, granularity)
+        total_plan = sum((_dec(period.bankable_plan_amount) for period in periods), Decimal("0"))
+        total_actual = sum((_dec(period.actual_amount) for period in periods), Decimal("0"))
+        return BenefitLedgerSummaryResponse(
+            initiative_id=initiative_id,
+            granularity=granularity,
+            locked_bankable_plan_version=locked_plan.version if locked_plan else None,
+            periods=periods,
+            bankable_plan_amount=_money(total_plan),
+            actual_amount=_money(total_actual),
+            variance=_money(total_actual - total_plan),
+        )
+
+    def lock_bankable_plan_from_approval(
+        self,
+        initiative_id: str,
+        submission_id: str,
+        locked_by_id: str,
+        locked_reason: str | None = None,
+    ) -> BankablePlanVersion:
+        self._ensure_tenant_initiative(initiative_id)
+        latest = self._repo.get_latest_bankable_plan(initiative_id)
+        if (
+            latest
+            and latest.get("trigger_type") == "approval"
+            and latest.get("trigger_submission_id") == submission_id
+        ):
+            return self._to_bankable_plan_version(latest)
+
+        snapshot = self._build_bankable_plan_snapshot(initiative_id)
+        version = int(latest["version"]) + 1 if latest else 1
+        row = self._repo.create_bankable_plan(
+            {
+                "initiative_id": initiative_id,
+                "version": version,
+                "trigger_type": "approval",
+                "trigger_submission_id": submission_id,
+                "locked_by_id": locked_by_id,
+                "locked_at": datetime.now(UTC).isoformat(),
+                "locked_reason": locked_reason,
+                "snapshot": snapshot.model_dump(mode="json"),
+            }
+        )
+        return self._to_bankable_plan_version(row)
+
+    def rebaseline_bankable_plan(
+        self,
+        initiative_id: str,
+        locked_by_id: str,
+        reason: str | None = None,
+    ) -> BankablePlanVersion:
+        self._ensure_tenant_initiative(initiative_id)
+        latest = self._repo.get_latest_bankable_plan(initiative_id)
+        if not latest:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No bankable plan exists for this initiative.",
+            )
+
+        snapshot = self._build_bankable_plan_snapshot(initiative_id)
+        row = self._repo.create_bankable_plan(
+            {
+                "initiative_id": initiative_id,
+                "version": int(latest["version"]) + 1,
+                "trigger_type": "rebaseline",
+                "trigger_submission_id": latest.get("trigger_submission_id"),
+                "locked_by_id": locked_by_id,
+                "locked_at": datetime.now(UTC).isoformat(),
+                "locked_reason": reason or latest.get("locked_reason"),
+                "snapshot": snapshot.model_dump(mode="json"),
+            }
+        )
+        return self._to_bankable_plan_version(row)
+
+    def get_bankable_plan_snapshot(self, initiative_id: str) -> BankablePlanSnapshot:
+        self._ensure_tenant_initiative(initiative_id)
+        return self._build_bankable_plan_snapshot(initiative_id)
+
+    def _build_bankable_plan_snapshot(self, initiative_id: str) -> BankablePlanSnapshot:
+        entries = self._repo.get_entries(initiative_id)
+        costs = self._repo.list_cost_lines(initiative_id)
+        metric_values = self._repo.list_metric_values(initiative_id)
+        config = self.get_configuration()
+        selections = self._resolve_selections(initiative_id, entries, costs, metric_values, config)
+        scoped_rows, scoped_costs = self._apply_financial_scope(entries, costs, selections)
+        scoped_metric_values = self._scope_metric_values(metric_values, selections)
+        summary = self._compute_summary(
+            scoped_rows,
+            initiative_id,
+            scoped_costs,
+            scoped_metric_values,
+            config,
+        )
+        return BankablePlanSnapshot(
+            entries=[self._to_entry_row(row) for row in entries],
+            cost_lines=[self._to_cost_line(row) for row in costs],
+            metric_values=[self._to_metric_value_row(row) for row in metric_values],
+            selections=selections,
+            financial_mode=self._financial_mode_descriptor(
+                initiative_id,
+                entries,
+                costs,
+                metric_values,
+                config=config,
+            ),
+            summary=summary,
+        )
+
+    @staticmethod
+    def _to_bankable_plan_version(row: dict) -> BankablePlanVersion:  # type: ignore[type-arg]
+        return BankablePlanVersion(
+            id=row["id"],
+            initiative_id=row["initiative_id"],
+            version=row["version"],
+            trigger_type=row["trigger_type"],
+            trigger_submission_id=row.get("trigger_submission_id"),
+            locked_by_id=row.get("locked_by_id"),
+            locked_at=row["locked_at"],
+            locked_reason=row.get("locked_reason"),
+            snapshot=BankablePlanSnapshot.model_validate(row["snapshot"]),
+        )
+
+    @staticmethod
+    def _as_date(value: object) -> date:
+        if isinstance(value, date):
+            return value
+        return date.fromisoformat(str(value))
+
+    def _benefit_entry_payload(self, data: BenefitLedgerEntryCreate) -> dict[str, object]:
+        period_end = data.period_end or data.period_start
+        return {
+            "period_granularity": data.period_granularity,
+            "period_start": data.period_start.isoformat(),
+            "period_end": period_end.isoformat(),
+            "bankable_plan_amount": _money(data.bankable_plan_amount),
+            "actual_amount": _money(data.actual_amount),
+            "description": data.description,
+        }
+
+    @staticmethod
+    def _to_benefit_ledger_entry(row: dict) -> BenefitLedgerEntry:  # type: ignore[type-arg]
+        bankable_plan_amount = _dec(row.get("bankable_plan_amount"))
+        actual_amount = _dec(row.get("actual_amount"))
+        variance = actual_amount - bankable_plan_amount
+        return BenefitLedgerEntry(
+            id=row["id"],
+            initiative_id=row["initiative_id"],
+            period_granularity=row["period_granularity"],
+            period_start=FinancialService._as_date(row["period_start"]),
+            period_end=FinancialService._as_date(row.get("period_end") or row["period_start"]),
+            bankable_plan_amount=_money(bankable_plan_amount),
+            actual_amount=_money(actual_amount),
+            variance=_money(variance),
+            description=row.get("description"),
+            created_at=str(row.get("created_at") or ""),
+            updated_at=str(row.get("updated_at") or ""),
+        )
+
+    def _benefit_ledger_period_summaries(
+        self,
+        rows: list[dict],  # type: ignore[type-arg]
+        granularity: BenefitLedgerGranularity,
+    ) -> list[BenefitLedgerPeriodSummary]:
+        grouped: dict[tuple[int, int | None, int | None], dict[str, object]] = {}
+        for row in rows:
+            period_start = self._as_date(row["period_start"])
+            key = self._benefit_period_key(period_start, granularity)
+            bucket = grouped.setdefault(
+                key,
+                {
+                    "bankable_plan_amount": Decimal("0"),
+                    "actual_amount": Decimal("0"),
+                    "year": key[0],
+                    "week": key[1],
+                    "month": key[2],
+                },
+            )
+            bucket["bankable_plan_amount"] = _dec(bucket["bankable_plan_amount"]) + _dec(
+                row.get("bankable_plan_amount")
+            )
+            bucket["actual_amount"] = _dec(bucket["actual_amount"]) + _dec(row.get("actual_amount"))
+
+        periods: list[BenefitLedgerPeriodSummary] = []
+        for year, week, month in sorted(
+            grouped, key=lambda item: self._benefit_period_sort(item, granularity)
+        ):
+            bucket = grouped[(year, week, month)]
+            bankable = _dec(bucket["bankable_plan_amount"])
+            actual = _dec(bucket["actual_amount"])
+            periods.append(
+                BenefitLedgerPeriodSummary(
+                    period=self._benefit_period_label(year, week, month, granularity),
+                    year=year,
+                    week=week,
+                    month=month,
+                    period_granularity=granularity,
+                    bankable_plan_amount=_money(bankable),
+                    actual_amount=_money(actual),
+                    variance=_money(actual - bankable),
+                )
+            )
+        return periods
+
+    @staticmethod
+    def _benefit_period_key(
+        period_start: date,
+        granularity: BenefitLedgerGranularity,
+    ) -> tuple[int, int | None, int | None]:
+        if granularity == "weekly":
+            iso = period_start.isocalendar()
+            return (iso.year, iso.week, None)
+        if granularity == "monthly":
+            return (period_start.year, None, period_start.month)
+        return (period_start.year, None, None)
+
+    @staticmethod
+    def _benefit_period_sort(
+        key: tuple[int, int | None, int | None],
+        granularity: BenefitLedgerGranularity,
+    ) -> tuple[int, int]:
+        year, week, month = key
+        if granularity == "weekly":
+            return (year, week or 0)
+        if granularity == "monthly":
+            return (year, month or 0)
+        return (year, 0)
+
+    @staticmethod
+    def _benefit_period_label(
+        year: int,
+        week: int | None,
+        month: int | None,
+        granularity: BenefitLedgerGranularity,
+    ) -> str:
+        if granularity == "weekly":
+            return f"{year}-W{(week or 0):02d}"
+        if granularity == "monthly":
+            return f"{year}-M{(month or 0):02d}"
+        return str(year)
+
+    # ── Portfolio financials ─────────────────────────────────────────────────
 
     def get_portfolio_financials(
         self,
@@ -469,9 +813,17 @@ class FinancialService:
             if row.get("initiative_id") in initiatives and (year is None or row.get("year") == year)
         ]
         config = self.get_configuration()
-        return self._compute_portfolio_financials(
+        response = self._compute_portfolio_financials(
             entries, costs, metric_values, config, granularity
         )
+        response.financial_mode = self._financial_mode_descriptor(
+            "",
+            entries,
+            costs,
+            metric_values,
+            config=config,
+        )
+        return response
 
     def get_portfolio_financial_contributors(
         self,
@@ -655,6 +1007,13 @@ class FinancialService:
             scenario=scenario,
             break_even_period=break_even_period,
             points=points,
+            financial_mode=self._financial_mode_descriptor(
+                initiative_id,
+                raw_entries,
+                raw_cost_lines,
+                metric_values,
+                config=self.get_configuration(),
+            ),
         )
 
     def get_portfolio_value_bridge(self) -> ValueBridgeResponse:
@@ -770,6 +1129,105 @@ class FinancialService:
         if stage and stage != "scoping":
             return True, "Financials are locked after the initiative moves to execution."
         return False, None
+
+    def _financial_mode_descriptor(
+        self,
+        initiative_id: str,
+        entries: list[dict],  # type: ignore[type-arg]
+        costs: list[dict],  # type: ignore[type-arg]
+        metric_values: list[dict],  # type: ignore[type-arg]
+        *,
+        config: FinancialConfigurationResponse | None = None,
+        bankable_plan: BankablePlanVersion | None = None,
+    ) -> FinancialModeDescriptor:
+        if bankable_plan is None:
+            bankable_plan = self.get_current_bankable_plan(initiative_id)
+        if bankable_plan:
+            return FinancialModeDescriptor(
+                key="bankable_locked",
+                label="Locked bankable plan",
+                description="Immutable baseline created from an approved stage-gate submission.",
+                locked=True,
+                scenarios=["approval", "rebaseline"],
+            )
+
+        mode_key = "planned_vs_actual"
+        label = "Planned vs actual"
+        description = "Planned vs actual reporting is active."
+        scenarios = ["planned", "actual"]
+        if self._has_multi_scenario_signal(entries, metric_values, config=config):
+            mode_key = "multi_scenario"
+            label = "Multi-scenario plan"
+            description = "Base, high, and actual scenarios are available."
+            scenarios = ["base", "high", "actual"]
+        elif not self._has_any_actual_signal(entries, costs, metric_values):
+            mode_key = "pre_lock"
+            label = "Pre-lock plan"
+            description = "Editable planning surface before approval."
+            scenarios = ["planned"]
+        return FinancialModeDescriptor(
+            key=mode_key,
+            label=label,
+            description=description,
+            locked=False,
+            scenarios=scenarios,
+        )
+
+    @staticmethod
+    def _has_any_actual_signal(
+        entries: list[dict],  # type: ignore[type-arg]
+        costs: list[dict],  # type: ignore[type-arg]
+        metric_values: list[dict],  # type: ignore[type-arg]
+    ) -> bool:
+        for row in entries:
+            if any(
+                _dec(row.get(field)) != Decimal("0")
+                for field in (
+                    "revenue_uplift_actual",
+                    "gross_margin_actual",
+                    "gm_uplift_actual",
+                    "cogs_actual",
+                )
+            ):
+                return True
+        for row in costs:
+            if row.get("amount_actual") is not None:
+                return True
+        return any(row.get("value_actual") is not None for row in metric_values)
+
+    @staticmethod
+    def _has_multi_scenario_signal(
+        entries: list[dict],  # type: ignore[type-arg]
+        metric_values: list[dict],  # type: ignore[type-arg]
+        *,
+        config: FinancialConfigurationResponse | None = None,
+    ) -> bool:
+        for row in entries:
+            for base_field, high_field in (
+                ("revenue_uplift_base", "revenue_uplift_high"),
+                ("gross_margin_base", "gross_margin_high"),
+                ("gm_uplift_base", "gm_uplift_high"),
+                ("cogs_base", "cogs_high"),
+            ):
+                if _dec(row.get(base_field)) != _dec(row.get(high_field)):
+                    return True
+        for row in metric_values:
+            if _dec(row.get("value_base")) != _dec(row.get("value_high")):
+                return True
+        if config:
+            return any(
+                item.is_active
+                and item.item_type == "metric"
+                and item.system_metric_key
+                in {
+                    "revenue_uplift_base",
+                    "revenue_uplift_high",
+                    "gross_margin_base",
+                    "gross_margin_high",
+                }
+                for item in config.items
+            )
+        return False
 
     def _assert_financials_editable(self, initiative_id: str) -> None:
         locked, reason = self._financial_lock_state(initiative_id)
@@ -1488,8 +1946,8 @@ class FinancialService:
             for field in ("value_base", "value_high", "value_actual")
         )
 
-    @staticmethod
     def _compute_value_bridge(
+        self,
         entries: list[dict],  # type: ignore[type-arg]
         cost_lines: list[dict],  # type: ignore[type-arg]
         initiative_id: str | None,
@@ -1588,10 +2046,17 @@ class FinancialService:
                 costs_total=_money(total_costs_actual),
                 net=_money(benefits_actual - costs_recurring_actual),
             ),
+            financial_mode=self._financial_mode_descriptor(
+                initiative_id or "",
+                entries,
+                cost_lines,
+                metric_values or [],
+                config=config,
+            ),
         )
 
-    @staticmethod
     def _compute_scenario_summary(
+        self,
         entries: list[dict],  # type: ignore[type-arg]
         cost_lines: list[dict],  # type: ignore[type-arg]
         metric_values: list[dict],  # type: ignore[type-arg]
@@ -1638,6 +2103,13 @@ class FinancialService:
             costs_one_off=_money(one_off),
             costs_total=_money(total_costs),
             net_value=_money(benefits_total - recurring),
+            financial_mode=self._financial_mode_descriptor(
+                "",
+                entries,
+                cost_lines,
+                metric_values,
+                config=config,
+            ),
         )
 
     @staticmethod

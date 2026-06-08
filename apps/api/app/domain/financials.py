@@ -6,6 +6,7 @@ and serialise as strings in JSON responses.
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from typing import Literal
 
@@ -25,6 +26,16 @@ FinancialRollupType = Literal[
     "net_value",
 ]
 PortfolioGranularity = Literal["monthly", "quarterly", "yearly"]
+FinancialModeKey = Literal["pre_lock", "planned_vs_actual", "multi_scenario", "bankable_locked"]
+BenefitLedgerGranularity = Literal["weekly", "monthly", "yearly"]
+
+
+class FinancialModeDescriptor(BaseModel):
+    key: FinancialModeKey
+    label: str
+    description: str | None = None
+    locked: bool = False
+    scenarios: list[str] = Field(default_factory=list)
 
 
 class FinancialConfigGroup(BaseModel):
@@ -167,6 +178,7 @@ class FinancialGridResponse(BaseModel):
     selections: InitiativeFinancialSelections = Field(default_factory=InitiativeFinancialSelections)
     locked: bool = False
     lock_reason: str | None = None
+    financial_mode: FinancialModeDescriptor | None = None
     summary: FinancialSummary
 
 
@@ -325,6 +337,7 @@ class PortfolioFinancialsResponse(BaseModel):
     broader_period_totals: list[PortfolioFinancialPeriod]
     cost_breakdown: list[PortfolioFinancialBreakdown]
     metric_breakdown: list[PortfolioFinancialBreakdown]
+    financial_mode: FinancialModeDescriptor | None = None
 
 
 class CostLineListResponse(BaseModel):
@@ -352,7 +365,92 @@ class FinancialMetricValueUpdate(BaseModel):
     value_actual: Decimal | None = None
 
 
+class BankablePlanSnapshot(BaseModel):
+    entries: list[FinancialEntryRow] = Field(default_factory=list)
+    cost_lines: list[CostLineItem] = Field(default_factory=list)
+    metric_values: list[FinancialMetricValueRow] = Field(default_factory=list)
+    selections: InitiativeFinancialSelections = Field(default_factory=InitiativeFinancialSelections)
+    financial_mode: FinancialModeDescriptor | None = None
+    summary: FinancialSummary
+
+
+class BankablePlanVersion(BaseModel):
+    id: str
+    initiative_id: str
+    version: int
+    trigger_type: Literal["approval", "rebaseline"]
+    trigger_submission_id: str | None = None
+    locked_by_id: str | None = None
+    locked_at: str
+    locked_reason: str | None = None
+    snapshot: BankablePlanSnapshot
+
+
+class BankablePlanResponse(BaseModel):
+    current: BankablePlanVersion | None = None
+    history: list[BankablePlanVersion] = Field(default_factory=list)
+
+
+class BankablePlanRebaselineRequest(BaseModel):
+    reason: str | None = None
+
+
+class BenefitLedgerEntryCreate(BaseModel):
+    period_granularity: BenefitLedgerGranularity
+    period_start: date
+    period_end: date | None = None
+    bankable_plan_amount: Decimal = Decimal("0")
+    actual_amount: Decimal = Decimal("0")
+    description: str | None = Field(None, max_length=2000)
+
+
+class BenefitLedgerEntryUpdate(BaseModel):
+    period_granularity: BenefitLedgerGranularity | None = None
+    period_start: date | None = None
+    period_end: date | None = None
+    bankable_plan_amount: Decimal | None = None
+    actual_amount: Decimal | None = None
+    description: str | None = Field(None, max_length=2000)
+
+
+class BenefitLedgerEntry(BaseModel):
+    id: str
+    initiative_id: str
+    period_granularity: BenefitLedgerGranularity
+    period_start: date
+    period_end: date
+    bankable_plan_amount: str = "0"
+    actual_amount: str = "0"
+    variance: str = "0"
+    description: str | None = None
+    created_at: str
+    updated_at: str
+
+
+class BenefitLedgerPeriodSummary(BaseModel):
+    period: str
+    year: int
+    week: int | None = None
+    month: int | None = None
+    period_granularity: BenefitLedgerGranularity
+    bankable_plan_amount: str = "0"
+    actual_amount: str = "0"
+    variance: str = "0"
+
+
+class BenefitLedgerSummaryResponse(BaseModel):
+    initiative_id: str
+    granularity: BenefitLedgerGranularity
+    locked_bankable_plan_version: int | None = None
+    periods: list[BenefitLedgerPeriodSummary] = Field(default_factory=list)
+    bankable_plan_amount: str = "0"
+    actual_amount: str = "0"
+    variance: str = "0"
+
+
 # Fix forward references
+BankablePlanSnapshot.model_rebuild()
+BankablePlanVersion.model_rebuild()
 FinancialGridUpdate.model_rebuild()
 FinancialGridResponse.model_rebuild()
 
@@ -382,6 +480,7 @@ class ValueBridgeResponse(BaseModel):
     base_case: ValueBridgeCase
     high_case: ValueBridgeCase
     actual: ValueBridgeCase
+    financial_mode: FinancialModeDescriptor | None = None
 
 
 class ScenarioFinancialSummary(BaseModel):
@@ -396,6 +495,7 @@ class ScenarioFinancialSummary(BaseModel):
     costs_one_off: str = "0"
     costs_total: str = "0"
     net_value: str = "0"
+    financial_mode: FinancialModeDescriptor | None = None
 
 
 class BreakEvenPoint(BaseModel):
@@ -416,6 +516,7 @@ class BreakEvenResponse(BaseModel):
     scenario: FinancialScenario
     break_even_period: str | None = None
     points: list[BreakEvenPoint]
+    financial_mode: FinancialModeDescriptor | None = None
 
 
 class FinancialCellAssumptionCreate(BaseModel):

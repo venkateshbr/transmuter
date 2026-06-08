@@ -235,7 +235,7 @@ def seed_users(c: Client, org_id: str, ws_ids: dict[str, str]) -> dict[str, str]
             "password": "Transmuter2026!",
             "display_name": "Sofia Tanaka",
             "title": "North Asia Lead",
-            "role": "workstream_lead",
+            "role": "initiative_owner",
             "workstreams": ["North Asia"],
         },
         {
@@ -244,7 +244,7 @@ def seed_users(c: Client, org_id: str, ws_ids: dict[str, str]) -> dict[str, str]
             "password": "Transmuter2026!",
             "display_name": "Carlos Rivera",
             "title": "Group Productivity Lead",
-            "role": "workstream_lead",
+            "role": "initiative_owner",
             "workstreams": ["Group Productivity"],
         },
         {
@@ -253,7 +253,7 @@ def seed_users(c: Client, org_id: str, ws_ids: dict[str, str]) -> dict[str, str]
             "password": "Transmuter2026!",
             "display_name": "Nadia Kowalski",
             "title": "ERP Programme Lead",
-            "role": "workstream_lead",
+            "role": "initiative_owner",
             "workstreams": ["ERP (Finance)"],
         },
     ]
