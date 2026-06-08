@@ -25,12 +25,13 @@ replace them.
   - Primary domain owned for the VPS: `ishirock.tech`.
   - VPS hostname: `srv1695814.hstgr.cloud`.
   - VPS public IP: `76.13.208.106`.
-  - Public app hostname: `https://transmuter.ishirock.tech`, expected to be
-    routed through Traefik to the Hostinger web container.
+  - Public app hostname: `https://transmuter.ishirock.tech`, routed through
+    Traefik to the Hostinger web container.
   - Local Supabase Docker instance is exposed at `https://supabase.ishirock.tech`.
   - Hostinger deployment runbook: `docs/team/HOSTINGER_VPS_DEPLOYMENT.md`.
-  - Hostinger deployment directory: `infra/hostinger/`.
-  - Hostinger app compose file: `infra/hostinger/docker-compose.yml`.
+  - Hostinger deployment root on the VPS: `/docker/transmuter`.
+  - Hostinger staged compose file on the VPS: `/docker/transmuter/docker-compose.yml`.
+  - Hostinger source compose template in the repo: `docker-compose.hostinger.yml`.
   - Hostinger deploy script: `infra/hostinger/deploy.sh`.
   - Cloud-to-local Supabase schema migration script:
     `infra/hostinger/migrate_supabase_schema_to_transmuter.sh`.

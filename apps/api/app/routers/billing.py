@@ -5,7 +5,7 @@ import hmac
 import json
 import time
 from typing import Annotated
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urljoin, urlsplit
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
@@ -20,6 +20,9 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 
 STRIPE_CHECKOUT_URL = "https://api.stripe.com/v1/checkout/sessions"
 STRIPE_PORTAL_URL = "https://api.stripe.com/v1/billing_portal/sessions"
+ORGANIZATION_SLUG_PATTERN = r"^[a-z0-9-]+$"
+ORGANIZATION_SLUG_MIN_LENGTH = 2
+ORGANIZATION_SLUG_MAX_LENGTH = 80
 
 
 class BillingConfig(BaseModel):
@@ -29,11 +32,19 @@ class BillingConfig(BaseModel):
     currency: str = "usd"
     billing_interval: str = "month"
     plans: list[dict[str, object]] = Field(default_factory=list)
+    organization_slug_pattern: str = ORGANIZATION_SLUG_PATTERN
+    organization_slug_min_length: int = ORGANIZATION_SLUG_MIN_LENGTH
+    organization_slug_max_length: int = ORGANIZATION_SLUG_MAX_LENGTH
 
 
 class CheckoutSessionRequest(BaseModel):
     organization_name: str = Field(..., min_length=2, max_length=200)
-    organization_slug: str = Field(..., min_length=2, max_length=80, pattern=r"^[a-z0-9-]+$")
+    organization_slug: str = Field(
+        ...,
+        min_length=ORGANIZATION_SLUG_MIN_LENGTH,
+        max_length=ORGANIZATION_SLUG_MAX_LENGTH,
+        pattern=ORGANIZATION_SLUG_PATTERN,
+    )
     admin_display_name: str = Field(..., min_length=2, max_length=120)
     admin_email: EmailStr
     initial_password: str = Field(..., min_length=8, max_length=128)
@@ -76,7 +87,10 @@ async def billing_config() -> BillingConfig:
 
 
 @router.post("/checkout-session", response_model=CheckoutSessionResponse)
-async def create_checkout_session(body: CheckoutSessionRequest) -> CheckoutSessionResponse:
+async def create_checkout_session(
+    request: Request,
+    body: CheckoutSessionRequest,
+) -> CheckoutSessionResponse:
     if (settings.payment_provider or "stripe") != "stripe":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -100,11 +114,13 @@ async def create_checkout_session(body: CheckoutSessionRequest) -> CheckoutSessi
     )
     plan = signup["plan"]
     intent = signup["intent"]
+    success_url = _resolve_redirect_url(request, body.success_url)
+    cancel_url = _resolve_redirect_url(request, body.cancel_url)
 
     payload = {
         "mode": "subscription",
-        "success_url": body.success_url,
-        "cancel_url": body.cancel_url,
+        "success_url": success_url,
+        "cancel_url": cancel_url,
         "customer_email": str(body.admin_email),
         "line_items[0][quantity]": "1",
         "metadata[signup_intent_id]": intent["id"],
@@ -160,6 +176,7 @@ async def create_checkout_session(body: CheckoutSessionRequest) -> CheckoutSessi
 
 @router.post("/portal-session", response_model=BillingPortalResponse)
 async def create_billing_portal_session(
+    request: Request,
     body: BillingPortalRequest,
     current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
 ) -> BillingPortalResponse:
@@ -187,11 +204,12 @@ async def create_billing_portal_session(
             status_code=status.HTTP_409_CONFLICT,
             detail="Stripe customer is not available yet. Complete checkout first.",
         )
+    return_url = _resolve_redirect_url(request, body.return_url)
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         response = await client.post(
             STRIPE_PORTAL_URL,
-            content=urlencode({"customer": customer_id, "return_url": body.return_url}),
+            content=urlencode({"customer": customer_id, "return_url": return_url}),
             headers={
                 "Authorization": f"Bearer {settings.stripe_secret_key}",
                 "Content-Type": "application/x-www-form-urlencoded",
@@ -293,3 +311,21 @@ def _verify_stripe_signature(payload: bytes, header: str | None) -> None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Stripe signature"
         )
+
+
+def _resolve_redirect_url(request: Request, value: str) -> str:
+    candidate = value.strip()
+    if not candidate:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Redirect URL must not be empty",
+        )
+
+    parsed = urlsplit(candidate)
+    if parsed.scheme and parsed.netloc:
+        return candidate
+
+    base_url = request.headers.get("origin") or str(request.base_url)
+    if not base_url.endswith("/"):
+        base_url = f"{base_url}/"
+    return urljoin(base_url, candidate)
