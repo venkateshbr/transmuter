@@ -103,6 +103,11 @@ class DashboardService:
         ][:5]
 
         bus, wss = self.repo.get_filter_options()
+        workstream_targets = self._calculate_workstream_targets(wss, self.repo.get_workstream_target_locks())
+        stage_gate_waterline = self._calculate_stage_gate_waterline(
+            workstream_targets,
+            value_matrix,
+        )
         rag_values = sorted({i.get("rag_status") for i in all_inits if i.get("rag_status")})
         priority_values = self._ordered_values(
             {i.get("priority") for i in all_inits if i.get("priority")},
@@ -132,6 +137,8 @@ class DashboardService:
             "kpi_pulse": kpi_pulse,
             "value_bridge": value_bridge,
             "value_matrix": value_matrix,
+            "workstream_targets": workstream_targets,
+            "stage_gate_waterline": stage_gate_waterline,
             "recent_activity": recent_activity,
             "available_filters": {
                 "business_units": bus,
@@ -277,6 +284,136 @@ class DashboardService:
         if not value:
             return set()
         return {part.strip() for part in value.split(",") if part.strip()}
+
+    def _calculate_workstream_targets(
+        self,
+        workstreams: list[dict[str, Any]],
+        locks: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        def _dec(value: object) -> Decimal:
+            return Decimal(str(value)) if value is not None else Decimal("0")
+
+        def _money(value: Decimal) -> str:
+            return str(value.quantize(Decimal("0.0001")))
+
+        latest_by_workstream: dict[str, dict[str, Any]] = {}
+        for row in locks:
+            latest_by_workstream[str(row.get("workstream_id"))] = row
+        workstream_name = {str(row["id"]): row.get("name") for row in workstreams}
+        items = []
+        for workstream_id, row in latest_by_workstream.items():
+            target = _dec(row.get("locked_run_rate_value"))
+            actual = _dec(row.get("actual_total"))
+            items.append(
+                {
+                    "workstream_id": workstream_id,
+                    "workstream_name": workstream_name.get(workstream_id) or "Workstream",
+                    "version": row.get("version"),
+                    "lock_date": row.get("lock_date"),
+                    "locked_at": row.get("locked_at"),
+                    "locked_run_rate_value": _money(target),
+                    "actual_total": _money(actual),
+                    "variance": _money(actual - target),
+                }
+            )
+        total_target = sum((_dec(row.get("locked_run_rate_value")) for row in latest_by_workstream.values()), Decimal("0"))
+        total_actual = sum((_dec(row.get("actual_total")) for row in latest_by_workstream.values()), Decimal("0"))
+        return {
+            "items": sorted(items, key=lambda item: item["workstream_name"]),
+            "locked_workstreams": len(items),
+            "locked_run_rate_value": _money(total_target),
+            "actual_total": _money(total_actual),
+            "variance": _money(total_actual - total_target),
+        }
+
+    def _calculate_stage_gate_waterline(
+        self,
+        workstream_targets: dict[str, Any],
+        value_matrix: dict[str, Any],
+    ) -> dict[str, Any]:
+        def _dec(value: object) -> Decimal:
+            return Decimal(str(value)) if value is not None else Decimal("0")
+
+        def _money(value: Decimal) -> str:
+            return str(value.quantize(Decimal("0.0001")))
+
+        target_by_workstream = {
+            str(row.get("workstream_id")): row
+            for row in workstream_targets.get("items", [])
+            if row.get("workstream_id")
+        }
+        items: list[dict[str, Any]] = []
+        totals = {
+            "l1": Decimal("0"),
+            "l2": Decimal("0"),
+            "l3": Decimal("0"),
+            "l4": Decimal("0"),
+            "l5": Decimal("0"),
+            "locked_plan": Decimal("0"),
+        }
+
+        for row in value_matrix.get("rows", []):
+            workstream_id = row.get("workstream_id")
+            target = target_by_workstream.get(str(workstream_id)) if workstream_id else None
+            locked_plan = _dec(target.get("locked_run_rate_value")) if target else Decimal("0")
+            l5 = _dec(target.get("actual_total")) if target else Decimal("0")
+            l4 = max(locked_plan - l5, Decimal("0"))
+            below = {"l1": Decimal("0"), "l2": Decimal("0"), "l3": Decimal("0")}
+            locked_ids = {
+                str(item.get("id"))
+                for item in (row.get("total") or {}).get("initiatives", [])
+                if target and locked_plan > Decimal("0") and item.get("stage") == "complete"
+            }
+
+            for initiative in (row.get("total") or {}).get("initiatives", []):
+                initiative_value = max(_dec(initiative.get("net_value_base")), Decimal("0"))
+                if str(initiative.get("id")) in locked_ids:
+                    continue
+                stage = initiative.get("stage")
+                if stage == "scoping":
+                    below["l1"] += initiative_value
+                elif stage == "complete":
+                    below["l2"] += initiative_value
+                else:
+                    below["l3"] += initiative_value
+
+            item = {
+                "label": row.get("workstream_name") or "Workstream",
+                "workstream_id": workstream_id,
+                "l1": _money(below["l1"]),
+                "l2": _money(below["l2"]),
+                "l3": _money(below["l3"]),
+                "l4": _money(l4),
+                "l5": _money(l5),
+                "locked_plan": _money(locked_plan),
+                "above_waterline": _money(l4 + l5),
+                "below_waterline": _money(below["l1"] + below["l2"] + below["l3"]),
+            }
+            items.append(item)
+            for key in ("l1", "l2", "l3"):
+                totals[key] += below[key]
+            totals["l4"] += l4
+            totals["l5"] += l5
+            totals["locked_plan"] += locked_plan
+
+        above = totals["l4"] + totals["l5"]
+        below_total = totals["l1"] + totals["l2"] + totals["l3"]
+        return {
+            "basis": "net_run_rate",
+            "x_axis": "workstream",
+            "items": sorted(items, key=lambda item: item["label"]),
+            "totals": {
+                "l1": _money(totals["l1"]),
+                "l2": _money(totals["l2"]),
+                "l3": _money(totals["l3"]),
+                "l4": _money(totals["l4"]),
+                "l5": _money(totals["l5"]),
+                "locked_plan": _money(totals["locked_plan"]),
+                "above_waterline": _money(above),
+                "below_waterline": _money(below_total),
+                "variance": _money(above - totals["locked_plan"]),
+            },
+        }
 
     @staticmethod
     def _ordered_values(values: set[str], preferred_order: list[str]) -> list[str]:

@@ -25,5 +25,7 @@ class DashboardResponse(BaseModel):
     kpi_pulse: dict[str, Any] = {}
     value_bridge: dict[str, str] = {}
     value_matrix: dict[str, Any] = {}
+    workstream_targets: dict[str, Any] = {}
+    stage_gate_waterline: dict[str, Any] = {}
     recent_activity: list[dict[str, Any]] = []
     available_filters: dict[str, list[dict[str, Any]]] = {}

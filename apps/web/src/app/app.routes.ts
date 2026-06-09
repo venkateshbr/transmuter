@@ -29,6 +29,11 @@ export const routes: Routes = [
       import('./features/auth/register/register.component').then(m => m.RegisterComponent),
   },
   {
+    path: 'auth/accept-invite',
+    loadComponent: () =>
+      import('./features/auth/accept-invite/accept-invite.component').then(m => m.AcceptInviteComponent),
+  },
+  {
     path: 'auth/change-password',
     canActivate: [authGuard],
     loadComponent: () =>

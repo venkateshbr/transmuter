@@ -47,9 +47,11 @@ interface MeetingArtifact {
           </div>
 
           <div class="flex items-center gap-2">
-            <button class="btn-ghost text-xs" (click)="importTranscript()">Import Transcript</button>
+            <button class="btn-ghost text-xs" (click)="openTranscriptModal()">Import Transcript</button>
             <button class="btn-secondary text-xs" (click)="generateMinutes()">Generate Minutes</button>
-            <button class="btn-ghost text-xs" [disabled]="!session()?.minutes_markdown" (click)="sendMinutes()">Send Minutes</button>
+            <button class="btn-ghost text-xs" [disabled]="!session()?.minutes_markdown || sendingMinutes()" (click)="sendMinutes()">
+              {{ sendingMinutes() ? 'Sending...' : (session()?.minutes_status === 'sent' ? 'Sent' : 'Send Minutes') }}
+            </button>
             <button class="btn-primary text-xs px-5" (click)="endSession()">Complete Session</button>
           </div>
         </header>
@@ -116,7 +118,18 @@ interface MeetingArtifact {
           </aside>
 
           <section class="overflow-y-auto bg-[var(--t-bg)]">
-            <div class="p-6 space-y-5">
+              <div class="p-6 space-y-5">
+              @if (sessionError()) {
+                <div class="border border-red-500/30 bg-red-500/10 p-3 text-sm font-bold text-red-500">
+                  {{ sessionError() }}
+                </div>
+              }
+              @if (sessionMessage()) {
+                <div class="border border-[var(--t-border)] bg-[var(--t-surface)] p-3 text-sm font-bold text-[var(--t-accent)]">
+                  {{ sessionMessage() }}
+                </div>
+              }
+
               <div class="border-b border-[var(--t-border)] pb-4">
                 <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Current Topic</p>
                 <h2 class="mt-2 text-2xl font-black text-[var(--t-text-primary)]">{{ activeAgenda()?.text || 'Open discussion' }}</h2>
@@ -288,6 +301,39 @@ interface MeetingArtifact {
             </section>
           </aside>
         </main>
+
+        @if (showTranscriptImport()) {
+          <div class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-6">
+            <form (ngSubmit)="importTranscript()" class="card w-full max-w-2xl p-6 space-y-5 shadow-2xl" style="background:var(--t-surface)">
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <h2 class="text-xl font-bold text-[var(--t-text-primary)]">Import transcript</h2>
+                  <p class="text-sm text-[var(--t-text-secondary)] mt-1">Paste a transcript or upload a .txt file.</p>
+                </div>
+                <button type="button" (click)="showTranscriptImport.set(false)" class="btn-ghost h-9 w-9 p-0" aria-label="Close transcript import dialog">
+                  <span class="material-icons text-sm">close</span>
+                </button>
+              </div>
+              <label>
+                <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Transcript Text</span>
+                <textarea [(ngModel)]="transcriptDraft" name="transcript_text" rows="12" class="input-field w-full resize-none text-sm" aria-label="Transcript text"></textarea>
+              </label>
+              <label class="block">
+                <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Text File</span>
+                <input type="file" accept=".txt,text/plain" (change)="onTranscriptFile($event)" class="input-field w-full text-sm" aria-label="Upload transcript text file" />
+              </label>
+              @if (transcriptFileName()) {
+                <p class="text-xs font-bold text-[var(--t-text-secondary)]">{{ transcriptFileName() }}</p>
+              }
+              <div class="flex justify-end gap-3 pt-2">
+                <button type="button" (click)="showTranscriptImport.set(false)" class="btn-ghost text-sm">Cancel</button>
+                <button type="submit" [disabled]="!transcriptDraft.trim() || importingTranscript()" class="btn-primary text-sm">
+                  {{ importingTranscript() ? 'Importing...' : 'Import transcript' }}
+                </button>
+              </div>
+            </form>
+          </div>
+        }
       }
     </div>
   `,
@@ -308,6 +354,12 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
   activeAgendaIndex = signal(0);
   duration = signal('00:00:00');
   saveStatus = signal('All changes saved');
+  showTranscriptImport = signal(false);
+  importingTranscript = signal(false);
+  sendingMinutes = signal(false);
+  transcriptFileName = signal('');
+  sessionError = signal<string | null>(null);
+  sessionMessage = signal<string | null>(null);
   notes = '';
   minutesDraft = '';
   transcriptDraft = '';
@@ -445,21 +497,70 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
     this.updateArtifact(item, { status });
   }
 
+  openTranscriptModal() {
+    this.sessionError.set(null);
+    this.sessionMessage.set(null);
+    this.transcriptDraft = this.session()?.transcript_text || '';
+    this.transcriptFileName.set('');
+    this.showTranscriptImport.set(true);
+  }
+
+  onTranscriptFile(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.txt') && file.type !== 'text/plain') {
+      this.sessionError.set('Upload a .txt transcript file.');
+      input.value = '';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      this.transcriptDraft = String(reader.result || '');
+      this.transcriptFileName.set(file.name);
+    };
+    reader.onerror = () => this.sessionError.set('Could not read transcript file.');
+    reader.readAsText(file);
+  }
+
   importTranscript() {
     const id = this.session()?.id;
     if (!id) return;
+    const transcript = this.transcriptDraft.trim();
+    if (!transcript) {
+      this.sessionError.set('Paste transcript text or upload a .txt file before importing.');
+      return;
+    }
+    this.importingTranscript.set(true);
+    this.sessionError.set(null);
     this.api.post<any>(`/meetings/sessions/${id}/transcript/import`, {
-      transcript_text: this.transcriptDraft || this.notes,
-      transcript_source: this.transcriptDraft ? 'manual' : 'notes',
-    }).subscribe(s => this.session.set({ ...this.session(), ...s }));
+      transcript_text: transcript,
+      transcript_source: this.transcriptFileName() ? 'txt_upload' : 'manual',
+    }).subscribe({
+      next: s => {
+        this.importingTranscript.set(false);
+        this.showTranscriptImport.set(false);
+        this.session.set({ ...this.session(), ...s, has_transcript: true });
+        this.sessionMessage.set('Transcript imported.');
+      },
+      error: err => {
+        this.importingTranscript.set(false);
+        this.sessionError.set(err.error?.detail || 'Could not import transcript.');
+      },
+    });
   }
 
   generateMinutes() {
     const id = this.session()?.id;
     if (!id) return;
-    this.api.post<any>(`/meetings/sessions/${id}/minutes/generate`, { force: true }).subscribe(s => {
-      this.session.set({ ...this.session(), ...s });
-      this.minutesDraft = s.minutes_markdown || '';
+    this.sessionError.set(null);
+    this.api.post<any>(`/meetings/sessions/${id}/minutes/generate`, { force: true }).subscribe({
+      next: s => {
+        this.session.set({ ...this.session(), ...s });
+        this.minutesDraft = s.minutes_markdown || '';
+        this.sessionMessage.set('Draft minutes generated.');
+      },
+      error: err => this.sessionError.set(err.error?.detail || 'Could not generate minutes.'),
     });
   }
 
@@ -475,9 +576,30 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
   sendMinutes() {
     const id = this.session()?.id;
     if (!id) return;
-    this.saveMinutesDraft();
-    this.api.post<any>(`/meetings/sessions/${id}/minutes/send`, {}).subscribe(s => {
-      this.session.set({ ...this.session(), ...s });
+    this.sendingMinutes.set(true);
+    this.sessionError.set(null);
+    this.api.patch<any>(`/meetings/sessions/${id}`, {
+      minutes_markdown: this.minutesDraft,
+      minutes_status: 'draft',
+    }).subscribe({
+      next: saved => {
+        this.session.set({ ...this.session(), ...saved });
+        this.api.post<any>(`/meetings/sessions/${id}/minutes/send`, {}).subscribe({
+          next: sent => {
+            this.sendingMinutes.set(false);
+            this.session.set({ ...this.session(), ...sent });
+            this.sessionMessage.set('Minutes sent.');
+          },
+          error: err => {
+            this.sendingMinutes.set(false);
+            this.sessionError.set(err.error?.detail || 'Could not send minutes.');
+          },
+        });
+      },
+      error: err => {
+        this.sendingMinutes.set(false);
+        this.sessionError.set(err.error?.detail || 'Could not save draft minutes.');
+      },
     });
   }
 

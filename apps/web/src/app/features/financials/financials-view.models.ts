@@ -7,6 +7,11 @@ export interface InitiativeOption {
   stage?: string | null;
   rag_status?: string | null;
   locked?: boolean | null;
+  workstream_id?: string | null;
+  workstream_name?: string | null;
+  workstreams?: {
+    name?: string | null;
+  } | null;
 }
 
 export interface BankablePlanSummary {
@@ -226,6 +231,42 @@ export interface BenefitLedgerSummaryResponse {
   variance: string;
 }
 
+export interface BenefitLedgerInitiativeRollup {
+  initiative_id: string;
+  initiative_code?: string | null;
+  name: string;
+  stage?: string | null;
+  workstream_id?: string | null;
+  workstream_name?: string | null;
+  locked_bankable_plan_version?: number | null;
+  bankable_plan_amount: string;
+  actual_amount: string;
+  variance: string;
+}
+
+export interface BenefitLedgerWorkstreamRollup {
+  workstream_id?: string | null;
+  workstream_name: string;
+  initiative_count: number;
+  locked_initiative_count: number;
+  bankable_plan_amount: string;
+  actual_amount: string;
+  variance: string;
+}
+
+export interface BenefitLedgerRollupSummaryResponse {
+  scope: 'portfolio' | 'workstream' | string;
+  scope_id?: string | null;
+  scope_name: string;
+  granularity: FinancialLedgerGranularity;
+  periods: BenefitLedgerPeriodSummary[];
+  bankable_plan_amount: string;
+  actual_amount: string;
+  variance: string;
+  workstreams: BenefitLedgerWorkstreamRollup[];
+  initiatives: BenefitLedgerInitiativeRollup[];
+}
+
 export interface GovernanceGate {
   id?: string | null;
   initiative_id: string;
@@ -264,6 +305,78 @@ export interface PortfolioGovernanceResponse {
   conditional: number;
   total_submissions: number;
   submissions: GovernanceSubmission[];
+}
+
+export interface WorkstreamOption {
+  id: string;
+  name: string;
+  business_unit_id?: string | null;
+}
+
+export interface FinancialGovernanceSettings {
+  initiative_plan_lock_gate_number: number;
+  plan_lock_on_approval: boolean;
+  allow_rebaseline: boolean;
+  rebaseline_roles: string[];
+  workstream_lock_cadence: 'one_off' | 'annual' | 'cycle_based';
+  initiative_inclusion_cutoff: 'approved_at_lte_lock_date';
+  valuation_method: 'run_rate';
+  locked_value_basis: 'net_run_rate' | 'benefit_run_rate';
+  workstream_target_versioning: boolean;
+}
+
+export interface WorkstreamTargetInitiative {
+  initiative_id: string;
+  initiative_code?: string | null;
+  name: string;
+  stage?: string | null;
+  approved_at?: string | null;
+  bankable_plan_version?: number | null;
+  value_source: string;
+  net_run_rate_value: string;
+  actual_value: string;
+}
+
+export interface WorkstreamTargetSnapshot {
+  workstream_id: string;
+  workstream_name?: string | null;
+  lock_date: string;
+  settings: FinancialGovernanceSettings;
+  included: WorkstreamTargetInitiative[];
+  excluded: WorkstreamTargetInitiative[];
+  locked_run_rate_value: string;
+  plan_total: string;
+  actual_total: string;
+  variance: string;
+}
+
+export interface WorkstreamTargetPreviewResponse extends WorkstreamTargetSnapshot {
+  latest_locked_version?: number | null;
+}
+
+export interface WorkstreamTargetLockVersion {
+  id: string;
+  workstream_id: string;
+  version: number;
+  lock_date: string;
+  locked_at: string;
+  locked_by_id?: string | null;
+  lock_cadence: 'one_off' | 'annual' | 'cycle_based';
+  cutoff_rule: 'approved_at_lte_lock_date';
+  valuation_method: 'run_rate';
+  locked_value_basis: 'net_run_rate' | 'benefit_run_rate';
+  included_initiative_ids: string[];
+  excluded_initiative_ids: string[];
+  locked_run_rate_value: string;
+  plan_total: string;
+  actual_total: string;
+  variance: string;
+  snapshot: WorkstreamTargetSnapshot;
+}
+
+export interface WorkstreamTargetLockResponse {
+  current: WorkstreamTargetLockVersion | null;
+  history: WorkstreamTargetLockVersion[];
 }
 
 export function initiativeLabel(initiative: InitiativeOption | null | undefined): string {

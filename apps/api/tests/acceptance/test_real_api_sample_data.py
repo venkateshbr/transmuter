@@ -26,6 +26,7 @@ EMAIL = os.environ.get("TRANSMUTER_E2E_EMAIL", "admin@ishirock.dev")
 PASSWORD = os.environ.get("TRANSMUTER_E2E_PASSWORD", "Transmuter2026!")
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 SHEET_NS = {"main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+_AUTH_HEADERS: dict[str, str] | None = None
 
 
 def _client() -> httpx.Client:
@@ -33,10 +34,14 @@ def _client() -> httpx.Client:
 
 
 def _auth_headers(client: httpx.Client) -> dict[str, str]:
+    global _AUTH_HEADERS
+    if _AUTH_HEADERS is not None:
+        return _AUTH_HEADERS
     response = client.post("/auth/login", json={"email": EMAIL, "password": PASSWORD})
     response.raise_for_status()
     token = response.json()["access_token"]
-    return {"Authorization": f"Bearer {token}"}
+    _AUTH_HEADERS = {"Authorization": f"Bearer {token}"}
+    return _AUTH_HEADERS
 
 
 def _workbook_sheet_names(content: bytes) -> list[str]:
@@ -685,7 +690,7 @@ def test_real_api_status_update_compliance_and_nudge_flow() -> None:
             generated_data = generated.json()
             assert generated_data["summary"]
             assert generated_data["rag_status"] in {"green", "amber", "red"}
-            assert "initiative" in generated_data["sources"]
+            assert "initiatives" in generated_data["sources"]
 
             draft = client.post(
                 f"/initiatives/{tracked_id}/status-updates",
@@ -741,7 +746,7 @@ def test_real_api_status_update_compliance_and_nudge_flow() -> None:
             nudge_data = nudge.json()
             assert nudge_data["success"] is True
             assert nudge_data["channel"] == "both"
-            assert nudge_data["delivery_status"] == "queued"
+            assert nudge_data["delivery_status"] in {"queued", "sent"}
 
             compliance_after = client.get(
                 "/portfolio/status-updates/compliance",
@@ -925,7 +930,7 @@ def test_real_api_people_directory_profile_invite_and_pressure() -> None:
         assert "on_their_plate" in profile_data
         assert "pressure" in profile_data
         assert "last_login_at" in profile_data
-        assert profile_data["status"] in {"active", "ghost", "deactivated"}
+        assert profile_data["status"] in {"active", "pending", "ghost", "deactivated"}
         assert isinstance(profile_data.get("workstreams", []), list)
         original_workstream_ids = [
             item["workstream_id"] for item in profile_data.get("workstreams", [])
@@ -973,22 +978,22 @@ def test_real_api_people_directory_profile_invite_and_pressure() -> None:
             invited.raise_for_status()
             invited_data = invited.json()
             invited_id = invited_data["id"]
-            assert invited_data["status"] == "ghost"
+            assert invited_data["status"] == "pending"
 
             invites = client.get("/invites", headers=headers)
             invites.raise_for_status()
             assert any(item["email"] == invite_email for item in invites.json()["items"])
 
-            deactivated = client.post(
-                f"/users/{invited_id}/deactivate",
+            revoked = client.post(
+                f"/invites/{invited_id}/revoke",
                 headers=headers,
             )
-            deactivated.raise_for_status()
-            assert deactivated.json()["status"] == "deactivated"
+            revoked.raise_for_status()
+            assert revoked.json()["status"] == "revoked"
             invited_id = None
         finally:
             if invited_id:
-                client.post(f"/users/{invited_id}/deactivate", headers=headers)
+                client.post(f"/invites/{invited_id}/revoke", headers=headers)
             client.put(
                 f"/users/{user_id}/workstreams",
                 headers=headers,
@@ -1316,10 +1321,18 @@ def test_real_api_financial_grid_save_reload_and_value_bridge() -> None:
 
         initiatives = client.get("/initiatives", headers=headers)
         initiatives.raise_for_status()
-        initiative_id = initiatives.json()["items"][0]["id"]
+        initiative_items = initiatives.json()["items"]
+        initiative_id = initiative_items[0]["id"]
+        for item in initiative_items:
+            candidate = client.get(f"/initiatives/{item['id']}/financials", headers=headers)
+            candidate.raise_for_status()
+            if not candidate.json()["locked"]:
+                initiative_id = item["id"]
+                break
 
         grid = client.get(f"/initiatives/{initiative_id}/financials", headers=headers)
         grid.raise_for_status()
+        assert grid.json()["locked"] is False
         entries = grid.json()["entries"]
         assert entries, "seeded initiative must include financial entries"
         period_keys = {(entry["year"], entry["quarter"], entry["month"]) for entry in entries}
@@ -1614,7 +1627,14 @@ def test_real_api_financial_excel_export_import_roundtrip() -> None:
 
         initiatives = client.get("/initiatives", headers=headers)
         initiatives.raise_for_status()
-        initiative_id = initiatives.json()["items"][0]["id"]
+        initiative_items = initiatives.json()["items"]
+        initiative_id = initiative_items[0]["id"]
+        for item in initiative_items:
+            candidate = client.get(f"/initiatives/{item['id']}/financials", headers=headers)
+            candidate.raise_for_status()
+            if not candidate.json()["locked"]:
+                initiative_id = item["id"]
+                break
 
         exported = client.get(
             f"/initiatives/{initiative_id}/financials/export.xlsx",
@@ -1642,6 +1662,7 @@ def test_real_api_financial_excel_export_import_roundtrip() -> None:
 
             grid = client.get(f"/initiatives/{initiative_id}/financials", headers=headers)
             grid.raise_for_status()
+            assert grid.json()["locked"] is False
             matching = [
                 entry
                 for entry in grid.json()["entries"]

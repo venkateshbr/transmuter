@@ -300,7 +300,7 @@ interface GlobalSearchResult {
             }
 
             @for (msg of messages(); track msg.timestamp) {
-              <div class="flex flex-col" [class.items-end]="msg.role === 'user'">
+              <div class="flex flex-col" [attr.data-testid]="'assistant-message-' + msg.role" [class.items-end]="msg.role === 'user'">
                 <div class="max-w-[85%] p-3 text-sm border"
                      [class.bg-[var(--t-accent)]]="msg.role === 'user'"
                      [class.text-white]="msg.role === 'user'"
@@ -312,7 +312,7 @@ interface GlobalSearchResult {
                   @if (msg.role === 'assistant' && msg.sources?.length) {
                     <div class="mt-3 flex flex-wrap gap-1 border-t border-[var(--t-border)] pt-2">
                       @for (source of msg.sources; track source.label) {
-                        <span class="rounded bg-[var(--t-surface)] px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-[var(--t-text-secondary)]">
+                        <span data-testid="assistant-source-chip" class="rounded bg-[var(--t-surface)] px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-[var(--t-text-secondary)]">
                           {{ source.label }}
                         </span>
                       }

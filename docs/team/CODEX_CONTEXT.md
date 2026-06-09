@@ -1,6 +1,6 @@
 # Codex Context - Transmuter
 
-Last updated: 2026-05-31
+Last updated: 2026-06-09
 
 This file captures durable working context for future Codex sessions. It supplements
 `AGENTS.md`, `docs/team/SDLC_PROTOCOL.md`, and `team/DESIGN_SYSTEM.md`; it does not
@@ -28,6 +28,10 @@ replace them.
   - Public app hostname: `https://transmuter.ishirock.tech`, routed through
     Traefik to the Hostinger web container.
   - Local Supabase Docker instance is exposed at `https://supabase.ishirock.tech`.
+  - Runtime Supabase selection is controlled by `SUPABASE_TARGET=cloud|local`.
+    Hostinger primary runtime should use `local` with
+    `DATABASE_LOCAL_URL` search path `transmuter,public,extensions`; Cloud remains
+    the fallback/demo target.
   - Hostinger deployment runbook: `docs/team/HOSTINGER_VPS_DEPLOYMENT.md`.
   - Hostinger deployment root on the VPS: `/docker/transmuter`.
   - Hostinger staged compose file on the VPS: `/docker/transmuter/docker-compose.yml`.
@@ -35,6 +39,17 @@ replace them.
   - Hostinger deploy script: `infra/hostinger/deploy.sh`.
   - Cloud-to-local Supabase schema migration script:
     `infra/hostinger/migrate_supabase_schema_to_transmuter.sh`.
+  - When the user asks to build and test, deploy through
+    `infra/hostinger/deploy.sh` and validate the real public domain
+    `https://transmuter.ishirock.tech` unless they explicitly ask for local-only
+    validation.
+  - Post-deploy validation should include `https://transmuter.ishirock.tech/health`,
+    `https://transmuter.ishirock.tech/api/health`, login through the browser,
+    and the touched real workflows on the public domain.
+  - Hostinger `worker` is opt-in via Compose profile `worker`. The current
+    cloud Supabase direct DB hostname resolves IPv6-only from this VPS, so the
+    Procrastinate worker should not be started until an IPv4-capable Postgres
+    pooler/direct URL is configured.
 - Frontend runtime config should point to `/api`; the web nginx container proxies
   that path to the Docker Compose API service at `http://api:8001`.
 

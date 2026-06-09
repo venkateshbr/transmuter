@@ -1,6 +1,6 @@
 # Environment Configuration
 
-Last updated: 2026-05-04
+Last updated: 2026-06-09
 
 Copy `.env.example` to `.env` before running Transmuter:
 
@@ -15,9 +15,10 @@ payment keys, webhook secrets, and optional AI/observability keys.
 
 | Variable | Required | Purpose | Example / Notes |
 | --- | --- | --- | --- |
-| `SUPABASE_URL` | Yes | Supabase project URL used by API and scripts. | `https://<project-ref>.supabase.co` |
-| `SUPABASE_ANON_KEY` | Yes | Supabase anon key for user-scoped clients and auth. | Starts with `ey...` |
-| `SUPABASE_SERVICE_KEY` | Yes | Supabase service-role key for admin/server operations. | Secret. Never expose in browser. |
+| `SUPABASE_TARGET` | Yes | Selects the active Supabase target. | `cloud` or `local`. |
+| `SUPABASE_<TARGET>_URL` | Yes | Supabase project URL used by API and scripts for the selected target. | `SUPABASE_CLOUD_URL` or `SUPABASE_LOCAL_URL`. |
+| `SUPABASE_<TARGET>_ANON_KEY` | Yes | Supabase anon key for user-scoped clients and auth for the selected target. | Starts with `ey...` |
+| `SUPABASE_<TARGET>_SERVICE_KEY` | Yes | Supabase service-role key for admin/server operations for the selected target. | Secret. Never expose in browser. |
 | `JWT_SECRET` | Yes | Signs Transmuter API JWTs after Supabase login. | At least 32 random chars. |
 | `OPENROUTER_API_KEY` | Yes by current config | Enables AI agents through OpenRouter. | Use a placeholder only if AI will not be exercised. |
 
@@ -41,16 +42,43 @@ payment keys, webhook secrets, and optional AI/observability keys.
 
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
-| `SUPABASE_URL` | Yes | None | Supabase project URL. |
-| `SUPABASE_ANON_KEY` | Yes | None | Browser-safe anon key, also used for auth flow. |
-| `SUPABASE_SERVICE_KEY` | Yes | None | Server-only service-role key. |
-| `DATABASE_URL` | Recommended | Empty | PostgreSQL connection string for Procrastinate background jobs. |
+| `SUPABASE_TARGET` | Yes | `cloud` | Active target. Must be `cloud` or `local`. |
+| `SUPABASE_CLOUD_URL` | Required when `SUPABASE_TARGET=cloud` | None | Supabase Cloud project URL. |
+| `SUPABASE_CLOUD_ANON_KEY` | Required when `SUPABASE_TARGET=cloud` | None | Supabase Cloud anon key. |
+| `SUPABASE_CLOUD_SERVICE_KEY` | Required when `SUPABASE_TARGET=cloud` | None | Supabase Cloud service-role key. |
+| `DATABASE_CLOUD_URL` | Recommended when `SUPABASE_TARGET=cloud` | Empty | Supabase Cloud PostgreSQL connection string for Procrastinate/background jobs. |
+| `SUPABASE_LOCAL_URL` | Required when `SUPABASE_TARGET=local` | None | Hostinger local Supabase API URL, currently `https://supabase.ishirock.tech`. |
+| `SUPABASE_LOCAL_ANON_KEY` | Required when `SUPABASE_TARGET=local` | None | Hostinger local Supabase anon key. |
+| `SUPABASE_LOCAL_SERVICE_KEY` | Required when `SUPABASE_TARGET=local` | None | Hostinger local Supabase service-role key. |
+| `DATABASE_LOCAL_URL` | Recommended when `SUPABASE_TARGET=local` | Empty | Hostinger local PostgreSQL connection string with `transmuter` first in `search_path`. |
+| `SUPABASE_URL` | Compatibility fallback | Empty | Legacy direct Supabase URL used only when the selected target-specific URL is absent. |
+| `SUPABASE_ANON_KEY` | Compatibility fallback | Empty | Legacy direct anon key used only when the selected target-specific anon key is absent. |
+| `SUPABASE_SERVICE_KEY` | Compatibility fallback | Empty | Legacy direct service key used only when the selected target-specific service key is absent. |
+| `DATABASE_URL` | Compatibility fallback | Empty | Legacy direct PostgreSQL URL used only when the selected target-specific database URL is absent. |
 
-Use the Supabase connection string for `DATABASE_URL`, usually:
+Use the Supabase Cloud connection string for `DATABASE_CLOUD_URL`, usually:
 
 ```text
 postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres
 ```
+
+For Hostinger local Supabase, keep `transmuter` first in the database search path:
+
+```text
+postgresql://postgres:<password>@host.docker.internal:5432/postgres?options=-csearch_path%3Dtransmuter,public,extensions
+```
+
+The local Supabase REST/PostgREST service must also expose `transmuter` first
+because the API uses unqualified Supabase `.table(...)` calls:
+
+```text
+PGRST_DB_SCHEMAS=transmuter,public,graphql_public
+PGRST_DB_EXTRA_SEARCH_PATH=transmuter,public,extensions
+```
+
+Switching between Cloud and Hostinger local requires only changing
+`SUPABASE_TARGET` and restarting the API/container, assuming both target blocks
+are populated.
 
 ## AI And Observability
 
@@ -149,6 +177,7 @@ These are not required for normal runtime, but are useful for regression tests.
 | `RUN_REAL_ACCEPTANCE` | Acceptance tests | Unset | Set to `1` to enable real API acceptance tests. |
 | `TRANSMUTER_API_BASE_URL` | Tests | `http://localhost:8000` | API URL for API/UI tests. |
 | `TRANSMUTER_UI_BASE_URL` | UI E2E | `http://localhost:4300` | Angular URL for browser tests. |
+| `DB_SCHEMA` | RLS verification | `public` | Schema inspected by RLS metadata/behavior checks. Use `transmuter` for Hostinger local Supabase. |
 | `TRANSMUTER_E2E_EMAIL` | Tests | Test default in code | Seeded test user email. |
 | `TRANSMUTER_E2E_PASSWORD` | Tests | Test default in code | Seeded test user password. Do not commit real values. |
 
@@ -157,7 +186,8 @@ These are not required for normal runtime, but are useful for regression tests.
 Before local or production startup:
 
 - `.env` exists and is not committed.
-- Supabase URL, anon key, and service key point to the intended project.
+- `SUPABASE_TARGET` points to the intended project, and that target's URL, anon
+  key, service key, and database URL are populated.
 - JWT secret is random and at least 32 characters.
 - Stripe keys, webhook secret, and Price IDs all come from the same Stripe mode
   (`test` or `live`), never mixed.

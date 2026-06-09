@@ -385,11 +385,14 @@ def _db_type(kind: str) -> str:
 
 def bootstrap_demo_portfolio(client: Client, tenant_id: str, owner_user_id: str) -> dict[str, int]:
     """Seed the deterministic multi-year demo portfolio for a tenant."""
+    _seed_bankable_plan_governance(client, tenant_id)
     workstream_ids = _seed_workstreams(client, tenant_id)
     initiative_ids = _seed_initiatives(client, tenant_id, workstream_ids, owner_user_id)
     _seed_milestones(client, tenant_id, initiative_ids, owner_user_id)
     _seed_financial_entries(client, tenant_id, initiative_ids)
     _seed_cost_lines(client, tenant_id, initiative_ids)
+    _seed_bankable_plan_locks(client, tenant_id, initiative_ids, owner_user_id)
+    _seed_workstream_target_locks(client, tenant_id, initiative_ids, workstream_ids, owner_user_id)
     _seed_dependencies(client, tenant_id, initiative_ids, owner_user_id)
     _seed_benefit_ledger(client, tenant_id, initiative_ids)
     _seed_initiative_controls(client, tenant_id, initiative_ids)
@@ -397,6 +400,30 @@ def bootstrap_demo_portfolio(client: Client, tenant_id: str, owner_user_id: str)
         "workstreams": len(workstream_ids),
         "initiatives": len(initiative_ids),
     }
+
+
+def _seed_bankable_plan_governance(client: Client, tenant_id: str) -> None:
+    org = (
+        client.table("organizations")
+        .select("settings")
+        .eq("id", tenant_id)
+        .maybe_single()
+        .execute()
+    )
+    settings = (org.data or {}).get("settings") or {}
+    settings["bankable_plan_governance"] = {
+        **(settings.get("bankable_plan_governance") or {}),
+        "initiative_plan_lock_gate_number": 2,
+        "plan_lock_on_approval": True,
+        "allow_rebaseline": True,
+        "rebaseline_roles": ["transformation_office"],
+        "workstream_lock_cadence": "one_off",
+        "initiative_inclusion_cutoff": "approved_at_lte_lock_date",
+        "valuation_method": "run_rate",
+        "locked_value_basis": "net_run_rate",
+        "workstream_target_versioning": True,
+    }
+    client.table("organizations").update({"settings": settings}).eq("id", tenant_id).execute()
 
 
 def _seed_workstreams(client: Client, tenant_id: str) -> dict[str, str]:
@@ -659,6 +686,204 @@ def _seed_cost_lines(client: Client, tenant_id: str, initiative_ids: dict[str, s
             ).execute()
         else:
             client.table("financial_cost_lines").insert({"id": str(uuid4()), **payload}).execute()
+
+
+def _seed_bankable_plan_locks(
+    client: Client,
+    tenant_id: str,
+    initiative_ids: dict[str, str],
+    owner_user_id: str,
+) -> None:
+    for initiative in INITIATIVES:
+        if initiative.stage == "scoping":
+            continue
+        iid = initiative_ids[initiative.label]
+        approved_at = initiative.actual_start or initiative.planned_start
+        submission = (
+            client.table("gate_submissions")
+            .select("id")
+            .eq("tenant_id", tenant_id)
+            .eq("initiative_id", iid)
+            .eq("gate_number", 2)
+            .eq("decision", "approved")
+            .execute()
+        )
+        submission_payload = {
+            "tenant_id": tenant_id,
+            "initiative_id": iid,
+            "gate_number": 2,
+            "submitted_by_id": owner_user_id,
+            "submitted_at": approved_at.isoformat(),
+            "decision": "approved",
+            "decided_by_id": owner_user_id,
+            "decided_at": approved_at.isoformat(),
+            "commentary": "Seeded demo approval for initiative plan lock.",
+            "criteria_snapshot": [
+                {
+                    "criterion_id": "demo-bankable-plan",
+                    "label": "Bankable plan ready",
+                    "ticked": True,
+                    "ticked_by": owner_user_id,
+                    "ticked_at": approved_at.isoformat(),
+                }
+            ],
+        }
+        if submission.data:
+            submission_id = submission.data[0]["id"]
+            client.table("gate_submissions").update(submission_payload).eq(
+                "id", submission_id
+            ).execute()
+        else:
+            submission_id = str(uuid4())
+            client.table("gate_submissions").insert(
+                {"id": submission_id, **submission_payload}
+            ).execute()
+
+        existing_plan = (
+            client.table("bankable_plans")
+            .select("id")
+            .eq("tenant_id", tenant_id)
+            .eq("initiative_id", iid)
+            .eq("version", 1)
+            .execute()
+        )
+        snapshot = {
+            "entries": [],
+            "cost_lines": [],
+            "metric_values": [],
+            "selections": {"metric_keys": [], "cost_category_keys": []},
+            "financial_mode": {
+                "key": "bankable_locked",
+                "label": "Locked bankable plan",
+                "description": "Seeded immutable baseline for demo portfolio.",
+                "locked": True,
+                "scenarios": ["approval"],
+            },
+            "summary": {
+                "net_value_plan": _dec(initiative.base_value),
+                "net_value_actual": _dec(initiative.actual_value),
+                "benefit_run_rate": _dec(initiative.base_value),
+                "cost_run_rate": "0.0000",
+            },
+        }
+        plan_payload = {
+            "tenant_id": tenant_id,
+            "initiative_id": iid,
+            "version": 1,
+            "trigger_type": "approval",
+            "trigger_submission_id": submission_id,
+            "locked_by_id": owner_user_id,
+            "locked_at": approved_at.isoformat(),
+            "locked_reason": "Seeded demo approval for initiative plan lock.",
+            "snapshot": snapshot,
+        }
+        if existing_plan.data:
+            client.table("bankable_plans").update(plan_payload).eq(
+                "id", existing_plan.data[0]["id"]
+            ).execute()
+        else:
+            client.table("bankable_plans").insert({"id": str(uuid4()), **plan_payload}).execute()
+
+
+def _seed_workstream_target_locks(
+    client: Client,
+    tenant_id: str,
+    initiative_ids: dict[str, str],
+    workstream_ids: dict[str, str],
+    owner_user_id: str,
+) -> None:
+    lock_date = date(2026, 12, 31)
+    for workstream_key, workstream_id in workstream_ids.items():
+        workstream_initiatives = [
+            initiative
+            for initiative in INITIATIVES
+            if initiative.workstream == workstream_key
+        ]
+        included = [initiative for initiative in workstream_initiatives if initiative.stage != "scoping"]
+        excluded = [initiative for initiative in workstream_initiatives if initiative.stage == "scoping"]
+        plan_total = sum((initiative.base_value for initiative in included), Decimal("0"))
+        actual_total = sum((initiative.actual_value or Decimal("0") for initiative in included), Decimal("0"))
+        snapshot = {
+            "workstream_id": workstream_id,
+            "workstream_name": next((name for key, name in WORKSTREAMS if key == workstream_key), workstream_key),
+            "lock_date": lock_date.isoformat(),
+            "settings": {
+                "initiative_plan_lock_gate_number": 2,
+                "plan_lock_on_approval": True,
+                "allow_rebaseline": True,
+                "rebaseline_roles": ["transformation_office"],
+                "workstream_lock_cadence": "one_off",
+                "initiative_inclusion_cutoff": "approved_at_lte_lock_date",
+                "valuation_method": "run_rate",
+                "locked_value_basis": "net_run_rate",
+                "workstream_target_versioning": True,
+            },
+            "included": [
+                {
+                    "initiative_id": initiative_ids[initiative.label],
+                    "initiative_code": initiative.code,
+                    "name": initiative.name,
+                    "stage": initiative.stage,
+                    "approved_at": (initiative.actual_start or initiative.planned_start).isoformat(),
+                    "bankable_plan_version": 1,
+                    "value_source": "bankable_plan",
+                    "net_run_rate_value": _dec(initiative.base_value),
+                    "actual_value": _dec(initiative.actual_value),
+                }
+                for initiative in included
+            ],
+            "excluded": [
+                {
+                    "initiative_id": initiative_ids[initiative.label],
+                    "initiative_code": initiative.code,
+                    "name": initiative.name,
+                    "stage": initiative.stage,
+                    "approved_at": None,
+                    "bankable_plan_version": None,
+                    "value_source": "current_financials_preview",
+                    "net_run_rate_value": _dec(initiative.base_value),
+                    "actual_value": _dec(initiative.actual_value),
+                }
+                for initiative in excluded
+            ],
+            "locked_run_rate_value": _dec(plan_total),
+            "plan_total": _dec(plan_total),
+            "actual_total": _dec(actual_total),
+            "variance": _dec(actual_total - plan_total),
+        }
+        existing = (
+            client.table("workstream_target_locks")
+            .select("id")
+            .eq("tenant_id", tenant_id)
+            .eq("workstream_id", workstream_id)
+            .eq("version", 1)
+            .execute()
+        )
+        payload = {
+            "tenant_id": tenant_id,
+            "workstream_id": workstream_id,
+            "version": 1,
+            "lock_date": lock_date.isoformat(),
+            "locked_at": lock_date.isoformat(),
+            "locked_by_id": owner_user_id,
+            "lock_cadence": "one_off",
+            "cutoff_rule": "approved_at_lte_lock_date",
+            "valuation_method": "run_rate",
+            "locked_value_basis": "net_run_rate",
+            "included_initiative_ids": [initiative_ids[initiative.label] for initiative in included],
+            "excluded_initiative_ids": [initiative_ids[initiative.label] for initiative in excluded],
+            "locked_run_rate_value": _dec(plan_total),
+            "plan_total": _dec(plan_total),
+            "actual_total": _dec(actual_total),
+            "variance": _dec(actual_total - plan_total),
+            "snapshot": snapshot,
+        }
+        if existing.data:
+            client.table("workstream_target_locks").update(payload).eq(
+                "id", existing.data[0]["id"]
+            ).execute()
+        else:
+            client.table("workstream_target_locks").insert({"id": str(uuid4()), **payload}).execute()
 
 
 def _seed_dependencies(

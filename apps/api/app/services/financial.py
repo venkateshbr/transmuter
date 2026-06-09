@@ -5,6 +5,7 @@ All financial calculations use Decimal arithmetic. Never float.
 
 from __future__ import annotations
 
+# ruff: noqa: F401
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID
@@ -20,8 +21,11 @@ from app.domain.financials import (
     BenefitLedgerEntryCreate,
     BenefitLedgerEntryUpdate,
     BenefitLedgerGranularity,
+    BenefitLedgerInitiativeRollup,
     BenefitLedgerPeriodSummary,
+    BenefitLedgerRollupSummaryResponse,
     BenefitLedgerSummaryResponse,
+    BenefitLedgerWorkstreamRollup,
     BreakEvenPoint,
     BreakEvenResponse,
     CostLineCreate,
@@ -39,6 +43,11 @@ from app.domain.financials import (
     FinancialConfigurationUpdate,
     FinancialEntryRow,
     FinancialEntryUpdate,
+    FinancialForecastResponse,
+    FinancialForecastRow,
+    FinancialForecastUpdate,
+    FinancialGovernanceSettings,
+    FinancialGovernanceSettingsUpdate,
     FinancialGridResponse,
     FinancialGridUpdate,
     FinancialMetricDeactivateRequest,
@@ -60,6 +69,12 @@ from app.domain.financials import (
     ScenarioFinancialSummary,
     ValueBridgeCase,
     ValueBridgeResponse,
+    WorkstreamTargetInitiative,
+    WorkstreamTargetLockRequest,
+    WorkstreamTargetLockResponse,
+    WorkstreamTargetLockVersion,
+    WorkstreamTargetPreviewResponse,
+    WorkstreamTargetSnapshot,
 )
 from app.repositories.financial import FinancialRepository
 from app.services.financial_workbook import build_financial_workbook, parse_financial_workbook
@@ -185,8 +200,26 @@ class FinancialService:
     ) -> FinancialGridResponse:
         """Upsert the full financial grid."""
         self._ensure_tenant_initiative(initiative_id)
-        self._assert_financials_editable(initiative_id)
+        locked, _ = self._financial_lock_state(initiative_id)
         data = self._normalize_grid_to_planned_window(initiative_id, data)
+        existing_entries = (
+            {self._period_key(row): row for row in self._repo.get_entries(initiative_id)}
+            if locked
+            else {}
+        )
+        existing_costs = (
+            {self._cost_period_key(row): row for row in self._repo.list_cost_lines(initiative_id)}
+            if locked
+            else {}
+        )
+        existing_metrics = (
+            {
+                self._metric_period_key(row): row
+                for row in self._repo.list_metric_values(initiative_id)
+            }
+            if locked
+            else {}
+        )
         db_rows: list[dict[str, object]] = []
         for entry in data.entries:
             row: dict[str, object] = {
@@ -228,6 +261,31 @@ class FinancialService:
                 val = getattr(entry, field_name)
                 row[field_name] = _money(val) if val is not None else None
 
+            if locked:
+                existing = existing_entries.get(self._period_key(row))
+                if existing:
+                    for field_name in [
+                        "revenue_uplift_base",
+                        "revenue_uplift_high",
+                        "revenue_uplift_pct_base",
+                        "revenue_uplift_pct_high",
+                        "gross_margin_base",
+                        "gross_margin_high",
+                        "gm_pct_base",
+                        "gm_pct_high",
+                        "gm_uplift_base",
+                        "gm_uplift_high",
+                        "gm_uplift_pct_base",
+                        "gm_uplift_pct_high",
+                        "cogs_base",
+                        "cogs_high",
+                        "cogs_pct_base",
+                        "cogs_pct_high",
+                    ]:
+                        row[field_name] = _money(existing.get(field_name))
+                else:
+                    continue
+
             db_rows.append(row)
 
         if db_rows:
@@ -237,38 +295,48 @@ class FinancialService:
         if data.cost_lines:
             cost_rows = []
             for cl in data.cost_lines:
-                cost_rows.append(
-                    {
-                        "name": cl.name,
-                        "category_key": cl.category_key,
-                        "year": cl.year,
-                        "quarter": cl.quarter,
-                        "month": cl.month,
-                        "amount_plan": _money(cl.amount_plan),
-                        "amount_actual": _money(cl.amount_actual)
-                        if cl.amount_actual is not None
-                        else None,
-                        "is_recurring": cl.is_recurring,
-                    }
-                )
+                row = {
+                    "name": cl.name,
+                    "category_key": cl.category_key,
+                    "year": cl.year,
+                    "quarter": cl.quarter,
+                    "month": cl.month,
+                    "amount_plan": _money(cl.amount_plan),
+                    "amount_actual": _money(cl.amount_actual)
+                    if cl.amount_actual is not None
+                    else None,
+                    "is_recurring": cl.is_recurring,
+                }
+                if locked:
+                    existing = existing_costs.get(self._cost_period_key(row))
+                    if not existing:
+                        continue
+                    row["name"] = existing.get("name") or row["name"]
+                    row["amount_plan"] = _money(existing.get("amount_plan"))
+                cost_rows.append(row)
             self._repo.upsert_cost_lines_batch(initiative_id, cost_rows)
 
         if data.metric_values:
             metric_rows = []
             for metric in data.metric_values:
-                metric_rows.append(
-                    {
-                        "metric_key": metric.metric_key,
-                        "year": metric.year,
-                        "quarter": metric.quarter,
-                        "month": metric.month,
-                        "value_base": _money(metric.value_base),
-                        "value_high": _money(metric.value_high),
-                        "value_actual": _money(metric.value_actual)
-                        if metric.value_actual is not None
-                        else None,
-                    }
-                )
+                row = {
+                    "metric_key": metric.metric_key,
+                    "year": metric.year,
+                    "quarter": metric.quarter,
+                    "month": metric.month,
+                    "value_base": _money(metric.value_base),
+                    "value_high": _money(metric.value_high),
+                    "value_actual": _money(metric.value_actual)
+                    if metric.value_actual is not None
+                    else None,
+                }
+                if locked:
+                    existing = existing_metrics.get(self._metric_period_key(row))
+                    if not existing:
+                        continue
+                    row["value_base"] = _money(existing.get("value_base"))
+                    row["value_high"] = _money(existing.get("value_high"))
+                metric_rows.append(row)
             self._repo.upsert_metric_values_batch(initiative_id, metric_rows)
 
         return self.get_financial_grid(initiative_id)
@@ -352,6 +420,25 @@ class FinancialService:
             for row in self._repo.list_config_items()
         ]
         return FinancialConfigurationResponse(groups=groups, items=items)
+
+    def get_governance_settings(self) -> FinancialGovernanceSettings:
+        settings = self._repo.get_organization_settings()
+        raw = settings.get("bankable_plan_governance") or {}
+        if not isinstance(raw, dict):
+            raw = {}
+        return FinancialGovernanceSettings.model_validate(raw)
+
+    def update_governance_settings(
+        self,
+        data: FinancialGovernanceSettingsUpdate,
+    ) -> FinancialGovernanceSettings:
+        current = self.get_governance_settings()
+        patch = data.model_dump(exclude_none=True)
+        next_settings = current.model_copy(update=patch)
+        org_settings = self._repo.get_organization_settings()
+        org_settings["bankable_plan_governance"] = next_settings.model_dump(mode="json")
+        self._repo.update_organization_settings(org_settings)
+        return next_settings
 
     def update_configuration(
         self, data: FinancialConfigurationUpdate
@@ -453,6 +540,35 @@ class FinancialService:
         )
         return self.get_initiative_selections(initiative_id)
 
+    def list_forecasts(self, initiative_id: str) -> FinancialForecastResponse:
+        self._ensure_tenant_initiative(initiative_id)
+        return FinancialForecastResponse(
+            initiative_id=initiative_id,
+            items=[self._to_forecast_row(row) for row in self._repo.list_forecasts(initiative_id)],
+        )
+
+    def update_forecasts(
+        self,
+        initiative_id: str,
+        forecasts: list[FinancialForecastUpdate],
+    ) -> FinancialForecastResponse:
+        self._ensure_tenant_initiative(initiative_id)
+        rows = [
+            {
+                "line_type": item.line_type,
+                "line_key": item.line_key,
+                "year": item.year,
+                "quarter": item.quarter,
+                "month": item.month,
+                "amount_forecast": _money(item.amount_forecast),
+                "notes": item.notes,
+            }
+            for item in forecasts
+        ]
+        if rows:
+            self._repo.upsert_forecasts_batch(initiative_id, rows)
+        return self.list_forecasts(initiative_id)
+
     def get_current_bankable_plan(self, initiative_id: str) -> BankablePlanVersion | None:
         self._ensure_tenant_initiative(initiative_id)
         row = self._repo.get_latest_bankable_plan(initiative_id)
@@ -547,6 +663,170 @@ class FinancialService:
             actual_amount=_money(total_actual),
             variance=_money(total_actual - total_plan),
         )
+
+    def get_benefit_ledger_rollup_summary(
+        self,
+        granularity: BenefitLedgerGranularity,
+        workstream_id: str | None = None,
+    ) -> BenefitLedgerRollupSummaryResponse:
+        initiatives = [
+            row
+            for row in self._repo.get_portfolio_initiatives()
+            if not workstream_id or row.get("workstream_id") == workstream_id
+        ]
+        initiative_ids = [str(row["id"]) for row in initiatives]
+        ledger_rows = self._repo.list_benefit_ledger_entries_for_initiatives(initiative_ids)
+        plans = self._repo.list_latest_bankable_plans_for_initiatives(initiative_ids)
+        plan_by_initiative = {str(row["initiative_id"]): row for row in plans}
+
+        ledger_by_initiative: dict[str, list[dict]] = {}
+        for row in ledger_rows:
+            ledger_by_initiative.setdefault(str(row["initiative_id"]), []).append(row)
+
+        initiative_rollups: list[BenefitLedgerInitiativeRollup] = []
+        workstream_groups: dict[str, dict[str, object]] = {}
+        total_plan = Decimal("0")
+        total_actual = Decimal("0")
+
+        for initiative in initiatives:
+            initiative_id = str(initiative["id"])
+            ws = initiative.get("workstreams") or {}
+            ws_id = str(initiative.get("workstream_id") or "unassigned")
+            ws_name = ws.get("name") or "Unassigned"
+            rows = ledger_by_initiative.get(initiative_id, [])
+            plan_row = plan_by_initiative.get(initiative_id)
+            ledger_plan = sum((_dec(row.get("bankable_plan_amount")) for row in rows), Decimal("0"))
+            actual = sum((_dec(row.get("actual_amount")) for row in rows), Decimal("0"))
+            fallback_plan = self._locked_plan_value(plan_row)
+            plan = ledger_plan if rows else fallback_plan
+            total_plan += plan
+            total_actual += actual
+
+            group = workstream_groups.setdefault(
+                ws_id,
+                {
+                    "workstream_id": None if ws_id == "unassigned" else ws_id,
+                    "workstream_name": ws_name,
+                    "initiative_count": 0,
+                    "locked_initiative_count": 0,
+                    "bankable_plan_amount": Decimal("0"),
+                    "actual_amount": Decimal("0"),
+                },
+            )
+            group["initiative_count"] = int(group["initiative_count"]) + 1
+            if plan_row:
+                group["locked_initiative_count"] = int(group["locked_initiative_count"]) + 1
+            group["bankable_plan_amount"] = _dec(group["bankable_plan_amount"]) + plan
+            group["actual_amount"] = _dec(group["actual_amount"]) + actual
+
+            initiative_rollups.append(
+                BenefitLedgerInitiativeRollup(
+                    initiative_id=initiative_id,
+                    initiative_code=initiative.get("initiative_code"),
+                    name=initiative.get("name") or "Initiative",
+                    stage=initiative.get("stage"),
+                    workstream_id=None if ws_id == "unassigned" else ws_id,
+                    workstream_name=ws_name,
+                    locked_bankable_plan_version=int(plan_row["version"]) if plan_row else None,
+                    bankable_plan_amount=_money(plan),
+                    actual_amount=_money(actual),
+                    variance=_money(actual - plan),
+                )
+            )
+
+        workstream_rollups = []
+        for group in workstream_groups.values():
+            plan = _dec(group["bankable_plan_amount"])
+            actual = _dec(group["actual_amount"])
+            workstream_rollups.append(
+                BenefitLedgerWorkstreamRollup(
+                    workstream_id=group["workstream_id"],  # type: ignore[arg-type]
+                    workstream_name=str(group["workstream_name"]),
+                    initiative_count=int(group["initiative_count"]),
+                    locked_initiative_count=int(group["locked_initiative_count"]),
+                    bankable_plan_amount=_money(plan),
+                    actual_amount=_money(actual),
+                    variance=_money(actual - plan),
+                )
+            )
+
+        scope_name = "Portfolio"
+        if workstream_id:
+            scope_name = next(
+                (
+                    str((row.get("workstreams") or {}).get("name") or "Workstream")
+                    for row in initiatives
+                    if row.get("workstream_id") == workstream_id
+                ),
+                "Workstream",
+            )
+
+        return BenefitLedgerRollupSummaryResponse(
+            scope="workstream" if workstream_id else "portfolio",
+            scope_id=workstream_id,
+            scope_name=scope_name,
+            granularity=granularity,
+            periods=self._benefit_ledger_period_summaries(ledger_rows, granularity),
+            bankable_plan_amount=_money(total_plan),
+            actual_amount=_money(total_actual),
+            variance=_money(total_actual - total_plan),
+            workstreams=sorted(workstream_rollups, key=lambda item: item.workstream_name),
+            initiatives=sorted(
+                initiative_rollups,
+                key=lambda item: (item.workstream_name or "", item.initiative_code or item.name),
+            ),
+        )
+
+    def get_workstream_target_preview(
+        self,
+        workstream_id: str,
+        lock_date: date,
+    ) -> WorkstreamTargetPreviewResponse:
+        snapshot = self._build_workstream_target_snapshot(workstream_id, lock_date)
+        latest = self._repo.get_latest_workstream_target_lock(workstream_id)
+        return WorkstreamTargetPreviewResponse(
+            **snapshot.model_dump(),
+            latest_locked_version=int(latest["version"]) if latest else None,
+        )
+
+    def get_workstream_target_history(self, workstream_id: str) -> WorkstreamTargetLockResponse:
+        rows = self._repo.list_workstream_target_locks(workstream_id)
+        history = [self._to_workstream_target_lock_version(row) for row in rows]
+        return WorkstreamTargetLockResponse(
+            current=history[-1] if history else None,
+            history=history,
+        )
+
+    def lock_workstream_target(
+        self,
+        workstream_id: str,
+        data: WorkstreamTargetLockRequest,
+        locked_by_id: str,
+    ) -> WorkstreamTargetLockVersion:
+        snapshot = self._build_workstream_target_snapshot(workstream_id, data.lock_date)
+        latest = self._repo.get_latest_workstream_target_lock(workstream_id)
+        version = int(latest["version"]) + 1 if latest else 1
+        row = self._repo.create_workstream_target_lock(
+            {
+                "workstream_id": workstream_id,
+                "version": version,
+                "lock_date": data.lock_date.isoformat(),
+                "locked_at": datetime.now(UTC).isoformat(),
+                "locked_by_id": locked_by_id,
+                "lock_cadence": snapshot.settings.workstream_lock_cadence,
+                "cutoff_rule": snapshot.settings.initiative_inclusion_cutoff,
+                "valuation_method": snapshot.settings.valuation_method,
+                "locked_value_basis": snapshot.settings.locked_value_basis,
+                "included_initiative_ids": [item.initiative_id for item in snapshot.included],
+                "excluded_initiative_ids": [item.initiative_id for item in snapshot.excluded],
+                "locked_run_rate_value": snapshot.locked_run_rate_value,
+                "plan_total": snapshot.plan_total,
+                "actual_total": snapshot.actual_total,
+                "variance": snapshot.variance,
+                "snapshot": snapshot.model_dump(mode="json"),
+            }
+        )
+        return self._to_workstream_target_lock_version(row)
 
     def lock_bankable_plan_from_approval(
         self,
@@ -658,10 +938,45 @@ class FinancialService:
         )
 
     @staticmethod
+    def _locked_plan_value(row: dict | None) -> Decimal:  # type: ignore[type-arg]
+        if not row:
+            return Decimal("0")
+        snapshot = row.get("snapshot") or {}
+        if isinstance(snapshot, BankablePlanSnapshot):
+            return _dec(snapshot.summary.net_value_plan)
+        summary = snapshot.get("summary") if isinstance(snapshot, dict) else {}
+        if isinstance(summary, dict):
+            return _dec(summary.get("net_value_plan"))
+        return Decimal("0")
+
+    @staticmethod
     def _as_date(value: object) -> date:
         if isinstance(value, date):
             return value
         return date.fromisoformat(str(value))
+
+    @staticmethod
+    def _period_key(row: dict) -> tuple[object, object, object]:  # type: ignore[type-arg]
+        return (row.get("year"), row.get("quarter"), row.get("month"))
+
+    @staticmethod
+    def _cost_period_key(row: dict) -> tuple[object, object, object, object, object]:  # type: ignore[type-arg]
+        return (
+            row.get("category_key", "other"),
+            row.get("year"),
+            row.get("quarter"),
+            row.get("month"),
+            row.get("is_recurring"),
+        )
+
+    @staticmethod
+    def _metric_period_key(row: dict) -> tuple[object, object, object, object]:  # type: ignore[type-arg]
+        return (
+            row.get("metric_key"),
+            row.get("year"),
+            row.get("quarter"),
+            row.get("month"),
+        )
 
     def _benefit_entry_payload(self, data: BenefitLedgerEntryCreate) -> dict[str, object]:
         period_end = data.period_end or data.period_start
@@ -693,6 +1008,128 @@ class FinancialService:
             updated_at=str(row.get("updated_at") or ""),
         )
 
+    @staticmethod
+    def _to_forecast_row(row: dict) -> FinancialForecastRow:  # type: ignore[type-arg]
+        return FinancialForecastRow(
+            id=row.get("id"),
+            initiative_id=row["initiative_id"],
+            line_type=row["line_type"],
+            line_key=row["line_key"],
+            year=row["year"],
+            quarter=row.get("quarter"),
+            month=row.get("month"),
+            amount_forecast=_money(row.get("amount_forecast")),
+            notes=row.get("notes"),
+        )
+
+    def _build_workstream_target_snapshot(
+        self,
+        workstream_id: str,
+        lock_date: date,
+    ) -> WorkstreamTargetSnapshot:
+        settings = self.get_governance_settings()
+        workstream = next(
+            (row for row in self._repo.list_workstreams() if row["id"] == workstream_id),
+            None,
+        )
+        if not workstream:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Workstream not found",
+            )
+
+        initiatives = self._repo.list_workstream_initiatives(workstream_id)
+        initiative_ids = [row["id"] for row in initiatives]
+        approvals = self._repo.list_approved_gate_submissions(
+            initiative_ids,
+            settings.initiative_plan_lock_gate_number,
+            lock_date,
+        )
+        approved_at_by_initiative: dict[str, str] = {}
+        for row in approvals:
+            decided_at = row.get("decided_at")
+            if decided_at:
+                approved_at_by_initiative[row["initiative_id"]] = str(decided_at)
+
+        included: list[WorkstreamTargetInitiative] = []
+        excluded: list[WorkstreamTargetInitiative] = []
+        for initiative in initiatives:
+            item = self._workstream_target_initiative(
+                initiative,
+                approved_at_by_initiative.get(initiative["id"]),
+            )
+            if item.approved_at:
+                included.append(item)
+            else:
+                excluded.append(item)
+
+        plan_total = sum((_dec(item.net_run_rate_value) for item in included), Decimal("0"))
+        actual_total = sum((_dec(item.actual_value) for item in included), Decimal("0"))
+        return WorkstreamTargetSnapshot(
+            workstream_id=workstream_id,
+            workstream_name=workstream.get("name"),
+            lock_date=lock_date,
+            settings=settings,
+            included=included,
+            excluded=excluded,
+            locked_run_rate_value=_money(plan_total),
+            plan_total=_money(plan_total),
+            actual_total=_money(actual_total),
+            variance=_money(actual_total - plan_total),
+        )
+
+    def _workstream_target_initiative(
+        self,
+        initiative: dict,  # type: ignore[type-arg]
+        approved_at: str | None,
+    ) -> WorkstreamTargetInitiative:
+        bankable_plan = self.get_current_bankable_plan(initiative["id"])
+        if bankable_plan:
+            summary = bankable_plan.snapshot.summary
+            value_source = "bankable_plan"
+            version = bankable_plan.version
+        else:
+            summary = self.get_financial_summary(initiative["id"])
+            value_source = "current_financials_preview"
+            version = None
+        return WorkstreamTargetInitiative(
+            initiative_id=initiative["id"],
+            initiative_code=initiative.get("initiative_code"),
+            name=initiative.get("name") or initiative["id"],
+            stage=initiative.get("stage"),
+            approved_at=approved_at,
+            bankable_plan_version=version,
+            value_source=value_source,
+            net_run_rate_value=_money(summary.net_value_plan),
+            actual_value=_money(summary.net_value_actual),
+        )
+
+    @staticmethod
+    def _to_workstream_target_lock_version(row: dict) -> WorkstreamTargetLockVersion:  # type: ignore[type-arg]
+        return WorkstreamTargetLockVersion(
+            id=row["id"],
+            workstream_id=row["workstream_id"],
+            version=row["version"],
+            lock_date=FinancialService._as_date(row["lock_date"]),
+            locked_at=str(row.get("locked_at") or ""),
+            locked_by_id=row.get("locked_by_id"),
+            lock_cadence=row.get("lock_cadence") or "one_off",
+            cutoff_rule=row.get("cutoff_rule") or "approved_at_lte_lock_date",
+            valuation_method=row.get("valuation_method") or "run_rate",
+            locked_value_basis=row.get("locked_value_basis") or "net_run_rate",
+            included_initiative_ids=[
+                str(item) for item in row.get("included_initiative_ids") or []
+            ],
+            excluded_initiative_ids=[
+                str(item) for item in row.get("excluded_initiative_ids") or []
+            ],
+            locked_run_rate_value=_money(row.get("locked_run_rate_value")),
+            plan_total=_money(row.get("plan_total")),
+            actual_total=_money(row.get("actual_total")),
+            variance=_money(row.get("variance")),
+            snapshot=WorkstreamTargetSnapshot.model_validate(row["snapshot"]),
+        )
+
     def _benefit_ledger_period_summaries(
         self,
         rows: list[dict],  # type: ignore[type-arg]
@@ -710,12 +1147,17 @@ class FinancialService:
                     "year": key[0],
                     "week": key[1],
                     "month": key[2],
+                    "period_start": period_start,
+                    "period_end": self._as_date(row.get("period_end") or row["period_start"]),
                 },
             )
             bucket["bankable_plan_amount"] = _dec(bucket["bankable_plan_amount"]) + _dec(
                 row.get("bankable_plan_amount")
             )
             bucket["actual_amount"] = _dec(bucket["actual_amount"]) + _dec(row.get("actual_amount"))
+            row_end = self._as_date(row.get("period_end") or row["period_start"])
+            bucket["period_start"] = min(bucket["period_start"], period_start)  # type: ignore[type-var]
+            bucket["period_end"] = max(bucket["period_end"], row_end)  # type: ignore[type-var]
 
         periods: list[BenefitLedgerPeriodSummary] = []
         for year, week, month in sorted(
@@ -730,6 +1172,8 @@ class FinancialService:
                     year=year,
                     week=week,
                     month=month,
+                    period_start=bucket["period_start"],  # type: ignore[arg-type]
+                    period_end=bucket["period_end"],  # type: ignore[arg-type]
                     period_granularity=granularity,
                     bankable_plan_amount=_money(bankable),
                     actual_amount=_money(actual),
@@ -1124,10 +1568,12 @@ class FinancialService:
         )
 
     def _financial_lock_state(self, initiative_id: str) -> tuple[bool, str | None]:
-        initiative = self._repo.get_initiative_period(initiative_id)
-        stage = str((initiative or {}).get("stage") or "")
-        if stage and stage != "scoping":
-            return True, "Financials are locked after the initiative moves to execution."
+        settings = self.get_governance_settings()
+        if settings.plan_lock_on_approval and self._repo.get_latest_bankable_plan(initiative_id):
+            return (
+                True,
+                "Approved plan values are locked; forecast and actual values remain editable.",
+            )
         return False, None
 
     def _financial_mode_descriptor(
@@ -1140,7 +1586,7 @@ class FinancialService:
         config: FinancialConfigurationResponse | None = None,
         bankable_plan: BankablePlanVersion | None = None,
     ) -> FinancialModeDescriptor:
-        if bankable_plan is None:
+        if bankable_plan is None and initiative_id:
             bankable_plan = self.get_current_bankable_plan(initiative_id)
         if bankable_plan:
             return FinancialModeDescriptor(

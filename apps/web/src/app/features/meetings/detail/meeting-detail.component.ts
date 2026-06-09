@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ApiService } from '../../../core/services/api.service';
 import { ActivatedRoute, RouterLink, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { forkJoin } from 'rxjs';
 
 @Component({
   selector: 'app-meeting-detail',
@@ -29,7 +30,7 @@ import { FormsModule } from '@angular/forms';
               Teams Invite
             </button>
             <button (click)="openEdit(m)" class="btn-ghost text-sm" aria-label="Edit meeting series">Edit Series</button>
-            <button (click)="startSession()" class="btn-primary text-sm flex items-center gap-2">
+            <button (click)="openStartSession()" class="btn-primary text-sm flex items-center gap-2">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
               Start Session
             </button>
@@ -47,7 +48,7 @@ import { FormsModule } from '@angular/forms';
           </div>
           <div class="card p-4">
             <p class="text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)] mb-1">Workstream</p>
-            <p class="text-sm font-bold text-[var(--t-text-primary)]">{{ m.workstreams?.name || 'All' }}</p>
+            <p class="text-sm font-bold text-[var(--t-text-primary)]">{{ meetingWorkstreamLabel(m) }}</p>
           </div>
           <div class="card p-4">
             <p class="text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)] mb-1">Total Sessions</p>
@@ -80,7 +81,10 @@ import { FormsModule } from '@angular/forms';
             <div class="card p-6">
               <div class="flex justify-between items-center mb-6">
                 <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Next Agenda</h3>
-                <button (click)="showAgendaForm.set(!showAgendaForm())" class="text-xs text-[var(--t-accent)] font-semibold" aria-label="Add agenda item">+ Add Item</button>
+                <div class="flex items-center gap-3">
+                  <button (click)="fetchAgendaSuggestions()" class="text-xs text-[var(--t-accent)] font-semibold" aria-label="Suggest agenda items">Suggest</button>
+                  <button (click)="showAgendaForm.set(!showAgendaForm())" class="text-xs text-[var(--t-accent)] font-semibold" aria-label="Add agenda item">+ Add Item</button>
+                </div>
               </div>
 
               @if (showAgendaForm()) {
@@ -94,6 +98,44 @@ import { FormsModule } from '@angular/forms';
                   </select>
                   <button type="submit" class="btn-primary text-sm">Add</button>
                 </form>
+              }
+
+              @if (suggestionsError()) {
+                <p class="mb-3 text-sm text-red-500">{{ suggestionsError() }}</p>
+              }
+
+              @if (agendaSuggestions().length) {
+                <div class="mb-5 border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4 space-y-3">
+                  <div class="flex items-center justify-between gap-3">
+                    <div>
+                      <p class="text-xs font-black uppercase tracking-widest text-[var(--t-text-secondary)]">AI agenda suggestions</p>
+                      <p class="text-xs text-[var(--t-text-tertiary)]">Review, edit, reject, then save accepted items.</p>
+                    </div>
+                    <button (click)="saveAcceptedSuggestions()" [disabled]="savingSuggestions()" class="btn-primary text-xs">
+                      {{ savingSuggestions() ? 'Saving...' : 'Save accepted' }}
+                    </button>
+                  </div>
+                  @for (suggestion of agendaSuggestions(); track suggestion.client_id) {
+                    <div class="border border-[var(--t-border)] bg-[var(--t-surface)] p-3">
+                      <div class="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          [checked]="suggestion.accepted"
+                          (change)="toggleSuggestionAccepted(suggestion.client_id, $any($event.target).checked)"
+                          class="mt-2 h-4 w-4"
+                          [attr.aria-label]="'Accept agenda suggestion ' + suggestion.text"
+                        />
+                        <div class="min-w-0 flex-1 space-y-2">
+                          <textarea [(ngModel)]="suggestion.text" rows="2" class="input-field w-full text-sm resize-none" aria-label="Edit agenda suggestion"></textarea>
+                          <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                            <p class="text-[10px] font-bold uppercase text-[var(--t-text-tertiary)]">{{ suggestion.source_type }} · {{ suggestion.rationale }}</p>
+                            <button type="button" (click)="rejectSuggestion(suggestion.client_id)" class="btn-ghost text-[10px]" aria-label="Reject agenda suggestion">Reject</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  }
+                </div>
               }
 
               <div class="space-y-3">
@@ -266,9 +308,53 @@ import { FormsModule } from '@angular/forms';
               <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Description</span>
               <textarea [(ngModel)]="editDraft.description" name="edit_description" rows="3" class="input-field w-full resize-none" aria-label="Meeting description"></textarea>
             </label>
+            <fieldset class="border border-[var(--t-border)] p-3">
+              <legend class="px-1 text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)]">Workstreams</legend>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                @for (ws of workstreams(); track ws.id) {
+                  <label class="flex items-center gap-2 text-xs font-bold text-[var(--t-text-primary)]">
+                    <input
+                      type="checkbox"
+                      [checked]="editDraft.workstream_ids?.includes(ws.id)"
+                      (change)="toggleEditWorkstream(ws.id, $any($event.target).checked)"
+                      class="h-4 w-4"
+                      [attr.aria-label]="'Select workstream ' + ws.name"
+                    />
+                    <span>{{ ws.name }}</span>
+                  </label>
+                }
+              </div>
+            </fieldset>
             <div class="flex justify-end gap-3 pt-2">
               <button type="button" (click)="editing.set(false)" class="btn-ghost text-sm">Cancel</button>
               <button type="submit" class="btn-primary text-sm">Save changes</button>
+            </div>
+          </form>
+        </div>
+      }
+
+      @if (startingSession()) {
+        <div class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-6">
+          <form (ngSubmit)="startSession()" class="card w-full max-w-md p-6 space-y-5 shadow-2xl" style="background:var(--t-surface)">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <h2 class="text-xl font-bold text-[var(--t-text-primary)]">Start session</h2>
+                <p class="text-sm text-[var(--t-text-secondary)] mt-1">Choose the review date to start or resume.</p>
+              </div>
+              <button type="button" (click)="startingSession.set(false)" class="btn-ghost h-9 w-9 p-0" aria-label="Close start session dialog">
+                <span class="material-icons text-sm">close</span>
+              </button>
+            </div>
+            <label>
+              <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Session Date</span>
+              <input [(ngModel)]="startSessionDate" name="session_date" type="date" required class="input-field w-full" aria-label="Session date" />
+            </label>
+            @if (startSessionError()) {
+              <p class="text-sm text-red-500">{{ startSessionError() }}</p>
+            }
+            <div class="flex justify-end gap-3 pt-2">
+              <button type="button" (click)="startingSession.set(false)" class="btn-ghost text-sm">Cancel</button>
+              <button type="submit" class="btn-primary text-sm">Start</button>
             </div>
           </form>
         </div>
@@ -287,12 +373,19 @@ export class MeetingDetailComponent implements OnInit {
   meeting = signal<any>(null);
   users = signal<any[]>([]);
   initiatives = signal<any[]>([]);
+  workstreams = signal<any[]>([]);
+  agendaSuggestions = signal<any[]>([]);
   editing = signal(false);
+  startingSession = signal(false);
+  savingSuggestions = signal(false);
+  suggestionsError = signal<string | null>(null);
+  startSessionError = signal<string | null>(null);
   showAgendaForm = signal(false);
   showAttendeeForm = signal(false);
   showInitiativeForm = signal(false);
   selectedUserId = '';
   selectedInitiativeId = '';
+  startSessionDate = this.todayLocal();
   agendaDraft = { text: '', initiative_id: '' };
   editDraft: any = {};
   private meetingId = '';
@@ -315,6 +408,9 @@ export class MeetingDetailComponent implements OnInit {
       this.initiatives.set(initiatives);
       this.selectedInitiativeId = initiatives[0]?.id || '';
     });
+    this.api.get<any>('/workstreams').subscribe(res => {
+      this.workstreams.set(res.items || res.data || []);
+    });
   }
 
   loadMeeting() {
@@ -327,12 +423,19 @@ export class MeetingDetailComponent implements OnInit {
       scope: meeting.scope || 'all',
       recurrence: meeting.recurrence || 'weekly',
       description: meeting.description || '',
+      workstream_ids: (Array.isArray(meeting.workstreams) ? meeting.workstreams : [])
+        .map((ws: any) => ws.id)
+        .filter(Boolean),
     };
     this.editing.set(true);
   }
 
   saveMeeting() {
-    this.api.put<any>(`/meetings/${this.meetingId}`, this.editDraft).subscribe(m => {
+    const payload = {
+      ...this.editDraft,
+      workstream_id: this.editDraft.workstream_ids?.[0] || null,
+    };
+    this.api.put<any>(`/meetings/${this.meetingId}`, payload).subscribe(m => {
       this.meeting.set(m);
       this.editing.set(false);
     });
@@ -378,12 +481,26 @@ export class MeetingDetailComponent implements OnInit {
     this.api.delete(`/meetings/${this.meetingId}/initiatives/${linkId}`).subscribe(() => this.loadMeeting());
   }
 
-  startSession() {
+  openStartSession() {
     const m = this.meeting();
     if (!m) return;
-    
-    this.api.post<any>(`/meetings/${m.id}/sessions/start`, {}).subscribe(session => {
-      this.router.navigate(['/meetings/sessions', session.id]);
+    this.startSessionDate = this.todayLocal();
+    this.startSessionError.set(null);
+    this.startingSession.set(true);
+  }
+
+  startSession() {
+    const m = this.meeting();
+    if (!m || !this.startSessionDate) return;
+
+    this.api.post<any>(`/meetings/${m.id}/sessions/start`, {
+      session_date: this.startSessionDate,
+    }).subscribe({
+      next: session => {
+        this.startingSession.set(false);
+        this.router.navigate(['/meetings/sessions', session.id]);
+      },
+      error: err => this.startSessionError.set(err.error?.detail || 'Could not start session.'),
     });
   }
 
@@ -394,5 +511,76 @@ export class MeetingDetailComponent implements OnInit {
       organizer_email: null,
       time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
     }).subscribe(() => this.loadMeeting());
+  }
+
+  fetchAgendaSuggestions() {
+    this.suggestionsError.set(null);
+    this.api.post<any>(`/meetings/${this.meetingId}/agenda/suggestions`, {}).subscribe({
+      next: res => {
+        const items = (res.items || []).map((item: any, index: number) => ({
+          ...item,
+          client_id: `${Date.now()}-${index}`,
+          accepted: true,
+        }));
+        this.agendaSuggestions.set(items);
+        if (!items.length) this.suggestionsError.set('No agenda suggestions were available.');
+      },
+      error: err => this.suggestionsError.set(err.error?.detail || 'Could not generate agenda suggestions.'),
+    });
+  }
+
+  toggleSuggestionAccepted(clientId: string, accepted: boolean): void {
+    this.agendaSuggestions.set(this.agendaSuggestions().map(item =>
+      item.client_id === clientId ? { ...item, accepted } : item
+    ));
+  }
+
+  rejectSuggestion(clientId: string): void {
+    this.agendaSuggestions.set(this.agendaSuggestions().filter(item => item.client_id !== clientId));
+  }
+
+  saveAcceptedSuggestions() {
+    const accepted = this.agendaSuggestions()
+      .filter(item => item.accepted && String(item.text || '').trim())
+      .map(item => ({
+        text: String(item.text).trim(),
+        initiative_id: item.initiative_id || null,
+      }));
+    if (!accepted.length) {
+      this.suggestionsError.set('Accept at least one agenda suggestion before saving.');
+      return;
+    }
+    this.savingSuggestions.set(true);
+    forkJoin(accepted.map(item => this.api.post<any>(`/meetings/${this.meetingId}/agenda`, item))).subscribe({
+      next: () => {
+        this.savingSuggestions.set(false);
+        this.agendaSuggestions.set([]);
+        this.loadMeeting();
+      },
+      error: err => {
+        this.savingSuggestions.set(false);
+        this.suggestionsError.set(err.error?.detail || 'Could not save accepted agenda suggestions.');
+      },
+    });
+  }
+
+  toggleEditWorkstream(workstreamId: string, checked: boolean): void {
+    const ids = new Set<string>(this.editDraft.workstream_ids || []);
+    if (checked) ids.add(workstreamId);
+    else ids.delete(workstreamId);
+    this.editDraft.workstream_ids = Array.from(ids);
+    if (this.editDraft.workstream_ids.length) this.editDraft.scope = 'workstream';
+  }
+
+  meetingWorkstreamLabel(meeting: any): string {
+    const workstreams = Array.isArray(meeting.workstreams) ? meeting.workstreams : [];
+    if (!workstreams.length) return 'All';
+    return workstreams.map((ws: any) => ws.name || 'Workstream').join(', ');
+  }
+
+  private todayLocal(): string {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    return now.toISOString().slice(0, 10);
   }
 }

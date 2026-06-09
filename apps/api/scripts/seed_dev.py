@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "../../../.env"))
 
-from supabase import Client, create_client  # noqa: E402
+from supabase import Client, ClientOptions, create_client  # noqa: E402
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -286,8 +286,7 @@ def seed_users(c: Client, org_id: str, ws_ids: dict[str, str]) -> dict[str, str]
             print(f"  Auth ensure failed for {u['email']} ({e}) — skipping")
             continue
 
-        # Create platform user record
-        c.table("users").insert({
+        user_payload = {
             "id": user_id,
             "tenant_id": org_id,
             "email": u["email"],
@@ -295,7 +294,12 @@ def seed_users(c: Client, org_id: str, ws_ids: dict[str, str]) -> dict[str, str]
             "title": u["title"],
             "role": u["role"],
             "status": "active",
-        }).execute()
+        }
+        existing_by_id = c.table("users").select("id").eq("id", user_id).execute()
+        if existing_by_id.data:
+            c.table("users").update(user_payload).eq("id", user_id).execute()
+        else:
+            c.table("users").insert(user_payload).execute()
 
         # Assign workstreams
         for ws_name in u["workstreams"]:
@@ -1280,13 +1284,19 @@ def seed_meetings(
 # ── Main ───────────────────────────────────────────────────────────────────────
 
 def main() -> None:
+    target = os.environ.get("SUPABASE_TARGET", "cloud").strip().lower()
     url = os.environ.get("SUPABASE_URL")
     key = os.environ.get("SUPABASE_SERVICE_KEY")
+    schema = os.environ.get("SUPABASE_SCHEMA") or "public"
+    if target == "local":
+        url = os.environ.get("SUPABASE_LOCAL_URL") or url
+        key = os.environ.get("SUPABASE_LOCAL_SERVICE_KEY") or key
+        schema = os.environ.get("SUPABASE_SCHEMA") or "transmuter"
     if not url or not key:
         print("ERROR: SUPABASE_URL and SUPABASE_SERVICE_KEY must be set.")
         sys.exit(1)
 
-    c = create_client(url, key)
+    c = create_client(url, key, options=ClientOptions(schema=schema))
     print("\n=== Transmuter Dev Seed ===\n")
 
     print("1. Organization...")

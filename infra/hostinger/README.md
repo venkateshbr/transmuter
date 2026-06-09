@@ -39,6 +39,27 @@ Copy the template, fill in real secrets, and keep it uncommitted:
 cp infra/hostinger/.env.example infra/hostinger/.env
 ```
 
+Hostinger defaults to the local self-hosted Supabase target:
+
+```text
+SUPABASE_TARGET=local
+SUPABASE_LOCAL_URL=https://supabase.ishirock.tech
+DATABASE_LOCAL_URL=postgresql://postgres:<password>@host.docker.internal:5432/postgres?options=-csearch_path%3Dtransmuter,public,extensions
+```
+
+To roll back to Supabase Cloud for demo/fallback, populate the
+`SUPABASE_CLOUD_*` and `DATABASE_CLOUD_URL` values, set
+`SUPABASE_TARGET=cloud`, and restart the stack. The legacy direct
+`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY`, and `DATABASE_URL`
+variables are compatibility fallbacks only.
+
+The local Supabase REST service must expose `transmuter` first:
+
+```text
+PGRST_DB_SCHEMAS=transmuter,public,graphql_public
+PGRST_DB_EXTRA_SEARCH_PATH=transmuter,public,extensions
+```
+
 ## Deploy
 
 ```bash
@@ -50,6 +71,16 @@ To run the schema migration on the VPS before rebuilding containers:
 ```bash
 RUN_DB_SCHEMA_MIGRATION=1 ./infra/hostinger/deploy.sh
 ```
+
+After the local schema is built, run the minimal bootstrap from `apps/api`:
+
+```bash
+HOSTINGER_ADMIN_PASSWORD='<temporary-password>' uv run python scripts/bootstrap_hostinger_local.py
+```
+
+This creates only platform/admin auth, one blank admin tenant, subscription
+shell data, financial configuration, and gate criteria. It does not seed
+operational tenant data.
 
 ## SRE handoff notes
 

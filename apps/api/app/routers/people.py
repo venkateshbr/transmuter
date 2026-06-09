@@ -8,7 +8,13 @@ from fastapi import APIRouter, Depends, Query
 
 from app.core.auth import CurrentUser, get_current_user, require_role
 from app.core.database import get_supabase_admin
-from app.domain.people import InviteCreate, UserCreate, UserUpdate, WorkstreamAssignment
+from app.domain.people import (
+    InviteCreate,
+    UserCreate,
+    UserTemporaryPassword,
+    UserUpdate,
+    WorkstreamAssignment,
+)
 from app.services.people import PeopleService
 
 router = APIRouter(tags=["people"])
@@ -76,6 +82,25 @@ async def deactivate_user(
     return svc.deactivate_user(user_id)
 
 
+@router.post("/users/{user_id}/password-reset-link")
+async def send_password_reset_link(
+    user_id: str,
+    svc: Annotated[PeopleService, Depends(_svc)],
+    current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+) -> dict[str, Any]:
+    return svc.send_password_setup_link(user_id, created_by_id=str(current_user.id))
+
+
+@router.post("/users/{user_id}/temporary-password")
+async def set_temporary_password(
+    user_id: str,
+    body: UserTemporaryPassword,
+    svc: Annotated[PeopleService, Depends(_svc)],
+    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+) -> dict[str, Any]:
+    return svc.set_temporary_password(user_id, body)
+
+
 @router.get("/users/{user_id}/pressure")
 async def get_user_pressure(
     user_id: str,
@@ -98,9 +123,9 @@ async def assign_user_workstreams(
 async def create_invite(
     body: InviteCreate,
     svc: Annotated[PeopleService, Depends(_svc)],
-    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+    current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
 ) -> dict[str, Any]:
-    return svc.invite_user(body)
+    return svc.invite_user(body, created_by_id=str(current_user.id))
 
 
 @router.get("/invites")
@@ -108,3 +133,21 @@ async def list_invites(
     svc: Annotated[PeopleService, Depends(_svc)],
 ) -> dict[str, Any]:
     return svc.list_invites()
+
+
+@router.post("/invites/{invite_id}/resend")
+async def resend_invite(
+    invite_id: str,
+    svc: Annotated[PeopleService, Depends(_svc)],
+    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+) -> dict[str, Any]:
+    return svc.resend_invite(invite_id)
+
+
+@router.post("/invites/{invite_id}/revoke")
+async def revoke_invite(
+    invite_id: str,
+    svc: Annotated[PeopleService, Depends(_svc)],
+    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+) -> dict[str, Any]:
+    return svc.revoke_invite(invite_id)

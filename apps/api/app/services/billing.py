@@ -27,6 +27,23 @@ class BillingPlan:
     stripe_price_id: str
 
 
+STRIPE_PRICE_PLACEHOLDER_PREFIXES = (
+    "replace-with",
+    "change-me",
+    "todo",
+)
+
+
+def normalize_stripe_price_id(value: str) -> str:
+    price_id = (value or "").strip()
+    if not price_id:
+        return ""
+    lowered = price_id.lower()
+    if any(lowered.startswith(prefix) for prefix in STRIPE_PRICE_PLACEHOLDER_PREFIXES):
+        return ""
+    return price_id
+
+
 def select_billing_plan(planned_user_count: int, billing_interval: str = "month") -> BillingPlan:
     if billing_interval not in {"month", "year"}:
         raise HTTPException(
@@ -46,9 +63,11 @@ def select_billing_plan(planned_user_count: int, billing_interval: str = "month"
             amount_cents=99900 if billing_interval == "month" else 999000,
             currency="usd",
             billing_interval=billing_interval,
-            stripe_price_id=settings.stripe_price_team_monthly
-            if billing_interval == "month"
-            else settings.stripe_price_team_annual,
+            stripe_price_id=normalize_stripe_price_id(
+                settings.stripe_price_team_monthly
+                if billing_interval == "month"
+                else settings.stripe_price_team_annual
+            ),
         )
     if planned_user_count <= 100:
         return BillingPlan(
@@ -59,9 +78,11 @@ def select_billing_plan(planned_user_count: int, billing_interval: str = "month"
             amount_cents=199900 if billing_interval == "month" else 1999000,
             currency="usd",
             billing_interval=billing_interval,
-            stripe_price_id=settings.stripe_price_business_monthly
-            if billing_interval == "month"
-            else settings.stripe_price_business_annual,
+            stripe_price_id=normalize_stripe_price_id(
+                settings.stripe_price_business_monthly
+                if billing_interval == "month"
+                else settings.stripe_price_business_annual
+            ),
         )
     raise HTTPException(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -113,8 +134,8 @@ def stripe_price_configuration() -> list[dict[str, Any]]:
             "billing_interval": "month",
             "amount_cents": 99900,
             "currency": "usd",
-            "price_id": settings.stripe_price_team_monthly or None,
-            "configured": bool(settings.stripe_price_team_monthly),
+            "price_id": normalize_stripe_price_id(settings.stripe_price_team_monthly) or None,
+            "configured": bool(normalize_stripe_price_id(settings.stripe_price_team_monthly)),
         },
         {
             "env_key": "STRIPE_PRICE_TEAM_ANNUAL",
@@ -123,8 +144,8 @@ def stripe_price_configuration() -> list[dict[str, Any]]:
             "billing_interval": "year",
             "amount_cents": 999000,
             "currency": "usd",
-            "price_id": settings.stripe_price_team_annual or None,
-            "configured": bool(settings.stripe_price_team_annual),
+            "price_id": normalize_stripe_price_id(settings.stripe_price_team_annual) or None,
+            "configured": bool(normalize_stripe_price_id(settings.stripe_price_team_annual)),
         },
         {
             "env_key": "STRIPE_PRICE_BUSINESS_MONTHLY",
@@ -133,8 +154,11 @@ def stripe_price_configuration() -> list[dict[str, Any]]:
             "billing_interval": "month",
             "amount_cents": 199900,
             "currency": "usd",
-            "price_id": settings.stripe_price_business_monthly or None,
-            "configured": bool(settings.stripe_price_business_monthly),
+            "price_id": normalize_stripe_price_id(settings.stripe_price_business_monthly)
+            or None,
+            "configured": bool(
+                normalize_stripe_price_id(settings.stripe_price_business_monthly)
+            ),
         },
         {
             "env_key": "STRIPE_PRICE_BUSINESS_ANNUAL",
@@ -143,8 +167,11 @@ def stripe_price_configuration() -> list[dict[str, Any]]:
             "billing_interval": "year",
             "amount_cents": 1999000,
             "currency": "usd",
-            "price_id": settings.stripe_price_business_annual or None,
-            "configured": bool(settings.stripe_price_business_annual),
+            "price_id": normalize_stripe_price_id(settings.stripe_price_business_annual)
+            or None,
+            "configured": bool(
+                normalize_stripe_price_id(settings.stripe_price_business_annual)
+            ),
         },
     ]
 
@@ -237,11 +264,6 @@ class BillingProvisioningService:
             or self._int_metadata(metadata, "planned_user_count", default=1)
         )
         initial_password = str(((intent or {}).get("metadata") or {}).get("initial_password") or "")
-        if not initial_password:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Signup password is unavailable. Please restart checkout.",
-            )
 
         org = self._ensure_organization(
             name=organization_name,
@@ -608,6 +630,11 @@ class BillingProvisioningService:
     def _ensure_auth_user_with_password(
         self, *, tenant_id: str, email: str, display_name: str, password: str
     ) -> str:
+        if not password:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Signup password is unavailable. Please restart checkout.",
+            )
         if len(password) < 8:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,

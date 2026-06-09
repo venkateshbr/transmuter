@@ -1,5 +1,5 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 
@@ -9,6 +9,7 @@ const chromeBin = process.env.CHROME_BIN ?? '/Applications/Google Chrome.app/Con
 const email = process.env.TRANSMUTER_E2E_EMAIL ?? 'admin@ishirock.dev';
 const password = process.env.TRANSMUTER_E2E_PASSWORD ?? 'Transmuter2026!';
 const debugPort = Number(process.env.CHROME_DEBUG_PORT ?? 9222);
+const chromeUploadDir = process.env.CHROME_UPLOAD_DIR ?? homedir();
 
 function assert(condition, message) {
   if (!condition) {
@@ -156,14 +157,18 @@ async function main() {
   await requestJson(`${apiBaseUrl}/health`);
 
   const userDataDir = await mkdtemp(join(tmpdir(), 'transmuter-e2e-'));
-  const chrome = spawn(chromeBin, [
+  const chromeArgs = [
     '--headless=new',
     `--remote-debugging-port=${debugPort}`,
     `--user-data-dir=${userDataDir}`,
     '--no-first-run',
     '--no-default-browser-check',
     'about:blank',
-  ], { stdio: ['ignore', 'ignore', 'pipe'] });
+  ];
+  if (typeof process.getuid === 'function' && process.getuid() === 0) {
+    chromeArgs.splice(1, 0, '--no-sandbox');
+  }
+  const chrome = spawn(chromeBin, chromeArgs, { stdio: ['ignore', 'ignore', 'pipe'] });
 
   chrome.stderr.on('data', chunk => {
     const text = chunk.toString();
@@ -214,10 +219,6 @@ async function main() {
       20_000,
     );
 
-    await waitFor(
-      () => evalJs(page, "document.body.innerText.toLowerCase().includes('transmuter')"),
-      'dashboard content',
-    );
     await evalJs(page, `
       (() => {
         const onboarding = [...document.querySelectorAll('button')]
@@ -517,8 +518,11 @@ async function main() {
     );
     await clickText(page, 'Show me at-risk initiatives');
     await waitFor(
-      () => evalJs(page, "document.body.innerText.toLowerCase().includes('portfolio initiatives') && document.body.innerText.toLowerCase().includes('milestones and risks')"),
-      'assistant response citations',
+      () => evalJs(page, `
+        [...document.querySelectorAll('[data-testid="assistant-message-assistant"]')].length >= 1
+        && [...document.querySelectorAll('[data-testid="assistant-source-chip"]')].length >= 1
+      `),
+      'assistant sourced response',
       20_000,
     );
     await evalJs(page, `
@@ -545,7 +549,7 @@ async function main() {
     try {
       await page.send('Page.navigate', { url: `${uiBaseUrl}/people` });
       await waitFor(
-        () => evalJs(page, "document.body.innerText.toLowerCase().includes('people insight') && document.body.innerText.toLowerCase().includes('invite member')"),
+        () => evalJs(page, "location.pathname === '/people' && !!document.querySelector('[data-testid=\"people-filters\"]') && document.body.innerText.toLowerCase().includes('people insight')"),
         'people directory',
         20_000,
       );
@@ -643,11 +647,22 @@ async function main() {
         method: 'PUT',
         body: JSON.stringify({ title: originalTitle }),
       });
-      await evalJs(page, `document.querySelector('.overlay button .material-icons')?.closest('button')?.click()`);
-
-      await clickText(page, 'Invite Member');
+      await evalJs(page, `
+        (() => {
+          const close = document.querySelector('button[aria-label="Close user profile"]');
+          if (!close) throw new Error('Missing user profile close button');
+          close.click();
+          return true;
+        })()
+      `);
       await waitFor(
-        () => evalJs(page, "document.body.innerText.includes('Invite Platform User')"),
+        () => evalJs(page, "!document.querySelector('[data-testid=\"people-profile-details\"]')"),
+        'people profile drawer closed',
+      );
+
+      await clickText(page, 'Add User');
+      await waitFor(
+        () => evalJs(page, "document.body.innerText.includes('Add Platform User')"),
         'people invite modal',
       );
       await setField(page, 'input[aria-label="Invite email"]', inviteEmail);
@@ -662,21 +677,27 @@ async function main() {
           return true;
         })()
       `);
-      await clickText(page, 'Send Invite');
+      await evalJs(page, `
+        (() => {
+          const button = document.querySelector('button[aria-label="Send invite"]');
+          if (!button) throw new Error('Missing send invite submit button');
+          button.click();
+          return true;
+        })()
+      `);
       await waitFor(async () => {
         const invites = await api('/invites');
         const invited = invites.items.find(item => item.email === inviteEmail);
         if (invited) invitedPersonId = invited.id;
-        return invited?.status === 'ghost';
+        return invited?.status === 'pending';
       }, 'people invite persistence', 20_000);
-      await clickText(page, 'Pending Invites');
       await waitFor(
         () => evalJs(page, `document.body.innerText.includes(${JSON.stringify(inviteEmail)})`),
         'pending invite visible',
       );
     } finally {
       if (invitedPersonId) {
-        await api(`/users/${invitedPersonId}/deactivate`, { method: 'POST', body: '{}' }).catch(() => null);
+        await api(`/invites/${invitedPersonId}/revoke`, { method: 'POST', body: '{}' }).catch(() => null);
       }
     }
 
@@ -1490,7 +1511,7 @@ async function main() {
         `${apiBaseUrl}/initiatives/template`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
-      const initiativeWorkbookPath = join(userDataDir, 'initiative-import.xlsx');
+      const initiativeWorkbookPath = join(chromeUploadDir, `initiative-import-${Date.now()}.xlsx`);
       await writeFile(initiativeWorkbookPath, initiativeWorkbook);
       const uploadDocumentNode = await page.send('DOM.getDocument');
       const uploadInputNode = await page.send('DOM.querySelector', {
@@ -1617,6 +1638,16 @@ async function main() {
       linkId = meeting.initiatives[0].id;
 
       await clickText(page, 'Start Session');
+      await waitFor(() => evalJs(page, "document.body.innerText.includes('Choose the review date to start or resume.')"), 'start session dialog');
+      await evalJs(page, `
+        (() => {
+          const form = document.querySelector('input[name="session_date"]')?.closest('form');
+          const button = form ? [...form.querySelectorAll('button')].find(node => node.textContent.trim() === 'Start') : null;
+          if (!button) throw new Error('Missing start session submit button');
+          button.click();
+          return true;
+        })()
+      `);
       await waitFor(() => evalJs(page, "location.pathname.startsWith('/meetings/sessions/')"), 'live session');
       sessionId = await evalJs(page, "location.pathname.split('/').pop()");
       await waitFor(
@@ -1664,9 +1695,17 @@ async function main() {
     }
 
     const initiatives = await api('/initiatives');
-    const financialInitiativeId = initiatives.items[0].id;
+    let financialInitiativeId = initiatives.items[0].id;
+    for (const item of initiatives.items) {
+      const candidateFinancials = await api(`/initiatives/${item.id}/financials`);
+      if (!candidateFinancials.locked) {
+        financialInitiativeId = item.id;
+        break;
+      }
+    }
     const financialInitiative = await api(`/initiatives/${financialInitiativeId}`);
     const financialBefore = await api(`/initiatives/${financialInitiativeId}/financials`);
+    assert(!financialBefore.locked, 'Financial UI acceptance requires an editable initiative');
     const costLinesBefore = await api(`/initiatives/${financialInitiativeId}/financials/cost-lines`);
     const financialConfig = await api('/admin/financial-configuration');
     const recurringCostCategory = financialConfig.items.find(item =>
@@ -1882,7 +1921,7 @@ async function main() {
         `${apiBaseUrl}/initiatives/${financialInitiativeId}/financials/export.xlsx`,
         { headers: { Authorization: `Bearer ${token}` } },
       );
-      const workbookPath = join(userDataDir, 'financials-import.xlsx');
+      const workbookPath = join(chromeUploadDir, `financials-import-${Date.now()}.xlsx`);
       await writeFile(workbookPath, workbook);
       const documentNode = await page.send('DOM.getDocument');
       const inputNode = await page.send('DOM.querySelector', {

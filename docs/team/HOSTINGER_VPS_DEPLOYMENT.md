@@ -1,6 +1,6 @@
 # Hostinger VPS Deployment Runbook
 
-Last updated: 2026-06-07
+Last updated: 2026-06-09
 
 ## Target
 
@@ -49,19 +49,32 @@ cp infra/hostinger/.env.example infra/hostinger/.env
 
 Fill in:
 
-- `SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_KEY`
-- `DATABASE_URL`
+- `SUPABASE_TARGET` (`local` for Hostinger primary, `cloud` for fallback/demo)
+- `SUPABASE_LOCAL_URL`
+- `SUPABASE_LOCAL_ANON_KEY`
+- `SUPABASE_LOCAL_SERVICE_KEY`
+- `DATABASE_LOCAL_URL`
+- `SUPABASE_CLOUD_URL`
+- `SUPABASE_CLOUD_ANON_KEY`
+- `SUPABASE_CLOUD_SERVICE_KEY`
+- `DATABASE_CLOUD_URL`
 - `SOURCE_DATABASE_URL`
 - `TARGET_DATABASE_URL`
 - `JWT_SECRET`
 - OpenRouter / Langfuse values as needed
 - Stripe values if billing/signup should work
 - `PLATFORM_ADMIN_EMAILS`
+- `HOSTINGER_ADMIN_PASSWORD` for one-time minimal local bootstrap, or separate
+  `HOSTINGER_PLATFORM_ADMIN_PASSWORD` and `HOSTINGER_TENANT_ADMIN_PASSWORD`
 
 Keep `infra/hostinger/.env` uncommitted.
 If any value contains spaces or shell-special characters, quote it in the `.env`
 file because the deploy script sources that file with shell syntax.
+
+The legacy direct variables `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
+`SUPABASE_SERVICE_KEY`, and `DATABASE_URL` remain compatibility fallbacks. Leave
+them blank when the target-specific values are configured so the active target is
+controlled only by `SUPABASE_TARGET`.
 
 ## One-Time Supabase Requirement
 
@@ -76,6 +89,18 @@ PGRST_DB_EXTRA_SEARCH_PATH=transmuter,public,extensions
 
 Restart Supabase REST/API services after changing this.
 
+The API continues to use unqualified Supabase `.table(...)` calls. With
+`SUPABASE_TARGET=local`, `transmuter` must therefore be first in both PostgREST
+schema exposure and the direct PostgreSQL search path:
+
+```text
+DATABASE_LOCAL_URL=postgresql://postgres:<password>@host.docker.internal:5432/postgres?options=-csearch_path%3Dtransmuter,public,extensions
+```
+
+To roll back to Supabase Cloud, set `SUPABASE_TARGET=cloud` and restart the
+Transmuter stack. To return to Hostinger local Supabase, set
+`SUPABASE_TARGET=local` and restart again.
+
 ## Deploy
 
 ```bash
@@ -88,6 +113,27 @@ To run the schema migration on the VPS immediately before restarting containers:
 RUN_DB_SCHEMA_MIGRATION=1 ./infra/hostinger/deploy.sh
 ```
 
+## Minimal Local Bootstrap
+
+After the local `transmuter` schema has been built and `SUPABASE_TARGET=local`
+is configured, seed only platform/admin and master configuration data:
+
+```bash
+cd apps/api
+HOSTINGER_ADMIN_PASSWORD='<temporary-password>' uv run python scripts/bootstrap_hostinger_local.py
+```
+
+The bootstrap creates or updates:
+
+- One platform admin Supabase Auth user with platform admin app metadata.
+- One blank admin tenant and tenant admin user.
+- Subscription plans and a `tenant_subscriptions` shell.
+- Financial configuration groups/items and gate criteria via `TenantBootstrapService`.
+
+It intentionally does not create initiatives, meetings, agenda items, attendees,
+sessions, action items, financial entries, cost lines, risks, KPIs, or other
+operational tenant data.
+
 What the script does:
 
 1. Creates `/docker/transmuter` on the VPS.
@@ -95,7 +141,8 @@ What the script does:
 3. Copies `infra/hostinger/.env` to `/docker/transmuter/.env`.
 4. Copies `docker-compose.hostinger.yml` to `/docker/transmuter/docker-compose.yml`.
 5. Optionally runs the schema migration helper on the VPS.
-6. Builds and starts `api`, `worker`, and `web` with Docker Compose.
+6. Builds and starts `api` and `web` with Docker Compose. The `worker` service
+   is available through the opt-in `worker` Compose profile.
 
 ## Validation
 
@@ -115,6 +162,11 @@ curl -fsS https://transmuter.ishirock.tech/health
 curl -fsS https://transmuter.ishirock.tech/api/health
 curl -fsS https://supabase.ishirock.tech/rest/v1/
 ```
+
+For local Supabase validation, also verify browser login as the platform/admin
+seed user and `/auth/me` through the app API. Platform/admin pages should load
+with only bootstrap/admin and master configuration data, not migrated
+operational tenant data.
 
 If Stripe signup is enabled, use:
 

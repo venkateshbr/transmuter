@@ -64,9 +64,7 @@ export class ForcePasswordChangeComponent {
     this.error.set(null);
     this.auth.changePassword(this.currentPassword, this.newPassword, this.confirmPassword).subscribe({
       next: () => {
-        this.auth.loadProfile().subscribe(() => {
-          this.router.navigate([this.auth.getRole() === 'platform_admin' ? '/platform' : '/dashboard']);
-        });
+        this.router.navigate([this.auth.getRole() === 'platform_admin' ? '/platform' : '/dashboard']);
       },
       error: (err) => {
         this.error.set(err.error?.detail || 'Password could not be changed');

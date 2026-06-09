@@ -137,6 +137,134 @@ const DASHBOARD_FILTER_STATE_KEY = 'transmuter.filters.dashboard';
         </a>
       </div>
 
+      <section class="card overflow-hidden border-l-4 border-[var(--t-accent)]" data-testid="dashboard-workstream-targets">
+        <div class="grid gap-0 lg:grid-cols-[1fr_auto]">
+          <a
+            routerLink="/financials/waterline"
+            class="block p-6 transition-colors hover:bg-[var(--t-surface-raised)]"
+            aria-label="Open workstream target waterline">
+            <div class="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">Bankable Workstream Targets</p>
+                <h2 class="mt-2 text-xl font-black text-[var(--t-text-primary)]">Locked net run-rate waterline</h2>
+                <p class="mt-2 max-w-2xl text-xs font-semibold leading-5 text-[var(--t-text-secondary)]">
+                  Latest immutable workstream target snapshots compared with actual realization. Open Waterline to preview or lock the next target.
+                </p>
+              </div>
+              <span class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] px-3 py-2 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-secondary)]">
+                {{ data()?.workstream_targets?.locked_workstreams || 0 }} locked
+              </span>
+            </div>
+          </a>
+          <div class="grid border-t border-[var(--t-border)] lg:grid-cols-3 lg:border-l lg:border-t-0">
+            <div class="min-w-44 p-5">
+              <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Target</p>
+              <p class="mt-2 text-lg font-black text-[var(--t-text-primary)]">{{ formatMoney(data()?.workstream_targets?.locked_run_rate_value) }}</p>
+            </div>
+            <div class="min-w-44 border-t border-[var(--t-border)] p-5 lg:border-l lg:border-t-0">
+              <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Actual</p>
+              <p class="mt-2 text-lg font-black text-[var(--t-text-primary)]">{{ formatMoney(data()?.workstream_targets?.actual_total) }}</p>
+            </div>
+            <div class="min-w-44 border-t border-[var(--t-border)] p-5 lg:border-l lg:border-t-0">
+              <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Variance</p>
+              <p class="mt-2 text-lg font-black" [class.text-emerald-600]="workstreamTargetVariance() >= 0" [class.text-red-500]="workstreamTargetVariance() < 0">
+                {{ formatMoney(data()?.workstream_targets?.variance) }}
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card overflow-hidden" data-testid="dashboard-stage-gate-waterline">
+        <div class="executive-surface flex flex-col gap-4 border-b border-[var(--t-border)] p-6 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div class="mb-3 flex items-center gap-2">
+              <span class="h-2 w-8 bg-[var(--t-blue-light)]"></span>
+              <span class="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Stage Gate Value</span>
+            </div>
+            <h2 class="text-2xl font-black tracking-tight">Stage-gate value vs locked bankable plan</h2>
+            <p class="mt-2 max-w-3xl text-xs font-medium leading-relaxed text-white/70">
+              L4 and L5 sit above the waterline as bankable value. L1 to L3 remain below the line as pipeline value by workstream.
+            </p>
+          </div>
+          <div class="grid min-w-72 grid-cols-3 border border-white/20 text-center">
+            <div class="p-3">
+              <p class="text-[9px] font-black uppercase tracking-widest text-white/60">Locked</p>
+              <p class="mt-1 text-sm font-black">{{ formatMoney(data()?.stage_gate_waterline?.totals?.locked_plan) }}</p>
+            </div>
+            <div class="border-l border-white/20 p-3">
+              <p class="text-[9px] font-black uppercase tracking-widest text-white/60">Above</p>
+              <p class="mt-1 text-sm font-black">{{ formatMoney(data()?.stage_gate_waterline?.totals?.above_waterline) }}</p>
+            </div>
+            <div class="border-l border-white/20 p-3">
+              <p class="text-[9px] font-black uppercase tracking-widest text-white/60">Below</p>
+              <p class="mt-1 text-sm font-black">{{ formatMoney(data()?.stage_gate_waterline?.totals?.below_waterline) }}</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="p-6">
+          <div class="relative h-[26rem] border-l border-b border-[var(--t-border)] bg-[var(--t-surface-raised)]">
+            <div class="absolute left-0 right-0 top-1/2 h-px bg-[var(--t-text-primary)]/45"></div>
+            <div class="absolute left-3 top-[calc(50%-1.6rem)] bg-[var(--t-surface-raised)] px-2 text-[9px] font-black uppercase tracking-widest text-emerald-600">
+              Bankable L4 + L5
+            </div>
+            <div class="absolute left-3 top-[calc(50%+0.6rem)] bg-[var(--t-surface-raised)] px-2 text-[9px] font-black uppercase tracking-widest text-[var(--t-blue-light)]">
+              Pipeline L1-L3
+            </div>
+
+            @for (item of data()?.stage_gate_waterline?.items || []; track item.workstream_id || item.label) {
+              <div class="absolute bottom-0 top-0 flex flex-col items-center justify-center" [style.left.%]="stageGateLeft($index)" [style.width.%]="stageGateWidth()">
+                <div class="relative h-full w-full max-w-16">
+                  <div
+                    class="absolute bottom-1/2 left-1/2 w-4 -translate-x-1/2 bg-emerald-600"
+                    [style.height.%]="stageGateHeight(item.l5)"
+                    title="L5 Realized/banked"></div>
+                  <div
+                    class="absolute left-1/2 w-4 -translate-x-1/2 bg-emerald-300"
+                    [style.bottom.%]="50 + stageGateHeight(item.l5)"
+                    [style.height.%]="stageGateHeight(item.l4)"
+                    title="L4 Implemented/bankable"></div>
+                  <div
+                    class="absolute left-1/2 top-1/2 w-4 -translate-x-1/2 bg-[var(--t-blue-light)]"
+                    [style.height.%]="stageGateHeight(item.l3)"
+                    title="L3 Planned/in execution"></div>
+                  <div
+                    class="absolute left-[calc(50%-1rem)] top-1/2 w-4 bg-[var(--t-accent)]"
+                    [style.height.%]="stageGateHeight(item.l2)"
+                    title="L2 Business case approved"></div>
+                  <div
+                    class="absolute left-[calc(50%+0.5rem)] top-1/2 w-4 bg-[var(--t-primary)]"
+                    [style.height.%]="stageGateHeight(item.l1)"
+                    title="L1 Idea"></div>
+                  <div
+                    class="absolute left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-amber-500"
+                    [style.bottom.%]="50 + stageGateHeight(item.locked_plan)"
+                    title="Locked bankable plan"></div>
+                </div>
+              </div>
+            }
+          </div>
+
+          <div class="mt-3 grid gap-2" [style.grid-template-columns]="'repeat(' + Math.max((data()?.stage_gate_waterline?.items || []).length, 1) + ', minmax(0, 1fr))'">
+            @for (item of data()?.stage_gate_waterline?.items || []; track item.workstream_id || item.label) {
+              <p class="truncate text-center text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]" [title]="item.label">
+                {{ item.label }}
+              </p>
+            }
+          </div>
+
+          <div class="mt-5 grid gap-3 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)] sm:grid-cols-3 lg:grid-cols-6">
+            <span class="border border-[var(--t-border)] p-2"><span class="mr-2 inline-block h-2 w-5 bg-emerald-600"></span>L5 Realized</span>
+            <span class="border border-[var(--t-border)] p-2"><span class="mr-2 inline-block h-2 w-5 bg-emerald-300"></span>L4 Bankable</span>
+            <span class="border border-[var(--t-border)] p-2"><span class="mr-2 inline-block h-2 w-5 bg-[var(--t-blue-light)]"></span>L3 Execution</span>
+            <span class="border border-[var(--t-border)] p-2"><span class="mr-2 inline-block h-2 w-5 bg-[var(--t-accent)]"></span>L2 Case</span>
+            <span class="border border-[var(--t-border)] p-2"><span class="mr-2 inline-block h-2 w-5 bg-[var(--t-primary)]"></span>L1 Idea</span>
+            <span class="border border-[var(--t-border)] p-2"><span class="mr-2 inline-block h-2 w-2 rounded-full bg-amber-500"></span>Locked plan</span>
+          </div>
+        </div>
+      </section>
+
       <!-- Value Matrix -->
       <section class="card overflow-hidden" data-testid="dashboard-value-matrix">
         <div class="executive-surface flex flex-col gap-4 border-b border-[var(--t-border)] p-6 lg:flex-row lg:items-end lg:justify-between">
@@ -861,6 +989,7 @@ export class DashboardComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  readonly Math = Math;
   
   data = signal<any>(null);
   reporting = signal(false);
@@ -1421,6 +1550,35 @@ export class DashboardComponent implements OnInit {
     if (total === 0) return 0;
     const red = this.data()?.rag_breakdown?.red || 0;
     return Math.round(((total - red) / total) * 100);
+  }
+
+  workstreamTargetVariance(): number {
+    return Number(this.data()?.workstream_targets?.variance || 0);
+  }
+
+  stageGateWidth(): number {
+    const count = Math.max((this.data()?.stage_gate_waterline?.items || []).length, 1);
+    return 100 / count;
+  }
+
+  stageGateLeft(index: number): number {
+    return index * this.stageGateWidth();
+  }
+
+  stageGateHeight(value: string | number | null | undefined): number {
+    const items = this.data()?.stage_gate_waterline?.items || [];
+    const max = Math.max(
+      ...items.flatMap((item: any) => [
+        Math.abs(Number(item.l1 || 0)),
+        Math.abs(Number(item.l2 || 0)),
+        Math.abs(Number(item.l3 || 0)),
+        Math.abs(Number(item.l4 || 0)),
+        Math.abs(Number(item.l5 || 0)),
+        Math.abs(Number(item.locked_plan || 0)),
+      ]),
+      1,
+    );
+    return Math.max(1, Math.min(45, (Math.abs(Number(value || 0)) / max) * 45));
   }
 
   getPressureRotation(): string {

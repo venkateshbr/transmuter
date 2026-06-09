@@ -83,7 +83,7 @@ const MEETINGS_FILTER_STATE_KEY = 'transmuter.filters.meetings.list';
               </div>
               <div class="flex items-center gap-2">
                  <span class="text-[9px] font-black uppercase tracking-tighter px-2 py-1 rounded bg-[var(--t-surface-raised)] border border-[var(--t-border)] text-[var(--t-text-secondary)]">
-                   {{ m.workstreams?.name || 'All BU' }}
+                   {{ meetingWorkstreamLabel(m) }}
                  </span>
                  <span class="text-[9px] font-black uppercase tracking-tighter px-2 py-1 rounded bg-[var(--t-accent-soft)] text-[var(--t-accent)]">
                    {{ m.stats?.open_actions || 0 }} open
@@ -148,6 +148,23 @@ const MEETINGS_FILTER_STATE_KEY = 'transmuter.filters.meetings.list';
                   }
                 </select>
               </label>
+              <fieldset class="md:col-span-2 border border-[var(--t-border)] p-3">
+                <legend class="px-1 text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)]">Workstreams</legend>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                  @for (ws of workstreams(); track ws.id) {
+                    <label class="flex items-center gap-2 text-xs font-bold text-[var(--t-text-primary)]">
+                      <input
+                        type="checkbox"
+                        [checked]="draft.workstream_ids.includes(ws.id)"
+                        (change)="toggleDraftWorkstream(ws.id, $any($event.target).checked)"
+                        class="h-4 w-4"
+                        [attr.aria-label]="'Select workstream ' + ws.name"
+                      />
+                      <span>{{ ws.name }}</span>
+                    </label>
+                  }
+                </div>
+              </fieldset>
               <label class="md:col-span-2">
                 <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Description</span>
                 <textarea [(ngModel)]="draft.description" name="description" rows="3" class="input-field w-full resize-none" aria-label="Meeting description"></textarea>
@@ -176,6 +193,7 @@ export class MeetingsListComponent implements OnInit {
   private readonly router = inject(Router);
   meetings = signal<any[]>([]);
   users = signal<any[]>([]);
+  workstreams = signal<any[]>([]);
   search = '';
   scopeFilter = '';
   showCreate = signal(false);
@@ -202,6 +220,9 @@ export class MeetingsListComponent implements OnInit {
       if (!this.draft.owner_id && users.length) {
         this.draft.owner_id = users[0].id;
       }
+    });
+    this.api.get<any>('/workstreams').subscribe(res => {
+      this.workstreams.set(res.items || res.data || []);
     });
   }
 
@@ -282,6 +303,7 @@ export class MeetingsListComponent implements OnInit {
       ...this.draft,
       name: this.draft.name.trim(),
       description: this.draft.description?.trim() || null,
+      workstream_id: this.draft.workstream_ids[0] || null,
     }).subscribe({
       next: meeting => {
         this.saving.set(false);
@@ -303,6 +325,22 @@ export class MeetingsListComponent implements OnInit {
       recurrence: 'weekly',
       description: '',
       owner_id: '',
+      workstream_ids: [] as string[],
     };
+  }
+
+  toggleDraftWorkstream(workstreamId: string, checked: boolean): void {
+    const ids = new Set(this.draft.workstream_ids);
+    if (checked) ids.add(workstreamId);
+    else ids.delete(workstreamId);
+    this.draft.workstream_ids = Array.from(ids);
+    if (this.draft.workstream_ids.length) this.draft.scope = 'workstream';
+  }
+
+  meetingWorkstreamLabel(meeting: any): string {
+    const workstreams = Array.isArray(meeting.workstreams) ? meeting.workstreams : [];
+    if (!workstreams.length) return 'All BU';
+    if (workstreams.length === 1) return workstreams[0]?.name || 'Workstream';
+    return `${workstreams.length} workstreams`;
   }
 }

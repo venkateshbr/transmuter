@@ -70,6 +70,7 @@ async def enforce_api_security_controls(
         "/auth/login",
         "/auth/change-password",
         "/auth/register",
+        "/auth/accept-invite",
     }:
         now = monotonic()
         client_ip = request.client.host if request.client else "unknown"

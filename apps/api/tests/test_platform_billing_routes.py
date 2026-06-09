@@ -263,6 +263,112 @@ def test_checkout_session_resolves_redirect_urls_from_request_origin(
     assert sent["cancel_url"] == ["https://example.com/cancel"]
 
 
+def test_checkout_session_uses_price_data_for_placeholder_price_ids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "payment_provider", "stripe")
+    monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_123")
+    monkeypatch.setattr(settings, "stripe_price_team_monthly", "replace-with-price-id")
+
+    fake_stripe = _FakeStripeAsyncClient(
+        response_payload={"id": "cs_test_123", "url": "https://stripe.example/session"}
+    )
+    fake_service = _FakeBillingProvisioningService()
+    fake_service.stripe_price_id = ""
+    monkeypatch.setattr(
+        "app.routers.billing.BillingProvisioningService", lambda client: fake_service
+    )
+    monkeypatch.setattr("app.routers.billing.httpx.AsyncClient", lambda timeout: fake_stripe)
+
+    response = client.post(
+        "/billing/checkout-session",
+        headers={"Origin": "https://demo.transmuter.test"},
+        json={
+            **_checkout_payload(),
+            "organization_slug": "placeholder-price-org",
+            "admin_email": "placeholder-price@example.com",
+        },
+    )
+
+    assert response.status_code == 200
+    assert fake_stripe.last_request is not None
+    sent = parse_qs(str(fake_stripe.last_request["content"]))
+    assert "line_items[0][price]" not in sent
+    assert sent["line_items[0][price_data][currency]"] == ["usd"]
+    assert sent["line_items[0][price_data][unit_amount]"] == ["99900"]
+    assert sent["line_items[0][price_data][recurring][interval]"] == ["month"]
+    assert sent["line_items[0][price_data][product_data][name]"] == ["Transmuter Team"]
+
+
+def test_checkout_completion_provisions_paid_session(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_123")
+
+    fake_service = _FakeBillingProvisioningService()
+    fake_stripe = _FakeStripeAsyncClient(
+        response_payload={
+            "id": "cs_test_123",
+            "status": "complete",
+            "payment_status": "paid",
+            "customer": "cus_test_123",
+            "subscription": "sub_test_123",
+            "metadata": {"signup_intent_id": "intent_test_123"},
+        }
+    )
+    monkeypatch.setattr(
+        "app.routers.billing.BillingProvisioningService", lambda client: fake_service
+    )
+    monkeypatch.setattr("app.routers.billing.httpx.AsyncClient", lambda timeout: fake_stripe)
+
+    response = client.post(
+        "/billing/checkout-completion",
+        json={"session_id": "cs_test_123"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "received": True,
+        "checkout_status": "complete",
+        "payment_status": "paid",
+        "provisioning_status": "provisioned",
+        "login_ready": True,
+        "tenant_id": "tenant_test_123",
+        "organization_slug": "checkout-completion-org",
+        "initial_admin_user_id": "user_test_123",
+    }
+    assert fake_stripe.last_request is not None
+    assert fake_stripe.last_request["url"].endswith("/cs_test_123")
+    assert fake_service.provisioned_session is not None
+    assert fake_service.provisioned_session["id"] == "cs_test_123"
+
+
+def test_checkout_completion_waits_for_unpaid_session(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_123")
+
+    fake_service = _FakeBillingProvisioningService()
+    fake_stripe = _FakeStripeAsyncClient(
+        response_payload={
+            "id": "cs_test_123",
+            "status": "open",
+            "payment_status": "unpaid",
+            "metadata": {"signup_intent_id": "intent_test_123"},
+        }
+    )
+    monkeypatch.setattr(
+        "app.routers.billing.BillingProvisioningService", lambda client: fake_service
+    )
+    monkeypatch.setattr("app.routers.billing.httpx.AsyncClient", lambda timeout: fake_stripe)
+
+    response = client.post(
+        "/billing/checkout-completion",
+        json={"session_id": "cs_test_123"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["provisioning_status"] == "pending_payment"
+    assert response.json()["login_ready"] is False
+    assert fake_service.provisioned_session is None
+
+
 def test_billing_portal_session_resolves_return_url_from_request_origin(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -306,6 +412,10 @@ def test_billing_portal_session_resolves_return_url_from_request_origin(
 
 
 class _FakeBillingProvisioningService:
+    def __init__(self) -> None:
+        self.provisioned_session: dict[str, object] | None = None
+        self.stripe_price_id = "price_test_123"
+
     def create_signup_intent(self, **kwargs: object) -> dict[str, object]:
         plan = SimpleNamespace(
             code="team",
@@ -313,13 +423,22 @@ class _FakeBillingProvisioningService:
             billing_interval=kwargs["billing_interval"],
             currency="usd",
             amount_cents=99900,
-            stripe_price_id="price_test_123",
+            stripe_price_id=self.stripe_price_id,
         )
         intent = {"id": "intent_test_123", "tenant_id": "tenant_test_123"}
         return {"intent": intent, "plan": plan}
 
     def mark_checkout_created(self, **kwargs: object) -> None:
         self.last_mark_checkout_created = kwargs  # type: ignore[attr-defined]
+
+    def provision_checkout_session(self, session: dict[str, object]) -> dict[str, object]:
+        self.provisioned_session = session
+        return {
+            "provisioning_status": "provisioned",
+            "tenant_id": "tenant_test_123",
+            "organization_slug": "checkout-completion-org",
+            "initial_admin_user_id": "user_test_123",
+        }
 
 
 class _FakeStripeAsyncClient:
@@ -335,6 +454,10 @@ class _FakeStripeAsyncClient:
 
     async def post(self, url: str, content: str, headers: dict[str, str]) -> object:
         self.last_request = {"url": url, "content": content, "headers": headers}
+        return SimpleNamespace(status_code=200, json=lambda: self.response_payload)
+
+    async def get(self, url: str, headers: dict[str, str]) -> object:
+        self.last_request = {"url": url, "headers": headers}
         return SimpleNamespace(status_code=200, json=lambda: self.response_payload)
 
 
