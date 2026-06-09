@@ -1,5 +1,10 @@
-import { Component } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Component, OnInit, inject, signal } from '@angular/core';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ApiService } from '../../../core/services/api.service';
+
+interface CheckoutCompletionResponse {
+  login_ready: boolean;
+}
 
 @Component({
   selector: 'app-subscription-success',
@@ -8,15 +13,47 @@ import { RouterLink } from '@angular/router';
   template: `
     <main class="flex min-h-screen items-center justify-center bg-[var(--t-bg)] px-6 text-[var(--t-text-primary)]">
       <section class="max-w-xl border border-[var(--t-border)] bg-[var(--t-surface)] p-8">
-        <p class="text-xs font-black uppercase tracking-[0.3em] text-[var(--t-accent)]">Checkout complete</p>
-        <h1 class="mt-4 text-4xl font-black">Subscription received.</h1>
-        <p class="mt-5 text-sm leading-7 text-[var(--t-text-secondary)]">
-          Stripe returned successfully. Tenant provisioning will be completed by the billing webhook
-          once the provisioning tables are added.
-        </p>
-        <a routerLink="/auth/login" class="btn-primary mt-8 inline-flex px-5 py-3 text-xs">Go to login</a>
+        <p class="text-xs font-black uppercase tracking-[0.3em] text-[var(--t-accent)]">Account setup complete</p>
+        <h1 class="mt-4 text-4xl font-black">Welcome to Transmuter.</h1>
+        @if (setupState() === 'checking') {
+          <p class="mt-5 text-sm leading-7 text-[var(--t-text-secondary)]">
+            We are finalizing your workspace setup. This usually takes just a moment.
+          </p>
+        } @else if (setupState() === 'ready') {
+          <p class="mt-5 text-sm leading-7 text-[var(--t-text-secondary)]">
+            Your account has been set up successfully. We are excited to help your team turn
+            transformation priorities into measurable business value.
+          </p>
+          <a routerLink="/auth/login" class="btn-primary mt-8 inline-flex px-5 py-3 text-xs">Go to login</a>
+        } @else {
+          <p class="mt-5 text-sm leading-7 text-[var(--t-text-secondary)]">
+            Your checkout is complete, and we are finishing your workspace setup. Please try
+            signing in shortly.
+          </p>
+          <a routerLink="/auth/login" class="btn-secondary mt-8 inline-flex px-5 py-3 text-xs">Go to login</a>
+        }
       </section>
     </main>
   `,
 })
-export class SubscriptionSuccessComponent {}
+export class SubscriptionSuccessComponent implements OnInit {
+  private readonly api = inject(ApiService);
+  private readonly route = inject(ActivatedRoute);
+
+  protected readonly setupState = signal<'checking' | 'ready' | 'pending'>('checking');
+
+  ngOnInit(): void {
+    const sessionId = this.route.snapshot.queryParamMap.get('session_id');
+    if (!sessionId) {
+      this.setupState.set('ready');
+      return;
+    }
+
+    this.api.post<CheckoutCompletionResponse>('/billing/checkout-completion', {
+      session_id: sessionId,
+    }).subscribe({
+      next: response => this.setupState.set(response.login_ready ? 'ready' : 'pending'),
+      error: () => this.setupState.set('pending'),
+    });
+  }
+}

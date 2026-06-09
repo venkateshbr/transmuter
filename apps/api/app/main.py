@@ -70,6 +70,7 @@ async def enforce_api_security_controls(
         "/auth/login",
         "/auth/change-password",
         "/auth/register",
+        "/auth/accept-invite",
     }:
         now = monotonic()
         client_ip = request.client.host if request.client else "unknown"
@@ -127,6 +128,8 @@ async def enforce_api_security_controls(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "http://localhost:4200",
+        "http://127.0.0.1:4200",
         "http://localhost:4300",
         "http://127.0.0.1:4300",
         "http://localhost:4301",

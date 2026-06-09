@@ -59,6 +59,21 @@ class CheckoutSessionResponse(BaseModel):
     session_id: str
 
 
+class CheckoutCompletionRequest(BaseModel):
+    session_id: str = Field(..., min_length=8, max_length=255)
+
+
+class CheckoutCompletionResponse(BaseModel):
+    received: bool
+    checkout_status: str | None = None
+    payment_status: str | None = None
+    provisioning_status: str
+    login_ready: bool = False
+    tenant_id: str | None = None
+    organization_slug: str | None = None
+    initial_admin_user_id: str | None = None
+
+
 class BillingPortalRequest(BaseModel):
     return_url: str = Field(..., min_length=1)
 
@@ -172,6 +187,65 @@ async def create_checkout_session(
         checkout_url=data["url"],
     )
     return CheckoutSessionResponse(checkout_url=data["url"], session_id=data["id"])
+
+
+@router.post("/checkout-completion", response_model=CheckoutCompletionResponse)
+async def complete_checkout_session(body: CheckoutCompletionRequest) -> CheckoutCompletionResponse:
+    if not settings.stripe_secret_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Stripe secret key is not configured",
+        )
+
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        response = await client.get(
+            f"{STRIPE_CHECKOUT_URL}/{body.session_id}",
+            headers={"Authorization": f"Bearer {settings.stripe_secret_key}"},
+        )
+
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Stripe checkout session could not be verified",
+        )
+
+    session = response.json()
+    if session.get("id") != body.session_id:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Stripe checkout session verification failed",
+        )
+
+    checkout_status = session.get("status")
+    payment_status = session.get("payment_status")
+    if checkout_status != "complete" or payment_status != "paid":
+        return CheckoutCompletionResponse(
+            received=True,
+            checkout_status=checkout_status,
+            payment_status=payment_status,
+            provisioning_status="pending_payment",
+            login_ready=False,
+        )
+
+    if not ((session.get("metadata") or {}).get("signup_intent_id")):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Checkout session is not linked to a signup intent",
+        )
+
+    provisioning = BillingProvisioningService(get_supabase_admin()).provision_checkout_session(
+        session
+    )
+    return CheckoutCompletionResponse(
+        received=True,
+        checkout_status=checkout_status,
+        payment_status=payment_status,
+        provisioning_status=provisioning["provisioning_status"],
+        login_ready=provisioning["provisioning_status"] == "provisioned",
+        tenant_id=provisioning.get("tenant_id"),
+        organization_slug=provisioning.get("organization_slug"),
+        initial_admin_user_id=provisioning.get("initial_admin_user_id"),
+    )
 
 
 @router.post("/portal-session", response_model=BillingPortalResponse)

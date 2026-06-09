@@ -143,6 +143,24 @@ describe('App', () => {
     expect((fixture.componentInstance as any).canManageTenant()).toBe(true);
   });
 
+  it('should expose financial and report submenu paths in the shell nav model', () => {
+    const fixture = TestBed.createComponent(App);
+    const navItems = (fixture.componentInstance as any).navItems;
+
+    const financials = navItems.find((item: any) => item.label === 'Financials');
+    expect(financials.children?.map((child: any) => child.path)).toEqual([
+      '/financials',
+      '/financials/bankable-plan',
+      '/financials/benefit-tracking',
+      '/financials/waterline',
+    ]);
+
+    const reports = navItems.find((item: any) => item.label === 'Reports');
+    expect(reports.children?.map((child: any) => child.path)).toEqual([
+      '/reports/control-tower',
+    ]);
+  });
+
   it('should render platform-only navigation for platform admins', async () => {
     const router = TestBed.inject(Router);
     role = 'platform_admin';
@@ -210,7 +228,7 @@ describe('App', () => {
     compiled.querySelector<HTMLButtonElement>('button[aria-label="Open user menu"]')?.click();
     fixture.detectChanges();
     expect(compiled.textContent).toContain('Profile');
-    compiled.querySelector<HTMLButtonElement>('button[aria-label="Logout"]')?.click();
+    Array.from(compiled.querySelectorAll<HTMLButtonElement>('button')).find(button => button.textContent?.includes('Logout'))?.click();
 
     expect(themeToggleCalled).toBe(true);
     expect(logoutCalled).toBe(true);

@@ -138,3 +138,61 @@ class PeopleRepository:
         if rows:
             self._c.table("user_workstreams").insert(rows).execute()
         return self.list_user_workstreams(user_id)
+
+    def list_invites(self) -> list[dict[str, Any]]:
+        result = (
+            self._c.table("user_invites")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        return result.data or []
+
+    def get_invite(self, invite_id: str) -> dict[str, Any] | None:
+        result = (
+            self._c.table("user_invites")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .eq("id", invite_id)
+            .maybe_single()
+            .execute()
+        )
+        return result.data if result else None
+
+    def get_pending_invite_by_email(self, email: str) -> dict[str, Any] | None:
+        result = (
+            self._c.table("user_invites")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .eq("email", email)
+            .eq("status", "pending")
+            .maybe_single()
+            .execute()
+        )
+        return result.data if result else None
+
+    def list_pending_invites_by_email(self, email: str) -> list[dict[str, Any]]:
+        result = (
+            self._c.table("user_invites")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .eq("email", email)
+            .eq("status", "pending")
+            .execute()
+        )
+        return result.data or []
+
+    def insert_invite(self, row: dict[str, Any]) -> dict[str, Any]:
+        result = self._c.table("user_invites").insert(row).execute()
+        return result.data[0] if result.data else row
+
+    def update_invite(self, invite_id: str, patch: dict[str, Any]) -> dict[str, Any]:
+        result = (
+            self._c.table("user_invites")
+            .update(patch)
+            .eq("tenant_id", self._tid)
+            .eq("id", invite_id)
+            .execute()
+        )
+        return result.data[0] if result.data else {}

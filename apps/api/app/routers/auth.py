@@ -11,6 +11,9 @@ from supabase import create_client
 from app.core.auth import CurrentUser, get_current_user
 from app.core.config import settings
 from app.core.database import get_supabase_admin
+from app.domain.people import InviteAccept
+from app.services.demo_portfolio_bootstrap import bootstrap_demo_portfolio
+from app.services.people import PeopleInviteAcceptanceService
 from app.services.tenant_bootstrap import TenantBootstrapService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -229,6 +232,8 @@ async def register_blank_tenant(body: RegisterRequest) -> TokenResponse:
             }
         ).execute()
         TenantBootstrapService(admin).bootstrap_tenant(tenant_id)
+        if settings.bootstrap_demo_data_on_registration:
+            bootstrap_demo_portfolio(admin, tenant_id, auth_user_id)
     except Exception as exc:
         if auth_user_id:
             with suppress(Exception):
@@ -270,6 +275,22 @@ async def refresh_session(body: RefreshRequest) -> TokenResponse:
         )
 
     return _token_response_for_session(supabase_user, resp.session, supabase_user.email)
+
+
+@router.post("/accept-invite", response_model=TokenResponse)
+async def accept_invite(body: InviteAccept) -> TokenResponse:
+    accepted = PeopleInviteAcceptanceService(get_supabase_admin()).accept_invite(body)
+    anon_client = create_client(settings.supabase_url, settings.supabase_anon_key)
+    try:
+        resp = anon_client.auth.sign_in_with_password(
+            {"email": accepted["email"], "password": body.password}
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Invite accepted, but automatic sign-in failed. Please sign in manually.",
+        ) from exc
+    return _token_response_for_session(resp.user, resp.session, accepted["email"])
 
 
 def _token_response_for_session(
@@ -419,11 +440,11 @@ async def patch_me(
     return await me(current_user)
 
 
-@router.post("/change-password", response_model=ChangePasswordResponse)
+@router.post("/change-password", response_model=TokenResponse)
 async def change_password(
     body: ChangePasswordRequest,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
-) -> ChangePasswordResponse:
+) -> TokenResponse:
     """Change the logged-in user's Supabase Auth password after re-authentication."""
     _validate_password_change_body(body)
     email = _email_for_current_user(current_user)
@@ -455,7 +476,17 @@ async def change_password(
             detail="Password could not be updated",
         ) from exc
 
-    return ChangePasswordResponse(status="password_changed")
+    try:
+        resp = anon_client.auth.sign_in_with_password(
+            {"email": email, "password": body.new_password}
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Password changed, but automatic sign-in failed. Please sign in manually.",
+        ) from exc
+
+    return _token_response_for_session(resp.user, resp.session, email)
 
 
 def _validate_new_password(password: str) -> None:

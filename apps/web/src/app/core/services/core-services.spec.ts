@@ -68,8 +68,8 @@ describe('AuthService', () => {
     localStorage.clear();
     api = {
       post: vi.fn(),
-      get: vi.fn(() => of({ id: 'user-1', role: 'viewer', display_name: 'Viewer' })),
-      patch: vi.fn(() => of({ id: 'user-1', role: 'viewer', display_name: 'Updated' })),
+      get: vi.fn(() => of({ id: 'user-1', role: 'viewer', display_name: 'Viewer', must_change_password: false })),
+      patch: vi.fn(() => of({ id: 'user-1', role: 'viewer', display_name: 'Updated', must_change_password: false })),
     };
     router = { navigate: vi.fn() };
 
@@ -128,7 +128,19 @@ describe('AuthService', () => {
   });
 
   it('should update profile and submit password changes through auth endpoints', async () => {
-    api.post.mockReturnValue(of({ status: 'password_changed' }));
+    api.post.mockReturnValue(
+      of({
+        access_token: token({ exp: future(), role: 'viewer' }),
+        refresh_token: 'refresh-after-password',
+        token_type: 'bearer',
+        expires_in: 3600,
+        user_id: 'user-1',
+        tenant_id: 'tenant-1',
+        role: 'viewer',
+        status: 'active',
+        must_change_password: false,
+      })
+    );
     const service = TestBed.inject(AuthService);
 
     await firstValueFrom(service.updateProfile({ display_name: 'Updated' }));
@@ -141,6 +153,8 @@ describe('AuthService', () => {
       new_password: 'NewPassword2026!',
       confirm_password: 'NewPassword2026!',
     });
+    expect(localStorage.getItem('refresh_token')).toBe('refresh-after-password');
+    expect(service.user()?.must_change_password).toBe(false);
   });
 
   it('should derive roles from JWT metadata and clear expired sessions', () => {

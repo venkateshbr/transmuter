@@ -45,7 +45,7 @@ const PEOPLE_FILTER_STATE_KEY = 'transmuter.filters.people.directory';
             [class.border-[var(--t-accent)]]="activeTab === 'pending'"
             [class.text-[var(--t-accent)]]="activeTab === 'pending'"
             class="whitespace-nowrap pb-4 px-1 border-b-2 font-black text-[10px] uppercase tracking-widest transition-all">
-            Pending Invites
+            Pending Access
           </button>
         </nav>
       </div>
@@ -105,9 +105,55 @@ const PEOPLE_FILTER_STATE_KEY = 'transmuter.filters.people.directory';
         </div>
       }
 
-      <!-- Pending Invites View -->
+      <!-- Pending Access View -->
       @if (activeTab === 'pending') {
+        <div class="space-y-6">
         <div class="card p-0 overflow-hidden">
+          <div class="border-b border-[var(--t-border)] bg-[var(--t-surface-raised)] px-8 py-4">
+            <h2 class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Pending Users</h2>
+          </div>
+          <table class="w-full text-left">
+            <thead class="bg-[var(--t-surface-raised)] border-b border-[var(--t-border)]">
+              <tr>
+                <th class="px-8 py-4 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Email Identity</th>
+                <th class="px-8 py-4 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Assigned Role</th>
+                <th class="px-8 py-4 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Status</th>
+                <th class="px-8 py-4 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)] text-right">Access Actions</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-[var(--t-border)]">
+               @for (user of pendingPeople(); track user.id) {
+               <tr class="hover:bg-[var(--t-surface-raised)]/50 transition-colors">
+                 <td class="px-8 py-6">
+                   <p class="text-sm font-black text-[var(--t-text-primary)]">{{ user.display_name || user.email }}</p>
+                   <p class="text-[10px] text-[var(--t-text-secondary)] mt-1 font-medium">{{ user.email }}</p>
+                 </td>
+                 <td class="px-8 py-6">
+                   <span class="badge-purple font-black text-[9px] uppercase tracking-widest px-2 py-0.5">{{ formatRole(user.role) }}</span>
+                 </td>
+                 <td class="px-8 py-6">
+                   <span class="text-xs font-black text-[var(--t-accent)]">{{ user.status | uppercase }}</span>
+                 </td>
+                 <td class="px-8 py-6 text-right">
+                   <div class="flex justify-end gap-3">
+                     <button (click)="openProfile(user)" class="text-[9px] font-black text-[var(--t-text-tertiary)] hover:text-[var(--t-accent)] uppercase underline">Profile</button>
+                     <button (click)="sendPasswordSetupLink(user)" class="text-[9px] font-black text-[var(--t-text-tertiary)] hover:text-[var(--t-accent)] uppercase underline">Send Setup Link</button>
+                   </div>
+                 </td>
+               </tr>
+               } @empty {
+               <tr>
+                 <td colspan="4" class="px-8 py-12 text-center text-[var(--t-text-secondary)]">No pending users.</td>
+               </tr>
+               }
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card p-0 overflow-hidden">
+          <div class="border-b border-[var(--t-border)] bg-[var(--t-surface-raised)] px-8 py-4">
+            <h2 class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Pending Invites</h2>
+          </div>
           <table class="w-full text-left">
             <thead class="bg-[var(--t-surface-raised)] border-b border-[var(--t-border)]">
               <tr>
@@ -133,7 +179,10 @@ const PEOPLE_FILTER_STATE_KEY = 'transmuter.filters.people.directory';
                  <td class="px-8 py-6 text-right">
                    <div class="flex flex-col items-end gap-1">
                      <span class="text-xs font-black text-[var(--t-accent)]">{{ invite.status | uppercase }}</span>
-                     <button (click)="deactivate(invite)" class="text-[9px] font-black text-[var(--t-text-tertiary)] hover:text-[var(--t-accent)] uppercase underline">Deactivate</button>
+                     <div class="flex gap-3">
+                       <button (click)="resendInvite(invite)" class="text-[9px] font-black text-[var(--t-text-tertiary)] hover:text-[var(--t-accent)] uppercase underline">Resend</button>
+                       <button (click)="revokeInvite(invite)" class="text-[9px] font-black text-[var(--t-text-tertiary)] hover:text-[var(--t-red)] uppercase underline">Revoke</button>
+                     </div>
                    </div>
                  </td>
                </tr>
@@ -144,6 +193,7 @@ const PEOPLE_FILTER_STATE_KEY = 'transmuter.filters.people.directory';
                }
             </tbody>
           </table>
+        </div>
         </div>
       }
 
@@ -157,6 +207,24 @@ const PEOPLE_FILTER_STATE_KEY = 'transmuter.filters.people.directory';
               </button>
             </div>
             <div class="space-y-4">
+              <div class="grid grid-cols-2 border border-[var(--t-border)]">
+                <button
+                  type="button"
+                  (click)="inviteMode.set('invite')"
+                  class="px-3 py-3 text-[10px] font-black uppercase tracking-widest"
+                  [ngClass]="inviteMode() === 'invite' ? 'bg-[var(--t-primary)] text-white' : ''"
+                  aria-label="Send invite mode">
+                  Send Invite
+                </button>
+                <button
+                  type="button"
+                  (click)="inviteMode.set('create')"
+                  class="border-l border-[var(--t-border)] px-3 py-3 text-[10px] font-black uppercase tracking-widest"
+                  [ngClass]="inviteMode() === 'create' ? 'bg-[var(--t-primary)] text-white' : ''"
+                  aria-label="Create user mode">
+                  Create User
+                </button>
+              </div>
               <input [(ngModel)]="inviteForm.email" class="input-field w-full" placeholder="email@company.com" aria-label="Invite email" />
               <input [(ngModel)]="inviteForm.display_name" class="input-field w-full" placeholder="Display name" aria-label="Invite display name" />
               <input [(ngModel)]="inviteForm.title" class="input-field w-full" placeholder="Title" aria-label="Invite title" />
@@ -165,13 +233,15 @@ const PEOPLE_FILTER_STATE_KEY = 'transmuter.filters.people.directory';
                 <option value="initiative_owner">Initiative Owner</option>
                 <option value="viewer">Viewer</option>
               </select>
-              <div class="grid grid-cols-[1fr_auto_auto] gap-2">
-                <input [type]="showTemporaryPassword() ? 'text' : 'password'" [(ngModel)]="inviteForm.temporary_password" class="input-field w-full" placeholder="Temporary password" aria-label="Temporary password" />
-                <button type="button" (click)="showTemporaryPassword.set(!showTemporaryPassword())" class="btn-secondary px-4 text-xs" aria-label="Toggle temporary password visibility">
-                  <span class="material-icons text-sm">{{ showTemporaryPassword() ? 'visibility_off' : 'visibility' }}</span>
-                </button>
-                <button type="button" (click)="generateTemporaryPassword()" class="btn-secondary px-4 text-xs" aria-label="Generate temporary password">Generate</button>
-              </div>
+              @if (inviteMode() === 'create') {
+                <div class="grid grid-cols-[1fr_auto_auto] gap-2">
+                  <input [type]="showTemporaryPassword() ? 'text' : 'password'" [(ngModel)]="inviteForm.temporary_password" class="input-field w-full" placeholder="Temporary password" aria-label="Temporary password" />
+                  <button type="button" (click)="showTemporaryPassword.set(!showTemporaryPassword())" class="btn-secondary px-4 text-xs" aria-label="Toggle temporary password visibility">
+                    <span class="material-icons text-sm">{{ showTemporaryPassword() ? 'visibility_off' : 'visibility' }}</span>
+                  </button>
+                  <button type="button" (click)="generateTemporaryPassword()" class="btn-secondary px-4 text-xs" aria-label="Generate temporary password">Generate</button>
+                </div>
+              }
               @if (workstreams().length) {
                 <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-3">
                   <p class="mb-2 text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Workstreams</p>
@@ -185,10 +255,23 @@ const PEOPLE_FILTER_STATE_KEY = 'transmuter.filters.people.directory';
                   </div>
                 </div>
               }
-              <div class="grid grid-cols-2 gap-3">
-                <button (click)="createUser()" class="btn-primary h-11 rounded-xl">Create User</button>
-                <button (click)="createInvite()" class="btn-secondary h-11 rounded-xl">Send Invite</button>
-              </div>
+              @if (inviteError()) {
+                <div class="border border-[var(--t-red)] bg-[var(--t-surface-raised)] p-3 text-sm font-bold text-[var(--t-red)]">
+                  {{ inviteError() }}
+                </div>
+              }
+              @if (inviteResult()?.invite_url) {
+                <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-3">
+                  <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Manual invite link</p>
+                  <p class="mt-2 break-all text-xs font-bold text-[var(--t-text-secondary)]">{{ inviteResult().invite_url }}</p>
+                </div>
+              }
+              <button
+                (click)="inviteMode() === 'create' ? createUser() : createInvite()"
+                class="btn-primary h-11 w-full"
+                [attr.aria-label]="inviteMode() === 'create' ? 'Create user' : 'Send invite'">
+                {{ inviteMode() === 'create' ? 'Create User' : 'Send Invite' }}
+              </button>
             </div>
           </div>
         </div>
@@ -208,7 +291,7 @@ const PEOPLE_FILTER_STATE_KEY = 'transmuter.filters.people.directory';
                     <p class="text-[10px] font-black text-[var(--t-accent)] uppercase tracking-widest">{{ formatRole(selectedUser.role) }}</p>
                   </div>
                </div>
-               <button (click)="selectedUser.set(null)" class="w-10 h-10 rounded-full hover:bg-[var(--t-surface-raised)] flex items-center justify-center transition-colors">
+               <button (click)="closeProfile()" class="w-10 h-10 rounded-full hover:bg-[var(--t-surface-raised)] flex items-center justify-center transition-colors" aria-label="Close user profile">
                  <span class="material-icons">close</span>
                </button>
             </div>
@@ -249,6 +332,35 @@ const PEOPLE_FILTER_STATE_KEY = 'transmuter.filters.people.directory';
                    <input [(ngModel)]="selectedUser.department" class="input-field text-sm" aria-label="User department" placeholder="Department" />
                    <input [(ngModel)]="selectedUser.market" class="input-field text-sm" aria-label="User market" placeholder="Market" />
                  </div>
+               </section>
+
+               <section class="card p-5" data-testid="people-access-setup">
+                 <div class="mb-4 flex items-center justify-between gap-3">
+                   <h3 class="text-[10px] font-black text-[var(--t-text-tertiary)] uppercase tracking-widest">Access</h3>
+                   <button type="button" (click)="sendPasswordSetupLink(selectedUser)" class="btn-secondary text-xs" aria-label="Send password setup link">Send Setup Link</button>
+                 </div>
+                 <div class="grid grid-cols-[1fr_auto_auto] gap-2">
+                   <input [type]="showResetTemporaryPassword() ? 'text' : 'password'" [(ngModel)]="resetTemporaryPassword" class="input-field text-sm" placeholder="Temporary password" aria-label="Reset temporary password" />
+                   <button type="button" (click)="showResetTemporaryPassword.set(!showResetTemporaryPassword())" class="btn-secondary px-4 text-xs" aria-label="Toggle reset temporary password visibility">
+                     <span class="material-icons text-sm">{{ showResetTemporaryPassword() ? 'visibility_off' : 'visibility' }}</span>
+                   </button>
+                   <button type="button" (click)="generateResetTemporaryPassword()" class="btn-secondary px-4 text-xs" aria-label="Generate reset temporary password">Generate</button>
+                 </div>
+                 <button type="button" (click)="setTemporaryPassword(selectedUser)" class="btn-primary mt-3 h-10 w-full text-xs" aria-label="Set temporary password">Set Temporary Password</button>
+                 @if (userAccessError()) {
+                   <div class="mt-3 border border-[var(--t-red)] bg-[var(--t-surface-raised)] p-3 text-sm font-bold text-[var(--t-red)]">
+                     {{ userAccessError() }}
+                   </div>
+                 }
+                 @if (userAccessResult()?.invite_url) {
+                   <div class="mt-3 border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-3">
+                     <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Manual setup link</p>
+                     <p class="mt-2 break-all text-xs font-bold text-[var(--t-text-secondary)]">{{ userAccessResult().invite_url }}</p>
+                   </div>
+                 }
+                 @if (userAccessResult() && !userAccessResult()?.invite_url) {
+                   <p class="mt-3 text-xs font-bold text-[var(--t-accent)]">Access update sent.</p>
+                 }
                </section>
 
                <section data-testid="people-workstreams">
@@ -331,16 +443,24 @@ const PEOPLE_FILTER_STATE_KEY = 'transmuter.filters.people.directory';
 export class PeopleComponent implements OnInit {
   private readonly api = inject(ApiService);
   people = signal<any[]>([]);
+  pendingPeople = signal<any[]>([]);
   invites = signal<any[]>([]);
   workstreams = signal<any[]>([]);
   
   activeTab: 'directory' | 'pending' = 'directory';
   selectedUser = signal<any | null>(null);
   showInvite = signal(false);
+  inviteMode = signal<'invite' | 'create'>('invite');
+  inviteResult = signal<any | null>(null);
+  inviteError = signal<string | null>(null);
+  userAccessResult = signal<any | null>(null);
+  userAccessError = signal<string | null>(null);
   showTemporaryPassword = signal(false);
+  showResetTemporaryPassword = signal(false);
   search = '';
   roleFilter = '';
   statusFilter = 'active';
+  resetTemporaryPassword = '';
   inviteForm = {
     email: '',
     display_name: '',
@@ -353,6 +473,7 @@ export class PeopleComponent implements OnInit {
   ngOnInit() {
     this.restoreDirectoryFilters();
     this.loadPeople();
+    this.loadPendingPeople();
     this.loadInvites();
     this.loadWorkstreams();
   }
@@ -365,6 +486,12 @@ export class PeopleComponent implements OnInit {
       search: this.search.trim(),
     }).subscribe(res => {
       this.people.set(res.items || []);
+    });
+  }
+
+  loadPendingPeople() {
+    this.api.get<any>('/people', { status: 'pending' }).subscribe(res => {
+      this.pendingPeople.set(res.items || []);
     });
   }
 
@@ -452,41 +579,136 @@ export class PeopleComponent implements OnInit {
   }
 
   openUserModal() {
-    if (!this.inviteForm.temporary_password) this.generateTemporaryPassword();
+    this.inviteMode.set('invite');
+    this.inviteError.set(null);
+    this.inviteResult.set(null);
     this.showInvite.set(true);
   }
 
   openProfile(user: any) {
     this.api.get<any>(`/users/${user.id}`).subscribe(profile => {
+      this.userAccessResult.set(null);
+      this.userAccessError.set(null);
+      this.resetTemporaryPassword = '';
       this.selectedUser.set(profile);
     });
   }
 
+  closeProfile() {
+    this.selectedUser.set(null);
+    this.userAccessResult.set(null);
+    this.userAccessError.set(null);
+    this.resetTemporaryPassword = '';
+  }
+
   createInvite() {
-    this.api.post<any>('/invites', this.inviteForm).subscribe(invite => {
-      this.showInvite.set(false);
-      this.resetInviteForm();
-      this.loadPeople();
-      this.loadInvites();
-      this.openProfile(invite);
+    this.inviteError.set(null);
+    this.inviteResult.set(null);
+    this.api.post<any>('/invites', {
+      email: this.inviteForm.email,
+      display_name: this.inviteForm.display_name,
+      title: this.inviteForm.title,
+      role: this.inviteForm.role,
+      workstream_ids: this.inviteForm.workstream_ids,
+    }).subscribe({
+      next: invite => {
+        this.inviteResult.set(invite);
+        if (!invite.invite_url) {
+          this.showInvite.set(false);
+          this.resetInviteForm();
+        }
+        this.activeTab = 'pending';
+        this.loadPeople();
+        this.loadPendingPeople();
+        this.loadInvites();
+      },
+      error: err => this.inviteError.set(this.formatApiError(err)),
     });
   }
 
   createUser() {
-    this.api.post<any>('/users', this.inviteForm).subscribe(user => {
-      this.showInvite.set(false);
-      this.resetInviteForm();
-      this.loadPeople();
-      this.loadInvites();
-      this.openProfile(user);
+    if (!this.inviteForm.temporary_password) this.generateTemporaryPassword();
+    this.inviteError.set(null);
+    this.inviteResult.set(null);
+    this.api.post<any>('/users', this.inviteForm).subscribe({
+      next: user => {
+        this.showInvite.set(false);
+        this.resetInviteForm();
+        this.loadPeople();
+        this.loadPendingPeople();
+        this.loadInvites();
+        this.openProfile(user);
+      },
+      error: err => this.inviteError.set(this.formatApiError(err)),
     });
   }
 
+  resendInvite(invite: any) {
+    this.api.post<any>(`/invites/${invite.id}/resend`, {}).subscribe(updated => {
+      this.inviteResult.set(updated);
+      this.loadInvites();
+    });
+  }
+
+  revokeInvite(invite: any) {
+    this.api.post<any>(`/invites/${invite.id}/revoke`, {}).subscribe(() => {
+      this.loadInvites();
+    });
+  }
+
+  sendPasswordSetupLink(user: any) {
+    this.userAccessError.set(null);
+    this.userAccessResult.set(null);
+    this.api.post<any>(`/users/${user.id}/password-reset-link`, {}).subscribe({
+      next: result => {
+        this.userAccessResult.set(result);
+        this.activeTab = 'pending';
+        this.loadPendingPeople();
+        this.loadInvites();
+      },
+      error: err => this.userAccessError.set(this.formatApiError(err)),
+    });
+  }
+
+  setTemporaryPassword(user: any) {
+    if (!this.resetTemporaryPassword) this.generateResetTemporaryPassword();
+    this.userAccessError.set(null);
+    this.userAccessResult.set(null);
+    this.api.post<any>(`/users/${user.id}/temporary-password`, {
+      temporary_password: this.resetTemporaryPassword,
+    }).subscribe({
+      next: updated => {
+        this.selectedUser.set(updated);
+        this.resetTemporaryPassword = '';
+        this.loadPeople();
+        this.loadPendingPeople();
+        this.loadInvites();
+        this.userAccessResult.set({ status: 'temporary_password_set' });
+      },
+      error: err => this.userAccessError.set(this.formatApiError(err)),
+    });
+  }
+
+  private formatApiError(err: unknown): string {
+    const fallback = 'Request could not be completed.';
+    if (!err || typeof err !== 'object') return fallback;
+    const detail = (err as { error?: { detail?: unknown } }).error?.detail;
+    return typeof detail === 'string' ? detail : fallback;
+  }
+
   generateTemporaryPassword() {
+    this.inviteForm.temporary_password = this.newTemporaryPassword();
+  }
+
+  generateResetTemporaryPassword() {
+    this.resetTemporaryPassword = this.newTemporaryPassword();
+  }
+
+  private newTemporaryPassword(): string {
     const bytes = new Uint8Array(8);
     crypto.getRandomValues(bytes);
     const token = Array.from(bytes, byte => byte.toString(36).padStart(2, '0')).join('').slice(0, 12);
-    this.inviteForm.temporary_password = `Transmuter${token}2026!`;
+    return `Transmuter${token}2026!`;
   }
 
   toggleInviteWorkstream(workstreamId: string) {
@@ -500,6 +722,8 @@ export class PeopleComponent implements OnInit {
   }
 
   private resetInviteForm() {
+    this.inviteError.set(null);
+    this.inviteResult.set(null);
     this.inviteForm = {
       email: '',
       display_name: '',
@@ -514,6 +738,7 @@ export class PeopleComponent implements OnInit {
     this.api.post<any>(`/users/${user.id}/ghost`, {}).subscribe(updated => {
       this.selectedUser.set(updated);
       this.loadPeople();
+      this.loadPendingPeople();
       this.loadInvites();
     });
   }
@@ -530,13 +755,15 @@ export class PeopleComponent implements OnInit {
     }).subscribe(updated => {
       this.selectedUser.set(updated);
       this.loadPeople();
+      this.loadPendingPeople();
     });
   }
 
   deactivate(user: any) {
     this.api.post<any>(`/users/${user.id}/deactivate`, {}).subscribe(() => {
-      this.selectedUser.set(null);
+      this.closeProfile();
       this.loadPeople();
+      this.loadPendingPeople();
       this.loadInvites();
     });
   }

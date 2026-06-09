@@ -15,8 +15,8 @@ import psycopg
 from dotenv import load_dotenv
 from psycopg.rows import dict_row
 
-
-PUBLIC_SCHEMA = "public"
+DEFAULT_DB_SCHEMA = "public"
+SUPPORTED_DB_SCHEMAS = {"public", "transmuter"}
 
 IGNORED_TABLES = {
     "spatial_ref_sys",
@@ -68,7 +68,17 @@ def connect() -> psycopg.Connection:
     return psycopg.connect(database_url, row_factory=dict_row)
 
 
-def fetch_table_statuses(conn: psycopg.Connection) -> list[TableRlsStatus]:
+def get_db_schema() -> str:
+    schema = os.environ.get("DB_SCHEMA", DEFAULT_DB_SCHEMA).strip() or DEFAULT_DB_SCHEMA
+    if schema not in SUPPORTED_DB_SCHEMAS:
+        raise RuntimeError(
+            f"DB_SCHEMA must be one of {', '.join(sorted(SUPPORTED_DB_SCHEMAS))}."
+        )
+    return schema
+
+
+def fetch_table_statuses(conn: psycopg.Connection, schema: str | None = None) -> list[TableRlsStatus]:
+    db_schema = schema or get_db_schema()
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -89,7 +99,7 @@ def fetch_table_statuses(conn: psycopg.Connection) -> list[TableRlsStatus]:
               and c.relkind in ('r', 'p')
             order by c.relname
             """,
-            (PUBLIC_SCHEMA,),
+            (db_schema,),
         )
         table_rows = cur.fetchall()
 
@@ -104,7 +114,7 @@ def fetch_table_statuses(conn: psycopg.Connection) -> list[TableRlsStatus]:
             where schemaname = %s
             order by tablename, policyname
             """,
-            (PUBLIC_SCHEMA,),
+            (db_schema,),
         )
         policies_by_table: dict[str, list[dict[str, object]]] = {}
         for policy in cur.fetchall():
@@ -179,11 +189,12 @@ def fetch_table_statuses(conn: psycopg.Connection) -> list[TableRlsStatus]:
     return statuses
 
 
-def summarize(statuses: list[TableRlsStatus]) -> dict[str, object]:
+def summarize(statuses: list[TableRlsStatus], schema: str | None = None) -> dict[str, object]:
     blockers = [status for status in statuses if status.severity == "blocker"]
     warnings = [status for status in statuses if status.severity == "warning"]
     tenant_tables = [status for status in statuses if status.classification == "tenant"]
     return {
+        "schema": schema or get_db_schema(),
         "table_count": len(statuses),
         "tenant_table_count": len(tenant_tables),
         "pass_count": len([status for status in statuses if status.severity == "pass"]),
@@ -196,10 +207,11 @@ def summarize(statuses: list[TableRlsStatus]) -> dict[str, object]:
 
 def main() -> int:
     load_environment()
+    schema = get_db_schema()
     with connect() as conn:
-        statuses = fetch_table_statuses(conn)
+        statuses = fetch_table_statuses(conn, schema)
 
-    summary = summarize(statuses)
+    summary = summarize(statuses, schema)
     print(json.dumps(summary, indent=2, sort_keys=True))
 
     if summary["blocker_count"]:

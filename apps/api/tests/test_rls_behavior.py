@@ -9,10 +9,14 @@ from uuid import uuid4
 import psycopg
 import pytest
 from dotenv import load_dotenv
+from psycopg import sql
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "../../../.env"))
 
 from app.core.config import settings  # noqa: E402
+
+
+DEFAULT_DB_SCHEMA = "public"
 
 
 pytestmark = pytest.mark.skipif(
@@ -25,7 +29,7 @@ def test_cross_tenant_select_is_filtered_by_rls_claims() -> None:
     tenant_a = uuid4()
     tenant_b = uuid4()
 
-    with psycopg.connect(settings.database_url) as conn:
+    with _connect_database() as conn:
         with conn.cursor() as cur:
             _seed_tenants_and_business_units(cur, tenant_a, tenant_b)
             _act_as_tenant(cur, tenant_a)
@@ -40,7 +44,7 @@ def test_wrong_tenant_insert_is_blocked_by_rls() -> None:
     tenant_a = uuid4()
     tenant_b = uuid4()
 
-    with psycopg.connect(settings.database_url) as conn:
+    with _connect_database() as conn:
         with conn.cursor() as cur:
             _seed_tenants_and_business_units(cur, tenant_a, tenant_b)
             _act_as_tenant(cur, tenant_a)
@@ -56,6 +60,16 @@ def test_wrong_tenant_insert_is_blocked_by_rls() -> None:
                 )
             cur.execute("rollback to savepoint wrong_tenant_insert")
         conn.rollback()
+
+
+def _connect_database() -> psycopg.Connection:
+    conn = psycopg.connect(settings.database_url)
+    db_schema = os.environ.get("DB_SCHEMA", DEFAULT_DB_SCHEMA).strip() or DEFAULT_DB_SCHEMA
+    with conn.cursor() as cur:
+        cur.execute(
+            sql.SQL("set search_path to {}, public, extensions").format(sql.Identifier(db_schema))
+        )
+    return conn
 
 
 def _seed_tenants_and_business_units(

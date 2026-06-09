@@ -27,6 +27,7 @@ MinutesStatus = Literal["not_generated", "draft", "sent"]
 class MeetingCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=300)
     workstream_id: str | None = None
+    workstream_ids: list[str] = Field(default_factory=list)
     scope: MeetingScope = "all"
     recurrence: MeetingRecurrence = "weekly"
     description: str | None = None
@@ -36,6 +37,7 @@ class MeetingCreate(BaseModel):
 class MeetingUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=300)
     workstream_id: str | None = None
+    workstream_ids: list[str] | None = None
     scope: MeetingScope | None = None
     recurrence: MeetingRecurrence | None = None
     description: str | None = None
@@ -60,6 +62,10 @@ class AttendeeCreate(BaseModel):
 
 class MeetingInitiativeCreate(BaseModel):
     initiative_id: str
+
+
+class SessionStartRequest(BaseModel):
+    session_date: str | None = None
 
 
 class SessionUpdate(BaseModel):
@@ -123,6 +129,19 @@ class MeetingTranscriptImport(BaseModel):
 
 class MeetingMinutesGenerateRequest(BaseModel):
     force: bool = False
+
+
+class AgendaSuggestion(BaseModel):
+    text: str
+    initiative_id: str | None = None
+    rationale: str
+    source_type: str
+
+
+class AgendaSuggestionsResponse(BaseModel):
+    items: list[AgendaSuggestion]
+    trace_id: str | None = None
+    trace_url: str | None = None
 
 
 class MeetingExternalEventCreate(BaseModel):

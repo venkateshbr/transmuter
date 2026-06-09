@@ -396,12 +396,33 @@ def test_change_password_reauthenticates_and_updates_supabase_auth(monkeypatch) 
     update_calls: list[tuple[str, dict[str, str]]] = []
 
     class FakeAuth:
+        def __init__(self) -> None:
+            self.calls: list[dict[str, str]] = []
+
         def sign_in_with_password(self, credentials: dict[str, str]) -> object:
+            self.calls.append(credentials)
+            if credentials["password"] == "CurrentPassword1!":
+                return object()
             assert credentials == {
                 "email": "viewer@example.com",
-                "password": "CurrentPassword1!",
+                "password": "NewPassword2026!",
             }
-            return object()
+            return type(
+                "AuthResponse",
+                (),
+                {
+                    "user": type("AuthUser", (), {"id": user_id})(),
+                    "session": type(
+                        "Session",
+                        (),
+                        {
+                            "access_token": "new-access-token",
+                            "refresh_token": "new-refresh-token",
+                            "expires_in": 3600,
+                        },
+                    )(),
+                },
+            )()
 
     class FakeAnonClient:
         auth = FakeAuth()
@@ -468,7 +489,10 @@ def test_change_password_reauthenticates_and_updates_supabase_auth(monkeypatch) 
     )
 
     assert response.status_code == 200
-    assert response.json() == {"status": "password_changed"}
+    body = response.json()
+    assert body["access_token"] == "new-access-token"
+    assert body["refresh_token"] == "new-refresh-token"
+    assert body["must_change_password"] is False
     assert update_calls == [(user_id, {"password": "NewPassword2026!"})]
 
 

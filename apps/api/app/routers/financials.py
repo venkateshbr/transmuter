@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
@@ -9,13 +10,22 @@ from fastapi.responses import Response
 from supabase import Client
 
 from app.core.auth import CurrentUser, get_current_user
-from app.core.database import get_supabase_request_client
+from app.core.database import get_supabase_admin, get_supabase_request_client
 from app.core.rbac import (
     assert_can_manage_initiatives,
     assert_can_view_initiative,
     assert_can_view_portfolio,
 )
 from app.domain.financials import (
+    BankablePlanRebaselineRequest,
+    BankablePlanResponse,
+    BankablePlanVersion,
+    BenefitLedgerEntry,
+    BenefitLedgerEntryCreate,
+    BenefitLedgerEntryUpdate,
+    BenefitLedgerGranularity,
+    BenefitLedgerRollupSummaryResponse,
+    BenefitLedgerSummaryResponse,
     BreakEvenResponse,
     CostLineCreate,
     CostLineItem,
@@ -28,6 +38,10 @@ from app.domain.financials import (
     FinancialCellAssumptionUpdate,
     FinancialConfigurationResponse,
     FinancialConfigurationUpdate,
+    FinancialForecastResponse,
+    FinancialForecastUpdate,
+    FinancialGovernanceSettings,
+    FinancialGovernanceSettingsUpdate,
     FinancialGridResponse,
     FinancialGridUpdate,
     FinancialMetricDeactivateRequest,
@@ -39,6 +53,10 @@ from app.domain.financials import (
     PortfolioGranularity,
     ScenarioFinancialSummary,
     ValueBridgeResponse,
+    WorkstreamTargetLockRequest,
+    WorkstreamTargetLockResponse,
+    WorkstreamTargetLockVersion,
+    WorkstreamTargetPreviewResponse,
 )
 from app.services.financial import FinancialService
 
@@ -50,6 +68,12 @@ def _svc(
     client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> FinancialService:
     return FinancialService(client, current_user.tenant_id)
+
+
+def _admin_svc(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> FinancialService:
+    return FinancialService(get_supabase_admin(), current_user.tenant_id)
 
 
 # ── Financial Grid ────────────────────────────────────────────────────────────
@@ -80,6 +104,206 @@ async def update_financials(
 
 
 @router.get(
+    "/initiatives/{initiative_id}/bankable-plan",
+    response_model=BankablePlanResponse,
+)
+async def get_bankable_plan(
+    initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
+) -> BankablePlanResponse:
+    assert_can_view_initiative(client, current_user, initiative_id)
+    return svc.get_bankable_plan_history(initiative_id)
+
+
+@router.get(
+    "/initiatives/{initiative_id}/bankable-plan/history",
+    response_model=list[BankablePlanVersion],
+)
+async def list_bankable_plan_history(
+    initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
+) -> list[BankablePlanVersion]:
+    assert_can_view_initiative(client, current_user, initiative_id)
+    return svc.list_bankable_plan_history(initiative_id)
+
+
+@router.post(
+    "/initiatives/{initiative_id}/bankable-plan/rebaseline",
+    response_model=BankablePlanVersion,
+)
+async def rebaseline_bankable_plan(
+    initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+    body: BankablePlanRebaselineRequest | None = None,
+) -> BankablePlanVersion:
+    assert_can_manage_initiatives(current_user)
+    return svc.rebaseline_bankable_plan(
+        initiative_id,
+        str(current_user.id),
+        reason=body.reason if body else None,
+    )
+
+
+@router.get(
+    "/initiatives/{initiative_id}/benefit-ledger",
+    response_model=list[BenefitLedgerEntry],
+)
+async def list_benefit_ledger_entries(
+    initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
+) -> list[BenefitLedgerEntry]:
+    assert_can_view_initiative(client, current_user, initiative_id)
+    return svc.list_benefit_ledger_entries(initiative_id)
+
+
+@router.post(
+    "/initiatives/{initiative_id}/benefit-ledger",
+    response_model=BenefitLedgerEntry,
+    status_code=201,
+)
+async def create_benefit_ledger_entry(
+    initiative_id: str,
+    body: BenefitLedgerEntryCreate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> BenefitLedgerEntry:
+    assert_can_manage_initiatives(current_user)
+    return svc.create_benefit_ledger_entry(initiative_id, body)
+
+
+@router.put(
+    "/initiatives/{initiative_id}/benefit-ledger/{entry_id}",
+    response_model=BenefitLedgerEntry,
+)
+async def update_benefit_ledger_entry(
+    initiative_id: str,
+    entry_id: str,
+    body: BenefitLedgerEntryUpdate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> BenefitLedgerEntry:
+    assert_can_manage_initiatives(current_user)
+    return svc.update_benefit_ledger_entry(initiative_id, entry_id, body)
+
+
+@router.delete(
+    "/initiatives/{initiative_id}/benefit-ledger/{entry_id}",
+    status_code=204,
+)
+async def delete_benefit_ledger_entry(
+    initiative_id: str,
+    entry_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> None:
+    assert_can_manage_initiatives(current_user)
+    svc.delete_benefit_ledger_entry(initiative_id, entry_id)
+
+
+@router.get(
+    "/benefit-ledger/summary",
+    response_model=BenefitLedgerRollupSummaryResponse,
+)
+async def get_benefit_ledger_rollup_summary(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+    granularity: BenefitLedgerGranularity = Query("monthly"),
+    workstream_id: str | None = Query(None),
+) -> BenefitLedgerRollupSummaryResponse:
+    assert_can_view_portfolio(current_user)
+    return svc.get_benefit_ledger_rollup_summary(granularity, workstream_id)
+
+
+@router.get(
+    "/initiatives/{initiative_id}/benefit-ledger/summary",
+    response_model=BenefitLedgerSummaryResponse,
+)
+async def get_benefit_ledger_summary(
+    initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
+    granularity: BenefitLedgerGranularity = Query("monthly"),
+) -> BenefitLedgerSummaryResponse:
+    assert_can_view_initiative(client, current_user, initiative_id)
+    return svc.get_benefit_ledger_summary(initiative_id, granularity)
+
+
+@router.get(
+    "/admin/financial-governance",
+    response_model=FinancialGovernanceSettings,
+)
+async def get_financial_governance_settings(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_admin_svc)],
+) -> FinancialGovernanceSettings:
+    assert_can_manage_initiatives(current_user)
+    return svc.get_governance_settings()
+
+
+@router.put(
+    "/admin/financial-governance",
+    response_model=FinancialGovernanceSettings,
+)
+async def update_financial_governance_settings(
+    body: FinancialGovernanceSettingsUpdate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_admin_svc)],
+) -> FinancialGovernanceSettings:
+    assert_can_manage_initiatives(current_user)
+    return svc.update_governance_settings(body)
+
+
+@router.get(
+    "/workstreams/{workstream_id}/target-lock/preview",
+    response_model=WorkstreamTargetPreviewResponse,
+)
+async def preview_workstream_target_lock(
+    workstream_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+    lock_date: date | None = Query(None),
+) -> WorkstreamTargetPreviewResponse:
+    assert_can_view_portfolio(current_user)
+    return svc.get_workstream_target_preview(workstream_id, lock_date or date.today())
+
+
+@router.get(
+    "/workstreams/{workstream_id}/target-lock",
+    response_model=WorkstreamTargetLockResponse,
+)
+async def get_workstream_target_lock_history(
+    workstream_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> WorkstreamTargetLockResponse:
+    assert_can_view_portfolio(current_user)
+    return svc.get_workstream_target_history(workstream_id)
+
+
+@router.post(
+    "/workstreams/{workstream_id}/target-lock",
+    response_model=WorkstreamTargetLockVersion,
+    status_code=201,
+)
+async def lock_workstream_target(
+    workstream_id: str,
+    body: WorkstreamTargetLockRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> WorkstreamTargetLockVersion:
+    assert_can_manage_initiatives(current_user)
+    return svc.lock_workstream_target(workstream_id, body, str(current_user.id))
+
+
+@router.get(
     "/initiatives/{initiative_id}/financials/selections",
     response_model=InitiativeFinancialSelectionsResponse,
 )
@@ -105,6 +329,34 @@ async def update_financial_selections(
 ) -> InitiativeFinancialSelectionsResponse:
     assert_can_manage_initiatives(current_user)
     return svc.update_initiative_selections(initiative_id, body)
+
+
+@router.get(
+    "/initiatives/{initiative_id}/financials/forecasts",
+    response_model=FinancialForecastResponse,
+)
+async def list_financial_forecasts(
+    initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
+) -> FinancialForecastResponse:
+    assert_can_view_initiative(client, current_user, initiative_id)
+    return svc.list_forecasts(initiative_id)
+
+
+@router.put(
+    "/initiatives/{initiative_id}/financials/forecasts",
+    response_model=FinancialForecastResponse,
+)
+async def update_financial_forecasts(
+    initiative_id: str,
+    body: list[FinancialForecastUpdate],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> FinancialForecastResponse:
+    assert_can_manage_initiatives(current_user)
+    return svc.update_forecasts(initiative_id, body)
 
 
 @router.get("/initiatives/{initiative_id}/financials/export.xlsx")

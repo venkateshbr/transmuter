@@ -20,6 +20,7 @@ class MeetingRepository:
         )
         meetings = result.data or []
         for meeting in meetings:
+            self._attach_workstreams(meeting)
             meeting["stats"] = self.get_stats(meeting["id"])
         return meetings
 
@@ -34,6 +35,7 @@ class MeetingRepository:
         )
         meeting = result.data if result else None
         if meeting:
+            self._attach_workstreams(meeting)
             meeting["stats"] = self.get_stats(meeting_id)
             meeting["initiatives"] = self.get_initiatives(meeting_id)
         return meeting
@@ -51,6 +53,49 @@ class MeetingRepository:
             .execute()
         )
         return result.data[0] if result.data else {}
+
+    def set_workstreams(self, meeting_id: str, workstream_ids: list[str]) -> None:
+        (
+            self._c.table("meeting_workstreams")
+            .delete()
+            .eq("tenant_id", self._tid)
+            .eq("meeting_id", meeting_id)
+            .execute()
+        )
+        unique_ids = list(dict.fromkeys([ws_id for ws_id in workstream_ids if ws_id]))
+        if not unique_ids:
+            return
+        self._c.table("meeting_workstreams").insert(
+            [
+                {
+                    "tenant_id": self._tid,
+                    "meeting_id": meeting_id,
+                    "workstream_id": workstream_id,
+                }
+                for workstream_id in unique_ids
+            ]
+        ).execute()
+
+    def get_workstreams(self, meeting_id: str) -> list[dict]:
+        result = (
+            self._c.table("meeting_workstreams")
+            .select("id, workstream_id, workstreams(id, name)")
+            .eq("tenant_id", self._tid)
+            .eq("meeting_id", meeting_id)
+            .order("created_at")
+            .execute()
+        )
+        rows = result.data or []
+        workstreams: list[dict] = []
+        for row in rows:
+            embedded = row.get("workstreams") if isinstance(row.get("workstreams"), dict) else {}
+            workstreams.append(
+                {
+                    "id": embedded.get("id") or row.get("workstream_id"),
+                    "name": embedded.get("name") or row.get("workstream_id"),
+                }
+            )
+        return workstreams
 
     def delete(self, meeting_id: str) -> None:
         (
@@ -210,6 +255,18 @@ class MeetingRepository:
             .execute()
         )
         return result.data[0] if result.data else {}
+
+    def get_session_by_date(self, meeting_id: str, session_date: str) -> dict | None:
+        result = (
+            self._c.table("meeting_sessions")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .eq("meeting_id", meeting_id)
+            .eq("session_date", session_date)
+            .maybe_single()
+            .execute()
+        )
+        return result.data if result else None
 
     def get_session(self, session_id: str) -> dict | None:
         result = (
@@ -375,6 +432,89 @@ class MeetingRepository:
         )
         return result.data or []
 
+    def list_open_actions_for_meeting(self, meeting_id: str) -> list[dict]:
+        session_ids = [session["id"] for session in self.get_sessions(meeting_id)]
+        if not session_ids:
+            return []
+        result = (
+            self._c.table("action_items")
+            .select(
+                "id, description, initiative_id, status, due_date, priority, "
+                "initiatives(id, name, initiative_code)"
+            )
+            .eq("tenant_id", self._tid)
+            .in_("session_id", session_ids)
+            .order("due_date")
+            .order("created_at", desc=True)
+            .execute()
+        )
+        return [
+            item
+            for item in (result.data or [])
+            if item.get("status") not in {"completed", "cancelled"}
+        ]
+
+    def list_initiatives_for_workstreams(self, workstream_ids: list[str]) -> list[dict]:
+        unique_ids = list(dict.fromkeys([ws_id for ws_id in workstream_ids if ws_id]))
+        if not unique_ids:
+            return []
+        result = (
+            self._c.table("initiatives")
+            .select(
+                "id, initiative_code, name, priority, rag_status, stage, tag, workstream_id, "
+                "workstreams(id, name)"
+            )
+            .eq("tenant_id", self._tid)
+            .in_("workstream_id", unique_ids)
+            .is_("archived_at", "null")
+            .order("rag_status", desc=True)
+            .order("planned_end")
+            .limit(30)
+            .execute()
+        )
+        return result.data or []
+
+    def list_recent_risks_for_initiatives(self, initiative_ids: list[str]) -> list[dict]:
+        unique_ids = list(
+            dict.fromkeys([initiative_id for initiative_id in initiative_ids if initiative_id])
+        )
+        if not unique_ids:
+            return []
+        result = (
+            self._c.table("risks")
+            .select(
+                "id, description, initiative_id, rating, status, initiatives(id, name, initiative_code)"
+            )
+            .eq("tenant_id", self._tid)
+            .in_("initiative_id", unique_ids)
+            .eq("status", "open")
+            .order("created_at", desc=True)
+            .limit(12)
+            .execute()
+        )
+        return result.data or []
+
+    def list_recent_milestones_for_initiatives(self, initiative_ids: list[str]) -> list[dict]:
+        unique_ids = list(
+            dict.fromkeys([initiative_id for initiative_id in initiative_ids if initiative_id])
+        )
+        if not unique_ids:
+            return []
+        result = (
+            self._c.table("milestones")
+            .select(
+                "id, name, initiative_id, status, planned_end, priority, "
+                "initiatives(id, name, initiative_code)"
+            )
+            .eq("tenant_id", self._tid)
+            .in_("initiative_id", unique_ids)
+            .neq("status", "complete")
+            .order("planned_end")
+            .limit(12)
+            .execute()
+        )
+        return result.data or []
+
     def get_action_item(self, action_item_id: str) -> dict:
         result = (
             self._c.table("action_items")
@@ -443,3 +583,18 @@ class MeetingRepository:
             "open_actions": open_actions,
             "last_session_date": sessions[0]["session_date"] if sessions else None,
         }
+
+    def _attach_workstreams(self, meeting: dict) -> None:
+        legacy = (
+            meeting.get("workstreams") if isinstance(meeting.get("workstreams"), dict) else None
+        )
+        meeting["legacy_workstream"] = legacy
+        workstreams = self.get_workstreams(meeting["id"])
+        if not workstreams and meeting.get("workstream_id"):
+            workstreams = [
+                {
+                    "id": meeting["workstream_id"],
+                    "name": (legacy or {}).get("name") or meeting["workstream_id"],
+                }
+            ]
+        meeting["workstreams"] = workstreams

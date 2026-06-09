@@ -14,6 +14,7 @@ import {
   signal,
 } from '@angular/core';
 import { echarts, type ECElementEvent, type EChartsCoreOption, type EChartsType } from '../../shared/charts/echarts-runtime';
+import { financialModeUsesActuals, resolveFinancialMode, type FinancialModeDescriptor } from './financials-view.models';
 
 type FinancialTrendMetric = 'net_value' | 'total_costs' | 'benefits';
 
@@ -49,6 +50,10 @@ interface TrendMetricOption {
           <p class="mt-2 max-w-2xl text-xs leading-5 text-[var(--t-text-secondary)]">
             Plan and actual trajectory by period, using the same portfolio financials data as the reconciliation table.
           </p>
+        </div>
+        <div class="inline-flex flex-wrap items-center gap-2 border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-1 text-[10px] font-black uppercase tracking-widest">
+          <span class="px-3 py-2 text-[var(--t-text-tertiary)]">Mode</span>
+          <span class="px-3 py-2 text-[var(--t-accent)]">{{ activeMode().label }}</span>
         </div>
         <div class="inline-flex border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-1" aria-label="Trend metric">
           @for (option of metricOptions; track option.id) {
@@ -106,6 +111,7 @@ export class PortfolioFinancialTrendComponent implements AfterViewInit, OnChange
   @Input() rows: FinancialTrendRow[] = [];
   @Input() granularity: FinancialTrendGranularity = 'monthly';
   @Input() showActuals = false;
+  @Input() financialMode: FinancialModeDescriptor | null = null;
 
   @Output() readonly periodSelected = new EventEmitter<FinancialTrendRow>();
 
@@ -155,6 +161,10 @@ export class PortfolioFinancialTrendComponent implements AfterViewInit, OnChange
 
   activeMetric(): TrendMetricOption {
     return this.metricOptions.find(option => option.id === this.metric()) || this.metricOptions[0];
+  }
+
+  activeMode(): FinancialModeDescriptor {
+    return resolveFinancialMode(this.financialMode, this.rows, { financial_mode: this.financialMode });
   }
 
   chartAriaLabel(): string {

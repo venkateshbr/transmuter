@@ -16,6 +16,7 @@ from app.domain.meetings import (
     ActionItemCreate,
     AgendaItemCreate,
     AgendaItemUpdate,
+    AgendaSuggestionsResponse,
     AttendeeCreate,
     MeetingArtifactCreate,
     MeetingArtifactUpdate,
@@ -26,6 +27,7 @@ from app.domain.meetings import (
     MeetingMinutesGenerateRequest,
     MeetingTranscriptImport,
     MeetingUpdate,
+    SessionStartRequest,
     SessionUpdate,
 )
 from app.services.meeting import MeetingService
@@ -230,10 +232,11 @@ async def start_session(
     meeting_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
+    body: SessionStartRequest | None = None,
 ) -> dict:
-    """Start a new live session or resume an active one."""
+    """Start a date-specific live session or resume that date's session."""
     assert_can_manage_initiatives(current_user)
-    return svc.start_session(meeting_id)
+    return svc.start_session(meeting_id, body)
 
 
 @router.post("/{meeting_id}/external-events/microsoft")
@@ -256,6 +259,16 @@ async def create_agenda_item(
 ) -> dict:
     assert_can_manage_initiatives(current_user)
     return svc.create_agenda_item(meeting_id, body)
+
+
+@router.post("/{meeting_id}/agenda/suggestions", response_model=AgendaSuggestionsResponse)
+async def suggest_agenda_items(
+    meeting_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[MeetingService, Depends(_svc)],
+) -> AgendaSuggestionsResponse:
+    assert_can_manage_initiatives(current_user)
+    return svc.suggest_agenda_items(meeting_id)
 
 
 @router.put("/{meeting_id}/agenda/{item_id}")

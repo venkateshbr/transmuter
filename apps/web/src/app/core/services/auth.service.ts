@@ -107,6 +107,29 @@ export class AuthService {
     );
   }
 
+  acceptInvite(token: string, password: string, confirmPassword: string): Observable<AuthResponse> {
+    return this.api.post<AuthResponse>('/auth/accept-invite', {
+      token,
+      password,
+      confirm_password: confirmPassword,
+    }).pipe(
+      tap((resp) => {
+        localStorage.setItem('access_token', resp.access_token);
+        this.storeRefreshToken(resp.refresh_token);
+        this.sessionExpiryHandled = false;
+        this.user.set({
+          id: resp.user_id,
+          tenant_id: resp.tenant_id,
+          role: resp.role,
+          status: resp.status,
+          must_change_password: resp.must_change_password,
+        });
+        this.isAuthenticated.set(true);
+        this.loadProfile().subscribe();
+      })
+    );
+  }
+
   loadProfile(): Observable<UserProfile> {
     return this.api.get<UserProfile>('/auth/me').pipe(
       tap(profile => this.user.set(profile))
@@ -119,12 +142,27 @@ export class AuthService {
     );
   }
 
-  changePassword(currentPassword: string, newPassword: string, confirmPassword: string): Observable<{ status: string }> {
-    return this.api.post<{ status: string }>('/auth/change-password', {
+  changePassword(currentPassword: string, newPassword: string, confirmPassword: string): Observable<AuthResponse> {
+    return this.api.post<AuthResponse>('/auth/change-password', {
       current_password: currentPassword,
       new_password: newPassword,
       confirm_password: confirmPassword,
-    }).pipe(tap(() => this.loadProfile().subscribe()));
+    }).pipe(
+      tap((resp) => {
+        localStorage.setItem('access_token', resp.access_token);
+        this.storeRefreshToken(resp.refresh_token);
+        this.sessionExpiryHandled = false;
+        this.user.set({
+          id: resp.user_id,
+          tenant_id: resp.tenant_id,
+          role: resp.role,
+          status: resp.status,
+          must_change_password: resp.must_change_password,
+        });
+        this.isAuthenticated.set(true);
+        this.loadProfile().subscribe();
+      })
+    );
   }
 
   logout() {

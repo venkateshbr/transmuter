@@ -151,3 +151,27 @@ class DashboardRepository:
         ).data or []
 
         return bus, wss
+
+    def get_workstream_target_locks(self) -> list[dict[str, Any]]:
+        try:
+            res = (
+                self.client.table("workstream_target_locks")
+                .select(
+                    "id, workstream_id, version, lock_date, locked_at, "
+                    "locked_run_rate_value, actual_total, variance"
+                )
+                .eq("tenant_id", self.tenant_id)
+                .order("workstream_id")
+                .order("version")
+                .execute()
+            )
+            return res.data or []
+        except Exception as exc:
+            text = str(exc)
+            if "workstream_target_locks" in text and (
+                "Could not find the table" in text
+                or "does not exist" in text
+                or "schema cache" in text
+            ):
+                return []
+            raise

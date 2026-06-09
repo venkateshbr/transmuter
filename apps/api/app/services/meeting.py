@@ -1,10 +1,12 @@
 import re
 from datetime import UTC, date, datetime, timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
+from langfuse.types import TraceContext
 from supabase import Client
 
+from app.agents.initiative_intake_agent import _get_langfuse
 from app.agents.meeting_notes_agent import (
     chunk_transcript,
     extract_action_items,
@@ -23,6 +25,8 @@ from app.domain.meetings import (
     ActionItemUpdate,
     AgendaItemCreate,
     AgendaItemUpdate,
+    AgendaSuggestion,
+    AgendaSuggestionsResponse,
     AttendeeCreate,
     MeetingArtifactCreate,
     MeetingArtifactUpdate,
@@ -32,6 +36,7 @@ from app.domain.meetings import (
     MeetingMinutesGenerateRequest,
     MeetingTranscriptImport,
     MeetingUpdate,
+    SessionStartRequest,
     SessionUpdate,
 )
 from app.domain.risks import RiskCreate, RiskUpdate
@@ -52,7 +57,16 @@ class MeetingService:
 
     def create_meeting(self, data: MeetingCreate) -> dict:
         payload = data.model_dump(exclude_none=True)
-        return self._repo.create(payload)
+        workstream_ids = self._normalized_workstream_ids(
+            payload.pop("workstream_ids", []),
+            payload.get("workstream_id"),
+        )
+        payload["workstream_id"] = workstream_ids[0] if workstream_ids else None
+        meeting = self._repo.create(payload)
+        if meeting:
+            self._repo.set_workstreams(meeting["id"], workstream_ids)
+            meeting = self._repo.get(meeting["id"]) or meeting
+        return meeting
 
     def get_meeting_detail(self, meeting_id: str) -> dict:
         meeting = self._repo.get(meeting_id)
@@ -75,9 +89,22 @@ class MeetingService:
     def update_meeting(self, meeting_id: str, data: MeetingUpdate) -> dict:
         self._assert_meeting(meeting_id)
         payload = data.model_dump(exclude_none=True)
+        workstream_ids_provided = (
+            "workstream_ids" in data.model_fields_set or "workstream_id" in data.model_fields_set
+        )
+        workstream_ids = self._normalized_workstream_ids(
+            payload.pop("workstream_ids", None),
+            payload.get("workstream_id"),
+        )
+        if workstream_ids_provided:
+            payload["workstream_id"] = workstream_ids[0] if workstream_ids else None
         if not payload:
+            if workstream_ids_provided:
+                self._repo.set_workstreams(meeting_id, workstream_ids)
             return self.get_meeting_detail(meeting_id)
         self._repo.update(meeting_id, payload)
+        if workstream_ids_provided:
+            self._repo.set_workstreams(meeting_id, workstream_ids)
         return self.get_meeting_detail(meeting_id)
 
     def delete_meeting(self, meeting_id: str) -> None:
@@ -90,6 +117,34 @@ class MeetingService:
         if "sort_order" not in payload:
             payload["sort_order"] = len(self._repo.get_agenda(meeting_id)) + 1
         return self._repo.create_agenda_item(meeting_id, payload)
+
+    def suggest_agenda_items(self, meeting_id: str) -> AgendaSuggestionsResponse:
+        meeting = self._assert_meeting(meeting_id)
+        workstream_ids = [item["id"] for item in meeting.get("workstreams") or [] if item.get("id")]
+        if not workstream_ids and meeting.get("workstream_id"):
+            workstream_ids = [meeting["workstream_id"]]
+
+        linked_rows = self._repo.get_initiatives(meeting_id)
+        linked_initiatives = [
+            row.get("initiatives") or {"id": row.get("initiative_id")}
+            for row in linked_rows
+            if row.get("initiative_id") or row.get("initiatives")
+        ]
+        workstream_initiatives = self._repo.list_initiatives_for_workstreams(workstream_ids)
+        initiatives = self._dedupe_by_id([*linked_initiatives, *workstream_initiatives])
+        initiative_ids = [item["id"] for item in initiatives if item.get("id")]
+
+        suggestions = self._deterministic_agenda_suggestions(
+            meeting=meeting,
+            initiatives=initiatives,
+            open_actions=self._repo.list_open_actions_for_meeting(meeting_id),
+            risks=self._repo.list_recent_risks_for_initiatives(initiative_ids),
+            milestones=self._repo.list_recent_milestones_for_initiatives(initiative_ids),
+        )
+        response = AgendaSuggestionsResponse(
+            items=suggestions[:12], trace_id=self._agenda_trace_id()
+        )
+        return self._trace_agenda_suggestions(meeting, response)
 
     def update_agenda_item(
         self,
@@ -124,18 +179,21 @@ class MeetingService:
         self._assert_meeting(meeting_id)
         self._repo.delete_initiative(meeting_id, link_id)
 
-    def start_session(self, meeting_id: str) -> dict:
-        from datetime import date
+    def start_session(self, meeting_id: str, data: SessionStartRequest | None = None) -> dict:
+        self._assert_meeting(meeting_id)
+        session_date = (data.session_date if data else None) or date.today().isoformat()
+        try:
+            date.fromisoformat(session_date)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="session_date must use YYYY-MM-DD format.",
+            ) from exc
 
-        today = date.today().isoformat()
-
-        # Check for existing in_progress session
-        sessions = self._repo.get_sessions(meeting_id)
-        active = [s for s in sessions if s["status"] == "in_progress"]
-        if active:
-            return active[0]
-
-        return self._repo.create_session(meeting_id, today)
+        existing = self._repo.get_session_by_date(meeting_id, session_date)
+        if existing:
+            return existing
+        return self._repo.create_session(meeting_id, session_date)
 
     def get_session_detail(self, session_id: str) -> dict:
         session = self._repo.get_session(session_id)
@@ -276,6 +334,11 @@ class MeetingService:
         _data: MeetingMinutesGenerateRequest,
     ) -> dict:
         detail = self.get_session_detail(session_id)
+        if not self._has_minutes_source(detail):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Add notes, import a transcript, capture agenda items, or record artifacts before generating minutes.",
+            )
         minutes = self._build_minutes(detail)
         return self._repo.update_session(
             session_id,
@@ -432,6 +495,178 @@ class MeetingService:
             status_value
             if status_value in {"open", "in_progress", "completed", "cancelled"}
             else "open"
+        )
+
+    @staticmethod
+    def _normalized_workstream_ids(
+        workstream_ids: list[str] | None,
+        legacy_workstream_id: str | None,
+    ) -> list[str]:
+        values = workstream_ids if workstream_ids is not None else []
+        if legacy_workstream_id and not values:
+            values = [legacy_workstream_id]
+        return list(dict.fromkeys([str(value) for value in values if value]))
+
+    @staticmethod
+    def _dedupe_by_id(items: list[dict]) -> list[dict]:
+        seen: set[str] = set()
+        deduped: list[dict] = []
+        for item in items:
+            item_id = item.get("id")
+            if not item_id or item_id in seen:
+                continue
+            seen.add(item_id)
+            deduped.append(item)
+        return deduped
+
+    def _deterministic_agenda_suggestions(
+        self,
+        *,
+        meeting: dict,
+        initiatives: list[dict],
+        open_actions: list[dict],
+        risks: list[dict],
+        milestones: list[dict],
+    ) -> list[AgendaSuggestion]:
+        suggestions: list[AgendaSuggestion] = []
+        for action in open_actions[:4]:
+            initiative = action.get("initiatives") or {}
+            suggestions.append(
+                AgendaSuggestion(
+                    text=self._mask_pii(f"Close carry-forward action: {action.get('description')}"),
+                    initiative_id=action.get("initiative_id"),
+                    rationale="Open action item carried forward from an earlier session.",
+                    source_type="carry_forward_action",
+                )
+            )
+            if initiative.get("initiative_code"):
+                suggestions[-1].rationale += f" Linked to {initiative['initiative_code']}."
+
+        for initiative in initiatives:
+            rag = initiative.get("rag_status")
+            stage = initiative.get("stage")
+            code = initiative.get("initiative_code") or "Initiative"
+            name = initiative.get("name") or "unnamed initiative"
+            if rag in {"red", "amber"}:
+                suggestions.append(
+                    AgendaSuggestion(
+                        text=self._mask_pii(f"Resolve {rag} status for {code} - {name}"),
+                        initiative_id=initiative.get("id"),
+                        rationale="Selected workstream or linked initiative is not green.",
+                        source_type="workstream_initiative",
+                    )
+                )
+            elif stage != "complete":
+                suggestions.append(
+                    AgendaSuggestion(
+                        text=self._mask_pii(
+                            f"Confirm next milestone and owner for {code} - {name}"
+                        ),
+                        initiative_id=initiative.get("id"),
+                        rationale="Active initiative in a selected workstream needs forward-looking review.",
+                        source_type="workstream_initiative",
+                    )
+                )
+
+        for risk in risks[:3]:
+            initiative = risk.get("initiatives") or {}
+            code = initiative.get("initiative_code") or "initiative"
+            suggestions.append(
+                AgendaSuggestion(
+                    text=self._mask_pii(
+                        f"Mitigate open risk for {code}: {risk.get('description')}"
+                    ),
+                    initiative_id=risk.get("initiative_id"),
+                    rationale="Recent open risk is tied to this meeting's initiatives.",
+                    source_type="risk",
+                )
+            )
+
+        for milestone in milestones[:3]:
+            initiative = milestone.get("initiatives") or {}
+            code = initiative.get("initiative_code") or "initiative"
+            due = f" due {milestone.get('planned_end')}" if milestone.get("planned_end") else ""
+            suggestions.append(
+                AgendaSuggestion(
+                    text=self._mask_pii(
+                        f"Review upcoming milestone for {code}: {milestone.get('name')}{due}"
+                    ),
+                    initiative_id=milestone.get("initiative_id"),
+                    rationale="Upcoming or incomplete milestone is relevant to this meeting.",
+                    source_type="milestone",
+                )
+            )
+
+        if not suggestions:
+            workstream_names = ", ".join(
+                [item.get("name") for item in meeting.get("workstreams") or [] if item.get("name")]
+            )
+            text = (
+                f"Confirm priorities, blockers, and owners for {workstream_names}"
+                if workstream_names
+                else "Confirm decisions, blockers, and owners for the next review period"
+            )
+            suggestions.append(
+                AgendaSuggestion(
+                    text=self._mask_pii(text),
+                    rationale="Fallback suggestion because no open actions, risks, milestones, or active initiatives were found.",
+                    source_type="fallback",
+                )
+            )
+
+        deduped: list[AgendaSuggestion] = []
+        seen_text: set[str] = set()
+        for suggestion in suggestions:
+            key = suggestion.text.lower()
+            if key in seen_text:
+                continue
+            seen_text.add(key)
+            deduped.append(suggestion)
+        return deduped
+
+    @staticmethod
+    def _agenda_trace_id() -> str:
+        langfuse = _get_langfuse()
+        if langfuse:
+            return langfuse.create_trace_id(seed=f"meeting-agenda-suggestions-{uuid4()}")
+        return f"deterministic-meeting-agenda-suggestions-{uuid4()}"
+
+    def _trace_agenda_suggestions(
+        self,
+        meeting: dict,
+        response: AgendaSuggestionsResponse,
+    ) -> AgendaSuggestionsResponse:
+        langfuse = _get_langfuse()
+        if not langfuse or not response.trace_id:
+            return response
+        try:
+            with langfuse.start_as_current_observation(
+                name="meeting_agenda_suggestions",
+                as_type="agent",
+                trace_context=TraceContext(trace_id=response.trace_id),
+                input={
+                    "meeting_id": meeting.get("id"),
+                    "workstream_count": len(meeting.get("workstreams") or []),
+                },
+                metadata={"source": "deterministic_agenda_suggestions"},
+                model=settings.default_model,
+            ):
+                response.trace_url = langfuse.get_trace_url(trace_id=response.trace_id)
+                langfuse.update_current_span(output=response.model_dump(mode="json"))
+            langfuse.flush()
+        except Exception:
+            response.trace_url = None
+        return response
+
+    @staticmethod
+    def _has_minutes_source(detail: dict) -> bool:
+        return any(
+            [
+                str(detail.get("notes") or "").strip(),
+                str(detail.get("transcript_text") or "").strip(),
+                bool(detail.get("agenda")),
+                bool(detail.get("artifacts")),
+            ]
         )
 
     def _build_minutes(self, detail: dict) -> str:

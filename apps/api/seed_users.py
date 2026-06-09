@@ -15,7 +15,7 @@ def seed():
     users = [
         {"email": "vishwa@ishirock.dev", "display_name": "Vishwa Vish", "role": "transformation_office", "title": "VP Transformation"},
         {"email": "aksha@ishirock.dev", "display_name": "Aksha Rock", "role": "initiative_owner", "title": "Digital Ops Lead"},
-        {"email": "mark@ishirock.dev", "display_name": "Mark Spencer", "role": "workstream_lead", "title": "Financial Controller"}
+        {"email": "mark@ishirock.dev", "display_name": "Mark Spencer", "role": "initiative_owner", "title": "Financial Controller"}
     ]
     
     for u in users:

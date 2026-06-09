@@ -29,6 +29,11 @@ export const routes: Routes = [
       import('./features/auth/register/register.component').then(m => m.RegisterComponent),
   },
   {
+    path: 'auth/accept-invite',
+    loadComponent: () =>
+      import('./features/auth/accept-invite/accept-invite.component').then(m => m.AcceptInviteComponent),
+  },
+  {
     path: 'auth/change-password',
     canActivate: [authGuard],
     loadComponent: () =>
@@ -52,8 +57,28 @@ export const routes: Routes = [
       },
       {
         path: 'financials',
-        loadComponent: () =>
-          import('./features/financials/portfolio-financials.component').then(m => m.PortfolioFinancialsComponent),
+        children: [
+          {
+            path: '',
+            loadComponent: () =>
+              import('./features/financials/portfolio-financials.component').then(m => m.PortfolioFinancialsComponent),
+          },
+          {
+            path: 'bankable-plan',
+            loadComponent: () =>
+              import('./features/financials/bankable-plan-review.component').then(m => m.BankablePlanReviewComponent),
+          },
+          {
+            path: 'benefit-tracking',
+            loadComponent: () =>
+              import('./features/financials/benefit-tracking.component').then(m => m.BenefitTrackingComponent),
+          },
+          {
+            path: 'waterline',
+            loadComponent: () =>
+              import('./features/financials/waterline.component').then(m => m.WaterlineComponent),
+          },
+        ],
       },
       {
         path: 'shared-costs',

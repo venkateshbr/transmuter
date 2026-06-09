@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
@@ -145,6 +145,278 @@ class FinancialRepository:
             if self._is_missing_table(exc, "initiative_financial_selections"):
                 return []
             raise
+
+    def list_bankable_plans(self, initiative_id: str) -> list[dict]:  # type: ignore[type-arg]
+        try:
+            result = (
+                self._c.table("bankable_plans")
+                .select("*")
+                .eq("tenant_id", self._tid)
+                .eq("initiative_id", initiative_id)
+                .order("version")
+                .execute()
+            )
+            return result.data or []
+        except Exception as exc:
+            if self._is_missing_table(exc, "bankable_plans"):
+                return []
+            raise
+
+    def list_latest_bankable_plans_for_initiatives(
+        self,
+        initiative_ids: list[str],
+    ) -> list[dict]:  # type: ignore[type-arg]
+        if not initiative_ids:
+            return []
+        try:
+            result = (
+                self._c.table("bankable_plans")
+                .select("*")
+                .eq("tenant_id", self._tid)
+                .in_("initiative_id", initiative_ids)
+                .order("initiative_id")
+                .order("version")
+                .execute()
+            )
+            latest: dict[str, dict] = {}
+            for row in result.data or []:
+                latest[str(row["initiative_id"])] = row
+            return list(latest.values())
+        except Exception as exc:
+            if self._is_missing_table(exc, "bankable_plans"):
+                return []
+            raise
+
+    def create_bankable_plan(self, data: dict) -> dict:  # type: ignore[type-arg]
+        payload = {
+            **data,
+            "id": data.get("id") or str(uuid4()),
+            "tenant_id": self._tid,
+            "created_at": data.get("created_at") or datetime.now(UTC).isoformat(),
+            "updated_at": data.get("updated_at") or datetime.now(UTC).isoformat(),
+        }
+        result = self._c.table("bankable_plans").insert(payload).execute()
+        return result.data[0]
+
+    def get_latest_bankable_plan(self, initiative_id: str) -> dict | None:  # type: ignore[type-arg]
+        plans = self.list_bankable_plans(initiative_id)
+        return plans[-1] if plans else None
+
+    def get_organization_settings(self) -> dict:  # type: ignore[type-arg]
+        result = (
+            self._c.table("organizations")
+            .select("settings")
+            .eq("id", self._tid)
+            .maybe_single()
+            .execute()
+        )
+        return (result.data or {}).get("settings") or {}
+
+    def update_organization_settings(self, settings: dict) -> dict:  # type: ignore[type-arg]
+        result = (
+            self._c.table("organizations")
+            .update({"settings": settings, "updated_at": datetime.now(UTC).isoformat()})
+            .eq("id", self._tid)
+            .execute()
+        )
+        return result.data[0] if result.data else {"settings": settings}
+
+    def list_workstreams(self) -> list[dict]:  # type: ignore[type-arg]
+        result = (
+            self._c.table("workstreams")
+            .select("id,name,business_unit_id")
+            .eq("tenant_id", self._tid)
+            .order("name")
+            .execute()
+        )
+        return result.data or []
+
+    def list_workstream_initiatives(self, workstream_id: str) -> list[dict]:  # type: ignore[type-arg]
+        result = (
+            self._c.table("initiatives")
+            .select("id,initiative_code,name,stage,workstream_id")
+            .eq("tenant_id", self._tid)
+            .eq("workstream_id", workstream_id)
+            .is_("archived_at", "null")
+            .order("initiative_code")
+            .execute()
+        )
+        return result.data or []
+
+    def list_approved_gate_submissions(
+        self,
+        initiative_ids: list[str],
+        gate_number: int,
+        cutoff_date: date,
+    ) -> list[dict]:  # type: ignore[type-arg]
+        if not initiative_ids:
+            return []
+        result = (
+            self._c.table("gate_submissions")
+            .select("id,initiative_id,gate_number,decision,decided_at")
+            .eq("tenant_id", self._tid)
+            .eq("gate_number", gate_number)
+            .eq("decision", "approved")
+            .in_("initiative_id", initiative_ids)
+            .lte("decided_at", f"{cutoff_date.isoformat()}T23:59:59+00:00")
+            .order("decided_at")
+            .execute()
+        )
+        return result.data or []
+
+    def list_workstream_target_locks(self, workstream_id: str) -> list[dict]:  # type: ignore[type-arg]
+        try:
+            result = (
+                self._c.table("workstream_target_locks")
+                .select("*")
+                .eq("tenant_id", self._tid)
+                .eq("workstream_id", workstream_id)
+                .order("version")
+                .execute()
+            )
+            return result.data or []
+        except Exception as exc:
+            if self._is_missing_table(exc, "workstream_target_locks"):
+                return []
+            raise
+
+    def create_workstream_target_lock(self, data: dict) -> dict:  # type: ignore[type-arg]
+        payload = {
+            **data,
+            "id": data.get("id") or str(uuid4()),
+            "tenant_id": self._tid,
+            "created_at": data.get("created_at") or datetime.now(UTC).isoformat(),
+            "updated_at": data.get("updated_at") or datetime.now(UTC).isoformat(),
+        }
+        result = self._c.table("workstream_target_locks").insert(payload).execute()
+        return result.data[0]
+
+    def get_latest_workstream_target_lock(self, workstream_id: str) -> dict | None:  # type: ignore[type-arg]
+        rows = self.list_workstream_target_locks(workstream_id)
+        return rows[-1] if rows else None
+
+    def list_forecasts(self, initiative_id: str) -> list[dict]:  # type: ignore[type-arg]
+        try:
+            result = (
+                self._c.table("financial_forecasts")
+                .select("*")
+                .eq("tenant_id", self._tid)
+                .eq("initiative_id", initiative_id)
+                .order("year")
+                .order("quarter")
+                .order("month")
+                .order("line_key")
+                .execute()
+            )
+            return result.data or []
+        except Exception as exc:
+            if self._is_missing_table(exc, "financial_forecasts"):
+                return []
+            raise
+
+    def upsert_forecasts_batch(self, initiative_id: str, rows: list[dict]) -> list[dict]:  # type: ignore[type-arg]
+        saved = []
+        for row in rows:
+            row["tenant_id"] = self._tid
+            row["initiative_id"] = initiative_id
+            existing_rows = self._find_forecasts(initiative_id, row)
+            row["updated_at"] = datetime.now(UTC).isoformat()
+            if existing_rows:
+                result = (
+                    self._c.table("financial_forecasts")
+                    .update(row)
+                    .eq("tenant_id", self._tid)
+                    .eq("id", existing_rows[0]["id"])
+                    .execute()
+                )
+            else:
+                row["id"] = str(uuid4())
+                result = self._c.table("financial_forecasts").insert(row).execute()
+            if result.data:
+                saved.append(result.data[0])
+        return saved
+
+    # ── Benefit Realization Ledger ────────────────────────────────────────────
+
+    def list_benefit_ledger_entries(self, initiative_id: str) -> list[dict]:  # type: ignore[type-arg]
+        try:
+            result = (
+                self._c.table("benefit_realization_ledger")
+                .select("*")
+                .eq("tenant_id", self._tid)
+                .eq("initiative_id", initiative_id)
+                .order("period_start")
+                .order("created_at")
+                .execute()
+            )
+            return result.data or []
+        except Exception as exc:
+            if self._is_missing_table(exc, "benefit_realization_ledger"):
+                return []
+            raise
+
+    def list_benefit_ledger_entries_for_initiatives(
+        self,
+        initiative_ids: list[str],
+    ) -> list[dict]:  # type: ignore[type-arg]
+        if not initiative_ids:
+            return []
+        try:
+            result = (
+                self._c.table("benefit_realization_ledger")
+                .select("*")
+                .eq("tenant_id", self._tid)
+                .in_("initiative_id", initiative_ids)
+                .order("period_start")
+                .order("created_at")
+                .execute()
+            )
+            return result.data or []
+        except Exception as exc:
+            if self._is_missing_table(exc, "benefit_realization_ledger"):
+                return []
+            raise
+
+    def create_benefit_ledger_entry(self, initiative_id: str, data: dict) -> dict:  # type: ignore[type-arg]
+        payload = {
+            **data,
+            "id": data.get("id") or str(uuid4()),
+            "tenant_id": self._tid,
+            "initiative_id": initiative_id,
+            "created_at": data.get("created_at") or datetime.now(UTC).isoformat(),
+            "updated_at": data.get("updated_at") or datetime.now(UTC).isoformat(),
+        }
+        result = self._c.table("benefit_realization_ledger").insert(payload).execute()
+        return result.data[0]
+
+    def update_benefit_ledger_entry(
+        self,
+        initiative_id: str,
+        entry_id: str,
+        data: dict,  # type: ignore[type-arg]
+    ) -> dict:  # type: ignore[type-arg]
+        data["updated_at"] = datetime.now(UTC).isoformat()
+        result = (
+            self._c.table("benefit_realization_ledger")
+            .update(data)
+            .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
+            .eq("id", entry_id)
+            .execute()
+        )
+        if not result.data:
+            return {}
+        return result.data[0]
+
+    def delete_benefit_ledger_entry(self, initiative_id: str, entry_id: str) -> None:
+        (
+            self._c.table("benefit_realization_ledger")
+            .delete()
+            .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
+            .eq("id", entry_id)
+            .execute()
+        )
 
     def replace_financial_selections(
         self,
@@ -367,8 +639,11 @@ class FinancialRepository:
     def get_portfolio_initiatives(self) -> list[dict]:  # type: ignore[type-arg]
         result = (
             self._c.table("initiatives")
-            .select("id,name,workstream_id,tag")
+            .select(
+                "id,initiative_code,name,stage,workstream_id,tag,workstreams(name,business_unit_id)"
+            )
             .eq("tenant_id", self._tid)
+            .is_("archived_at", "null")
             .execute()
         )
         return result.data or []
@@ -619,6 +894,25 @@ class FinancialRepository:
             result = query.execute()
         except Exception as exc:
             if self._is_missing_table(exc, "financial_metric_values"):
+                return []
+            raise
+        return result.data or []
+
+    def _find_forecasts(self, initiative_id: str, row: dict) -> list[dict]:  # type: ignore[type-arg]
+        query = (
+            self._c.table("financial_forecasts")
+            .select("id")
+            .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
+            .eq("line_type", row["line_type"])
+            .eq("line_key", row["line_key"])
+            .eq("year", row["year"])
+        )
+        query = self._match_period(query, row)
+        try:
+            result = query.execute()
+        except Exception as exc:
+            if self._is_missing_table(exc, "financial_forecasts"):
                 return []
             raise
         return result.data or []

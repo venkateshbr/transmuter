@@ -25,7 +25,7 @@ import { ApiService } from '../../../core/services/api.service';
           <h1 class="text-4xl font-black leading-tight md:text-5xl">Create your enterprise workspace.</h1>
           <p class="mt-6 text-sm leading-7 text-[var(--t-text-secondary)]">
             Select the program scale for your transformation office. After checkout, Transmuter
-            provisions the tenant and initial transformation-office admin from the verified Stripe event.
+            sets up your workspace and first admin account so your team can get started.
           </p>
 
           <div class="mt-8 grid gap-3">
