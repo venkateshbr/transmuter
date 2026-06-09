@@ -475,12 +475,16 @@ class MeetingRepository:
         return result.data or []
 
     def list_recent_risks_for_initiatives(self, initiative_ids: list[str]) -> list[dict]:
-        unique_ids = list(dict.fromkeys([initiative_id for initiative_id in initiative_ids if initiative_id]))
+        unique_ids = list(
+            dict.fromkeys([initiative_id for initiative_id in initiative_ids if initiative_id])
+        )
         if not unique_ids:
             return []
         result = (
             self._c.table("risks")
-            .select("id, description, initiative_id, rating, status, initiatives(id, name, initiative_code)")
+            .select(
+                "id, description, initiative_id, rating, status, initiatives(id, name, initiative_code)"
+            )
             .eq("tenant_id", self._tid)
             .in_("initiative_id", unique_ids)
             .eq("status", "open")
@@ -491,7 +495,9 @@ class MeetingRepository:
         return result.data or []
 
     def list_recent_milestones_for_initiatives(self, initiative_ids: list[str]) -> list[dict]:
-        unique_ids = list(dict.fromkeys([initiative_id for initiative_id in initiative_ids if initiative_id]))
+        unique_ids = list(
+            dict.fromkeys([initiative_id for initiative_id in initiative_ids if initiative_id])
+        )
         if not unique_ids:
             return []
         result = (
@@ -579,7 +585,9 @@ class MeetingRepository:
         }
 
     def _attach_workstreams(self, meeting: dict) -> None:
-        legacy = meeting.get("workstreams") if isinstance(meeting.get("workstreams"), dict) else None
+        legacy = (
+            meeting.get("workstreams") if isinstance(meeting.get("workstreams"), dict) else None
+        )
         meeting["legacy_workstream"] = legacy
         workstreams = self.get_workstreams(meeting["id"])
         if not workstreams and meeting.get("workstream_id"):

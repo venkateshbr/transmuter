@@ -67,9 +67,7 @@ def _connect_database() -> psycopg.Connection:
     db_schema = os.environ.get("DB_SCHEMA", DEFAULT_DB_SCHEMA).strip() or DEFAULT_DB_SCHEMA
     with conn.cursor() as cur:
         cur.execute(
-            sql.SQL("set search_path to {}, public, extensions").format(
-                sql.Identifier(db_schema)
-            )
+            sql.SQL("set search_path to {}, public, extensions").format(sql.Identifier(db_schema))
         )
     return conn
 

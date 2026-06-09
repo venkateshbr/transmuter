@@ -87,9 +87,7 @@ class FakeTableQuery:
 
     def _matched_rows(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         return [
-            row
-            for row in rows
-            if all(row.get(column) == value for column, value in self.filters)
+            row for row in rows if all(row.get(column) == value for column, value in self.filters)
         ]
 
 

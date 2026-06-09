@@ -152,7 +152,9 @@ class FakeMeetingV2Repository:
         assert session_id == "session-empty"
         return []
 
-    def get_carry_forward_action_items(self, meeting_id: str, current_session_id: str) -> list[dict]:
+    def get_carry_forward_action_items(
+        self, meeting_id: str, current_session_id: str
+    ) -> list[dict]:
         assert meeting_id == "meeting-1"
         assert current_session_id == "session-empty"
         return []

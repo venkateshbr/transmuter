@@ -191,7 +191,14 @@ class FakeTargetRepo:
         initiative_id: str,
         rows: list[dict[str, object]],
     ) -> list[dict[str, object]]:
-        saved = [{"id": f"forecast-{len(self.forecasts) + idx + 1}", "initiative_id": initiative_id, **row} for idx, row in enumerate(rows)]
+        saved = [
+            {
+                "id": f"forecast-{len(self.forecasts) + idx + 1}",
+                "initiative_id": initiative_id,
+                **row,
+            }
+            for idx, row in enumerate(rows)
+        ]
         self.forecasts.extend(saved)
         return saved
 

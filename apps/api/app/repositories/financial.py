@@ -639,7 +639,9 @@ class FinancialRepository:
     def get_portfolio_initiatives(self) -> list[dict]:  # type: ignore[type-arg]
         result = (
             self._c.table("initiatives")
-            .select("id,initiative_code,name,stage,workstream_id,tag,workstreams(name,business_unit_id)")
+            .select(
+                "id,initiative_code,name,stage,workstream_id,tag,workstreams(name,business_unit_id)"
+            )
             .eq("tenant_id", self._tid)
             .is_("archived_at", "null")
             .execute()

@@ -795,17 +795,23 @@ def _seed_workstream_target_locks(
     lock_date = date(2026, 12, 31)
     for workstream_key, workstream_id in workstream_ids.items():
         workstream_initiatives = [
-            initiative
-            for initiative in INITIATIVES
-            if initiative.workstream == workstream_key
+            initiative for initiative in INITIATIVES if initiative.workstream == workstream_key
         ]
-        included = [initiative for initiative in workstream_initiatives if initiative.stage != "scoping"]
-        excluded = [initiative for initiative in workstream_initiatives if initiative.stage == "scoping"]
+        included = [
+            initiative for initiative in workstream_initiatives if initiative.stage != "scoping"
+        ]
+        excluded = [
+            initiative for initiative in workstream_initiatives if initiative.stage == "scoping"
+        ]
         plan_total = sum((initiative.base_value for initiative in included), Decimal("0"))
-        actual_total = sum((initiative.actual_value or Decimal("0") for initiative in included), Decimal("0"))
+        actual_total = sum(
+            (initiative.actual_value or Decimal("0") for initiative in included), Decimal("0")
+        )
         snapshot = {
             "workstream_id": workstream_id,
-            "workstream_name": next((name for key, name in WORKSTREAMS if key == workstream_key), workstream_key),
+            "workstream_name": next(
+                (name for key, name in WORKSTREAMS if key == workstream_key), workstream_key
+            ),
             "lock_date": lock_date.isoformat(),
             "settings": {
                 "initiative_plan_lock_gate_number": 2,
@@ -824,7 +830,9 @@ def _seed_workstream_target_locks(
                     "initiative_code": initiative.code,
                     "name": initiative.name,
                     "stage": initiative.stage,
-                    "approved_at": (initiative.actual_start or initiative.planned_start).isoformat(),
+                    "approved_at": (
+                        initiative.actual_start or initiative.planned_start
+                    ).isoformat(),
                     "bankable_plan_version": 1,
                     "value_source": "bankable_plan",
                     "net_run_rate_value": _dec(initiative.base_value),
@@ -870,8 +878,12 @@ def _seed_workstream_target_locks(
             "cutoff_rule": "approved_at_lte_lock_date",
             "valuation_method": "run_rate",
             "locked_value_basis": "net_run_rate",
-            "included_initiative_ids": [initiative_ids[initiative.label] for initiative in included],
-            "excluded_initiative_ids": [initiative_ids[initiative.label] for initiative in excluded],
+            "included_initiative_ids": [
+                initiative_ids[initiative.label] for initiative in included
+            ],
+            "excluded_initiative_ids": [
+                initiative_ids[initiative.label] for initiative in excluded
+            ],
             "locked_run_rate_value": _dec(plan_total),
             "plan_total": _dec(plan_total),
             "actual_total": _dec(actual_total),
@@ -883,7 +895,9 @@ def _seed_workstream_target_locks(
                 "id", existing.data[0]["id"]
             ).execute()
         else:
-            client.table("workstream_target_locks").insert({"id": str(uuid4()), **payload}).execute()
+            client.table("workstream_target_locks").insert(
+                {"id": str(uuid4()), **payload}
+            ).execute()
 
 
 def _seed_dependencies(

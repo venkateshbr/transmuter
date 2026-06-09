@@ -141,7 +141,9 @@ class MeetingService:
             risks=self._repo.list_recent_risks_for_initiatives(initiative_ids),
             milestones=self._repo.list_recent_milestones_for_initiatives(initiative_ids),
         )
-        response = AgendaSuggestionsResponse(items=suggestions[:12], trace_id=self._agenda_trace_id())
+        response = AgendaSuggestionsResponse(
+            items=suggestions[:12], trace_id=self._agenda_trace_id()
+        )
         return self._trace_agenda_suggestions(meeting, response)
 
     def update_agenda_item(
@@ -557,7 +559,9 @@ class MeetingService:
             elif stage != "complete":
                 suggestions.append(
                     AgendaSuggestion(
-                        text=self._mask_pii(f"Confirm next milestone and owner for {code} - {name}"),
+                        text=self._mask_pii(
+                            f"Confirm next milestone and owner for {code} - {name}"
+                        ),
                         initiative_id=initiative.get("id"),
                         rationale="Active initiative in a selected workstream needs forward-looking review.",
                         source_type="workstream_initiative",
@@ -569,7 +573,9 @@ class MeetingService:
             code = initiative.get("initiative_code") or "initiative"
             suggestions.append(
                 AgendaSuggestion(
-                    text=self._mask_pii(f"Mitigate open risk for {code}: {risk.get('description')}"),
+                    text=self._mask_pii(
+                        f"Mitigate open risk for {code}: {risk.get('description')}"
+                    ),
                     initiative_id=risk.get("initiative_id"),
                     rationale="Recent open risk is tied to this meeting's initiatives.",
                     source_type="risk",

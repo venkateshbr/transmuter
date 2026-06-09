@@ -103,7 +103,9 @@ class DashboardService:
         ][:5]
 
         bus, wss = self.repo.get_filter_options()
-        workstream_targets = self._calculate_workstream_targets(wss, self.repo.get_workstream_target_locks())
+        workstream_targets = self._calculate_workstream_targets(
+            wss, self.repo.get_workstream_target_locks()
+        )
         stage_gate_waterline = self._calculate_stage_gate_waterline(
             workstream_targets,
             value_matrix,
@@ -316,8 +318,13 @@ class DashboardService:
                     "variance": _money(actual - target),
                 }
             )
-        total_target = sum((_dec(row.get("locked_run_rate_value")) for row in latest_by_workstream.values()), Decimal("0"))
-        total_actual = sum((_dec(row.get("actual_total")) for row in latest_by_workstream.values()), Decimal("0"))
+        total_target = sum(
+            (_dec(row.get("locked_run_rate_value")) for row in latest_by_workstream.values()),
+            Decimal("0"),
+        )
+        total_actual = sum(
+            (_dec(row.get("actual_total")) for row in latest_by_workstream.values()), Decimal("0")
+        )
         return {
             "items": sorted(items, key=lambda item: item["workstream_name"]),
             "locked_workstreams": len(items),

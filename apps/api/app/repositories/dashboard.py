@@ -169,7 +169,9 @@ class DashboardRepository:
         except Exception as exc:
             text = str(exc)
             if "workstream_target_locks" in text and (
-                "Could not find the table" in text or "does not exist" in text or "schema cache" in text
+                "Could not find the table" in text
+                or "does not exist" in text
+                or "schema cache" in text
             ):
                 return []
             raise

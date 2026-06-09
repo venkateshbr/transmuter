@@ -228,7 +228,9 @@ class PeopleService:
         return self.get_profile(user_id)
 
     def list_invites(self) -> dict[str, Any]:
-        invites = [self._public_invite(self._expire_if_needed(row)) for row in self._repo.list_invites()]
+        invites = [
+            self._public_invite(self._expire_if_needed(row)) for row in self._repo.list_invites()
+        ]
         return {"items": invites, "total": len(invites)}
 
     def resend_invite(self, invite_id: str) -> dict[str, Any]:
@@ -442,11 +444,7 @@ class PeopleService:
     def _deliver_invite(self, invite: dict[str, Any], token: str) -> dict[str, Any]:
         invite_url = self._invite_url(token)
         is_setup = invite.get("purpose") == PASSWORD_SETUP_PURPOSE
-        subject = (
-            "Set up your Transmuter password"
-            if is_setup
-            else "You're invited to Transmuter"
-        )
+        subject = "Set up your Transmuter password" if is_setup else "You're invited to Transmuter"
         action_text = (
             "Use this secure link to set your Transmuter password and access your workspace."
             if is_setup
@@ -603,22 +601,26 @@ class PeopleInviteAcceptanceService:
             )
 
         auth_user_id = self._create_auth_user(invite, password)
-        row = self._client.table("users").insert(
-            {
-                "id": auth_user_id,
-                "tenant_id": tenant_id,
-                "email": email,
-                "display_name": invite["display_name"],
-                "role": invite["role"],
-                "title": invite.get("title"),
-                "department": invite.get("department"),
-                "market": invite.get("market"),
-                "status": "active",
-                "must_change_password": False,
-                "onboarding_completed": False,
-                "updated_at": datetime.now(UTC).isoformat(),
-            }
-        ).execute()
+        row = (
+            self._client.table("users")
+            .insert(
+                {
+                    "id": auth_user_id,
+                    "tenant_id": tenant_id,
+                    "email": email,
+                    "display_name": invite["display_name"],
+                    "role": invite["role"],
+                    "title": invite.get("title"),
+                    "department": invite.get("department"),
+                    "market": invite.get("market"),
+                    "status": "active",
+                    "must_change_password": False,
+                    "onboarding_completed": False,
+                    "updated_at": datetime.now(UTC).isoformat(),
+                }
+            )
+            .execute()
+        )
         user = row.data[0] if row.data else {"id": auth_user_id, "tenant_id": tenant_id}
         workstream_ids = invite.get("workstream_ids") or []
         if workstream_ids:

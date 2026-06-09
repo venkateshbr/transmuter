@@ -154,11 +154,8 @@ def stripe_price_configuration() -> list[dict[str, Any]]:
             "billing_interval": "month",
             "amount_cents": 199900,
             "currency": "usd",
-            "price_id": normalize_stripe_price_id(settings.stripe_price_business_monthly)
-            or None,
-            "configured": bool(
-                normalize_stripe_price_id(settings.stripe_price_business_monthly)
-            ),
+            "price_id": normalize_stripe_price_id(settings.stripe_price_business_monthly) or None,
+            "configured": bool(normalize_stripe_price_id(settings.stripe_price_business_monthly)),
         },
         {
             "env_key": "STRIPE_PRICE_BUSINESS_ANNUAL",
@@ -167,11 +164,8 @@ def stripe_price_configuration() -> list[dict[str, Any]]:
             "billing_interval": "year",
             "amount_cents": 1999000,
             "currency": "usd",
-            "price_id": normalize_stripe_price_id(settings.stripe_price_business_annual)
-            or None,
-            "configured": bool(
-                normalize_stripe_price_id(settings.stripe_price_business_annual)
-            ),
+            "price_id": normalize_stripe_price_id(settings.stripe_price_business_annual) or None,
+            "configured": bool(normalize_stripe_price_id(settings.stripe_price_business_annual)),
         },
     ]
 

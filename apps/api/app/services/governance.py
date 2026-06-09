@@ -183,12 +183,9 @@ class GovernanceService:
                 if hasattr(financial_service, "get_governance_settings")
                 else None
             )
-            if (
-                governance_settings is None
-                or (
-                    governance_settings.plan_lock_on_approval
-                    and sub["gate_number"] == governance_settings.initiative_plan_lock_gate_number
-                )
+            if governance_settings is None or (
+                governance_settings.plan_lock_on_approval
+                and sub["gate_number"] == governance_settings.initiative_plan_lock_gate_number
             ):
                 financial_service.lock_bankable_plan_from_approval(
                     sub["initiative_id"],
