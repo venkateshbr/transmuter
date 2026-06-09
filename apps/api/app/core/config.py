@@ -110,7 +110,7 @@ class Settings(BaseSettings):
             )
             if not value
         ]
-        if missing:
+        if missing and self._has_any_supabase_configuration():
             raise ValueError(
                 f"Missing required Supabase setting(s) for target '{target}': {', '.join(missing)}."
             )
@@ -120,6 +120,21 @@ class Settings(BaseSettings):
     def _target_value(self, target: str, prefix: str, suffix: str, fallback: str) -> str:
         value = getattr(self, f"{prefix}_{target}_{suffix}", "")
         return value or fallback
+
+    def _has_any_supabase_configuration(self) -> bool:
+        return any(
+            [
+                self.supabase_url,
+                self.supabase_anon_key,
+                self.supabase_service_key,
+                self.supabase_cloud_url,
+                self.supabase_cloud_anon_key,
+                self.supabase_cloud_service_key,
+                self.supabase_local_url,
+                self.supabase_local_anon_key,
+                self.supabase_local_service_key,
+            ]
+        )
 
 
 settings = Settings()  # type: ignore[call-arg]

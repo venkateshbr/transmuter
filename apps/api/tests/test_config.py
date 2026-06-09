@@ -101,3 +101,17 @@ def test_legacy_direct_supabase_envs_still_work_without_target_specific_values()
     assert settings.supabase_anon_key == "legacy-anon"
     assert settings.supabase_service_key == "legacy-service"
     assert settings.database_url == "postgresql://legacy/postgres"
+
+
+def test_empty_supabase_settings_are_allowed_for_deterministic_no_db_tests() -> None:
+    settings = _settings()
+
+    assert settings.supabase_target == "cloud"
+    assert settings.supabase_url == ""
+    assert settings.supabase_anon_key == ""
+    assert settings.supabase_service_key == ""
+
+
+def test_partial_supabase_settings_still_fail_fast() -> None:
+    with pytest.raises(ValueError, match="Missing required Supabase setting"):
+        _settings(supabase_url="https://legacy.supabase.co")
