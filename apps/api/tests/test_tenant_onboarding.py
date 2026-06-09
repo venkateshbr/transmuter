@@ -391,7 +391,7 @@ class FakeInviteClient:
         self.workstream_rows: list[dict[str, object]] = []
         self.auth = SimpleNamespace(admin=FakeInviteAuthAdmin(self))
 
-    def table(self, name: str) -> "FakeInviteQuery":
+    def table(self, name: str) -> FakeInviteQuery:
         return FakeInviteQuery(self, name)
 
 
@@ -420,29 +420,29 @@ class FakeInviteQuery:
         self._insert: dict[str, object] | list[dict[str, object]] | None = None
         self._filters: dict[str, object] = {}
 
-    def select(self, *args: object, **kwargs: object) -> "FakeInviteQuery":
+    def select(self, *args: object, **kwargs: object) -> FakeInviteQuery:
         self._operation = "select"
         return self
 
-    def insert(self, payload: dict[str, object] | list[dict[str, object]]) -> "FakeInviteQuery":
+    def insert(self, payload: dict[str, object] | list[dict[str, object]]) -> FakeInviteQuery:
         self._operation = "insert"
         self._insert = payload
         return self
 
-    def update(self, patch: dict[str, object]) -> "FakeInviteQuery":
+    def update(self, patch: dict[str, object]) -> FakeInviteQuery:
         self._operation = "update"
         self._patch = patch
         return self
 
-    def delete(self) -> "FakeInviteQuery":
+    def delete(self) -> FakeInviteQuery:
         self._operation = "delete"
         return self
 
-    def eq(self, key: str, value: object) -> "FakeInviteQuery":
+    def eq(self, key: str, value: object) -> FakeInviteQuery:
         self._filters[key] = value
         return self
 
-    def maybe_single(self) -> "FakeInviteQuery":
+    def maybe_single(self) -> FakeInviteQuery:
         return self
 
     def execute(self) -> SimpleNamespace:

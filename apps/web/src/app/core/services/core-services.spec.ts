@@ -68,8 +68,8 @@ describe('AuthService', () => {
     localStorage.clear();
     api = {
       post: vi.fn(),
-      get: vi.fn(() => of({ id: 'user-1', role: 'viewer', display_name: 'Viewer' })),
-      patch: vi.fn(() => of({ id: 'user-1', role: 'viewer', display_name: 'Updated' })),
+      get: vi.fn(() => of({ id: 'user-1', role: 'viewer', display_name: 'Viewer', must_change_password: false })),
+      patch: vi.fn(() => of({ id: 'user-1', role: 'viewer', display_name: 'Updated', must_change_password: false })),
     };
     router = { navigate: vi.fn() };
 
