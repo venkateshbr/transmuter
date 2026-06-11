@@ -38,7 +38,9 @@ interface MeetingArtifact {
             <div class="min-w-0">
               <div class="flex items-center gap-3">
                 <h1 class="text-lg font-black truncate text-[var(--t-text-primary)]">{{ s.meetings?.name }}</h1>
-                <span class="badge badge-red text-[9px] animate-pulse">Live</span>
+                <span class="badge text-[9px]" [class.badge-red]="s.status === 'in_progress'" [class.badge-gray]="s.status !== 'in_progress'">
+                  {{ s.status === 'in_progress' ? 'Live' : (s.status || 'scheduled') }}
+                </span>
               </div>
               <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">
                 {{ s.session_date | date:'EEE, MMM d' }} · {{ duration() }} · {{ saveStatus() }}
@@ -47,12 +49,21 @@ interface MeetingArtifact {
           </div>
 
           <div class="flex items-center gap-2">
+            @if (teamsJoinUrl()) {
+              <a [href]="teamsJoinUrl()" target="_blank" rel="noreferrer" class="btn-secondary text-xs" aria-label="Join Microsoft Teams meeting">Join Teams</a>
+            }
+            <button class="btn-ghost text-xs" (click)="generateAgendaSuggestions()">Generate Agenda</button>
+            <button class="btn-secondary text-xs" (click)="openTeamsInvite()">Teams Invite</button>
             <button class="btn-ghost text-xs" (click)="openTranscriptModal()">Import Transcript</button>
             <button class="btn-secondary text-xs" (click)="generateMinutes()">Generate Minutes</button>
             <button class="btn-ghost text-xs" [disabled]="!session()?.minutes_markdown || sendingMinutes()" (click)="sendMinutes()">
               {{ sendingMinutes() ? 'Sending...' : (session()?.minutes_status === 'sent' ? 'Sent' : 'Send Minutes') }}
             </button>
-            <button class="btn-primary text-xs px-5" (click)="endSession()">Complete Session</button>
+            @if (s.status === 'scheduled') {
+              <button class="btn-primary text-xs px-5" (click)="startScheduledSession()">Start Session</button>
+            } @else {
+              <button class="btn-primary text-xs px-5" (click)="endSession()">Complete Session</button>
+            }
           </div>
         </header>
 
@@ -62,12 +73,18 @@ interface MeetingArtifact {
               <section>
                 <div class="flex items-center justify-between mb-3">
                   <h2 class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Agenda</h2>
-                  <span class="text-[10px] font-bold text-[var(--t-text-tertiary)]">{{ (s.agenda || []).length }}</span>
+                  <button class="text-[10px] font-bold text-[var(--t-accent)]" (click)="showAgendaForm.set(!showAgendaForm())" aria-label="Add session agenda item">+ Add</button>
                 </div>
+                @if (showAgendaForm()) {
+                  <div class="mb-3 space-y-2">
+                    <textarea [(ngModel)]="agendaDraft.text" rows="3" class="input-field w-full text-xs resize-none" aria-label="Session agenda item"></textarea>
+                    <button class="btn-secondary w-full text-[10px]" (click)="addSessionAgendaItem()">Add Agenda Item</button>
+                  </div>
+                }
                 <div class="space-y-2">
                   @for (item of s.agenda; track item.id; let i = $index) {
-                    <button
-                      class="w-full text-left p-3 border transition-colors"
+                    <div
+                      class="w-full text-left p-3 border transition-colors cursor-pointer"
                       [class.bg-[var(--t-accent-soft)]]="activeAgendaIndex() === i"
                       [class.border-[var(--t-accent)]]="activeAgendaIndex() === i"
                       [class.bg-[var(--t-surface)]]="activeAgendaIndex() !== i"
@@ -84,12 +101,42 @@ interface MeetingArtifact {
                             </p>
                           }
                         </div>
+                        <button class="ml-auto text-[var(--t-text-tertiary)] hover:text-red-500" (click)="deleteSessionAgendaItem(item.id); $event.stopPropagation()" aria-label="Delete session agenda item">
+                          <span class="material-icons text-sm">close</span>
+                        </button>
                       </div>
-                    </button>
+                    </div>
                   }
                   @if ((s.agenda || []).length === 0) {
                     <div class="p-4 border border-dashed border-[var(--t-border)] text-xs text-[var(--t-text-secondary)]">
                       No agenda items configured.
+                    </div>
+                  }
+                </div>
+              </section>
+
+              <section class="pt-4 border-t border-[var(--t-border)]">
+                <div class="flex items-center justify-between mb-3">
+                  <h2 class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Attendees</h2>
+                  <button class="text-[10px] font-bold text-[var(--t-accent)]" (click)="showAttendeeForm.set(!showAttendeeForm())" aria-label="Add session attendee">+ Add</button>
+                </div>
+                @if (showAttendeeForm()) {
+                  <div class="mb-3 flex gap-2">
+                    <select [(ngModel)]="selectedUserId" class="input-field min-w-0 flex-1 text-xs" aria-label="Session attendee">
+                      @for (u of users(); track u.id) {
+                        <option [value]="u.id">{{ u.display_name || u.email }}</option>
+                      }
+                    </select>
+                    <button class="btn-secondary text-[10px]" (click)="addSessionAttendee()">Add</button>
+                  </div>
+                }
+                <div class="space-y-2">
+                  @for (attendee of s.attendees || []; track attendee.id) {
+                    <div class="flex items-center justify-between gap-2 p-2 bg-[var(--t-surface)] border border-[var(--t-border)]">
+                      <span class="truncate text-xs font-bold text-[var(--t-text-primary)]">{{ attendee.users?.display_name || attendee.users?.email || attendee.user_id }}</span>
+                      <button class="text-[var(--t-text-tertiary)] hover:text-red-500" (click)="deleteSessionAttendee(attendee.id)" aria-label="Remove session attendee">
+                        <span class="material-icons text-sm">close</span>
+                      </button>
                     </div>
                   }
                 </div>
@@ -325,10 +372,73 @@ interface MeetingArtifact {
               @if (transcriptFileName()) {
                 <p class="text-xs font-bold text-[var(--t-text-secondary)]">{{ transcriptFileName() }}</p>
               }
+              <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p class="text-xs font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Microsoft Teams</p>
+                  <p class="mt-1 text-sm text-[var(--t-text-secondary)]">Sync the transcript from the Teams event after transcription has finished.</p>
+                </div>
+                <button type="button" (click)="syncMicrosoftTranscript()" [disabled]="syncingMicrosoftTranscript()" class="btn-secondary text-xs" aria-label="Sync Microsoft Teams transcript">
+                  {{ syncingMicrosoftTranscript() ? 'Syncing...' : 'Sync from Microsoft' }}
+                </button>
+              </div>
               <div class="flex justify-end gap-3 pt-2">
                 <button type="button" (click)="showTranscriptImport.set(false)" class="btn-ghost text-sm">Cancel</button>
                 <button type="submit" [disabled]="!transcriptDraft.trim() || importingTranscript()" class="btn-primary text-sm">
                   {{ importingTranscript() ? 'Importing...' : 'Import transcript' }}
+                </button>
+              </div>
+            </form>
+          </div>
+        }
+
+        @if (showTeamsInvite()) {
+          <div class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-6">
+            <form (ngSubmit)="syncTeamsInvite()" class="card w-full max-w-2xl p-6 space-y-5 shadow-2xl" style="background:var(--t-surface)">
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <h2 class="text-xl font-bold text-[var(--t-text-primary)]">Session Teams invite</h2>
+                  <p class="text-sm text-[var(--t-text-secondary)] mt-1">Creates or updates the Microsoft Teams event for this dated session only.</p>
+                </div>
+                <button type="button" (click)="showTeamsInvite.set(false)" class="btn-ghost h-9 w-9 p-0" aria-label="Close Teams invite dialog">
+                  <span class="material-icons text-sm">close</span>
+                </button>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <label>
+                  <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Date</span>
+                  <input [(ngModel)]="teamsDraft.date" name="session_teams_date" type="date" required class="input-field w-full" aria-label="Teams date" />
+                </label>
+                <label>
+                  <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Start</span>
+                  <input [(ngModel)]="teamsDraft.start_time" name="session_teams_start" type="time" required class="input-field w-full" aria-label="Teams start time" />
+                </label>
+                <label>
+                  <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">End</span>
+                  <input [(ngModel)]="teamsDraft.end_time" name="session_teams_end" type="time" required class="input-field w-full" aria-label="Teams end time" />
+                </label>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <label>
+                  <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Timezone</span>
+                  <input [(ngModel)]="teamsDraft.time_zone" name="session_teams_timezone" required class="input-field w-full" aria-label="Teams timezone" />
+                </label>
+                <label>
+                  <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Organizer</span>
+                  <select [(ngModel)]="teamsDraft.organizer_email" name="session_teams_organizer" class="input-field w-full" aria-label="Teams organizer">
+                    <option value="">Default connected organizer</option>
+                    @for (connection of microsoftConnections(); track connection.id) {
+                      <option [value]="connection.organizer_email">{{ connection.organizer_email }}</option>
+                    }
+                  </select>
+                </label>
+              </div>
+              @if (teamsInviteError()) {
+                <p class="text-sm text-red-500">{{ teamsInviteError() }}</p>
+              }
+              <div class="flex justify-end gap-3 pt-2">
+                <button type="button" (click)="showTeamsInvite.set(false)" class="btn-ghost text-sm">Cancel</button>
+                <button type="submit" [disabled]="syncingTeamsInvite()" class="btn-primary text-sm">
+                  {{ syncingTeamsInvite() ? 'Syncing...' : 'Send / Update Invite' }}
                 </button>
               </div>
             </form>
@@ -349,20 +459,37 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
   private readonly notesChanged$ = new Subject<string>();
 
   session = signal<any>(null);
+  users = signal<any[]>([]);
+  meetingIntegrations = signal<any[]>([]);
   artifacts = signal<MeetingArtifact[]>([]);
   initiativeContext = signal<any | null>(null);
   activeAgendaIndex = signal(0);
   duration = signal('00:00:00');
   saveStatus = signal('All changes saved');
   showTranscriptImport = signal(false);
+  showAgendaForm = signal(false);
+  showAttendeeForm = signal(false);
+  showTeamsInvite = signal(false);
   importingTranscript = signal(false);
+  syncingMicrosoftTranscript = signal(false);
+  syncingTeamsInvite = signal(false);
   sendingMinutes = signal(false);
   transcriptFileName = signal('');
   sessionError = signal<string | null>(null);
   sessionMessage = signal<string | null>(null);
+  teamsInviteError = signal<string | null>(null);
   notes = '';
   minutesDraft = '';
   transcriptDraft = '';
+  selectedUserId = '';
+  agendaDraft = { text: '' };
+  teamsDraft = {
+    date: '',
+    start_time: '09:00',
+    end_time: '10:00',
+    time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    organizer_email: '',
+  };
   newActionItem = '';
   artifactDraft: { artifact_type: ArtifactType; priority: string } = {
     artifact_type: 'action',
@@ -374,6 +501,12 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
   activeAgenda = computed(() => {
     const agenda = this.session()?.agenda || [];
     return agenda[this.activeAgendaIndex()] || agenda[0] || null;
+  });
+
+  teamsJoinUrl = computed(() => {
+    const events = this.session()?.external_events || [];
+    const event = events.find((item: any) => item.provider === 'microsoft' && item.join_url);
+    return event?.join_url || '';
   });
 
   contextCards = computed(() => {
@@ -390,6 +523,8 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
   ngOnInit() {
     const id = this.route.snapshot.paramMap.get('id');
     if (id) this.loadSession(id);
+    this.loadUsers();
+    this.loadMeetingIntegrations();
 
     interval(1000).pipe(takeUntil(this.destroy$)).subscribe(() => {
       const diff = Math.floor((Date.now() - this.startTime) / 1000);
@@ -422,6 +557,21 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
     });
   }
 
+  loadUsers() {
+    this.api.get<any>('/users').subscribe(res => {
+      const users = res.data || [];
+      this.users.set(users);
+      this.selectedUserId = users[0]?.id || '';
+    });
+  }
+
+  loadMeetingIntegrations() {
+    this.api.get<any>('/meeting-integrations').subscribe({
+      next: res => this.meetingIntegrations.set(res.items || []),
+      error: () => this.meetingIntegrations.set([]),
+    });
+  }
+
   selectAgenda(index: number) {
     this.activeAgendaIndex.set(index);
     const item = (this.session()?.agenda || [])[index];
@@ -441,6 +591,79 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
   onNotesChange() {
     this.saveStatus.set('Saving...');
     this.notesChanged$.next(this.notes);
+  }
+
+  addSessionAgendaItem() {
+    const session = this.session();
+    const text = this.agendaDraft.text.trim();
+    if (!session?.id || !text) return;
+    this.api.post<any>(`/meetings/sessions/${session.id}/agenda`, { text }).subscribe({
+      next: () => {
+        this.agendaDraft = { text: '' };
+        this.showAgendaForm.set(false);
+        this.loadSession(session.id);
+      },
+      error: err => this.sessionError.set(err.error?.detail || 'Could not add agenda item.'),
+    });
+  }
+
+  deleteSessionAgendaItem(itemId: string) {
+    const id = this.session()?.id;
+    if (!id) return;
+    this.api.delete(`/meetings/sessions/${id}/agenda/${itemId}`).subscribe({
+      next: () => this.loadSession(id),
+      error: err => this.sessionError.set(err.error?.detail || 'Could not delete agenda item.'),
+    });
+  }
+
+  generateAgendaSuggestions() {
+    const id = this.session()?.id;
+    if (!id) return;
+    this.sessionError.set(null);
+    this.api.post<any>(`/meetings/sessions/${id}/agenda/suggestions`, {}).subscribe({
+      next: res => {
+        const items = (res.items || [])
+          .map((item: any, index: number) => ({
+            text: item.text,
+            initiative_id: item.initiative_id || null,
+            sort_order: (this.session()?.agenda || []).length + index + 1,
+          }))
+          .filter((item: any) => String(item.text || '').trim());
+        if (!items.length) {
+          this.sessionMessage.set('No agenda suggestions were available.');
+          return;
+        }
+        forkJoin(items.map((item: any) => this.api.post<any>(`/meetings/sessions/${id}/agenda`, item))).subscribe({
+          next: () => {
+            this.sessionMessage.set('Agenda suggestions added.');
+            this.loadSession(id);
+          },
+          error: err => this.sessionError.set(err.error?.detail || 'Could not save agenda suggestions.'),
+        });
+      },
+      error: err => this.sessionError.set(err.error?.detail || 'Could not generate agenda suggestions.'),
+    });
+  }
+
+  addSessionAttendee() {
+    const id = this.session()?.id;
+    if (!id || !this.selectedUserId) return;
+    this.api.post<any>(`/meetings/sessions/${id}/attendees`, { user_id: this.selectedUserId }).subscribe({
+      next: () => {
+        this.showAttendeeForm.set(false);
+        this.loadSession(id);
+      },
+      error: err => this.sessionError.set(err.error?.detail || 'Could not add attendee.'),
+    });
+  }
+
+  deleteSessionAttendee(attendeeId: string) {
+    const id = this.session()?.id;
+    if (!id) return;
+    this.api.delete(`/meetings/sessions/${id}/attendees/${attendeeId}`).subscribe({
+      next: () => this.loadSession(id),
+      error: err => this.sessionError.set(err.error?.detail || 'Could not remove attendee.'),
+    });
   }
 
   saveNotes(content: string) {
@@ -463,7 +686,7 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
       description: title,
       priority: this.artifactDraft.priority,
       status: 'open',
-      agenda_item_id: active?.id || null,
+      agenda_item_id: active?.source_agenda_item_id || null,
       initiative_id: active?.initiative_id || null,
     };
     this.api.post<MeetingArtifact>(`/meetings/sessions/${session.id}/artifacts`, body).subscribe(item => {
@@ -474,13 +697,13 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
   }
 
   updateArtifact(artifact: MeetingArtifact, patch: Record<string, string | null>) {
-    this.api.put<MeetingArtifact>(`/meeting-artifacts/${artifact.id}`, patch).subscribe(updated => {
+    this.api.put<MeetingArtifact>(`/meetings/artifacts/${artifact.id}`, patch).subscribe(updated => {
       this.artifacts.set(this.artifacts().map(item => item.id === artifact.id ? { ...item, ...updated } : item));
     });
   }
 
   deleteArtifact(artifact: MeetingArtifact) {
-    this.api.delete(`/meeting-artifacts/${artifact.id}`).subscribe(() => {
+    this.api.delete(`/meetings/artifacts/${artifact.id}`).subscribe(() => {
       this.artifacts.set(this.artifacts().filter(item => item.id !== artifact.id));
       const id = this.session()?.id;
       if (id) this.loadSession(id);
@@ -503,6 +726,57 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
     this.transcriptDraft = this.session()?.transcript_text || '';
     this.transcriptFileName.set('');
     this.showTranscriptImport.set(true);
+  }
+
+  openTeamsInvite() {
+    const session = this.session();
+    if (!session) return;
+    const meeting = session.meetings || {};
+    const start = String(meeting.start_time || '09:00').slice(0, 5);
+    this.teamsDraft = {
+      date: session.session_date || this.todayLocal(),
+      start_time: start,
+      end_time: this.endTime(start, Number(meeting.duration_minutes || 60)),
+      time_zone: meeting.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+      organizer_email: this.microsoftConnections()[0]?.organizer_email || '',
+    };
+    this.teamsInviteError.set(null);
+    this.showTeamsInvite.set(true);
+  }
+
+  syncTeamsInvite() {
+    const id = this.session()?.id;
+    if (!id) return;
+    this.syncingTeamsInvite.set(true);
+    this.teamsInviteError.set(null);
+    this.api.post<any>(`/meetings/sessions/${id}/external-events/microsoft`, {
+      organizer_email: this.teamsDraft.organizer_email || null,
+      start_date_time: `${this.teamsDraft.date}T${this.teamsDraft.start_time}:00`,
+      end_date_time: `${this.teamsDraft.date}T${this.teamsDraft.end_time}:00`,
+      time_zone: this.teamsDraft.time_zone || 'UTC',
+      attendee_user_ids: (this.session()?.attendees || []).map((item: any) => item.user_id).filter(Boolean),
+    }).subscribe({
+      next: event => {
+        this.syncingTeamsInvite.set(false);
+        if (event.sync_status === 'synced') {
+          this.showTeamsInvite.set(false);
+          this.sessionMessage.set('Teams invite synced.');
+        } else {
+          this.teamsInviteError.set(event.sync_error || 'Microsoft Teams invite is not synced yet.');
+        }
+        this.loadSession(id);
+      },
+      error: err => {
+        this.syncingTeamsInvite.set(false);
+        this.teamsInviteError.set(err.error?.detail || 'Could not sync Teams invite.');
+      },
+    });
+  }
+
+  microsoftConnections(): any[] {
+    return this.meetingIntegrations().filter(item =>
+      item.provider === 'microsoft_graph' && item.sync_status === 'connected'
+    );
   }
 
   onTranscriptFile(event: Event) {
@@ -546,6 +820,31 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
       error: err => {
         this.importingTranscript.set(false);
         this.sessionError.set(err.error?.detail || 'Could not import transcript.');
+      },
+    });
+  }
+
+  syncMicrosoftTranscript() {
+    const id = this.session()?.id;
+    if (!id) return;
+    this.syncingMicrosoftTranscript.set(true);
+    this.sessionError.set(null);
+    this.sessionMessage.set(null);
+    this.api.post<any>(`/meetings/sessions/${id}/transcript/sync/microsoft`, {}).subscribe({
+      next: res => {
+        this.syncingMicrosoftTranscript.set(false);
+        if (res.status === 'synced' && res.session) {
+          this.showTranscriptImport.set(false);
+          this.session.set({ ...this.session(), ...res.session, has_transcript: true });
+          this.transcriptDraft = res.session.transcript_text || '';
+          this.sessionMessage.set('Microsoft Teams transcript synced.');
+          return;
+        }
+        this.sessionMessage.set(res.detail || 'Microsoft Teams transcript is not available yet.');
+      },
+      error: err => {
+        this.syncingMicrosoftTranscript.set(false);
+        this.sessionError.set(err.error?.detail || 'Could not sync Microsoft Teams transcript.');
       },
     });
   }
@@ -611,6 +910,20 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
     });
   }
 
+  startScheduledSession() {
+    const session = this.session();
+    if (!session?.meeting_id) return;
+    this.api.post<any>(`/meetings/${session.meeting_id}/sessions/start`, {
+      session_date: session.session_date,
+    }).subscribe({
+      next: updated => {
+        this.session.set({ ...this.session(), ...updated });
+        this.sessionMessage.set('Session started.');
+      },
+      error: err => this.sessionError.set(err.error?.detail || 'Could not start session.'),
+    });
+  }
+
   financialRows() {
     const summary = this.initiativeContext()?.financials?.summary || {};
     return [
@@ -643,5 +956,18 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
       currency: 'USD',
       maximumFractionDigits: 0,
     }).format(amount);
+  }
+
+  endTime(start: string, durationMinutes: number): string {
+    const [hours, minutes] = String(start || '09:00').slice(0, 5).split(':').map(Number);
+    const date = new Date(2000, 0, 1, hours || 0, minutes || 0);
+    date.setMinutes(date.getMinutes() + (durationMinutes || 60));
+    return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+  }
+
+  private todayLocal(): string {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    return now.toISOString().slice(0, 10);
   }
 }

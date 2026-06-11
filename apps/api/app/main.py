@@ -30,6 +30,7 @@ from app.routers import (
     initiatives,
     kpis,
     meeting_artifacts,
+    meeting_integrations,
     meetings,
     milestones,
     people,
@@ -153,6 +154,7 @@ app.include_router(auth.router)
 app.include_router(billing.router)
 app.include_router(dashboard.router)
 app.include_router(meetings.router)
+app.include_router(meeting_integrations.router)
 app.include_router(meeting_artifacts.router)
 app.include_router(people.router)
 app.include_router(platform.router)
