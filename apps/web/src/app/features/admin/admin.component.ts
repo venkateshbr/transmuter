@@ -368,6 +368,104 @@ import { FormsModule } from '@angular/forms';
                 </div>
               </section>
             </div>
+
+            <div class="card overflow-hidden">
+              <section class="border-b border-red-500/30 bg-red-500/10 p-8">
+                <p class="text-[10px] font-black uppercase tracking-widest text-red-500">Destructive meeting operation</p>
+                <h3 class="mt-2 text-2xl font-black text-[var(--t-text-primary)]">Delete selected meetings</h3>
+                <p class="mt-2 max-w-2xl text-sm leading-6 text-[var(--t-text-secondary)]">
+                  Select one or more meeting series to delete. This removes sessions, notes, transcripts, agenda items,
+                  attendees, meeting links, Teams sync rows, artifacts, and meeting-created action/risk records.
+                </p>
+              </section>
+
+              <section class="grid gap-6 p-8 lg:grid-cols-[1fr_0.8fr]">
+                <div class="space-y-3">
+                  @for (meeting of meetingCleanupCandidates(); track meeting.id) {
+                    <label
+                      class="block border p-4 transition-colors"
+                      [class.border-red-500]="selectedMeetingCleanupIds().includes(meeting.id)"
+                      [class.bg-red-500/10]="selectedMeetingCleanupIds().includes(meeting.id)"
+                      [class.border-[var(--t-border)]]="!selectedMeetingCleanupIds().includes(meeting.id)"
+                      [class.bg-[var(--t-surface-raised)]]="!selectedMeetingCleanupIds().includes(meeting.id)">
+                      <div class="flex items-start gap-3">
+                        <input
+                          type="checkbox"
+                          class="mt-1 h-4 w-4"
+                          [checked]="selectedMeetingCleanupIds().includes(meeting.id)"
+                          (change)="toggleMeetingCleanupSelection(meeting.id, $any($event.target).checked)"
+                          [attr.aria-label]="'Select meeting ' + meeting.name + ' for cleanup'" />
+                        <div class="min-w-0 flex-1">
+                          <div class="flex items-start justify-between gap-4">
+                            <div class="min-w-0">
+                              <p class="truncate text-sm font-black text-[var(--t-text-primary)]">{{ meeting.name }}</p>
+                              <p class="mt-1 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">
+                                {{ recurrenceLabel(meeting.recurrence) }} · {{ meeting.users?.display_name || 'No owner' }}
+                              </p>
+                            </div>
+                            <span class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">
+                              {{ meeting.dependent_count || 0 }} rows
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </label>
+                  }
+                  @if (!meetingCleanupCandidates().length) {
+                    <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4 text-sm font-bold text-[var(--t-text-secondary)]">
+                      No meeting series available.
+                    </div>
+                  }
+                </div>
+
+                <div class="border border-red-500/30 bg-[var(--t-surface-raised)] p-5">
+                  <p class="text-sm font-black text-[var(--t-text-primary)]">
+                    {{ selectedMeetingCleanupIds().length }} meeting{{ selectedMeetingCleanupIds().length === 1 ? '' : 's' }} selected
+                  </p>
+                  <p class="mt-2 text-sm leading-6 text-[var(--t-text-secondary)]">
+                    Type <span class="font-mono font-black">DELETE MEETINGS</span> to confirm bulk deletion.
+                  </p>
+
+                  <label class="mt-5 block">
+                    <span class="text-[10px] font-black uppercase tracking-widest text-red-500">
+                      Confirmation
+                    </span>
+                    <input
+                      class="input-field mt-2 w-full font-mono"
+                      [ngModel]="meetingCleanupConfirmation()"
+                      (ngModelChange)="meetingCleanupConfirmation.set($event)"
+                      placeholder="DELETE MEETINGS"
+                      aria-label="Meeting cleanup confirmation phrase">
+                  </label>
+
+                  @if (meetingCleanupError()) {
+                    <div class="mt-4 border border-red-500/30 bg-red-500/10 p-3 text-sm font-bold text-red-500">
+                      {{ meetingCleanupError() }}
+                    </div>
+                  }
+
+                  @if (meetingCleanupResult()) {
+                    <div class="mt-4 border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm font-bold text-emerald-600">
+                      Deleted {{ meetingCleanupResult().deleted_meetings?.length || 0 }} meeting series.
+                    </div>
+                  }
+
+                  <div class="mt-5 flex justify-end gap-3">
+                    <button type="button" class="btn-ghost border border-[var(--t-border)] px-4 py-2 text-xs font-black uppercase" (click)="loadMeetingCleanupCandidates()" aria-label="Refresh meeting cleanup list">
+                      Refresh
+                    </button>
+                    <button
+                      type="button"
+                      class="border border-red-500 bg-red-500 px-4 py-2 text-xs font-black uppercase text-white disabled:cursor-not-allowed disabled:opacity-40"
+                      [disabled]="!canDeleteSelectedMeetings() || meetingCleanupDeleting()"
+                      (click)="deleteSelectedMeetings()"
+                      aria-label="Delete selected meetings">
+                      {{ meetingCleanupDeleting() ? 'Deleting...' : 'Delete meetings' }}
+                    </button>
+                  </div>
+                </div>
+              </section>
+            </div>
           }
 
           @if (activeTab === 'Strategic Parameters') {
@@ -859,6 +957,12 @@ export class AdminComponent implements OnInit {
   initiativeDeleting = signal(false);
   initiativeDeleteError = signal<string | null>(null);
   initiativeDeleteResult = signal<any | null>(null);
+  meetingCleanupCandidates = signal<any[]>([]);
+  selectedMeetingCleanupIds = signal<string[]>([]);
+  meetingCleanupConfirmation = signal('');
+  meetingCleanupDeleting = signal(false);
+  meetingCleanupError = signal<string | null>(null);
+  meetingCleanupResult = signal<any | null>(null);
   gateCriteria = signal<any[]>([]);
   auditLogs = signal<any[]>([]);
   financialGroups = signal<any[]>([]);
@@ -891,6 +995,7 @@ export class AdminComponent implements OnInit {
     this.loadSetupStatus();
     this.loadCleanupPreview();
     this.loadInitiativeDeleteCandidates();
+    this.loadMeetingCleanupCandidates();
     this.loadGateCriteria();
     this.loadAuditLogs();
     this.loadFinancialConfiguration();
@@ -955,6 +1060,14 @@ export class AdminComponent implements OnInit {
     this.api.get<any>('/initiatives?page_size=200&sort_by=initiative_code').subscribe({
       next: res => this.initiativeDeleteCandidates.set(res.items || []),
       error: err => this.initiativeDeleteError.set(err.error?.detail || 'Could not load initiatives'),
+    });
+  }
+
+  loadMeetingCleanupCandidates() {
+    this.meetingCleanupError.set(null);
+    this.api.get<any>('/admin/meeting-cleanup-candidates').subscribe({
+      next: res => this.meetingCleanupCandidates.set(res.items || []),
+      error: err => this.meetingCleanupError.set(err.error?.detail || 'Could not load meetings'),
     });
   }
 
@@ -1418,12 +1531,52 @@ export class AdminComponent implements OnInit {
         this.selectedInitiativeDeleteId.set('');
         this.initiativeDeleteConfirmation.set('');
         this.loadInitiativeDeleteCandidates();
+        this.loadMeetingCleanupCandidates();
         this.loadCleanupPreview();
         this.loadAuditLogs();
       },
       error: err => {
         this.initiativeDeleteError.set(err.error?.detail || 'Could not delete initiative');
         this.initiativeDeleting.set(false);
+      },
+    });
+  }
+
+  toggleMeetingCleanupSelection(meetingId: string, checked: boolean): void {
+    const ids = new Set(this.selectedMeetingCleanupIds());
+    if (checked) ids.add(meetingId);
+    else ids.delete(meetingId);
+    this.selectedMeetingCleanupIds.set(Array.from(ids));
+    this.meetingCleanupError.set(null);
+    this.meetingCleanupResult.set(null);
+  }
+
+  canDeleteSelectedMeetings(): boolean {
+    return this.selectedMeetingCleanupIds().length > 0
+      && this.meetingCleanupConfirmation().trim() === 'DELETE MEETINGS';
+  }
+
+  deleteSelectedMeetings() {
+    if (!this.canDeleteSelectedMeetings() || this.meetingCleanupDeleting()) return;
+
+    this.meetingCleanupDeleting.set(true);
+    this.meetingCleanupError.set(null);
+    this.api.post<any>('/admin/meeting-cleanup/delete', {
+      meeting_ids: this.selectedMeetingCleanupIds(),
+      confirm_phrase: this.meetingCleanupConfirmation().trim(),
+    }).subscribe({
+      next: res => {
+        this.meetingCleanupResult.set(res);
+        this.meetingCleanupDeleting.set(false);
+        this.selectedMeetingCleanupIds.set([]);
+        this.meetingCleanupConfirmation.set('');
+        this.loadMeetingCleanupCandidates();
+        this.loadCleanupPreview();
+        this.loadAuditLogs();
+      },
+      error: err => {
+        this.meetingCleanupError.set(err.error?.detail || 'Could not delete selected meetings');
+        this.meetingCleanupDeleting.set(false);
       },
     });
   }
@@ -1480,6 +1633,16 @@ export class AdminComponent implements OnInit {
 
   labelize(value: string): string {
     return value.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  recurrenceLabel(value: string): string {
+    const labels: Record<string, string> = {
+      ad_hoc: 'One-off',
+      weekly: 'Weekly',
+      biweekly: 'Biweekly',
+      monthly: 'Monthly',
+    };
+    return labels[value] || this.labelize(value || '');
   }
 
   formatCents(cents: number | undefined, currency: string | undefined): string {

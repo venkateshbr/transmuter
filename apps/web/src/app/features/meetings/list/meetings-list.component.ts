@@ -47,11 +47,11 @@ const MEETINGS_FILTER_STATE_KEY = 'transmuter.filters.meetings.list';
             <div class="flex justify-between items-start mb-6">
               <div class="flex flex-col">
                  <span class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)] mb-1">
-                   {{ m.recurrence }}
+                   {{ recurrenceLabel(m.recurrence) }}
                  </span>
                  <div class="flex items-center gap-1.5 text-[var(--t-text-tertiary)]">
                    <span class="material-icons text-xs">schedule</span>
-                   <span class="text-[10px] font-bold">14:00 (GMT+8)</span>
+                   <span class="text-[10px] font-bold">{{ scheduleLabel(m) }}</span>
                  </div>
               </div>
               <div class="flex -space-x-3">
@@ -108,7 +108,7 @@ const MEETINGS_FILTER_STATE_KEY = 'transmuter.filters.meetings.list';
 
       @if (showCreate()) {
         <div class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-6">
-          <form (ngSubmit)="createMeeting()" class="card w-full max-w-xl p-6 space-y-5 shadow-2xl" style="background:var(--t-surface)">
+          <form (ngSubmit)="createMeeting()" class="card w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 space-y-5 shadow-2xl" style="background:var(--t-surface)">
             <div class="flex items-start justify-between gap-4">
               <div>
                 <h2 class="text-xl font-bold text-[var(--t-text-primary)]">New meeting series</h2>
@@ -129,16 +129,47 @@ const MEETINGS_FILTER_STATE_KEY = 'transmuter.filters.meetings.list';
                 <select [(ngModel)]="draft.scope" name="scope" class="input-field w-full" aria-label="Meeting scope">
                   <option value="all">All</option>
                   <option value="workstream">Workstream</option>
-                  <option value="initiative">Initiative</option>
                 </select>
               </label>
               <label>
                 <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Recurrence</span>
                 <select [(ngModel)]="draft.recurrence" name="recurrence" class="input-field w-full" aria-label="Meeting recurrence">
+                  <option value="ad_hoc">One-off</option>
                   <option value="weekly">Weekly</option>
                   <option value="biweekly">Biweekly</option>
                   <option value="monthly">Monthly</option>
                 </select>
+              </label>
+              @if (draft.recurrence === 'ad_hoc') {
+                <label>
+                  <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Date</span>
+                  <input [(ngModel)]="draft.one_off_date" name="one_off_date" type="date" class="input-field w-full" aria-label="One-off meeting date" />
+                </label>
+              } @else {
+                <label>
+                  <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Day</span>
+                  <select [(ngModel)]="draft.day_of_week" name="day_of_week" class="input-field w-full" aria-label="Meeting day of week">
+                    @for (day of weekdays; track day.value) {
+                      <option [ngValue]="day.value">{{ day.label }}</option>
+                    }
+                  </select>
+                </label>
+                <label>
+                  <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Series end</span>
+                  <input [(ngModel)]="draft.series_end_date" name="series_end_date" type="date" class="input-field w-full" aria-label="Meeting series end date" />
+                </label>
+              }
+              <label>
+                <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Start</span>
+                <input [(ngModel)]="draft.start_time" name="start_time" type="time" required class="input-field w-full" aria-label="Meeting start time" />
+              </label>
+              <label>
+                <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Duration</span>
+                <input [(ngModel)]="draft.duration_minutes" name="duration_minutes" type="number" min="1" max="1440" required class="input-field w-full" aria-label="Meeting duration minutes" />
+              </label>
+              <label>
+                <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Timezone</span>
+                <input [(ngModel)]="draft.timezone" name="timezone" required class="input-field w-full" aria-label="Meeting timezone" />
               </label>
               <label class="md:col-span-2">
                 <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Owner</span>
@@ -165,6 +196,27 @@ const MEETINGS_FILTER_STATE_KEY = 'transmuter.filters.meetings.list';
                   }
                 </div>
               </fieldset>
+              <fieldset class="md:col-span-2 border border-[var(--t-border)] p-3">
+                <legend class="px-1 text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)]">Participants</legend>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                  @for (u of users(); track u.id) {
+                    <label class="flex items-center gap-2 text-xs font-bold text-[var(--t-text-primary)]">
+                      <input
+                        type="checkbox"
+                        [checked]="draft.participant_user_ids.includes(u.id)"
+                        (change)="toggleDraftParticipant(u.id, $any($event.target).checked)"
+                        class="h-4 w-4"
+                        [attr.aria-label]="'Select participant ' + (u.display_name || u.email)"
+                      />
+                      <span>{{ u.display_name || u.email }}</span>
+                    </label>
+                  }
+                </div>
+              </fieldset>
+              <label class="md:col-span-2">
+                <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Default agenda</span>
+                <textarea [(ngModel)]="draft.default_agenda_text" name="default_agenda_text" rows="4" class="input-field w-full resize-none" aria-label="Default agenda items" placeholder="One topic per line"></textarea>
+              </label>
               <label class="md:col-span-2">
                 <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Description</span>
                 <textarea [(ngModel)]="draft.description" name="description" rows="3" class="input-field w-full resize-none" aria-label="Meeting description"></textarea>
@@ -243,7 +295,6 @@ export class MeetingsListComponent implements OnInit {
         options: [
           { id: 'all', name: 'All' },
           { id: 'workstream', name: 'Workstream' },
-          { id: 'initiative', name: 'Initiative' },
         ],
       },
     ];
@@ -304,6 +355,9 @@ export class MeetingsListComponent implements OnInit {
       name: this.draft.name.trim(),
       description: this.draft.description?.trim() || null,
       workstream_id: this.draft.workstream_ids[0] || null,
+      one_off_date: this.draft.recurrence === 'ad_hoc' ? this.draft.one_off_date || this.todayLocal() : null,
+      series_end_date: this.draft.recurrence === 'ad_hoc' ? null : this.draft.series_end_date || null,
+      default_agenda_items: this.defaultAgendaItems(),
     }).subscribe({
       next: meeting => {
         this.saving.set(false);
@@ -323,9 +377,17 @@ export class MeetingsListComponent implements OnInit {
       name: '',
       scope: 'all',
       recurrence: 'weekly',
+      day_of_week: new Date().getDay() === 0 ? 6 : new Date().getDay() - 1,
+      one_off_date: this.todayLocal(),
+      series_end_date: this.defaultSeriesEndDate(),
+      start_time: '09:00',
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+      duration_minutes: 60,
       description: '',
       owner_id: '',
       workstream_ids: [] as string[],
+      participant_user_ids: [] as string[],
+      default_agenda_text: '',
     };
   }
 
@@ -337,10 +399,68 @@ export class MeetingsListComponent implements OnInit {
     if (this.draft.workstream_ids.length) this.draft.scope = 'workstream';
   }
 
+  toggleDraftParticipant(userId: string, checked: boolean): void {
+    const ids = new Set(this.draft.participant_user_ids);
+    if (checked) ids.add(userId);
+    else ids.delete(userId);
+    this.draft.participant_user_ids = Array.from(ids);
+  }
+
   meetingWorkstreamLabel(meeting: any): string {
     const workstreams = Array.isArray(meeting.workstreams) ? meeting.workstreams : [];
     if (!workstreams.length) return 'All BU';
     if (workstreams.length === 1) return workstreams[0]?.name || 'Workstream';
     return `${workstreams.length} workstreams`;
+  }
+
+  recurrenceLabel(value: string): string {
+    const labels: Record<string, string> = {
+      ad_hoc: 'One-off',
+      weekly: 'Weekly',
+      biweekly: 'Biweekly',
+      monthly: 'Monthly',
+    };
+    return labels[value] || value;
+  }
+
+  scheduleLabel(meeting: any): string {
+    const time = String(meeting.start_time || '09:00').slice(0, 5);
+    const timezone = meeting.timezone || 'UTC';
+    if (meeting.recurrence === 'ad_hoc') {
+      return `${meeting.one_off_date || 'One-off'} · ${time} ${timezone}`;
+    }
+    const day = this.weekdays.find(item => item.value === Number(meeting.day_of_week))?.short || 'Day';
+    return `${day} · ${time} ${timezone}`;
+  }
+
+  defaultAgendaItems(): Array<{ text: string; sort_order: number }> {
+    return String(this.draft.default_agenda_text || '')
+      .split('\n')
+      .map(item => item.trim())
+      .filter(Boolean)
+      .map((text, index) => ({ text, sort_order: index + 1 }));
+  }
+
+  readonly weekdays = [
+    { value: 0, label: 'Monday', short: 'Mon' },
+    { value: 1, label: 'Tuesday', short: 'Tue' },
+    { value: 2, label: 'Wednesday', short: 'Wed' },
+    { value: 3, label: 'Thursday', short: 'Thu' },
+    { value: 4, label: 'Friday', short: 'Fri' },
+    { value: 5, label: 'Saturday', short: 'Sat' },
+    { value: 6, label: 'Sunday', short: 'Sun' },
+  ];
+
+  private todayLocal(): string {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    return now.toISOString().slice(0, 10);
+  }
+
+  private defaultSeriesEndDate(): string {
+    const now = new Date();
+    now.setMonth(now.getMonth() + 3);
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    return now.toISOString().slice(0, 10);
   }
 }

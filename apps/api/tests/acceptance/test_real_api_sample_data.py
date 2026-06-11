@@ -181,9 +181,16 @@ def test_real_api_meeting_crud_session_and_action_flow() -> None:
             json={
                 "name": name,
                 "scope": "all",
-                "recurrence": "weekly",
+                "recurrence": "biweekly",
+                "day_of_week": 2,
+                "start_time": "13:30",
+                "timezone": "UTC",
+                "duration_minutes": 45,
+                "series_end_date": "2030-09-30",
                 "description": "Created by real API acceptance test",
                 "owner_id": user_id,
+                "participant_user_ids": [user_id],
+                "default_agenda_items": [{"text": "Acceptance default agenda"}],
             },
         )
         created.raise_for_status()
@@ -230,9 +237,49 @@ def test_real_api_meeting_crud_session_and_action_flow() -> None:
             initiative_link.raise_for_status()
             link_id = initiative_link.json()["id"]
 
+            window = client.get(
+                f"/meetings/{meeting_id}/sessions",
+                headers=headers,
+                params={"anchor_date": "2030-06-10", "page_size": 3},
+            )
+            window.raise_for_status()
+            window_data = window.json()
+            assert len(window_data["items"]) == 6
+            assert window_data["items"][0]["status"] == "scheduled"
+
             session = client.post(f"/meetings/{meeting_id}/sessions/start", headers=headers)
             session.raise_for_status()
             session_id = session.json()["id"]
+
+            session_agenda = client.post(
+                f"/meetings/sessions/{session_id}/agenda",
+                headers=headers,
+                json={"text": "Session-specific acceptance agenda", "initiative_id": initiative_id},
+            )
+            session_agenda.raise_for_status()
+            session_agenda_id = session_agenda.json()["id"]
+
+            session_attendee = client.post(
+                f"/meetings/sessions/{session_id}/attendees",
+                headers=headers,
+                json={"user_id": user_id},
+            )
+            session_attendee.raise_for_status()
+            session_attendee_id = session_attendee.json()["id"]
+
+            teams = client.post(
+                f"/meetings/sessions/{session_id}/external-events/microsoft",
+                headers=headers,
+                json={
+                    "start_date_time": "2030-06-10T13:30:00",
+                    "end_date_time": "2030-06-10T14:15:00",
+                    "time_zone": "UTC",
+                    "attendee_user_ids": [user_id],
+                    "series_end_date": "2030-09-30",
+                },
+            )
+            teams.raise_for_status()
+            assert teams.json()["sync_status"] in {"not_configured", "synced", "failed"}
 
             notes = client.patch(
                 f"/meetings/sessions/{session_id}",
@@ -241,6 +288,33 @@ def test_real_api_meeting_crud_session_and_action_flow() -> None:
             )
             notes.raise_for_status()
             assert notes.json()["notes"] == "Acceptance notes autosaved via real API."
+
+            transcript_text = (
+                "Rupa Menon: Acceptance agenda needs a benefits owner before the next review. "
+                "Vishwa Rao: Session-specific acceptance agenda has a migration risk that needs a rollback owner. "
+                "Rupa Menon: Finance validation can complete after the owner is confirmed."
+            )
+            imported_transcript = client.post(
+                f"/meetings/sessions/{session_id}/transcript/import",
+                headers=headers,
+                json={"transcript_text": transcript_text, "transcript_source": "manual"},
+            )
+            imported_transcript.raise_for_status()
+
+            minutes = client.post(
+                f"/meetings/sessions/{session_id}/minutes/generate",
+                headers=headers,
+                json={"force": True},
+            )
+            minutes.raise_for_status()
+            minutes_markdown = minutes.json()["minutes_markdown"]
+            assert "## AI Summary" in minutes_markdown
+            assert "## Agenda Discussion" in minutes_markdown
+            assert "### Session-specific acceptance agenda" in minutes_markdown
+            assert "rollback owner" in minutes_markdown
+            assert "## Transcript Summary Source" not in minutes_markdown
+            assert "Rupa Menon:" not in minutes_markdown
+            assert "Vishwa Rao:" not in minutes_markdown
 
             action = client.post(
                 f"/meetings/sessions/{session_id}/action-items",
@@ -307,8 +381,215 @@ def test_real_api_meeting_crud_session_and_action_flow() -> None:
                 f"/meetings/{meeting_id}/agenda/{agenda_id}",
                 headers=headers,
             ).raise_for_status()
+            client.delete(
+                f"/meetings/sessions/{session_id}/agenda/{session_agenda_id}",
+                headers=headers,
+            ).raise_for_status()
+            client.delete(
+                f"/meetings/sessions/{session_id}/attendees/{session_attendee_id}",
+                headers=headers,
+            ).raise_for_status()
         finally:
             client.delete(f"/meetings/{meeting_id}", headers=headers)
+
+
+def test_real_api_admin_bulk_meeting_cleanup_deletes_related_records() -> None:
+    with _client() as client:
+        headers = _auth_headers(client)
+
+        users = client.get("/users", headers=headers)
+        users.raise_for_status()
+        user_id = users.json()["data"][0]["id"]
+
+        initiatives = client.get("/initiatives", headers=headers)
+        initiatives.raise_for_status()
+        initiative_id = initiatives.json()["items"][0]["id"]
+
+        created_meeting_ids: list[str] = []
+        action_ids: list[str] = []
+        risk_ids: list[str] = []
+        try:
+            for index in range(2):
+                created = client.post(
+                    "/meetings",
+                    headers=headers,
+                    json={
+                        "name": f"Acceptance Cleanup Meeting {index} {uuid4()}",
+                        "scope": "all",
+                        "recurrence": "weekly",
+                        "day_of_week": index,
+                        "start_time": "10:00",
+                        "timezone": "UTC",
+                        "duration_minutes": 30,
+                        "series_end_date": "2030-12-31",
+                        "description": "Created for admin bulk cleanup acceptance.",
+                        "owner_id": user_id,
+                        "participant_user_ids": [user_id],
+                        "default_agenda_items": [{"text": "Cleanup default agenda"}],
+                    },
+                )
+                created.raise_for_status()
+                meeting_id = created.json()["id"]
+                created_meeting_ids.append(meeting_id)
+
+                agenda = client.post(
+                    f"/meetings/{meeting_id}/agenda",
+                    headers=headers,
+                    json={"text": "Cleanup agenda", "initiative_id": initiative_id},
+                )
+                agenda.raise_for_status()
+
+                attendee = client.post(
+                    f"/meetings/{meeting_id}/attendees",
+                    headers=headers,
+                    json={"user_id": user_id},
+                )
+                attendee.raise_for_status()
+
+                link = client.post(
+                    f"/meetings/{meeting_id}/initiatives",
+                    headers=headers,
+                    json={"initiative_id": initiative_id},
+                )
+                link.raise_for_status()
+
+                series_teams = client.post(
+                    f"/meetings/{meeting_id}/external-events/microsoft",
+                    headers=headers,
+                    json={
+                        "start_date_time": "2030-06-10T10:00:00",
+                        "end_date_time": "2030-06-10T10:30:00",
+                        "time_zone": "UTC",
+                        "attendee_user_ids": [user_id],
+                        "series_end_date": "2030-12-31",
+                    },
+                )
+                series_teams.raise_for_status()
+
+                session = client.post(
+                    f"/meetings/{meeting_id}/sessions/start",
+                    headers=headers,
+                    json={"session_date": f"2030-06-{10 + index:02d}"},
+                )
+                session.raise_for_status()
+                session_id = session.json()["id"]
+
+                session_notes = client.patch(
+                    f"/meetings/sessions/{session_id}",
+                    headers=headers,
+                    json={
+                        "notes": "Cleanup notes",
+                        "transcript_text": "Cleanup transcript",
+                    },
+                )
+                session_notes.raise_for_status()
+
+                session_agenda = client.post(
+                    f"/meetings/sessions/{session_id}/agenda",
+                    headers=headers,
+                    json={
+                        "text": "Cleanup session agenda",
+                        "initiative_id": initiative_id,
+                    },
+                )
+                session_agenda.raise_for_status()
+
+                session_attendee = client.post(
+                    f"/meetings/sessions/{session_id}/attendees",
+                    headers=headers,
+                    json={"user_id": user_id},
+                )
+                session_attendee.raise_for_status()
+
+                session_teams = client.post(
+                    f"/meetings/sessions/{session_id}/external-events/microsoft",
+                    headers=headers,
+                    json={
+                        "start_date_time": "2030-06-10T10:00:00",
+                        "end_date_time": "2030-06-10T10:30:00",
+                        "time_zone": "UTC",
+                        "attendee_user_ids": [user_id],
+                    },
+                )
+                session_teams.raise_for_status()
+
+                action = client.post(
+                    f"/meetings/sessions/{session_id}/action-items",
+                    headers=headers,
+                    json={
+                        "description": "Cleanup direct action",
+                        "initiative_id": initiative_id,
+                        "assignee_id": user_id,
+                        "priority": "medium",
+                    },
+                )
+                action.raise_for_status()
+                action_ids.append(action.json()["id"])
+
+                artifact = client.post(
+                    f"/meetings/sessions/{session_id}/artifacts",
+                    headers=headers,
+                    json={
+                        "artifact_type": "risk",
+                        "title": "Cleanup linked risk",
+                        "description": "Risk created by meeting cleanup acceptance.",
+                        "initiative_id": initiative_id,
+                        "owner_id": user_id,
+                        "priority": "high",
+                    },
+                )
+                artifact.raise_for_status()
+                risk_ids.append(artifact.json()["linked_record_id"])
+
+            candidates = client.get("/admin/meeting-cleanup-candidates", headers=headers)
+            candidates.raise_for_status()
+            candidate_ids = {item["id"] for item in candidates.json()["items"]}
+            assert set(created_meeting_ids).issubset(candidate_ids)
+
+            rejected = client.post(
+                "/admin/meeting-cleanup/delete",
+                headers=headers,
+                json={"meeting_ids": created_meeting_ids, "confirm_phrase": "delete meetings"},
+            )
+            assert rejected.status_code == 400
+
+            deleted = client.post(
+                "/admin/meeting-cleanup/delete",
+                headers=headers,
+                json={
+                    "meeting_ids": created_meeting_ids,
+                    "confirm_phrase": "DELETE MEETINGS",
+                },
+            )
+            deleted.raise_for_status()
+            deleted_data = deleted.json()
+            assert deleted_data["deleted"] is True
+            assert set(deleted_data["meeting_ids"]) == set(created_meeting_ids)
+            assert deleted_data["deleted_rows"]["meetings"] == 2
+            assert deleted_data["deleted_rows"]["agenda_items"] >= 2
+            assert deleted_data["deleted_rows"]["meeting_sessions"] >= 2
+            assert deleted_data["deleted_rows"]["meeting_session_agenda_items"] >= 2
+            assert deleted_data["deleted_rows"]["meeting_session_attendees"] >= 2
+            assert deleted_data["deleted_rows"]["action_items"] >= 2
+            assert deleted_data["linked_records"]["risk"] >= 2
+
+            meetings = client.get("/meetings", headers=headers)
+            meetings.raise_for_status()
+            remaining_meeting_ids = {item["id"] for item in meetings.json()["items"]}
+            assert not set(created_meeting_ids) & remaining_meeting_ids
+
+            actions = client.get("/action-items", headers=headers)
+            actions.raise_for_status()
+            remaining_action_ids = {item["id"] for item in actions.json()["items"]}
+            assert not set(action_ids) & remaining_action_ids
+
+            risks = client.get(f"/initiatives/{initiative_id}/risks", headers=headers)
+            risks.raise_for_status()
+            remaining_risk_ids = {item["id"] for item in risks.json()["items"]}
+            assert not set(risk_ids) & remaining_risk_ids
+        finally:
+            for meeting_id in created_meeting_ids:
+                client.delete(f"/meetings/{meeting_id}", headers=headers)
 
 
 def test_real_api_initiative_template_import_flow() -> None:

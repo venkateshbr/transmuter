@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 MeetingScope = Literal["workstream", "all"]
 MeetingRecurrence = Literal["weekly", "biweekly", "monthly", "ad_hoc"]
@@ -24,26 +24,6 @@ MeetingArtifactStatus = Literal[
 MinutesStatus = Literal["not_generated", "draft", "sent"]
 
 
-class MeetingCreate(BaseModel):
-    name: str = Field(..., min_length=1, max_length=300)
-    workstream_id: str | None = None
-    workstream_ids: list[str] = Field(default_factory=list)
-    scope: MeetingScope = "all"
-    recurrence: MeetingRecurrence = "weekly"
-    description: str | None = None
-    owner_id: str | None = None
-
-
-class MeetingUpdate(BaseModel):
-    name: str | None = Field(None, min_length=1, max_length=300)
-    workstream_id: str | None = None
-    workstream_ids: list[str] | None = None
-    scope: MeetingScope | None = None
-    recurrence: MeetingRecurrence | None = None
-    description: str | None = None
-    owner_id: str | None = None
-
-
 class AgendaItemCreate(BaseModel):
     text: str = Field(..., min_length=1, max_length=1000)
     initiative_id: str | None = None
@@ -54,6 +34,41 @@ class AgendaItemUpdate(BaseModel):
     text: str | None = Field(None, min_length=1, max_length=1000)
     initiative_id: str | None = None
     sort_order: int | None = None
+
+
+class MeetingCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=300)
+    workstream_id: str | None = None
+    workstream_ids: list[str] = Field(default_factory=list)
+    scope: MeetingScope = "all"
+    recurrence: MeetingRecurrence = "weekly"
+    day_of_week: int | None = Field(None, ge=0, le=6)
+    start_time: str = "09:00"
+    timezone: str = "UTC"
+    duration_minutes: int = Field(60, ge=1, le=1440)
+    one_off_date: str | None = None
+    series_end_date: str | None = None
+    description: str | None = None
+    owner_id: str | None = None
+    participant_user_ids: list[str] = Field(default_factory=list)
+    default_agenda_items: list[AgendaItemCreate] = Field(default_factory=list)
+
+
+class MeetingUpdate(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=300)
+    workstream_id: str | None = None
+    workstream_ids: list[str] | None = None
+    scope: MeetingScope | None = None
+    recurrence: MeetingRecurrence | None = None
+    day_of_week: int | None = Field(None, ge=0, le=6)
+    start_time: str | None = None
+    timezone: str | None = None
+    duration_minutes: int | None = Field(None, ge=1, le=1440)
+    one_off_date: str | None = None
+    series_end_date: str | None = None
+    description: str | None = None
+    owner_id: str | None = None
+    participant_user_ids: list[str] | None = None
 
 
 class AttendeeCreate(BaseModel):
@@ -146,22 +161,40 @@ class AgendaSuggestionsResponse(BaseModel):
 
 class MeetingExternalEventCreate(BaseModel):
     organizer_email: str | None = None
-    start_date_time: str | None = None
-    end_date_time: str | None = None
+    start_date_time: str
+    end_date_time: str
     time_zone: str = "UTC"
+    attendee_user_ids: list[str] = Field(default_factory=list)
+    series_end_date: str | None = None
+
+    @model_validator(mode="after")
+    def validate_schedule(self) -> MeetingExternalEventCreate:
+        if not self.start_date_time or not self.end_date_time:
+            raise ValueError("start_date_time and end_date_time are required.")
+        return self
 
 
 class MeetingExternalEventResponse(BaseModel):
     id: str
     provider: str
     meeting_id: str
+    session_id: str | None = None
     external_event_id: str | None = None
     online_meeting_id: str | None = None
     join_url: str | None = None
     organizer_email: str | None = None
+    scheduled_start_at: str | None = None
+    scheduled_end_at: str | None = None
+    time_zone: str | None = None
     sync_status: str
     sync_error: str | None = None
     last_synced_at: str | None = None
+
+
+class MeetingTranscriptSyncResponse(BaseModel):
+    status: str
+    detail: str | None = None
+    session: dict[str, Any] | None = None
 
 
 class MeetingListResponse(BaseModel):

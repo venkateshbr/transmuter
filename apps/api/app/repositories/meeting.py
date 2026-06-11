@@ -41,17 +41,60 @@ class MeetingRepository:
         return meeting
 
     def create(self, data: dict) -> dict:
-        result = self._c.table("meetings").insert({"tenant_id": self._tid, **data}).execute()
+        payload = {"tenant_id": self._tid, **data}
+        try:
+            result = self._c.table("meetings").insert(payload).execute()
+        except Exception as exc:
+            if not self._is_missing_meeting_schedule_columns(exc):
+                raise
+            legacy_payload = {
+                key: value
+                for key, value in payload.items()
+                if key
+                not in {
+                    "day_of_week",
+                    "start_time",
+                    "timezone",
+                    "duration_minutes",
+                    "one_off_date",
+                    "series_end_date",
+                }
+            }
+            result = self._c.table("meetings").insert(legacy_payload).execute()
         return result.data[0] if result.data else {}
 
     def update(self, meeting_id: str, data: dict) -> dict:
-        result = (
-            self._c.table("meetings")
-            .update(data)
-            .eq("tenant_id", self._tid)
-            .eq("id", meeting_id)
-            .execute()
-        )
+        try:
+            result = (
+                self._c.table("meetings")
+                .update(data)
+                .eq("tenant_id", self._tid)
+                .eq("id", meeting_id)
+                .execute()
+            )
+        except Exception as exc:
+            if not self._is_missing_meeting_schedule_columns(exc):
+                raise
+            legacy_data = {
+                key: value
+                for key, value in data.items()
+                if key
+                not in {
+                    "day_of_week",
+                    "start_time",
+                    "timezone",
+                    "duration_minutes",
+                    "one_off_date",
+                    "series_end_date",
+                }
+            }
+            result = (
+                self._c.table("meetings")
+                .update(legacy_data)
+                .eq("tenant_id", self._tid)
+                .eq("id", meeting_id)
+                .execute()
+            )
         return result.data[0] if result.data else {}
 
     def set_workstreams(self, meeting_id: str, workstream_ids: list[str]) -> None:
@@ -186,6 +229,28 @@ class MeetingRepository:
         )
         return result.data[0] if result.data else {}
 
+    def set_attendees(self, meeting_id: str, user_ids: list[str]) -> None:
+        (
+            self._c.table("meeting_attendees")
+            .delete()
+            .eq("tenant_id", self._tid)
+            .eq("meeting_id", meeting_id)
+            .execute()
+        )
+        unique_ids = list(dict.fromkeys([user_id for user_id in user_ids if user_id]))
+        if not unique_ids:
+            return
+        self._c.table("meeting_attendees").insert(
+            [
+                {
+                    "tenant_id": self._tid,
+                    "meeting_id": meeting_id,
+                    "user_id": user_id,
+                }
+                for user_id in unique_ids
+            ]
+        ).execute()
+
     def delete_attendee(self, meeting_id: str, attendee_id: str) -> None:
         (
             self._c.table("meeting_attendees")
@@ -241,19 +306,25 @@ class MeetingRepository:
             .execute()
         )
 
-    def create_session(self, meeting_id: str, session_date: str) -> dict:
-        result = (
-            self._c.table("meeting_sessions")
-            .insert(
-                {
-                    "tenant_id": self._tid,
-                    "meeting_id": meeting_id,
-                    "session_date": session_date,
-                    "status": "in_progress",
-                }
-            )
-            .execute()
-        )
+    def create_session(self, meeting_id: str, session_date: str, data: dict | None = None) -> dict:
+        payload = {
+            "tenant_id": self._tid,
+            "meeting_id": meeting_id,
+            "session_date": session_date,
+            "status": "scheduled",
+            **(data or {}),
+        }
+        try:
+            result = self._c.table("meeting_sessions").insert(payload).execute()
+        except Exception as exc:
+            if not self._is_missing_session_schedule_columns(exc):
+                raise
+            legacy_payload = {
+                key: value
+                for key, value in payload.items()
+                if key not in {"scheduled_start_at", "scheduled_end_at"}
+            }
+            result = self._c.table("meeting_sessions").insert(legacy_payload).execute()
         return result.data[0] if result.data else {}
 
     def get_session_by_date(self, meeting_id: str, session_date: str) -> dict | None:
@@ -280,14 +351,182 @@ class MeetingRepository:
         return result.data if result else None
 
     def update_session(self, session_id: str, data: dict) -> dict:
+        try:
+            result = (
+                self._c.table("meeting_sessions")
+                .update(data)
+                .eq("tenant_id", self._tid)
+                .eq("id", session_id)
+                .execute()
+            )
+        except Exception as exc:
+            if not self._is_missing_session_schedule_columns(exc):
+                raise
+            legacy_data = {
+                key: value
+                for key, value in data.items()
+                if key not in {"scheduled_start_at", "scheduled_end_at"}
+            }
+            result = (
+                self._c.table("meeting_sessions")
+                .update(legacy_data)
+                .eq("tenant_id", self._tid)
+                .eq("id", session_id)
+                .execute()
+            )
+        return result.data[0] if result.data else {}
+
+    def get_session_agenda(self, session_id: str) -> list[dict]:
+        try:
+            result = (
+                self._c.table("meeting_session_agenda_items")
+                .select("*, initiatives(name, initiative_code)")
+                .eq("tenant_id", self._tid)
+                .eq("session_id", session_id)
+                .order("sort_order")
+                .execute()
+            )
+        except Exception as exc:
+            if self._is_missing_session_snapshot_tables(exc):
+                return []
+            raise
+        return result.data or []
+
+    def create_session_agenda_item(self, session_id: str, meeting_id: str, data: dict) -> dict:
         result = (
-            self._c.table("meeting_sessions")
-            .update(data)
-            .eq("tenant_id", self._tid)
-            .eq("id", session_id)
+            self._c.table("meeting_session_agenda_items")
+            .insert(
+                {
+                    "tenant_id": self._tid,
+                    "session_id": session_id,
+                    "meeting_id": meeting_id,
+                    **data,
+                }
+            )
             .execute()
         )
         return result.data[0] if result.data else {}
+
+    def update_session_agenda_item(self, session_id: str, item_id: str, data: dict) -> dict:
+        data["updated_at"] = datetime.now(UTC).isoformat()
+        result = (
+            self._c.table("meeting_session_agenda_items")
+            .update(data)
+            .eq("tenant_id", self._tid)
+            .eq("session_id", session_id)
+            .eq("id", item_id)
+            .execute()
+        )
+        return result.data[0] if result.data else {}
+
+    def delete_session_agenda_item(self, session_id: str, item_id: str) -> None:
+        (
+            self._c.table("meeting_session_agenda_items")
+            .delete()
+            .eq("tenant_id", self._tid)
+            .eq("session_id", session_id)
+            .eq("id", item_id)
+            .execute()
+        )
+
+    def snapshot_session_agenda(self, session: dict, agenda: list[dict]) -> None:
+        if self.get_session_agenda(session["id"]):
+            return
+        rows = [
+            {
+                "tenant_id": self._tid,
+                "meeting_id": session["meeting_id"],
+                "session_id": session["id"],
+                "source_agenda_item_id": item.get("id"),
+                "initiative_id": item.get("initiative_id"),
+                "text": item.get("text"),
+                "sort_order": item.get("sort_order") or index,
+            }
+            for index, item in enumerate(agenda, start=1)
+            if item.get("text")
+        ]
+        if not rows:
+            return
+        try:
+            self._c.table("meeting_session_agenda_items").insert(rows).execute()
+        except Exception as exc:
+            if self._is_missing_session_snapshot_tables(exc):
+                return
+            raise
+
+    def get_session_attendees(self, session_id: str) -> list[dict]:
+        try:
+            result = (
+                self._c.table("meeting_session_attendees")
+                .select("*, users(display_name, email, role)")
+                .eq("tenant_id", self._tid)
+                .eq("session_id", session_id)
+                .execute()
+            )
+        except Exception as exc:
+            if self._is_missing_session_snapshot_tables(exc):
+                return []
+            raise
+        return result.data or []
+
+    def add_session_attendee(self, session: dict, user_id: str) -> dict:
+        existing = (
+            self._c.table("meeting_session_attendees")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .eq("session_id", session["id"])
+            .eq("user_id", user_id)
+            .maybe_single()
+            .execute()
+        )
+        if existing and existing.data:
+            return existing.data
+        result = (
+            self._c.table("meeting_session_attendees")
+            .insert(
+                {
+                    "tenant_id": self._tid,
+                    "meeting_id": session["meeting_id"],
+                    "session_id": session["id"],
+                    "user_id": user_id,
+                }
+            )
+            .execute()
+        )
+        return result.data[0] if result.data else {}
+
+    def delete_session_attendee(self, session_id: str, attendee_id: str) -> None:
+        (
+            self._c.table("meeting_session_attendees")
+            .delete()
+            .eq("tenant_id", self._tid)
+            .eq("session_id", session_id)
+            .eq("id", attendee_id)
+            .execute()
+        )
+
+    def snapshot_session_attendees(self, session: dict, attendees: list[dict]) -> None:
+        if self.get_session_attendees(session["id"]):
+            return
+        rows = [
+            {
+                "tenant_id": self._tid,
+                "meeting_id": session["meeting_id"],
+                "session_id": session["id"],
+                "source_meeting_attendee_id": attendee.get("id"),
+                "user_id": attendee.get("user_id"),
+            }
+            for attendee in attendees
+            if attendee.get("user_id")
+        ]
+        if not rows:
+            return
+        try:
+            self._c.table("meeting_session_attendees").insert(rows).execute()
+        except Exception as exc:
+            if self._is_missing_session_snapshot_tables(exc):
+                return
+            raise
 
     def create_action_item(self, session_id: str, data: dict) -> dict:
         result = (
@@ -392,30 +631,169 @@ class MeetingRepository:
             .execute()
         )
 
-    def upsert_external_event(self, meeting_id: str, provider: str, data: dict) -> dict:
+    def upsert_external_event(
+        self,
+        meeting_id: str,
+        provider: str,
+        data: dict,
+        session_id: str | None = None,
+    ) -> dict:
         payload = {
             "tenant_id": self._tid,
             "meeting_id": meeting_id,
+            "session_id": session_id,
+            "provider": provider,
+            **data,
+            "updated_at": datetime.now(UTC).isoformat(),
+        }
+        try:
+            existing_query = (
+                self._c.table("meeting_external_events")
+                .select("id")
+                .eq("tenant_id", self._tid)
+                .eq("meeting_id", meeting_id)
+                .eq("provider", provider)
+            )
+            if session_id:
+                existing_query = existing_query.eq("session_id", session_id)
+            else:
+                existing_query = existing_query.is_("session_id", "null")
+            existing = existing_query.limit(1).execute()
+            if existing.data:
+                result = (
+                    self._c.table("meeting_external_events")
+                    .update(payload)
+                    .eq("tenant_id", self._tid)
+                    .eq("id", existing.data[0]["id"])
+                    .execute()
+                )
+            else:
+                result = self._c.table("meeting_external_events").insert(payload).execute()
+        except Exception as exc:
+            if not self._is_missing_external_event_columns(exc):
+                raise
+            legacy_payload = {
+                key: value
+                for key, value in payload.items()
+                if key
+                not in {
+                    "integration_connection_id",
+                    "scheduled_start_at",
+                    "scheduled_end_at",
+                    "time_zone",
+                    "session_id",
+                }
+            }
+            result = (
+                self._c.table("meeting_external_events")
+                .upsert(legacy_payload, on_conflict="meeting_id,provider")
+                .execute()
+            )
+        return result.data[0] if result.data else {}
+
+    def get_external_events(self, meeting_id: str, session_id: str | None = None) -> list[dict]:
+        query = (
+            self._c.table("meeting_external_events")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .eq("meeting_id", meeting_id)
+        )
+        if session_id:
+            query = query.or_(f"session_id.eq.{session_id},session_id.is.null")
+        try:
+            result = query.execute()
+        except Exception as exc:
+            if not session_id or not self._is_missing_external_event_columns(exc):
+                raise
+            result = (
+                self._c.table("meeting_external_events")
+                .select("*")
+                .eq("tenant_id", self._tid)
+                .eq("meeting_id", meeting_id)
+                .execute()
+            )
+        return result.data or []
+
+    def list_integration_connections(self) -> list[dict]:
+        try:
+            result = (
+                self._c.table("integration_connections")
+                .select(
+                    "id, tenant_id, provider, organizer_email, external_account_id, "
+                    "token_expires_at, scopes, sync_status, sync_error, last_synced_at, "
+                    "created_at, updated_at"
+                )
+                .eq("tenant_id", self._tid)
+                .order("provider")
+                .execute()
+            )
+        except Exception as exc:
+            if self._is_missing_integration_table(exc):
+                return []
+            raise
+        return result.data or []
+
+    def get_integration_connection(
+        self,
+        provider: str,
+        organizer_email: str | None = None,
+    ) -> dict | None:
+        query = (
+            self._c.table("integration_connections")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .eq("provider", provider)
+        )
+        if organizer_email:
+            query = query.eq("organizer_email", organizer_email)
+        try:
+            result = query.order("updated_at", desc=True).limit(1).execute()
+        except Exception as exc:
+            if self._is_missing_integration_table(exc):
+                return None
+            raise
+        return result.data[0] if result.data else None
+
+    def get_integration_connection_by_id(self, connection_id: str) -> dict | None:
+        try:
+            result = (
+                self._c.table("integration_connections")
+                .select("*")
+                .eq("tenant_id", self._tid)
+                .eq("id", connection_id)
+                .maybe_single()
+                .execute()
+            )
+        except Exception as exc:
+            if self._is_missing_integration_table(exc):
+                return None
+            raise
+        return result.data if result else None
+
+    def upsert_integration_connection(self, provider: str, data: dict) -> dict:
+        payload = {
+            "tenant_id": self._tid,
             "provider": provider,
             **data,
             "updated_at": datetime.now(UTC).isoformat(),
         }
         result = (
-            self._c.table("meeting_external_events")
-            .upsert(payload, on_conflict="meeting_id,provider")
+            self._c.table("integration_connections")
+            .upsert(payload, on_conflict="tenant_id,provider,organizer_email")
             .execute()
         )
         return result.data[0] if result.data else {}
 
-    def get_external_events(self, meeting_id: str) -> list[dict]:
+    def update_integration_connection(self, connection_id: str, data: dict) -> dict:
+        payload = {**data, "updated_at": datetime.now(UTC).isoformat()}
         result = (
-            self._c.table("meeting_external_events")
-            .select("*")
+            self._c.table("integration_connections")
+            .update(payload)
             .eq("tenant_id", self._tid)
-            .eq("meeting_id", meeting_id)
+            .eq("id", connection_id)
             .execute()
         )
-        return result.data or []
+        return result.data[0] if result.data else {}
 
     def list_action_items(self) -> list[dict]:
         result = (
@@ -598,3 +976,50 @@ class MeetingRepository:
                 }
             ]
         meeting["workstreams"] = workstreams
+
+    @staticmethod
+    def _is_missing_integration_table(exc: Exception) -> bool:
+        message = str(exc)
+        return "integration_connections" in message and (
+            "schema cache" in message or "PGRST205" in message
+        )
+
+    @staticmethod
+    def _is_missing_external_event_columns(exc: Exception) -> bool:
+        message = str(exc)
+        return "meeting_external_events" in message and (
+            "scheduled_start_at" in message
+            or "scheduled_end_at" in message
+            or "integration_connection_id" in message
+            or "time_zone" in message
+            or "session_id" in message
+        )
+
+    @staticmethod
+    def _is_missing_meeting_schedule_columns(exc: Exception) -> bool:
+        message = str(exc)
+        return "meetings" in message and any(
+            column in message
+            for column in (
+                "day_of_week",
+                "start_time",
+                "timezone",
+                "duration_minutes",
+                "one_off_date",
+                "series_end_date",
+            )
+        )
+
+    @staticmethod
+    def _is_missing_session_schedule_columns(exc: Exception) -> bool:
+        message = str(exc)
+        return "meeting_sessions" in message and (
+            "scheduled_start_at" in message or "scheduled_end_at" in message
+        )
+
+    @staticmethod
+    def _is_missing_session_snapshot_tables(exc: Exception) -> bool:
+        message = str(exc)
+        return (
+            "meeting_session_agenda_items" in message or "meeting_session_attendees" in message
+        ) and ("schema cache" in message or "PGRST205" in message or "does not exist" in message)

@@ -19,10 +19,13 @@ PORTFOLIO_CLEANUP_TABLES = [
     "action_items",
     "meeting_artifacts",
     "meeting_external_events",
+    "meeting_session_agenda_items",
+    "meeting_session_attendees",
     "agenda_items",
     "meeting_sessions",
     "meeting_initiatives",
     "meeting_attendees",
+    "meeting_workstreams",
     "meetings",
     "gate_submissions",
     "stage_gates",
@@ -397,6 +400,104 @@ class AdminService:
             "preserved_objects": PRESERVED_PORTFOLIO_CLEANUP_OBJECTS,
         }
 
+    def list_meeting_cleanup_candidates(self) -> dict[str, Any]:
+        response = (
+            self._c.table("meetings")
+            .select("id, name, recurrence, created_at, users!meetings_owner_id_fkey(display_name)")
+            .eq("tenant_id", self._tid)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        items = []
+        for meeting in response.data or []:
+            meeting_id = meeting["id"]
+            counts = self._meeting_cleanup_counts([meeting_id])
+            items.append(
+                {
+                    **meeting,
+                    "dependent_count": sum(counts.values()),
+                    "cleanup_counts": counts,
+                }
+            )
+        return {"items": items, "total": len(items)}
+
+    def delete_selected_meetings(
+        self,
+        meeting_ids: list[str],
+        confirm_phrase: str,
+    ) -> dict[str, Any]:
+        if confirm_phrase.strip() != "DELETE MEETINGS":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Confirmation phrase does not match",
+            )
+
+        normalized_ids = list(
+            dict.fromkeys([str(item) for item in meeting_ids if str(item).strip()])
+        )
+        if not normalized_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Select at least one meeting to delete",
+            )
+
+        existing = (
+            self._c.table("meetings")
+            .select("id, name")
+            .eq("tenant_id", self._tid)
+            .in_("id", normalized_ids)
+            .execute()
+        )
+        existing_rows = existing.data or []
+        existing_ids = [row["id"] for row in existing_rows]
+        missing_ids = [
+            meeting_id for meeting_id in normalized_ids if meeting_id not in existing_ids
+        ]
+        if missing_ids:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="One or more selected meetings were not found",
+            )
+
+        counts = self._meeting_cleanup_counts(existing_ids)
+        linked_records = self._meeting_artifact_linked_records(existing_ids, exclusive_only=True)
+        self._c.table("meetings").delete().eq("tenant_id", self._tid).in_(
+            "id", existing_ids
+        ).execute()
+
+        if linked_records["risk"]:
+            self._delete_by_ids("risks", linked_records["risk"])
+        if linked_records["action_item"]:
+            self._delete_by_ids("action_items", linked_records["action_item"])
+
+        if self._user_id:
+            self._audit_repo.log(
+                "delete",
+                "meeting_cleanup",
+                self._tid,
+                self._user_id,
+                {
+                    "meeting_ids": existing_ids,
+                    "meeting_names": [row.get("name") for row in existing_rows],
+                    "deleted_rows": counts,
+                    "linked_records": {
+                        "risk": len(linked_records["risk"]),
+                        "action_item": len(linked_records["action_item"]),
+                    },
+                },
+            )
+
+        return {
+            "deleted": True,
+            "meeting_ids": existing_ids,
+            "deleted_meetings": existing_rows,
+            "deleted_rows": counts,
+            "linked_records": {
+                "risk": len(linked_records["risk"]),
+                "action_item": len(linked_records["action_item"]),
+            },
+        }
+
     # ── Audit Logs ───────────────────────────────────────────────
 
     def list_audit_logs(self, limit: int = 100) -> dict[str, Any]:
@@ -473,8 +574,11 @@ class AdminService:
                 "meetings",
                 "meeting_attendees",
                 "meeting_initiatives",
+                "meeting_workstreams",
                 "meeting_external_events",
                 "meeting_artifacts",
+                "meeting_session_agenda_items",
+                "meeting_session_attendees",
                 "meeting_sessions",
                 "agenda_items",
             ],
@@ -486,3 +590,117 @@ class AdminService:
             key: sum(table_counts.get(table, 0) for table in tables)
             for key, tables in groups.items()
         }
+
+    def _meeting_cleanup_counts(self, meeting_ids: list[str]) -> dict[str, int]:
+        tables = [
+            "meetings",
+            "meeting_attendees",
+            "meeting_initiatives",
+            "meeting_workstreams",
+            "meeting_external_events",
+            "meeting_artifacts",
+            "meeting_session_agenda_items",
+            "meeting_session_attendees",
+            "meeting_sessions",
+            "agenda_items",
+        ]
+        counts = {table: self._count_rows_for_meetings(table, meeting_ids) for table in tables}
+        session_ids = self._session_ids_for_meetings(meeting_ids)
+        counts["action_items"] = self._count_rows_for_sessions("action_items", session_ids)
+        linked = self._meeting_artifact_linked_records(meeting_ids, exclusive_only=True)
+        counts["linked_risks"] = len(linked["risk"])
+        counts["linked_action_items"] = len(linked["action_item"])
+        return counts
+
+    def _meeting_artifact_linked_records(
+        self,
+        meeting_ids: list[str],
+        *,
+        exclusive_only: bool = False,
+    ) -> dict[str, list[str]]:
+        if not meeting_ids:
+            return {"risk": [], "action_item": []}
+        response = (
+            self._c.table("meeting_artifacts")
+            .select("linked_record_type, linked_record_id")
+            .eq("tenant_id", self._tid)
+            .in_("meeting_id", meeting_ids)
+            .execute()
+        )
+        records = {"risk": [], "action_item": []}
+        for row in response.data or []:
+            linked_type = row.get("linked_record_type")
+            linked_id = row.get("linked_record_id")
+            if linked_type in records and linked_id:
+                records[linked_type].append(str(linked_id))
+        return {
+            key: self._exclusive_linked_record_ids(key, list(dict.fromkeys(values)), meeting_ids)
+            if exclusive_only
+            else list(dict.fromkeys(values))
+            for key, values in records.items()
+        }
+
+    def _exclusive_linked_record_ids(
+        self,
+        linked_type: str,
+        linked_ids: list[str],
+        selected_meeting_ids: list[str],
+    ) -> list[str]:
+        if not linked_ids:
+            return []
+        response = (
+            self._c.table("meeting_artifacts")
+            .select("linked_record_id, meeting_id")
+            .eq("tenant_id", self._tid)
+            .eq("linked_record_type", linked_type)
+            .in_("linked_record_id", linked_ids)
+            .execute()
+        )
+        selected = set(selected_meeting_ids)
+        safe_ids = set(linked_ids)
+        for row in response.data or []:
+            linked_id = str(row.get("linked_record_id") or "")
+            if linked_id and row.get("meeting_id") not in selected:
+                safe_ids.discard(linked_id)
+        return [linked_id for linked_id in linked_ids if linked_id in safe_ids]
+
+    def _session_ids_for_meetings(self, meeting_ids: list[str]) -> list[str]:
+        if not meeting_ids:
+            return []
+        response = (
+            self._c.table("meeting_sessions")
+            .select("id")
+            .eq("tenant_id", self._tid)
+            .in_("meeting_id", meeting_ids)
+            .execute()
+        )
+        return [row["id"] for row in response.data or []]
+
+    def _count_rows_for_meetings(self, table: str, meeting_ids: list[str]) -> int:
+        if not meeting_ids:
+            return 0
+        response = (
+            self._c.table(table)
+            .select("id", count="exact")
+            .eq("tenant_id", self._tid)
+            .in_("meeting_id" if table != "meetings" else "id", meeting_ids)
+            .execute()
+        )
+        return response.count or 0
+
+    def _count_rows_for_sessions(self, table: str, session_ids: list[str]) -> int:
+        if not session_ids:
+            return 0
+        response = (
+            self._c.table(table)
+            .select("id", count="exact")
+            .eq("tenant_id", self._tid)
+            .in_("session_id", session_ids)
+            .execute()
+        )
+        return response.count or 0
+
+    def _delete_by_ids(self, table: str, ids: list[str]) -> None:
+        if not ids:
+            return
+        self._c.table(table).delete().eq("tenant_id", self._tid).in_("id", ids).execute()

@@ -1079,6 +1079,10 @@ def seed_meetings(
             "workstream_id": None,
             "scope": "all",
             "recurrence": "weekly",
+            "day_of_week": 0,
+            "start_time": "09:00",
+            "timezone": "UTC",
+            "duration_minutes": 60,
             "description": (
                 "Weekly steering cadence for portfolio risks, value delivery, and decisions."
             ),
@@ -1118,6 +1122,10 @@ def seed_meetings(
             "workstream_id": ws_ids.get("North Asia"),
             "scope": "workstream",
             "recurrence": "weekly",
+            "day_of_week": 2,
+            "start_time": "14:00",
+            "timezone": "UTC",
+            "duration_minutes": 60,
             "description": (
                 "Workstream review for North Asia growth initiatives and account execution."
             ),
@@ -1168,11 +1176,15 @@ def seed_meetings(
                 "tenant_id": org_id,
                 "name": meeting["name"],
                 "workstream_id": meeting["workstream_id"],
-                "scope": meeting["scope"],
-                "recurrence": meeting["recurrence"],
-                "description": meeting["description"],
-                "owner_id": user_ids.get(str(meeting["owner"])),
-            }).execute()
+                    "scope": meeting["scope"],
+                    "recurrence": meeting["recurrence"],
+                    "day_of_week": meeting["day_of_week"],
+                    "start_time": meeting["start_time"],
+                    "timezone": meeting["timezone"],
+                    "duration_minutes": meeting["duration_minutes"],
+                    "description": meeting["description"],
+                    "owner_id": user_ids.get(str(meeting["owner"])),
+                }).execute()
             meeting_id = inserted.data[0]["id"]
 
         for attendee in meeting["attendees"]:

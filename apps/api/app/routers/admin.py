@@ -22,6 +22,11 @@ class PortfolioCleanupRequest(BaseModel):
     confirm_slug: str = Field(..., min_length=2, max_length=80)
 
 
+class MeetingBulkCleanupRequest(BaseModel):
+    meeting_ids: list[str] = Field(..., min_length=1, max_length=100)
+    confirm_phrase: str = Field(..., min_length=1, max_length=80)
+
+
 class StrategicParameterReferenceResetRequest(BaseModel):
     parameter_type: Literal["market", "theme", "tag"]
     value: str = Field(..., min_length=1, max_length=300)
@@ -75,6 +80,23 @@ async def delete_portfolio_data_action(
 ) -> dict[str, object]:
     """Delete current-tenant portfolio data via an action endpoint for browser clients."""
     return svc.delete_portfolio_data(body.confirm_slug)
+
+
+@router.get("/meeting-cleanup-candidates")
+async def list_meeting_cleanup_candidates(
+    svc: Annotated[AdminService, Depends(_svc)],
+) -> dict[str, object]:
+    """List current-tenant meeting series available for selective cleanup."""
+    return svc.list_meeting_cleanup_candidates()
+
+
+@router.post("/meeting-cleanup/delete")
+async def delete_selected_meetings(
+    body: MeetingBulkCleanupRequest,
+    svc: Annotated[AdminService, Depends(_svc)],
+) -> dict[str, object]:
+    """Delete selected current-tenant meeting series and dependent meeting data."""
+    return svc.delete_selected_meetings(body.meeting_ids, body.confirm_phrase)
 
 
 @router.put("/settings")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from datetime import date, timedelta
 from uuid import uuid4
 
 import pytest
@@ -207,9 +208,12 @@ def test_meeting_artifacts_actions_risks_carry_forward_and_minutes(
     assert send_response.json()["minutes_status"] == "sent"
 
     client.post(f"/meetings/sessions/{session['id']}/end", json={}, headers=auth(admin_token))
+    next_session_date = (
+        date.fromisoformat(session["session_date"]) + timedelta(days=1)
+    ).isoformat()
     next_session = client.post(
         f"/meetings/{meeting['id']}/sessions/start",
-        json={},
+        json={"session_date": next_session_date},
         headers=auth(admin_token),
     ).json()
     next_detail = client.get(
@@ -233,7 +237,11 @@ def test_microsoft_external_event_gracefully_degrades(admin_token: str) -> None:
     meeting, _agenda, _session = create_meeting_with_session(admin_token, initiative["id"])
     response = client.post(
         f"/meetings/{meeting['id']}/external-events/microsoft",
-        json={"time_zone": "UTC"},
+        json={
+            "start_date_time": "2026-06-10T09:00:00",
+            "end_date_time": "2026-06-10T10:00:00",
+            "time_zone": "UTC",
+        },
         headers=auth(admin_token),
     )
     assert response.status_code == 200, response.text

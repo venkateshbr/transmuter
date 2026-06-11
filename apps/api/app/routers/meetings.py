@@ -26,6 +26,7 @@ from app.domain.meetings import (
     MeetingListResponse,
     MeetingMinutesGenerateRequest,
     MeetingTranscriptImport,
+    MeetingTranscriptSyncResponse,
     MeetingUpdate,
     SessionStartRequest,
     SessionUpdate,
@@ -109,6 +110,86 @@ async def create_action_item(
     return svc.create_action_item(session_id, data)
 
 
+@router.post("/sessions/{session_id}/agenda", status_code=201)
+async def create_session_agenda_item(
+    session_id: str,
+    body: AgendaItemCreate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[MeetingService, Depends(_svc)],
+) -> dict:
+    assert_can_manage_initiatives(current_user)
+    return svc.create_session_agenda_item(session_id, body)
+
+
+@router.put("/sessions/{session_id}/agenda/{item_id}")
+async def update_session_agenda_item(
+    session_id: str,
+    item_id: str,
+    body: AgendaItemUpdate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[MeetingService, Depends(_svc)],
+) -> dict:
+    assert_can_manage_initiatives(current_user)
+    return svc.update_session_agenda_item(session_id, item_id, body)
+
+
+@router.post("/sessions/{session_id}/agenda/suggestions", response_model=AgendaSuggestionsResponse)
+async def suggest_session_agenda_items(
+    session_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[MeetingService, Depends(_svc)],
+) -> AgendaSuggestionsResponse:
+    assert_can_manage_initiatives(current_user)
+    return svc.suggest_session_agenda_items(session_id)
+
+
+@router.delete("/sessions/{session_id}/agenda/{item_id}", status_code=204)
+async def delete_session_agenda_item(
+    session_id: str,
+    item_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[MeetingService, Depends(_svc)],
+) -> None:
+    assert_can_manage_initiatives(current_user)
+    svc.delete_session_agenda_item(session_id, item_id)
+
+
+@router.post("/sessions/{session_id}/attendees", status_code=201)
+async def add_session_attendee(
+    session_id: str,
+    body: AttendeeCreate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[MeetingService, Depends(_svc)],
+) -> dict:
+    assert_can_manage_initiatives(current_user)
+    return svc.add_session_attendee(session_id, body)
+
+
+@router.delete("/sessions/{session_id}/attendees/{attendee_id}", status_code=204)
+async def delete_session_attendee(
+    session_id: str,
+    attendee_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[MeetingService, Depends(_svc)],
+) -> None:
+    assert_can_manage_initiatives(current_user)
+    svc.delete_session_attendee(session_id, attendee_id)
+
+
+@router.post("/sessions/{session_id}/external-events/microsoft")
+async def create_session_microsoft_external_event(
+    session_id: str,
+    body: MeetingExternalEventCreate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[MeetingService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
+) -> dict:
+    assert_can_manage_initiatives(current_user)
+    assert_can_view_session(client, current_user, session_id)
+    session = svc.get_session_detail(session_id)
+    return svc.create_microsoft_event(session["meeting_id"], body, session_id=session_id)
+
+
 @router.get("/sessions/{session_id}/artifacts")
 async def list_session_artifacts(
     session_id: str,
@@ -140,6 +221,19 @@ async def import_session_transcript(
 ) -> dict:
     assert_can_manage_initiatives(current_user)
     return svc.import_transcript(session_id, body)
+
+
+@router.post(
+    "/sessions/{session_id}/transcript/sync/microsoft",
+    response_model=MeetingTranscriptSyncResponse,
+)
+async def sync_microsoft_session_transcript(
+    session_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[MeetingService, Depends(_svc)],
+) -> MeetingTranscriptSyncResponse:
+    assert_can_manage_initiatives(current_user)
+    return svc.sync_microsoft_transcript(session_id)
 
 
 @router.post("/sessions/{session_id}/minutes/generate")
@@ -237,6 +331,19 @@ async def start_session(
     """Start a date-specific live session or resume that date's session."""
     assert_can_manage_initiatives(current_user)
     return svc.start_session(meeting_id, body)
+
+
+@router.get("/{meeting_id}/sessions")
+async def list_meeting_sessions_window(
+    meeting_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[MeetingService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
+    anchor_date: str | None = None,
+    page_size: int = 3,
+) -> dict:
+    assert_can_view_meeting(client, current_user, meeting_id)
+    return svc.get_sessions_window(meeting_id, anchor_date=anchor_date, page_size=page_size)
 
 
 @router.post("/{meeting_id}/external-events/microsoft")
