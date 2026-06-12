@@ -59,6 +59,8 @@ class MeetingProvider(Protocol):
 
     def sync_transcript(self, external_event: dict) -> TranscriptSyncResult: ...
 
+    def cancel_invite(self, external_event: dict) -> None: ...
+
 
 class MicrosoftGraphMeetingProvider:
     def __init__(
@@ -111,6 +113,21 @@ class MicrosoftGraphMeetingProvider:
 
     def get_join_url(self, external_event: dict) -> str | None:
         return external_event.get("join_url")
+
+    def cancel_invite(self, external_event: dict) -> None:
+        external_event_id = external_event.get("external_event_id")
+        if not external_event_id:
+            raise MeetingProviderConfigurationError(
+                "The synced Teams event does not include a Microsoft event id."
+            )
+        access_token = self._access_token()
+        user_id = self._graph_user_id(external_event.get("organizer_email"))
+        response = self._http.delete(
+            f"https://graph.microsoft.com/v1.0/{user_id}/events/{quote(str(external_event_id), safe='')}",
+            headers=self._headers(access_token),
+            timeout=10,
+        )
+        response.raise_for_status()
 
     def sync_transcript(self, external_event: dict) -> TranscriptSyncResult:
         access_token = self._access_token()
@@ -284,6 +301,11 @@ class DisabledMeetingBotProvider:
 
     def get_join_url(self, external_event: dict) -> str | None:
         return None
+
+    def cancel_invite(self, external_event: dict) -> None:
+        raise MeetingProviderConfigurationError(
+            f"{self._provider_name} meeting bot provider is disabled."
+        )
 
     def sync_transcript(self, external_event: dict) -> TranscriptSyncResult:
         return TranscriptSyncResult(

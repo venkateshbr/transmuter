@@ -36,6 +36,7 @@ from app.domain.meetings import (
     MeetingExternalEventCreate,
     MeetingInitiativeCreate,
     MeetingMinutesGenerateRequest,
+    MeetingSeriesCancelResponse,
     MeetingTranscriptImport,
     MeetingTranscriptSyncResponse,
     MeetingUpdate,
@@ -137,6 +138,105 @@ class MeetingService:
             self._repo.set_attendees(meeting_id, self._normalized_ids(participant_user_ids))
         return self.get_meeting_detail(meeting_id)
 
+    def cancel_meeting_series(self, meeting_id: str) -> MeetingSeriesCancelResponse:
+        meeting = self._assert_meeting(meeting_id)
+        if meeting.get("status") == "cancelled":
+            return MeetingSeriesCancelResponse(
+                meeting=self.get_meeting_detail(meeting_id),
+                teams_status="already_cancelled",
+                teams_detail="Meeting series was already cancelled.",
+                cancelled_sessions=0,
+            )
+
+        events = [
+            event
+            for event in self._repo.get_external_events(meeting_id)
+            if event.get("provider") == "microsoft"
+        ]
+        teams_status = "no_external_event"
+        teams_detail = "No synced Microsoft Teams event was found for this series."
+
+        for event in events:
+            if not event.get("external_event_id"):
+                if event.get("id"):
+                    self._repo.update_external_event(
+                        event["id"],
+                        {
+                            "sync_status": "cancelled",
+                            "sync_error": None,
+                            "last_synced_at": datetime.now(UTC).isoformat(),
+                        },
+                    )
+                teams_status = "cancelled"
+                teams_detail = (
+                    "No Microsoft event id was present; platform event state was cancelled."
+                )
+                continue
+
+            connection = self._microsoft_connection_for_event(event)
+            if not connection:
+                if event.get("id"):
+                    self._repo.update_external_event(
+                        event["id"],
+                        {
+                            "sync_status": "not_configured",
+                            "sync_error": "Microsoft Graph is not connected for the event organizer.",
+                        },
+                    )
+                teams_status = "not_configured"
+                teams_detail = "Microsoft Graph is not connected for the event organizer."
+                continue
+
+            try:
+                MicrosoftGraphMeetingProvider(
+                    connection,
+                    self._integration_secret_repo(),
+                ).cancel_invite(event)
+            except MeetingProviderConfigurationError as exc:
+                teams_status = "not_configured"
+                teams_detail = str(exc)
+                if event.get("id"):
+                    self._repo.update_external_event(
+                        event["id"],
+                        {"sync_status": "not_configured", "sync_error": teams_detail},
+                    )
+            except Exception as exc:  # noqa: BLE001 - platform cancellation must not block.
+                teams_status = "failed"
+                teams_detail = str(exc)[:500]
+                if event.get("id"):
+                    self._repo.update_external_event(
+                        event["id"],
+                        {"sync_status": "failed", "sync_error": teams_detail},
+                    )
+            else:
+                teams_status = "cancelled"
+                teams_detail = "Microsoft Teams event cancellation was sent."
+                if event.get("id"):
+                    self._repo.update_external_event(
+                        event["id"],
+                        {
+                            "sync_status": "cancelled",
+                            "sync_error": None,
+                            "last_synced_at": datetime.now(UTC).isoformat(),
+                        },
+                    )
+
+        self._repo.update(
+            meeting_id,
+            {
+                "status": "cancelled",
+                "series_end_date": date.today().isoformat(),
+                "updated_at": datetime.now(UTC).isoformat(),
+            },
+        )
+        cancelled_sessions = self._repo.cancel_open_sessions(meeting_id)
+        return MeetingSeriesCancelResponse(
+            meeting=self.get_meeting_detail(meeting_id),
+            teams_status=teams_status,
+            teams_detail=teams_detail,
+            cancelled_sessions=cancelled_sessions,
+        )
+
     def delete_meeting(self, meeting_id: str) -> None:
         self._assert_meeting(meeting_id)
         self._repo.delete(meeting_id)
@@ -213,6 +313,15 @@ class MeetingService:
         page_size: int = 3,
     ) -> dict:
         meeting = self._assert_meeting(meeting_id)
+        if meeting.get("status") == "cancelled":
+            sessions = self._repo.get_sessions(meeting_id)
+            return {
+                "anchor_date": anchor_date or date.today().isoformat(),
+                "page_size": max(1, min(page_size, 12)),
+                "items": sessions,
+                "previous_anchor_date": None,
+                "next_anchor_date": None,
+            }
         anchor = self._parse_date(anchor_date or date.today().isoformat(), "anchor_date")
         size = max(1, min(page_size, 12))
         session_dates = self._session_window_dates(meeting, anchor, size)
@@ -236,6 +345,11 @@ class MeetingService:
 
     def start_session(self, meeting_id: str, data: SessionStartRequest | None = None) -> dict:
         meeting = self._assert_meeting(meeting_id)
+        if meeting.get("status") == "cancelled":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cancelled meeting series cannot start new sessions.",
+            )
         session_date = (data.session_date if data else None) or date.today().isoformat()
         parsed = self._parse_date(session_date, "session_date")
 

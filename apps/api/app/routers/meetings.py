@@ -25,6 +25,7 @@ from app.domain.meetings import (
     MeetingInitiativeCreate,
     MeetingListResponse,
     MeetingMinutesGenerateRequest,
+    MeetingSeriesCancelResponse,
     MeetingTranscriptImport,
     MeetingTranscriptSyncResponse,
     MeetingUpdate,
@@ -309,6 +310,16 @@ async def update_meeting(
 ) -> dict:
     assert_can_manage_initiatives(current_user)
     return svc.update_meeting(meeting_id, body)
+
+
+@router.post("/{meeting_id}/cancel", response_model=MeetingSeriesCancelResponse)
+async def cancel_meeting_series(
+    meeting_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[MeetingService, Depends(_svc)],
+) -> MeetingSeriesCancelResponse:
+    assert_can_manage_initiatives(current_user)
+    return svc.cancel_meeting_series(meeting_id)
 
 
 @router.delete("/{meeting_id}", status_code=204)

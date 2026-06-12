@@ -36,6 +36,7 @@ class FakeHttp:
     def __init__(self) -> None:
         self.posts: list[dict] = []
         self.gets: list[dict] = []
+        self.deletes: list[dict] = []
 
     def post(self, url: str, **kwargs) -> FakeResponse:  # noqa: ANN003
         self.posts.append({"url": url, **kwargs})
@@ -55,6 +56,10 @@ class FakeHttp:
         return FakeResponse(
             text="WEBVTT\n\n1\n00:00:00.000 --> 00:00:02.000\n<v Vishwa>Welcome team</v>"
         )
+
+    def delete(self, url: str, **kwargs) -> FakeResponse:  # noqa: ANN003
+        self.deletes.append({"url": url, **kwargs})
+        return FakeResponse()
 
 
 def test_graph_provider_refreshes_token_and_sends_attendees(monkeypatch) -> None:
@@ -158,6 +163,31 @@ def test_graph_provider_syncs_and_normalizes_vtt(monkeypatch) -> None:
 
     assert result.status == "synced"
     assert result.transcript_text == "Vishwa: Welcome team"
+
+
+def test_graph_provider_deletes_event_on_cancel(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "encryption_key", "test-encryption-key")
+    repo = FakeRepo()
+    http = FakeHttp()
+    connection = {
+        "id": "connection-1",
+        "organizer_email": "organizer@example.com",
+        "access_token_encrypted": encrypt_secret("valid-token"),
+        "refresh_token_encrypted": encrypt_secret("refresh-token"),
+        "token_expires_at": (datetime.now(UTC) + timedelta(minutes=30)).isoformat(),
+    }
+
+    provider = MicrosoftGraphMeetingProvider(connection, repo, http)
+    provider.cancel_invite(
+        {
+            "external_event_id": "event-1",
+            "organizer_email": "organizer@example.com",
+        }
+    )
+
+    assert http.deletes
+    assert http.deletes[0]["url"].endswith("/users/organizer%40example.com/events/event-1")
+    assert http.deletes[0]["headers"]["Authorization"] == "Bearer valid-token"
 
 
 def test_normalize_vtt_transcript_strips_cues_and_duplicates() -> None:

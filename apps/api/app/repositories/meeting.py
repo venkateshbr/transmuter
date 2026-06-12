@@ -16,6 +16,7 @@ class MeetingRepository:
             self._c.table("meetings")
             .select("*, users!meetings_owner_id_fkey(display_name), workstreams(name)")
             .eq("tenant_id", self._tid)
+            .neq("status", "cancelled")
             .execute()
         )
         meetings = result.data or []
@@ -86,6 +87,7 @@ class MeetingRepository:
                     "duration_minutes",
                     "one_off_date",
                     "series_end_date",
+                    "status",
                 }
             }
             result = (
@@ -375,6 +377,22 @@ class MeetingRepository:
                 .execute()
             )
         return result.data[0] if result.data else {}
+
+    def cancel_open_sessions(self, meeting_id: str) -> int:
+        result = (
+            self._c.table("meeting_sessions")
+            .update(
+                {
+                    "status": "cancelled",
+                    "updated_at": datetime.now(UTC).isoformat(),
+                }
+            )
+            .eq("tenant_id", self._tid)
+            .eq("meeting_id", meeting_id)
+            .in_("status", ["scheduled", "in_progress"])
+            .execute()
+        )
+        return len(result.data or [])
 
     def get_session_agenda(self, session_id: str) -> list[dict]:
         try:
@@ -689,6 +707,17 @@ class MeetingRepository:
                 .upsert(legacy_payload, on_conflict="meeting_id,provider")
                 .execute()
             )
+        return result.data[0] if result.data else {}
+
+    def update_external_event(self, event_id: str, data: dict) -> dict:
+        payload = {**data, "updated_at": datetime.now(UTC).isoformat()}
+        result = (
+            self._c.table("meeting_external_events")
+            .update(payload)
+            .eq("tenant_id", self._tid)
+            .eq("id", event_id)
+            .execute()
+        )
         return result.data[0] if result.data else {}
 
     def get_external_events(self, meeting_id: str, session_id: str | None = None) -> list[dict]:
@@ -1007,6 +1036,7 @@ class MeetingRepository:
                 "duration_minutes",
                 "one_off_date",
                 "series_end_date",
+                "status",
             )
         )
 

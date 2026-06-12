@@ -23,17 +23,31 @@ import { forkJoin } from 'rxjs';
               {{ m.name }}<span class="text-[var(--t-accent)]">.</span>
             </h1>
             <p class="text-[var(--t-text-secondary)]">{{ m.description }}</p>
+            @if (m.status === 'cancelled') {
+              <span class="inline-flex border border-red-500/30 bg-red-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-red-500">
+                Cancelled series
+              </span>
+            }
+            @if (meetingNotice()) {
+              <p class="mt-2 max-w-3xl border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-3 text-sm font-bold text-[var(--t-text-primary)]">
+                {{ meetingNotice() }}
+              </p>
+            }
           </div>
           <div class="flex gap-2">
-            <button (click)="openMicrosoftInvite()" class="btn-secondary text-sm flex items-center gap-2" aria-label="Create Microsoft Teams invite">
-              <span class="material-icons text-sm">video_call</span>
-              Teams Invite
-            </button>
+            @if (m.status !== 'cancelled') {
+              <button (click)="openMicrosoftInvite()" class="btn-secondary text-sm flex items-center gap-2" aria-label="Create Microsoft Teams invite">
+                <span class="material-icons text-sm">video_call</span>
+                Teams Invite
+              </button>
+            }
             <button (click)="openEdit(m)" class="btn-ghost text-sm" aria-label="Edit meeting series">Edit Series</button>
-            <button (click)="openStartSession()" class="btn-primary text-sm flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-              Start Session
-            </button>
+            @if (m.status !== 'cancelled') {
+              <button (click)="openStartSession()" class="btn-primary text-sm flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Start Session
+              </button>
+            }
           </div>
         </div>
 
@@ -72,7 +86,9 @@ import { forkJoin } from 'rxjs';
                 }
               }
             </div>
-            <button (click)="openMicrosoftInvite()" class="btn-ghost text-xs" aria-label="Sync Microsoft Teams invite">Sync Invite</button>
+            @if (m.status !== 'cancelled') {
+              <button (click)="openMicrosoftInvite()" class="btn-ghost text-xs" aria-label="Sync Microsoft Teams invite">Sync Invite</button>
+            }
           </div>
         }
 
@@ -397,10 +413,23 @@ import { forkJoin } from 'rxjs';
                   }
                 </div>
               </fieldset>
+              @if (cancelMeetingError()) {
+                <p class="text-sm font-bold text-red-500">{{ cancelMeetingError() }}</p>
+              }
             </div>
-            <div class="flex justify-end gap-3 border-t border-[var(--t-border)] p-6">
-              <button type="button" (click)="editing.set(false)" class="btn-ghost text-sm">Cancel</button>
-              <button type="submit" class="btn-primary text-sm">Save changes</button>
+            <div class="flex flex-col gap-3 border-t border-[var(--t-border)] p-6 md:flex-row md:items-center md:justify-between">
+              <button
+                type="button"
+                (click)="cancelMeetingSeries()"
+                [disabled]="cancellingMeeting() || meeting()?.status === 'cancelled'"
+                class="border border-red-500/40 px-4 py-2 text-xs font-black uppercase tracking-widest text-red-500 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Cancel meeting series">
+                {{ cancellingMeeting() ? 'Cancelling...' : 'Cancel series' }}
+              </button>
+              <div class="flex justify-end gap-3">
+                <button type="button" (click)="editing.set(false)" class="btn-ghost text-sm">Close</button>
+                <button type="submit" class="btn-primary text-sm">Save changes</button>
+              </div>
             </div>
           </form>
         </div>
@@ -546,9 +575,12 @@ export class MeetingDetailComponent implements OnInit {
   showMicrosoftInvite = signal(false);
   savingSuggestions = signal(false);
   syncingMicrosoftInvite = signal(false);
+  cancellingMeeting = signal(false);
   suggestionsError = signal<string | null>(null);
   startSessionError = signal<string | null>(null);
   microsoftInviteError = signal<string | null>(null);
+  cancelMeetingError = signal<string | null>(null);
+  meetingNotice = signal<string | null>(null);
   showAgendaForm = signal(false);
   showAttendeeForm = signal(false);
   showInitiativeForm = signal(false);
@@ -627,6 +659,7 @@ export class MeetingDetailComponent implements OnInit {
         .map((attendee: any) => attendee.user_id)
         .filter(Boolean),
     };
+    this.cancelMeetingError.set(null);
     this.editing.set(true);
   }
 
@@ -640,6 +673,35 @@ export class MeetingDetailComponent implements OnInit {
     this.api.put<any>(`/meetings/${this.meetingId}`, payload).subscribe(m => {
       this.meeting.set(m);
       this.editing.set(false);
+    });
+  }
+
+  cancelMeetingSeries() {
+    const m = this.meeting();
+    if (!m || this.cancellingMeeting() || m.status === 'cancelled') return;
+    const confirmed = window.confirm(
+      'Cancel this meeting series? This will cancel future platform sessions and send the Microsoft Teams cancellation when a synced Teams event exists.'
+    );
+    if (!confirmed) return;
+
+    this.cancellingMeeting.set(true);
+    this.cancelMeetingError.set(null);
+    this.meetingNotice.set(null);
+    this.api.post<any>(`/meetings/${this.meetingId}/cancel`, {}).subscribe({
+      next: res => {
+        this.cancellingMeeting.set(false);
+        this.editing.set(false);
+        this.meeting.set(res.meeting);
+        if (res.teams_status === 'failed' || res.teams_status === 'not_configured') {
+          this.meetingNotice.set(res.teams_detail || 'The series was cancelled, but Teams cancellation was not completed.');
+        } else {
+          this.meetingNotice.set(res.teams_detail || 'Meeting series cancelled.');
+        }
+      },
+      error: err => {
+        this.cancellingMeeting.set(false);
+        this.cancelMeetingError.set(err.error?.detail || 'Could not cancel meeting series.');
+      },
     });
   }
 
