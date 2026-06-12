@@ -1,5 +1,6 @@
 import { Component, Input, OnInit, inject, signal, computed, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../../../../core/services/api.service';
 import { environment } from '../../../../../environments/environment';
@@ -58,6 +59,7 @@ interface FinancialGrid {
   initiative_id: string;
   definitions?: FinancialMetricDefinition[];
   scenarios?: FinancialScenarioDefinition[];
+  benefit_lines?: FinancialBenefitLine[];
   values?: ConfigurableMetricValue[];
   settings?: { fiscal_year_start_month: number; reporting_currency: string };
   entries: FinancialEntry[];
@@ -110,6 +112,18 @@ interface ConfigurableMetricValue {
   value: string;
   status: 'draft' | 'submitted' | 'approved';
   note?: string | null;
+}
+
+interface FinancialBenefitLine {
+  id: string;
+  metric_definition_id: string;
+  name: string;
+  description?: string | null;
+  impact_type?: 'recurring' | 'one_time' | null;
+  timing?: string | null;
+  confidence?: string | number | null;
+  show_in_summary: boolean;
+  display_order: number;
 }
 
 interface InitiativeFinancialSelections {
@@ -207,6 +221,7 @@ interface GridMetric {
   costCategoryKey?: string;
   metricValueKey?: string;
   metricDefinitionId?: string;
+  benefitLineId?: string | null;
   scenarioId?: string;
   metricScenario?: FinancialScenario;
   isRecurring?: boolean;
@@ -218,7 +233,7 @@ interface GridMetric {
 @Component({
   selector: 'app-financials-tab',
   standalone: true,
-  imports: [CommonModule, HotTableModule, RouterLink],
+  imports: [CommonModule, FormsModule, HotTableModule, RouterLink],
   template: `
     <div class="space-y-6">
       <div class="flex flex-wrap items-center justify-between gap-3">
@@ -319,6 +334,31 @@ interface GridMetric {
           <div class="mb-4 border-l-4 border-[var(--t-accent)] bg-[var(--t-surface-raised)] px-4 py-3 text-sm" style="color:var(--t-text-secondary)">
             <span class="font-bold" style="color:var(--t-text-primary)">Financials locked.</span>
             {{ grid()?.lock_reason || 'Changes require transformation office approval.' }}
+          </div>
+        }
+
+        @if (!isLocked() && benefitMetricDefinitions().length) {
+          <div class="mb-4 grid gap-3 border bg-[var(--t-surface-raised)] p-4 lg:grid-cols-[180px_1fr_120px_auto]" style="border-color:var(--t-border)">
+            <label class="grid gap-1">
+              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Benefit Metric</span>
+              <select class="input-field py-2 text-xs" [ngModel]="newBenefitLineMetricId()" (ngModelChange)="newBenefitLineMetricId.set($event)" aria-label="Benefit line metric">
+                <option value="">Select metric</option>
+                @for (metric of benefitMetricDefinitions(); track metric.id) {
+                  <option [value]="metric.id">{{ metric.label }}</option>
+                }
+              </select>
+            </label>
+            <label class="grid gap-1">
+              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Named Benefit Line</span>
+              <input class="input-field py-2 text-xs font-bold" [ngModel]="newBenefitLineName()" (ngModelChange)="newBenefitLineName.set($event)" aria-label="Benefit line name" placeholder="Revenue uplift from improved retention">
+            </label>
+            <label class="grid gap-1">
+              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Confidence %</span>
+              <input type="number" min="0" max="100" class="input-field py-2 text-xs" [ngModel]="newBenefitLineConfidence()" (ngModelChange)="newBenefitLineConfidence.set(numberValueOrNull($event))" aria-label="Benefit line confidence">
+            </label>
+            <div class="flex items-end">
+              <button type="button" class="btn-primary px-4 py-2 text-[10px]" [disabled]="!canAddBenefitLine()" (click)="addBenefitLine()" aria-label="Add benefit line">Add Line</button>
+            </div>
           </div>
         }
 
@@ -441,6 +481,9 @@ export class FinancialsTabComponent implements OnInit {
   costLines = signal<CostLine[]>([]);
   isEditing = signal(false);
   scenario = signal<FinancialScenario>('base');
+  newBenefitLineMetricId = signal('');
+  newBenefitLineName = signal('');
+  newBenefitLineConfidence = signal<number | null>(null);
   readonly scenarios: { id: FinancialScenario; label: string }[] = [
     { id: 'base', label: 'Base' },
     { id: 'high', label: 'High' },
@@ -501,21 +544,29 @@ export class FinancialsTabComponent implements OnInit {
     const cleanDefinitions = this.grid()?.definitions || [];
     const cleanScenario = this.selectedScenarioDefinition();
     if (cleanDefinitions.length && cleanScenario) {
+      const benefitLines = this.grid()?.benefit_lines || [];
       const metricRows = cleanDefinitions
         .filter(definition => definition.is_active !== false)
         .sort((a, b) => (a.group_key || '').localeCompare(b.group_key || '') || a.label.localeCompare(b.label))
-        .map((definition): GridMetric => ({
-          category: this.metricCategoryLabel(definition),
-          label: `${definition.label} (${cleanScenario.label})${definition.aggregation === 'formula' ? ' - computed' : ''}`,
-          key: `metric_${definition.id}_${cleanScenario.id}`,
-          source: 'metric_value' as const,
-          metricDefinitionId: definition.id,
-          scenarioId: cleanScenario.id,
-          metricValueKey: definition.key,
-          metricScenario: this.scenario(),
-          readOnly: definition.aggregation === 'formula',
-          formula: definition.aggregation === 'formula' ? (definition as any).formula || null : null,
-        }));
+        .flatMap((definition): GridMetric[] => {
+          const matchingLines = benefitLines
+            .filter(line => line.metric_definition_id === definition.id && line.show_in_summary !== false)
+            .sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0) || a.name.localeCompare(b.name));
+          const lines = matchingLines.length ? matchingLines : [null];
+          return lines.map(line => ({
+            category: this.metricCategoryLabel(definition),
+            label: `${line ? `${line.name} / ` : ''}${definition.label} (${cleanScenario.label})${definition.aggregation === 'formula' ? ' - computed' : ''}`,
+            key: `metric_${definition.id}_${cleanScenario.id}_${line?.id || 'default'}`,
+            source: 'metric_value' as const,
+            metricDefinitionId: definition.id,
+            benefitLineId: line?.id || null,
+            scenarioId: cleanScenario.id,
+            metricValueKey: definition.key,
+            metricScenario: this.scenario(),
+            readOnly: definition.aggregation === 'formula',
+            formula: definition.aggregation === 'formula' ? definition.formula || null : null,
+          }));
+        });
       const costRows: GridMetric[] = [
         { category: 'Costs', label: 'Recurring Costs (Plan)', key: 'costs_recurring_plan', source: 'cost_line', isRecurring: true, actual: false },
         { category: 'Costs', label: 'Recurring Costs (Actual)', key: 'costs_recurring_actual', source: 'cost_line', isRecurring: true, actual: true },
@@ -710,6 +761,12 @@ export class FinancialsTabComponent implements OnInit {
     return bridge.base_case;
   });
 
+  benefitMetricDefinitions = computed(() =>
+    (this.grid()?.definitions || [])
+      .filter(definition => definition.is_active !== false && definition.is_benefit && definition.aggregation !== 'formula')
+      .sort((a, b) => a.label.localeCompare(b.label)),
+  );
+
   dynamicYears = computed(() => {
     const planned = this.plannedMonthRange();
     const valueYears = this.valueBearingMonths().map(period => period.year);
@@ -795,6 +852,7 @@ export class FinancialsTabComponent implements OnInit {
         actual: m.actual,
         readOnly: Boolean(m.readOnly),
         formula: m.formula || null,
+        benefitLineId: m.benefitLineId || null,
       };
       for (const year of years) {
         if (this.isEditing()) {
@@ -888,6 +946,7 @@ export class FinancialsTabComponent implements OnInit {
         actual: row.actual,
         readOnly: row.readOnly,
         formula: row.formula,
+        benefitLineId: row.benefitLineId,
       })),
       editableMonths: () => this.editableMonths(),
       hasColumn: (columnKey: string) => this.hotColumns().some(column => column.data === columnKey),
@@ -930,12 +989,13 @@ export class FinancialsTabComponent implements OnInit {
         const val = row[`col_${period.year}_m${period.month}`] || 0;
         const numericVal = this.parseMoney(val);
         if (row.source === 'metric_value' && row.metricDefinitionId && row.scenarioId) {
-          const key = `${row.metricDefinitionId}_${row.scenarioId}_${period.year}_${period.month}`;
-          if (!numericVal && !this.hasExistingConfigurableValue(period.year, period.month, row.metricDefinitionId, row.scenarioId)) return;
+          const benefitLineId = row.benefitLineId || null;
+          const key = `${row.metricDefinitionId}_${row.scenarioId}_${benefitLineId || 'default'}_${period.year}_${period.month}`;
+          if (!numericVal && !this.hasExistingConfigurableValue(period.year, period.month, row.metricDefinitionId, row.scenarioId, benefitLineId)) return;
           cleanValueMap.set(key, {
             metric_definition_id: row.metricDefinitionId,
             scenario_id: row.scenarioId,
-            benefit_line_id: null,
+            benefit_line_id: benefitLineId,
             year: period.year,
             month: period.month,
             value: numericVal.toString(),
@@ -1065,7 +1125,7 @@ export class FinancialsTabComponent implements OnInit {
        if (m.source === 'metric_value') {
          if (m.metricDefinitionId && m.scenarioId) {
            return (this.grid()?.values || [])
-             .filter(x => x.metric_definition_id === m.metricDefinitionId && x.scenario_id === m.scenarioId && x.year === year && months.includes(x.month))
+             .filter(x => x.metric_definition_id === m.metricDefinitionId && x.scenario_id === m.scenarioId && (x.benefit_line_id || null) === (m.benefitLineId || null) && x.year === year && months.includes(x.month))
              .reduce((s, x) => s + parseFloat(x.value || '0'), 0);
          }
          const monthlyValues = metricValues.filter(x => x.metric_key === metricValueKey && x.year === year && months.includes(x.month!) && this.metricValueHasValue(x));
@@ -1103,17 +1163,17 @@ export class FinancialsTabComponent implements OnInit {
         const cleanValues = this.grid()?.values || [];
         if (mon) {
           return cleanValues
-            .filter(x => x.metric_definition_id === m.metricDefinitionId && x.scenario_id === m.scenarioId && x.year === year && x.month === mon)
+            .filter(x => x.metric_definition_id === m.metricDefinitionId && x.scenario_id === m.scenarioId && (x.benefit_line_id || null) === (m.benefitLineId || null) && x.year === year && x.month === mon)
             .reduce((sum, x) => sum + parseFloat(x.value || '0'), 0);
         }
         if (q) {
           const months = [(q-1)*3+1, (q-1)*3+2, (q-1)*3+3];
           return cleanValues
-            .filter(x => x.metric_definition_id === m.metricDefinitionId && x.scenario_id === m.scenarioId && x.year === year && months.includes(x.month))
+            .filter(x => x.metric_definition_id === m.metricDefinitionId && x.scenario_id === m.scenarioId && (x.benefit_line_id || null) === (m.benefitLineId || null) && x.year === year && months.includes(x.month))
             .reduce((sum, x) => sum + parseFloat(x.value || '0'), 0);
         }
         return cleanValues
-          .filter(x => x.metric_definition_id === m.metricDefinitionId && x.scenario_id === m.scenarioId && x.year === year)
+          .filter(x => x.metric_definition_id === m.metricDefinitionId && x.scenario_id === m.scenarioId && (x.benefit_line_id || null) === (m.benefitLineId || null) && x.year === year)
           .reduce((sum, x) => sum + parseFloat(x.value || '0'), 0);
       }
       const exactRows = metricValues
@@ -1294,10 +1354,11 @@ export class FinancialsTabComponent implements OnInit {
     );
   }
 
-  private hasExistingConfigurableValue(year: number, month: number, metricDefinitionId: string, scenarioId: string): boolean {
+  private hasExistingConfigurableValue(year: number, month: number, metricDefinitionId: string, scenarioId: string, benefitLineId: string | null): boolean {
     return (this.grid()?.values || []).some(value =>
       value.metric_definition_id === metricDefinitionId
       && value.scenario_id === scenarioId
+      && (value.benefit_line_id || null) === benefitLineId
       && value.year === year
       && value.month === month
     );
@@ -1351,6 +1412,53 @@ export class FinancialsTabComponent implements OnInit {
     if (val === null || val === undefined) return 0;
     const num = typeof val === 'string' ? parseFloat(val) : val;
     return Number.isFinite(num) ? num : 0;
+  }
+
+  numberValueOrNull(value: string | number | null): number | null {
+    if (value === null || value === '') return null;
+    const num = Number(value);
+    return Number.isFinite(num) ? Math.max(0, Math.min(100, num)) : null;
+  }
+
+  canAddBenefitLine(): boolean {
+    return Boolean(this.newBenefitLineMetricId() && this.newBenefitLineName().trim());
+  }
+
+  addBenefitLine(): void {
+    if (!this.canAddBenefitLine() || this.isLocked()) return;
+    const metricDefinitionId = this.newBenefitLineMetricId();
+    const name = this.newBenefitLineName().trim();
+    const confidence = this.newBenefitLineConfidence();
+    const displayOrder = (this.grid()?.benefit_lines || []).length + 1;
+    this.saving.set(true);
+    this.api.put<FinancialGrid>(`/initiatives/${this.initiativeId}/financials`, {
+      values: [],
+      benefit_lines: [{
+        metric_definition_id: metricDefinitionId,
+        name,
+        description: null,
+        impact_type: 'recurring',
+        timing: null,
+        confidence,
+        phasing: {},
+        attributes: {},
+        show_in_summary: true,
+        display_order: displayOrder,
+      }],
+    }).subscribe({
+      next: grid => {
+        this.grid.set(grid);
+        this.newBenefitLineMetricId.set('');
+        this.newBenefitLineName.set('');
+        this.newBenefitLineConfidence.set(null);
+        this.saving.set(false);
+        this._loadData();
+      },
+      error: () => {
+        this.saving.set(false);
+        alert('Failed to add benefit line.');
+      },
+    });
   }
 
   openAssumptionForSelection(selection: any): void {
