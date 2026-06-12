@@ -96,10 +96,16 @@ class FakeTenantBootstrapService:
         pass
 
     def bootstrap_tenant(self, _tenant_id: str) -> dict[str, int]:
-        return {"settings": 1, "financial_groups": 10, "financial_items": 18, "gate_criteria": 8}
+        return {
+            "settings": 1,
+            "financial_groups": 0,
+            "financial_items": 0,
+            "gate_criteria": 0,
+            "stage_gate_definitions": 0,
+        }
 
 
-def test_hostinger_bootstrap_seeds_only_admin_shell_and_master_config(
+def test_hostinger_bootstrap_seeds_only_admin_shell(
     monkeypatch,
 ) -> None:
     client = FakeClient()
@@ -125,6 +131,9 @@ def test_hostinger_bootstrap_seeds_only_admin_shell_and_master_config(
     assert len(client.tables["users"]) == 1
     assert len(client.tables["subscription_plans"]) == 5
     assert len(client.tables["tenant_subscriptions"]) == 1
+    assert result["tenant_shell"]["financial_groups"] == 0
+    assert result["tenant_shell"]["financial_items"] == 0
+    assert result["tenant_shell"]["gate_criteria"] == 0
     assert "initiatives" not in client.tables
     assert "meetings" not in client.tables
     assert "financial_entries" not in client.tables
