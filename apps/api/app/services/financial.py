@@ -773,6 +773,27 @@ class FinancialService:
             )
         return self._to_scenario_definition(row)
 
+    def create_bridge_row(self, data: FinancialBridgeRow) -> FinancialBridgeRow:
+        payload = data.model_dump(mode="json", exclude_none=True)
+        payload.pop("id", None)
+        row = self._repo.create_financial_bridge_row(payload)
+        return self._to_bridge_row(row)
+
+    def update_bridge_row(
+        self,
+        bridge_row_id: str,
+        data: FinancialBridgeRow,
+    ) -> FinancialBridgeRow:
+        payload = data.model_dump(mode="json", exclude_none=True)
+        payload.pop("id", None)
+        row = self._repo.update_financial_bridge_row(bridge_row_id, payload)
+        if not row:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Financial bridge row not found",
+            )
+        return self._to_bridge_row(row)
+
     def get_governance_settings(self) -> FinancialGovernanceSettings:
         settings = self._repo.get_organization_settings()
         raw = settings.get("bankable_plan_governance") or {}

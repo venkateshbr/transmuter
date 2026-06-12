@@ -826,6 +826,79 @@ import { FormsModule } from '@angular/forms';
                       }
                     </div>
                   </section>
+
+                  <section class="border border-[var(--t-border)]">
+                    <div class="flex items-center justify-between gap-3 border-b border-[var(--t-border)] bg-[var(--t-surface-raised)] px-4 py-3">
+                      <div>
+                        <p class="text-xs font-black uppercase tracking-widest text-[var(--t-accent)]">Value Bridge Rows</p>
+                        <p class="mt-1 text-[10px] text-[var(--t-text-tertiary)]">Tenant-defined bridge lines for portfolio and initiative value reporting</p>
+                      </div>
+                      <button type="button" class="btn-secondary px-3 py-2 text-[10px]" (click)="addBridgeRowDefinition()" aria-label="Add value bridge row">Add Row</button>
+                    </div>
+                    <div class="divide-y divide-[var(--t-border)]">
+                      @for (row of bridgeRows(); track row.id || row.key) {
+                        <div class="grid gap-4 p-4">
+                          <div class="grid gap-3 lg:grid-cols-[1fr_150px_110px_100px_auto] lg:items-end">
+                            <label class="grid gap-1">
+                              <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Label</span>
+                              <input class="input-field py-2 text-xs font-bold" [ngModel]="row.label" (ngModelChange)="row.label = $event" aria-label="Bridge row label">
+                            </label>
+                            <label class="grid gap-1">
+                              <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Kind</span>
+                              <select class="input-field py-2 text-xs" [ngModel]="row.row_kind" (ngModelChange)="row.row_kind = $event" aria-label="Bridge row kind">
+                                <option value="metric_set">Metrics</option>
+                                <option value="cost_set">Costs</option>
+                                <option value="subtotal">Subtotal</option>
+                                <option value="net">Net</option>
+                              </select>
+                            </label>
+                            <label class="grid gap-1">
+                              <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Sign</span>
+                              <select class="input-field py-2 text-xs" [ngModel]="row.sign" (ngModelChange)="row.sign = numberValue($event)" aria-label="Bridge row sign">
+                                <option [ngValue]="1">Positive</option>
+                                <option [ngValue]="-1">Negative</option>
+                              </select>
+                            </label>
+                            <label class="grid gap-1">
+                              <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Order</span>
+                              <input type="number" class="input-field py-2 text-xs" [ngModel]="row.display_order" (ngModelChange)="row.display_order = numberValue($event)" aria-label="Bridge row display order">
+                            </label>
+                            <div class="flex items-center gap-2">
+                              <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="row.is_active = !row.is_active" [attr.aria-label]="'Toggle ' + row.label">{{ row.is_active ? 'Active' : 'Hidden' }}</button>
+                              <button type="button" class="btn-primary px-3 py-2 text-[10px]" (click)="saveBridgeRowDefinition(row)" aria-label="Save value bridge row">Save</button>
+                            </div>
+                          </div>
+
+                          @if (row.row_kind !== 'net') {
+                            <div class="grid gap-4 lg:grid-cols-2">
+                              <div class="border border-[var(--t-border)] bg-[var(--t-surface)] p-3">
+                                <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Metric Inputs</p>
+                                <div class="mt-3 grid gap-2 sm:grid-cols-2">
+                                  @for (metric of metricDefinitions(); track metric.id || metric.key) {
+                                    <label class="flex items-center gap-2 text-xs font-bold text-[var(--t-text-primary)]">
+                                      <input type="checkbox" [checked]="bridgeRowMetricSelected(row, metric.id)" (change)="toggleBridgeRowMetric(row, metric.id)" [attr.aria-label]="'Use metric ' + metric.label + ' in bridge row'">
+                                      <span>{{ metric.label }}</span>
+                                    </label>
+                                  }
+                                </div>
+                              </div>
+                              <div class="border border-[var(--t-border)] bg-[var(--t-surface)] p-3">
+                                <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Cost Category Inputs</p>
+                                <div class="mt-3 grid gap-2 sm:grid-cols-2">
+                                  @for (category of activeCostCategoryItems(); track category.key) {
+                                    <label class="flex items-center gap-2 text-xs font-bold text-[var(--t-text-primary)]">
+                                      <input type="checkbox" [checked]="bridgeRowCostCategorySelected(row, category.key)" (change)="toggleBridgeRowCostCategory(row, category.key)" [attr.aria-label]="'Use cost category ' + category.label + ' in bridge row'">
+                                      <span>{{ category.label }}</span>
+                                    </label>
+                                  }
+                                </div>
+                              </div>
+                            </div>
+                          }
+                        </div>
+                      }
+                    </div>
+                  </section>
                 </div>
               </div>
 
@@ -1136,6 +1209,7 @@ export class AdminComponent implements OnInit {
   financialItems = signal<any[]>([]);
   metricDefinitions = signal<any[]>([]);
   scenarioDefinitions = signal<any[]>([]);
+  bridgeRows = signal<any[]>([]);
   reportingSettings = signal<any>({ fiscal_year_start_month: 1, reporting_currency: 'USD' });
 
   // Inline add state
@@ -1283,6 +1357,7 @@ export class AdminComponent implements OnInit {
     this.api.get<any>('/financial-engine-configuration').subscribe(res => {
       this.metricDefinitions.set(res.definitions || []);
       this.scenarioDefinitions.set(res.scenarios || []);
+      this.bridgeRows.set(res.bridge_rows || []);
       this.reportingSettings.set(res.settings || { fiscal_year_start_month: 1, reporting_currency: 'USD' });
     });
   }
@@ -1591,6 +1666,70 @@ export class AdminComponent implements OnInit {
       this.loadFinancialEngineConfiguration();
       this.loadAuditLogs();
     });
+  }
+
+  addBridgeRowDefinition() {
+    const index = this.bridgeRows().length + 1;
+    this.bridgeRows.update(rows => [
+      ...rows,
+      {
+        key: `custom_bridge_row_${Date.now()}`,
+        label: `Bridge Row ${index}`,
+        row_kind: 'metric_set',
+        metric_definition_ids: [],
+        cost_category_keys: [],
+        sign: 1,
+        display_order: 1000 + index,
+        is_active: true,
+      },
+    ]);
+  }
+
+  saveBridgeRowDefinition(row: any) {
+    const payload = {
+      id: row.id || null,
+      key: row.key || this.uniqueEngineKey(row.label, 'bridge_row', this.bridgeRows()),
+      label: row.label,
+      row_kind: row.row_kind || 'metric_set',
+      metric_definition_ids: row.row_kind === 'net' ? [] : (row.metric_definition_ids || []),
+      cost_category_keys: row.row_kind === 'net' ? [] : (row.cost_category_keys || []),
+      sign: Number(row.sign || 1) < 0 ? -1 : 1,
+      display_order: Number(row.display_order || 0),
+      is_active: row.is_active !== false,
+    };
+    const request = row.id
+      ? this.api.patch(`/admin/financial-engine/bridge-rows/${row.id}`, payload)
+      : this.api.post('/admin/financial-engine/bridge-rows', payload);
+    request.subscribe(() => {
+      this.loadFinancialEngineConfiguration();
+      this.loadAuditLogs();
+    });
+  }
+
+  activeCostCategoryItems(): any[] {
+    return this.financialItems()
+      .filter(item => item.item_type === 'cost_category' && item.is_active !== false)
+      .sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0));
+  }
+
+  bridgeRowMetricSelected(row: any, metricId: string): boolean {
+    return (row.metric_definition_ids || []).includes(metricId);
+  }
+
+  toggleBridgeRowMetric(row: any, metricId: string) {
+    const current = new Set<string>(row.metric_definition_ids || []);
+    current.has(metricId) ? current.delete(metricId) : current.add(metricId);
+    row.metric_definition_ids = Array.from(current);
+  }
+
+  bridgeRowCostCategorySelected(row: any, categoryKey: string): boolean {
+    return (row.cost_category_keys || []).includes(categoryKey);
+  }
+
+  toggleBridgeRowCostCategory(row: any, categoryKey: string) {
+    const current = new Set<string>(row.cost_category_keys || []);
+    current.has(categoryKey) ? current.delete(categoryKey) : current.add(categoryKey);
+    row.cost_category_keys = Array.from(current);
   }
 
   addMetricGroup() {

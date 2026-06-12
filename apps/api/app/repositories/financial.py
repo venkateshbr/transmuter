@@ -649,6 +649,25 @@ class FinancialRepository:
         )
         return result.data or []
 
+    def create_financial_bridge_row(self, data: dict) -> dict:  # type: ignore[type-arg]
+        payload = {**data, "tenant_id": self._tid}
+        result = self._c.table("financial_bridge_rows").insert(payload).execute()
+        return result.data[0]
+
+    def update_financial_bridge_row(
+        self,
+        bridge_row_id: str,
+        data: dict,  # type: ignore[type-arg]
+    ) -> dict | None:  # type: ignore[type-arg]
+        result = (
+            self._c.table("financial_bridge_rows")
+            .update(data)
+            .eq("tenant_id", self._tid)
+            .eq("id", bridge_row_id)
+            .execute()
+        )
+        return result.data[0] if result.data else None
+
     def get_reporting_settings(self) -> dict:  # type: ignore[type-arg]
         result = (
             self._c.table("organizations")
