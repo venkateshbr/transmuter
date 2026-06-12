@@ -1843,6 +1843,72 @@ async function main() {
       cogs_high: financialOriginal.cogs_high,
       cogs_actual: financialOriginal.cogs_actual,
     };
+    const metricValueRestores = [];
+    let assumptionRowKey = 'gm_uplift_base';
+    const scenarioDefinitionForUi = scenario => {
+      const scenarios = (financialBefore.scenarios || []).filter(item => item.is_active !== false);
+      const preferredKeys = {
+        base: ['plan_base', 'base'],
+        high: ['plan_high', 'high'],
+        actual: ['actual'],
+      }[scenario] || [];
+      return scenarios.find(item => preferredKeys.includes(item.key))
+        || (scenario === 'base' ? scenarios.find(item => item.kind === 'plan' && item.is_primary) : null)
+        || scenarios.find(item => item.kind === (scenario === 'actual' ? 'actual' : 'plan'))
+        || scenarios[0]
+        || null;
+    };
+    const highScenarioDefinition = scenarioDefinitionForUi('high');
+    const actualScenarioDefinition = scenarioDefinitionForUi('actual');
+    assert(highScenarioDefinition && actualScenarioDefinition, 'Configurable financial scenarios were not available for browser acceptance');
+    const enrichMetricRow = row => {
+      if (!row || row.source !== 'metric_value') return row;
+      if (row.metricDefinitionId && row.scenarioId && row.metricValueKey) return row;
+      for (const definition of financialBefore.definitions || []) {
+        for (const scenario of financialBefore.scenarios || []) {
+          const prefix = `metric_${definition.id}_${scenario.id}_`;
+          if (!row.key?.startsWith(prefix)) continue;
+          const rawBenefitLineId = row.key.slice(prefix.length);
+          return {
+            ...row,
+            metricDefinitionId: definition.id,
+            scenarioId: scenario.id,
+            metricValueKey: definition.key,
+            metricScenario: row.metricScenario,
+            benefitLineId: rawBenefitLineId && rawBenefitLineId !== 'default' ? rawBenefitLineId : null,
+          };
+        }
+      }
+      return row;
+    };
+    const pickMetricRow = (rows, preferredKeys, fallbackText, scenarioId = null) => {
+      const enrichedRows = rows.map(enrichMetricRow)
+        .filter(row => !scenarioId || row.scenarioId === scenarioId);
+      return preferredKeys.map(key => enrichedRows.find(row => row.metricValueKey === key)).find(Boolean)
+        || enrichedRows.find(row => row.metricValueKey && row.metricValueKey.includes(fallbackText))
+        || enrichedRows[0]
+        || null;
+    };
+    const restoreValueForMetricRow = row => {
+      if (!row?.metricDefinitionId || !row?.scenarioId) return null;
+      const original = (financialBefore.values || []).find(value =>
+        value.metric_definition_id === row.metricDefinitionId
+        && value.scenario_id === row.scenarioId
+        && (value.benefit_line_id || null) === (row.benefitLineId || null)
+        && value.year === year
+        && value.month === month
+      );
+      return {
+        metric_definition_id: row.metricDefinitionId,
+        scenario_id: row.scenarioId,
+        benefit_line_id: row.benefitLineId || null,
+        year,
+        month,
+        value: original?.value ?? '0',
+        status: original?.status ?? 'draft',
+        note: original?.note ?? null,
+      };
+    };
 
     try {
       await page.send('Page.navigate', { url: `${uiBaseUrl}/initiatives/${financialInitiativeId}` });
@@ -1887,14 +1953,74 @@ async function main() {
       costActualRowKey = actualCostRow.key;
       await evalJs(page, "globalThis.__transmuterFinancials.setScenario('high')");
       await waitFor(
-        () => evalJs(page, "document.body.innerText.includes('High') && !document.querySelector('[data-testid=\"financial-break-even-chart\"]')"),
+        () => evalJs(page, `
+          document.body.innerText.includes('High')
+            && !document.querySelector('[data-testid="financial-break-even-chart"]')
+            && globalThis.__transmuterFinancials.rows().some(row =>
+              row.source === 'metric_value'
+              && row.readOnly !== true
+              && ${JSON.stringify(highScenarioDefinition?.id || '')}
+              && row.key.includes(${JSON.stringify(`_${highScenarioDefinition?.id || ''}_`)})
+            )
+        `),
         'financial scenario UI without break-even chart',
       );
+      const highMetricRows = await evalJs(page, `
+        globalThis.__transmuterFinancials.rows()
+          .filter(row => row.source === 'metric_value' && row.readOnly !== true)
+      `);
+      const highMetricRow = pickMetricRow(highMetricRows, ['revenue_uplift'], 'revenue', highScenarioDefinition?.id || null);
+      assert(highMetricRow, 'No editable configurable metric row was available for the high scenario');
+      const highMetricRestore = restoreValueForMetricRow(highMetricRow);
+      if (highMetricRestore) metricValueRestores.push(highMetricRestore);
+      assumptionRowKey = highMetricRow.key;
       await evalJs(page, `
         (() => {
-          globalThis.__transmuterFinancials.setCell('revenue_uplift_base', ${JSON.stringify(periodColumn)}, ${expectedRevenueUpliftBase});
-          globalThis.__transmuterFinancials.setCell('gm_uplift_actual', ${JSON.stringify(periodColumn)}, ${expectedGmUpliftActual});
-          globalThis.__transmuterFinancials.setCell(${JSON.stringify(costPlanRowKey)}, ${JSON.stringify(periodColumn)}, 1250);
+          globalThis.__transmuterFinancials.setCell(${JSON.stringify(highMetricRow.key)}, ${JSON.stringify(periodColumn)}, ${expectedRevenueUpliftBase});
+          return true;
+        })()
+      `);
+      await evalJs(page, "globalThis.__transmuterFinancials.setScenario('actual')");
+      await waitFor(
+        () => evalJs(page, `
+          document.body.innerText.includes('Actuals')
+          && globalThis.__transmuterFinancials.rows().some(row =>
+            row.source === 'metric_value'
+            && row.readOnly !== true
+            && ${JSON.stringify(actualScenarioDefinition?.id || '')}
+            && row.key.includes(${JSON.stringify(`_${actualScenarioDefinition?.id || ''}_`)})
+          )
+        `),
+        'actual scenario configurable metric rows',
+      );
+      const actualMetricRows = await evalJs(page, `
+        globalThis.__transmuterFinancials.rows()
+          .filter(row => row.source === 'metric_value' && row.readOnly !== true)
+      `);
+      const actualMetricRow = pickMetricRow(actualMetricRows, ['gm_uplift'], 'margin', actualScenarioDefinition?.id || null);
+      assert(actualMetricRow, 'No editable configurable metric row was available for the actual scenario');
+      const actualMetricRestore = restoreValueForMetricRow(actualMetricRow);
+      if (actualMetricRestore) metricValueRestores.push(actualMetricRestore);
+      const currentGridCostRows = await evalJs(page, `
+        globalThis.__transmuterFinancials.rows()
+          .filter(row => row.source === 'cost_line' || row.key.startsWith('costs_'))
+      `);
+      const currentPlanCostRow = currentGridCostRows.find(row => row.key === costPlanRowKey)
+        || currentGridCostRows.find(row => row.costCategoryKey === recurringCostCategory?.key && row.actual === false)
+        || currentGridCostRows.find(row => row.isRecurring === true && row.actual === false)
+        || null;
+      const currentActualCostRow = currentGridCostRows.find(row => row.key === costActualRowKey)
+        || currentGridCostRows.find(row => row.costCategoryKey === recurringCostCategory?.key && row.actual === true)
+        || currentGridCostRows.find(row => row.isRecurring === true && row.actual === true)
+        || currentGridCostRows.find(row => row.key.includes('actual'));
+      assert(currentActualCostRow, 'Financial actual cost row was not available in the active scenario grid');
+      costActualRowKey = currentActualCostRow.key;
+      if (currentPlanCostRow) costPlanRowKey = currentPlanCostRow.key;
+      await evalJs(page, `
+        (() => {
+          globalThis.__transmuterFinancials.setCell(${JSON.stringify(actualMetricRow.key)}, ${JSON.stringify(periodColumn)}, ${expectedGmUpliftActual});
+          const planCostRowKey = ${JSON.stringify(currentPlanCostRow?.key || null)};
+          if (planCostRowKey) globalThis.__transmuterFinancials.setCell(planCostRowKey, ${JSON.stringify(periodColumn)}, 1250);
           globalThis.__transmuterFinancials.setCell(${JSON.stringify(costActualRowKey)}, ${JSON.stringify(periodColumn)}, 1000);
           globalThis.__transmuterFinancials.save();
           return true;
@@ -1926,7 +2052,7 @@ async function main() {
       const assumptionText = `UI acceptance assumption ${Date.now()}`;
       await evalJs(page, `
         (() => {
-          globalThis.__transmuterFinancials.setAssumption('gm_uplift_base', ${JSON.stringify(periodColumn)}, ${JSON.stringify(assumptionText)});
+          globalThis.__transmuterFinancials.setAssumption(${JSON.stringify(assumptionRowKey)}, ${JSON.stringify(periodColumn)}, ${JSON.stringify(assumptionText)});
           return true;
         })()
       `);
@@ -1999,7 +2125,7 @@ async function main() {
       }
       await api(`/initiatives/${financialInitiativeId}/financials`, {
         method: 'PUT',
-        body: JSON.stringify({ entries: [restoreEntry], cost_lines: [] }),
+        body: JSON.stringify({ entries: [restoreEntry], values: metricValueRestores, cost_lines: [] }),
       }).catch(() => null);
 
       const currentCostLines = await api(`/initiatives/${financialInitiativeId}/financials/cost-lines`).catch(() => ({ items: [] }));
