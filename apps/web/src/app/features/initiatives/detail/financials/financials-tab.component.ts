@@ -338,7 +338,7 @@ interface GridMetric {
         }
 
         @if (!isLocked() && benefitMetricDefinitions().length) {
-          <div class="mb-4 grid gap-3 border bg-[var(--t-surface-raised)] p-4 lg:grid-cols-[180px_1fr_120px_auto]" style="border-color:var(--t-border)">
+          <div class="mb-4 grid gap-3 border bg-[var(--t-surface-raised)] p-4 lg:grid-cols-[180px_1fr_120px_140px_120px_140px_140px_auto]" style="border-color:var(--t-border)">
             <label class="grid gap-1">
               <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Benefit Metric</span>
               <select class="input-field py-2 text-xs" [ngModel]="newBenefitLineMetricId()" (ngModelChange)="newBenefitLineMetricId.set($event)" aria-label="Benefit line metric">
@@ -355,6 +355,26 @@ interface GridMetric {
             <label class="grid gap-1">
               <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Confidence %</span>
               <input type="number" min="0" max="100" class="input-field py-2 text-xs" [ngModel]="newBenefitLineConfidence()" (ngModelChange)="newBenefitLineConfidence.set(numberValueOrNull($event))" aria-label="Benefit line confidence">
+            </label>
+            <label class="grid gap-1">
+              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Phasing</span>
+              <select class="input-field py-2 text-xs" [ngModel]="newBenefitLinePhasingMode()" (ngModelChange)="setBenefitLinePhasingMode($event)" aria-label="Benefit line phasing mode">
+                <option value="manual">Manual</option>
+                <option value="one_off">One-off</option>
+                <option value="spread">Spread</option>
+              </select>
+            </label>
+            <label class="grid gap-1">
+              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Amount</span>
+              <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineAmount()" (ngModelChange)="newBenefitLineAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line phased amount">
+            </label>
+            <label class="grid gap-1">
+              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Start</span>
+              <input type="month" class="input-field py-2 text-xs" [ngModel]="newBenefitLineStartMonth()" (ngModelChange)="newBenefitLineStartMonth.set($event)" aria-label="Benefit line start month">
+            </label>
+            <label class="grid gap-1">
+              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">End</span>
+              <input type="month" class="input-field py-2 text-xs" [ngModel]="newBenefitLineEndMonth()" (ngModelChange)="newBenefitLineEndMonth.set($event)" [disabled]="newBenefitLinePhasingMode() !== 'spread'" aria-label="Benefit line end month">
             </label>
             <div class="flex items-end">
               <button type="button" class="btn-primary px-4 py-2 text-[10px]" [disabled]="!canAddBenefitLine()" (click)="addBenefitLine()" aria-label="Add benefit line">Add Line</button>
@@ -484,6 +504,10 @@ export class FinancialsTabComponent implements OnInit {
   newBenefitLineMetricId = signal('');
   newBenefitLineName = signal('');
   newBenefitLineConfidence = signal<number | null>(null);
+  newBenefitLinePhasingMode = signal<'manual' | 'one_off' | 'spread'>('manual');
+  newBenefitLineAmount = signal<number | null>(null);
+  newBenefitLineStartMonth = signal('');
+  newBenefitLineEndMonth = signal('');
   readonly scenarios: { id: FinancialScenario; label: string }[] = [
     { id: 'base', label: 'Base' },
     { id: 'high', label: 'High' },
@@ -1401,6 +1425,34 @@ export class FinancialsTabComponent implements OnInit {
     return { year, month };
   }
 
+  private parseMonthInput(value: string): { year: number; month: number } | null {
+    const match = /^(\d{4})-(\d{2})$/.exec(value || '');
+    if (!match) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) return null;
+    return { year, month };
+  }
+
+  private monthRange(
+    start: { year: number; month: number },
+    end: { year: number; month: number },
+  ): FinancialPeriodMonth[] {
+    if (start.year > end.year || (start.year === end.year && start.month > end.month)) return [];
+    const periods: FinancialPeriodMonth[] = [];
+    let year = start.year;
+    let month = start.month;
+    while (year < end.year || (year === end.year && month <= end.month)) {
+      periods.push(this.periodMonth(year, month));
+      month += 1;
+      if (month > 12) {
+        month = 1;
+        year += 1;
+      }
+    }
+    return periods;
+  }
+
   formatMoney(val: string | number | null): string {
     if (val === null || val === undefined) return '—';
     const num = typeof val === 'string' ? parseFloat(val) : val;
@@ -1420,8 +1472,26 @@ export class FinancialsTabComponent implements OnInit {
     return Number.isFinite(num) ? Math.max(0, Math.min(100, num)) : null;
   }
 
+  numberValueOrNullUnbounded(value: string | number | null): number | null {
+    if (value === null || value === '') return null;
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  }
+
+  setBenefitLinePhasingMode(value: string): void {
+    if (value === 'one_off' || value === 'spread') {
+      this.newBenefitLinePhasingMode.set(value);
+      return;
+    }
+    this.newBenefitLinePhasingMode.set('manual');
+  }
+
   canAddBenefitLine(): boolean {
-    return Boolean(this.newBenefitLineMetricId() && this.newBenefitLineName().trim());
+    if (!this.newBenefitLineMetricId() || !this.newBenefitLineName().trim()) return false;
+    if (this.newBenefitLinePhasingMode() === 'manual') return true;
+    if (this.newBenefitLineAmount() === null || !this.newBenefitLineStartMonth()) return false;
+    if (this.newBenefitLinePhasingMode() === 'spread' && !this.newBenefitLineEndMonth()) return false;
+    return true;
   }
 
   addBenefitLine(): void {
@@ -1430,6 +1500,7 @@ export class FinancialsTabComponent implements OnInit {
     const name = this.newBenefitLineName().trim();
     const confidence = this.newBenefitLineConfidence();
     const displayOrder = (this.grid()?.benefit_lines || []).length + 1;
+    const phasingMode = this.newBenefitLinePhasingMode();
     this.saving.set(true);
     this.api.put<FinancialGrid>(`/initiatives/${this.initiativeId}/financials`, {
       values: [],
@@ -1440,25 +1511,79 @@ export class FinancialsTabComponent implements OnInit {
         impact_type: 'recurring',
         timing: null,
         confidence,
-        phasing: {},
+        phasing: {
+          mode: phasingMode,
+          amount: this.newBenefitLineAmount(),
+          start_month: this.newBenefitLineStartMonth() || null,
+          end_month: this.newBenefitLineEndMonth() || null,
+        },
         attributes: {},
         show_in_summary: true,
         display_order: displayOrder,
       }],
     }).subscribe({
       next: grid => {
-        this.grid.set(grid);
-        this.newBenefitLineMetricId.set('');
-        this.newBenefitLineName.set('');
-        this.newBenefitLineConfidence.set(null);
-        this.saving.set(false);
-        this._loadData();
+        const createdLine = (grid.benefit_lines || [])
+          .filter(line => line.metric_definition_id === metricDefinitionId && line.name === name)
+          .sort((a, b) => Number(b.display_order || 0) - Number(a.display_order || 0))[0];
+        const generatedValues = createdLine ? this.generatedBenefitLineValues(createdLine.id) : [];
+        if (!generatedValues.length) {
+          this.finishBenefitLineAdd(grid);
+          return;
+        }
+        this.api.put<FinancialGrid>(`/initiatives/${this.initiativeId}/financials`, {
+          values: generatedValues,
+        }).subscribe({
+          next: updatedGrid => this.finishBenefitLineAdd(updatedGrid),
+          error: () => {
+            this.saving.set(false);
+            alert('Benefit line was created, but phased values could not be generated.');
+            this._loadData();
+          },
+        });
       },
       error: () => {
         this.saving.set(false);
         alert('Failed to add benefit line.');
       },
     });
+  }
+
+  private finishBenefitLineAdd(grid: FinancialGrid): void {
+    this.grid.set(grid);
+    this.newBenefitLineMetricId.set('');
+    this.newBenefitLineName.set('');
+    this.newBenefitLineConfidence.set(null);
+    this.newBenefitLinePhasingMode.set('manual');
+    this.newBenefitLineAmount.set(null);
+    this.newBenefitLineStartMonth.set('');
+    this.newBenefitLineEndMonth.set('');
+    this.saving.set(false);
+    this._loadData();
+  }
+
+  private generatedBenefitLineValues(benefitLineId: string): any[] {
+    const mode = this.newBenefitLinePhasingMode();
+    if (mode === 'manual') return [];
+    const scenario = this.selectedScenarioDefinition();
+    const amount = this.newBenefitLineAmount();
+    const start = this.parseMonthInput(this.newBenefitLineStartMonth());
+    const end = mode === 'spread'
+      ? this.parseMonthInput(this.newBenefitLineEndMonth())
+      : start;
+    if (!scenario || amount === null || !start || !end) return [];
+    const months = this.monthRange(start, end);
+    if (!months.length) return [];
+    const value = mode === 'spread' ? amount / months.length : amount;
+    return months.map(period => ({
+      metric_definition_id: this.newBenefitLineMetricId(),
+      scenario_id: scenario.id,
+      benefit_line_id: benefitLineId,
+      year: period.year,
+      month: period.month,
+      value: value.toString(),
+      status: 'draft',
+    }));
   }
 
   openAssumptionForSelection(selection: any): void {
