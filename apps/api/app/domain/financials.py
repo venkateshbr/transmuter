@@ -819,6 +819,17 @@ class ValueBridgeCase(BaseModel):
     net: str = "0"  # Total benefits - recurring costs
 
 
+class ValueBridgeRow(BaseModel):
+    key: str
+    label: str
+    row_kind: Literal["metric_set", "cost_set", "subtotal", "net"]
+    base_case: str = "0"
+    high_case: str = "0"
+    actual: str = "0"
+    sign: Literal[-1, 1] = 1
+    display_order: int = 0
+
+
 class ValueBridgeResponse(BaseModel):
     """Three-column Value Bridge: Benefits / Costs / Net."""
 
@@ -826,6 +837,7 @@ class ValueBridgeResponse(BaseModel):
     base_case: ValueBridgeCase
     high_case: ValueBridgeCase
     actual: ValueBridgeCase
+    rows: list[ValueBridgeRow] = Field(default_factory=list)
     financial_mode: FinancialModeDescriptor | None = None
 
 

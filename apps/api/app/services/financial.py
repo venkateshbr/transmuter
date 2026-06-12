@@ -85,6 +85,7 @@ from app.domain.financials import (
     ScenarioFinancialSummary,
     ValueBridgeCase,
     ValueBridgeResponse,
+    ValueBridgeRow,
     WorkstreamTargetInitiative,
     WorkstreamTargetLockRequest,
     WorkstreamTargetLockResponse,
@@ -3186,6 +3187,7 @@ class FinancialService:
             base_case=self._clean_bridge_case(base, plan_costs),
             high_case=self._clean_bridge_case(high, plan_costs),
             actual=self._clean_bridge_case(actual, actual_costs),
+            rows=self._clean_dynamic_bridge_rows(values, cost_lines),
             financial_mode=FinancialModeDescriptor(
                 key="multi_scenario",
                 label="Configurable metric engine",
@@ -3485,6 +3487,98 @@ class FinancialService:
             costs_total=_money(recurring + one_off),
             net=_money(benefits_total - recurring),
         )
+
+    def _clean_dynamic_bridge_rows(
+        self,
+        values: list[dict],  # type: ignore[type-arg]
+        cost_lines: list[dict],  # type: ignore[type-arg]
+    ) -> list[ValueBridgeRow]:
+        bridge_rows = [
+            row for row in self._repo.list_financial_bridge_rows() if row.get("is_active", True)
+        ]
+        if not bridge_rows:
+            return []
+        scenarios = {row["id"]: row for row in self._repo.list_financial_scenarios()}
+        definitions = {row["id"]: row for row in self._repo.list_metric_definitions()}
+        plan_costs = self._clean_cost_totals(cost_lines, actual=False)
+        actual_costs = self._clean_cost_totals(cost_lines, actual=True)
+
+        def metric_total(metric_ids: set[str], scenario_key: str) -> Decimal:
+            if not metric_ids:
+                return Decimal("0")
+            total = Decimal("0")
+            for row in values:
+                scenario = scenarios.get(row.get("scenario_id"))
+                if not scenario or scenario.get("key") != scenario_key:
+                    continue
+                if str(row.get("metric_definition_id")) not in metric_ids:
+                    continue
+                total += _dec(row.get("value"))
+            return total
+
+        def benefit_total(scenario_key: str) -> Decimal:
+            total = Decimal("0")
+            for row in values:
+                scenario = scenarios.get(row.get("scenario_id"))
+                if not scenario or scenario.get("key") != scenario_key:
+                    continue
+                definition = definitions.get(row.get("metric_definition_id"))
+                if not definition or not definition.get("is_benefit"):
+                    continue
+                total += _dec(row.get("value"))
+            return total
+
+        def cost_total(category_keys: set[str], actual: bool) -> Decimal:
+            total = Decimal("0")
+            for row in cost_lines:
+                if category_keys and str(row.get("category_key", "other")) not in category_keys:
+                    continue
+                raw = row.get("amount_actual") if actual else row.get("amount_plan")
+                total += _dec(raw)
+            return total
+
+        response_rows: list[ValueBridgeRow] = []
+        for row in sorted(bridge_rows, key=lambda item: item.get("display_order") or 0):
+            row_kind = row.get("row_kind") or "metric_set"
+            if row_kind not in {"metric_set", "cost_set", "subtotal", "net"}:
+                row_kind = "metric_set"
+            sign = -1 if int(row.get("sign") or 1) < 0 else 1
+            metric_ids = {str(item) for item in row.get("metric_definition_ids") or [] if item}
+            category_keys = {str(item) for item in row.get("cost_category_keys") or [] if item}
+
+            if row_kind == "net":
+                base_value = benefit_total("plan_base") - _dec(plan_costs["recurring"])
+                high_value = benefit_total("plan_high") - _dec(plan_costs["recurring"])
+                actual_value = benefit_total("actual") - _dec(actual_costs["recurring"])
+            else:
+                include_metrics = row_kind in {"metric_set", "subtotal"}
+                include_costs = row_kind in {"cost_set", "subtotal"}
+                base_value = (
+                    metric_total(metric_ids, "plan_base") if include_metrics else Decimal("0")
+                ) + (cost_total(category_keys, actual=False) if include_costs else Decimal("0"))
+                high_value = (
+                    metric_total(metric_ids, "plan_high") if include_metrics else Decimal("0")
+                ) + (cost_total(category_keys, actual=False) if include_costs else Decimal("0"))
+                actual_value = (
+                    metric_total(metric_ids, "actual") if include_metrics else Decimal("0")
+                ) + (cost_total(category_keys, actual=True) if include_costs else Decimal("0"))
+                base_value *= Decimal(sign)
+                high_value *= Decimal(sign)
+                actual_value *= Decimal(sign)
+
+            response_rows.append(
+                ValueBridgeRow(
+                    key=row["key"],
+                    label=row["label"],
+                    row_kind=row_kind,
+                    base_case=_money(base_value),
+                    high_case=_money(high_value),
+                    actual=_money(actual_value),
+                    sign=sign,
+                    display_order=row.get("display_order") or 0,
+                )
+            )
+        return response_rows
 
     @staticmethod
     def _clean_portfolio_period_key(
