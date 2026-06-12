@@ -382,6 +382,53 @@ interface GridMetric {
           </div>
         }
 
+        @if (!isLocked() && costCategoryDefinitions().length) {
+          <div class="mb-4 grid gap-3 border bg-[var(--t-surface-raised)] p-4 lg:grid-cols-[180px_1fr_100px_110px_120px_140px_140px_auto]" style="border-color:var(--t-border)">
+            <label class="grid gap-1">
+              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Cost Category</span>
+              <select class="input-field py-2 text-xs" [ngModel]="newCostLineCategoryKey()" (ngModelChange)="setCostLineCategory($event)" aria-label="Cost line category">
+                <option value="">Select category</option>
+                @for (category of costCategoryDefinitions(); track category.key) {
+                  <option [value]="category.key">{{ category.label }}</option>
+                }
+              </select>
+            </label>
+            <label class="grid gap-1">
+              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Cost Line</span>
+              <input class="input-field py-2 text-xs font-bold" [ngModel]="newCostLineName()" (ngModelChange)="newCostLineName.set($event)" aria-label="Cost line name" placeholder="Implementation support">
+            </label>
+            <label class="grid gap-1">
+              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Lane</span>
+              <select class="input-field py-2 text-xs" [ngModel]="newCostLineLane()" (ngModelChange)="setCostLineLane($event)" aria-label="Cost line lane">
+                <option value="plan">Plan</option>
+                <option value="actual">Actual</option>
+              </select>
+            </label>
+            <label class="grid gap-1">
+              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Mode</span>
+              <select class="input-field py-2 text-xs" [ngModel]="newCostLinePhasingMode()" (ngModelChange)="setCostLinePhasingMode($event)" aria-label="Cost line phasing mode">
+                <option value="one_off">One-off</option>
+                <option value="spread">Spread</option>
+              </select>
+            </label>
+            <label class="grid gap-1">
+              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Amount</span>
+              <input type="number" class="input-field py-2 text-xs" [ngModel]="newCostLineAmount()" (ngModelChange)="newCostLineAmount.set(numberValueOrNullUnbounded($event))" aria-label="Cost line amount">
+            </label>
+            <label class="grid gap-1">
+              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Start</span>
+              <input type="month" class="input-field py-2 text-xs" [ngModel]="newCostLineStartMonth()" (ngModelChange)="newCostLineStartMonth.set($event)" aria-label="Cost line start month">
+            </label>
+            <label class="grid gap-1">
+              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">End</span>
+              <input type="month" class="input-field py-2 text-xs" [ngModel]="newCostLineEndMonth()" (ngModelChange)="newCostLineEndMonth.set($event)" [disabled]="newCostLinePhasingMode() !== 'spread'" aria-label="Cost line end month">
+            </label>
+            <div class="flex items-end">
+              <button type="button" class="btn-secondary px-4 py-2 text-[10px]" [disabled]="!canGenerateCostLine()" (click)="generateCostLine()" aria-label="Generate cost line">Add Cost</button>
+            </div>
+          </div>
+        }
+
         <div class="handsontable-container overflow-hidden rounded-xl border bg-[var(--t-surface-raised)]" style="border-color:var(--t-border)">
           <hot-table
             #hot
@@ -508,6 +555,14 @@ export class FinancialsTabComponent implements OnInit {
   newBenefitLineAmount = signal<number | null>(null);
   newBenefitLineStartMonth = signal('');
   newBenefitLineEndMonth = signal('');
+  newCostLineCategoryKey = signal('');
+  newCostLineName = signal('');
+  newCostLineLane = signal<'plan' | 'actual'>('plan');
+  newCostLineRecurring = signal(true);
+  newCostLinePhasingMode = signal<'one_off' | 'spread'>('spread');
+  newCostLineAmount = signal<number | null>(null);
+  newCostLineStartMonth = signal('');
+  newCostLineEndMonth = signal('');
   readonly scenarios: { id: FinancialScenario; label: string }[] = [
     { id: 'base', label: 'Base' },
     { id: 'high', label: 'High' },
@@ -788,6 +843,12 @@ export class FinancialsTabComponent implements OnInit {
   benefitMetricDefinitions = computed(() =>
     (this.grid()?.definitions || [])
       .filter(definition => definition.is_active !== false && definition.is_benefit && definition.aggregation !== 'formula')
+      .sort((a, b) => a.label.localeCompare(b.label)),
+  );
+
+  costCategoryDefinitions = computed(() =>
+    (this.configuration()?.items || [])
+      .filter(item => item.item_type === 'cost_category' && item.is_active !== false)
       .sort((a, b) => a.label.localeCompare(b.label)),
   );
 
@@ -1484,6 +1545,75 @@ export class FinancialsTabComponent implements OnInit {
       return;
     }
     this.newBenefitLinePhasingMode.set('manual');
+  }
+
+  setCostLineLane(value: string): void {
+    this.newCostLineLane.set(value === 'actual' ? 'actual' : 'plan');
+  }
+
+  setCostLineCategory(value: string): void {
+    this.newCostLineCategoryKey.set(value);
+    const category = this.costCategoryDefinitions().find(item => item.key === value);
+    if (category?.rollup_type === 'one_off_cost') this.newCostLineRecurring.set(false);
+    if (category?.rollup_type === 'recurring_cost') this.newCostLineRecurring.set(true);
+  }
+
+  setCostLinePhasingMode(value: string): void {
+    this.newCostLinePhasingMode.set(value === 'one_off' ? 'one_off' : 'spread');
+  }
+
+  canGenerateCostLine(): boolean {
+    if (!this.newCostLineCategoryKey() || !this.newCostLineName().trim()) return false;
+    if (this.newCostLineAmount() === null || !this.newCostLineStartMonth()) return false;
+    if (this.newCostLinePhasingMode() === 'spread' && !this.newCostLineEndMonth()) return false;
+    return true;
+  }
+
+  generateCostLine(): void {
+    if (!this.canGenerateCostLine() || this.isLocked()) return;
+    const start = this.parseMonthInput(this.newCostLineStartMonth());
+    const end = this.newCostLinePhasingMode() === 'spread'
+      ? this.parseMonthInput(this.newCostLineEndMonth())
+      : start;
+    const amount = this.newCostLineAmount();
+    if (!start || !end || amount === null) return;
+    const months = this.monthRange(start, end);
+    if (!months.length) return;
+    const value = this.newCostLinePhasingMode() === 'spread' ? amount / months.length : amount;
+    const lane = this.newCostLineLane();
+    const costLines = months.map(period => ({
+      name: this.newCostLineName().trim(),
+      category_key: this.newCostLineCategoryKey(),
+      year: period.year,
+      month: period.month,
+      quarter: null,
+      amount_plan: lane === 'plan' ? value.toString() : '0',
+      amount_actual: lane === 'actual' ? value.toString() : null,
+      is_recurring: this.newCostLineRecurring(),
+    }));
+    this.saving.set(true);
+    this.api.put<FinancialGrid>(`/initiatives/${this.initiativeId}/financials`, {
+      values: [],
+      cost_lines: costLines,
+    }).subscribe({
+      next: grid => {
+        this.grid.set(grid);
+        this.newCostLineCategoryKey.set('');
+        this.newCostLineName.set('');
+        this.newCostLineLane.set('plan');
+        this.newCostLineRecurring.set(true);
+        this.newCostLinePhasingMode.set('spread');
+        this.newCostLineAmount.set(null);
+        this.newCostLineStartMonth.set('');
+        this.newCostLineEndMonth.set('');
+        this.saving.set(false);
+        this._loadData();
+      },
+      error: () => {
+        this.saving.set(false);
+        alert('Failed to generate cost line.');
+      },
+    });
   }
 
   canAddBenefitLine(): boolean {
