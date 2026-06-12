@@ -27,17 +27,22 @@ class FinancialRepository:
 
     def get_entries(self, initiative_id: str) -> list[dict]:  # type: ignore[type-arg]
         """Return all financial_entries rows for an initiative, ordered by year/quarter."""
-        result = (
-            self._c.table("financial_entries")
-            .select("*")
-            .eq("tenant_id", self._tid)
-            .eq("initiative_id", initiative_id)
-            .order("year")
-            .order("quarter")
-            .order("month")
-            .execute()
-        )
-        return result.data or []
+        try:
+            result = (
+                self._c.table("financial_entries")
+                .select("*")
+                .eq("tenant_id", self._tid)
+                .eq("initiative_id", initiative_id)
+                .order("year")
+                .order("quarter")
+                .order("month")
+                .execute()
+            )
+            return result.data or []
+        except Exception as exc:
+            if self._is_missing_table(exc, "financial_entries"):
+                return []
+            raise
 
     def get_initiative_period(self, initiative_id: str) -> dict | None:  # type: ignore[type-arg]
         result = (
@@ -56,22 +61,27 @@ class FinancialRepository:
 
     def upsert_entries_batch(self, initiative_id: str, rows: list[dict]) -> list[dict]:  # type: ignore[type-arg]
         """Upsert multiple financial entries at once."""
-        saved = []
-        for row in rows:
-            row["tenant_id"] = self._tid
-            row["initiative_id"] = initiative_id
-            existing_rows = self._find_financial_entries(initiative_id, row)
-            if existing_rows:
-                row["updated_at"] = datetime.now(UTC).isoformat()
-                result = None
-                for existing in existing_rows:
-                    result = self._write_financial_entry(row, existing["id"])
-            else:
-                row["id"] = str(uuid4())
-                result = self._write_financial_entry(row)
-            if result.data:
-                saved.append(result.data[0])
-        return saved
+        try:
+            saved = []
+            for row in rows:
+                row["tenant_id"] = self._tid
+                row["initiative_id"] = initiative_id
+                existing_rows = self._find_financial_entries(initiative_id, row)
+                if existing_rows:
+                    row["updated_at"] = datetime.now(UTC).isoformat()
+                    result = None
+                    for existing in existing_rows:
+                        result = self._write_financial_entry(row, existing["id"])
+                else:
+                    row["id"] = str(uuid4())
+                    result = self._write_financial_entry(row)
+                if result.data:
+                    saved.append(result.data[0])
+            return saved
+        except Exception as exc:
+            if self._is_missing_table(exc, "financial_entries"):
+                return []
+            raise
 
     # ── Cost Lines ────────────────────────────────────────────────────────────
 
@@ -103,9 +113,94 @@ class FinancialRepository:
             )
             return result.data or []
         except Exception as exc:
-            if self._is_missing_table(exc, "financial_metric_values"):
+            text = str(exc)
+            if self._is_missing_table(exc, "financial_metric_values") or "metric_key" in text:
                 return []
             raise
+
+    def list_benefit_lines(self, initiative_id: str) -> list[dict]:  # type: ignore[type-arg]
+        result = (
+            self._c.table("financial_benefit_lines")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
+            .order("display_order")
+            .order("name")
+            .execute()
+        )
+        return result.data or []
+
+    def list_configurable_metric_values(self, initiative_id: str) -> list[dict]:  # type: ignore[type-arg]
+        result = (
+            self._c.table("financial_metric_values")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
+            .order("year")
+            .order("month")
+            .execute()
+        )
+        return result.data or []
+
+    def create_benefit_lines_batch(
+        self,
+        initiative_id: str,
+        rows: list[dict],  # type: ignore[type-arg]
+        user_id: str | None = None,
+    ) -> list[dict]:  # type: ignore[type-arg]
+        if not rows:
+            return []
+        now = datetime.now(UTC).isoformat()
+        payload = []
+        for row in rows:
+            payload.append(
+                {
+                    **row,
+                    "id": row.get("id") or str(uuid4()),
+                    "tenant_id": self._tid,
+                    "initiative_id": initiative_id,
+                    "created_by": row.get("created_by") or user_id,
+                    "updated_by": row.get("updated_by") or user_id,
+                    "created_at": row.get("created_at") or now,
+                    "updated_at": row.get("updated_at") or now,
+                }
+            )
+        result = self._c.table("financial_benefit_lines").insert(payload).execute()
+        return result.data or []
+
+    def upsert_configurable_metric_values_batch(
+        self,
+        initiative_id: str,
+        rows: list[dict],  # type: ignore[type-arg]
+        user_id: str | None = None,
+    ) -> list[dict]:  # type: ignore[type-arg]
+        saved = []
+        now = datetime.now(UTC).isoformat()
+        for row in rows:
+            payload = {
+                **row,
+                "tenant_id": self._tid,
+                "initiative_id": initiative_id,
+                "updated_by": row.get("updated_by") or user_id,
+                "updated_at": row.get("updated_at") or now,
+            }
+            existing = self._find_configurable_metric_value(initiative_id, payload)
+            if existing:
+                result = (
+                    self._c.table("financial_metric_values")
+                    .update(payload)
+                    .eq("tenant_id", self._tid)
+                    .eq("id", existing["id"])
+                    .execute()
+                )
+            else:
+                payload["id"] = payload.get("id") or str(uuid4())
+                payload["created_by"] = payload.get("created_by") or user_id
+                payload["created_at"] = payload.get("created_at") or now
+                result = self._c.table("financial_metric_values").insert(payload).execute()
+            if result.data:
+                saved.append(result.data[0])
+        return saved
 
     def upsert_metric_values_batch(self, initiative_id: str, rows: list[dict]) -> list[dict]:  # type: ignore[type-arg]
         saved = []
@@ -521,6 +616,114 @@ class FinancialRepository:
         )
         return result.data or []
 
+    def list_metric_definitions(self) -> list[dict]:  # type: ignore[type-arg]
+        result = (
+            self._c.table("financial_metric_definitions")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .order("display_order")
+            .order("label")
+            .execute()
+        )
+        return result.data or []
+
+    def list_financial_scenarios(self) -> list[dict]:  # type: ignore[type-arg]
+        result = (
+            self._c.table("financial_scenarios")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .order("display_order")
+            .order("label")
+            .execute()
+        )
+        return result.data or []
+
+    def list_financial_bridge_rows(self) -> list[dict]:  # type: ignore[type-arg]
+        result = (
+            self._c.table("financial_bridge_rows")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .order("display_order")
+            .order("label")
+            .execute()
+        )
+        return result.data or []
+
+    def get_reporting_settings(self) -> dict:  # type: ignore[type-arg]
+        result = (
+            self._c.table("organizations")
+            .select("fiscal_year_start_month,reporting_currency")
+            .eq("id", self._tid)
+            .maybe_single()
+            .execute()
+        )
+        return result.data or {}
+
+    def update_reporting_settings(self, data: dict) -> dict:  # type: ignore[type-arg]
+        payload = {**data, "updated_at": datetime.now(UTC).isoformat()}
+        result = self._c.table("organizations").update(payload).eq("id", self._tid).execute()
+        return result.data[0] if result.data else payload
+
+    def create_metric_definition(
+        self,
+        data: dict,  # type: ignore[type-arg]
+        user_id: str | None = None,
+    ) -> dict:  # type: ignore[type-arg]
+        now = datetime.now(UTC).isoformat()
+        payload = {
+            **data,
+            "id": data.get("id") or str(uuid4()),
+            "tenant_id": self._tid,
+            "created_by": data.get("created_by") or user_id,
+            "updated_by": data.get("updated_by") or user_id,
+            "created_at": data.get("created_at") or now,
+            "updated_at": data.get("updated_at") or now,
+        }
+        result = self._c.table("financial_metric_definitions").insert(payload).execute()
+        return result.data[0]
+
+    def update_metric_definition(
+        self,
+        metric_definition_id: str,
+        data: dict,  # type: ignore[type-arg]
+        user_id: str | None = None,
+    ) -> dict:  # type: ignore[type-arg]
+        payload = {**data, "updated_by": user_id, "updated_at": datetime.now(UTC).isoformat()}
+        result = (
+            self._c.table("financial_metric_definitions")
+            .update(payload)
+            .eq("tenant_id", self._tid)
+            .eq("id", metric_definition_id)
+            .execute()
+        )
+        return result.data[0] if result.data else {}
+
+    def create_financial_scenario(self, data: dict) -> dict:  # type: ignore[type-arg]
+        payload = {
+            **data,
+            "id": data.get("id") or str(uuid4()),
+            "tenant_id": self._tid,
+            "created_at": data.get("created_at") or datetime.now(UTC).isoformat(),
+            "updated_at": data.get("updated_at") or datetime.now(UTC).isoformat(),
+        }
+        result = self._c.table("financial_scenarios").insert(payload).execute()
+        return result.data[0]
+
+    def update_financial_scenario(
+        self,
+        scenario_id: str,
+        data: dict,  # type: ignore[type-arg]
+    ) -> dict:  # type: ignore[type-arg]
+        payload = {**data, "updated_at": datetime.now(UTC).isoformat()}
+        result = (
+            self._c.table("financial_scenarios")
+            .update(payload)
+            .eq("tenant_id", self._tid)
+            .eq("id", scenario_id)
+            .execute()
+        )
+        return result.data[0] if result.data else {}
+
     def upsert_config_group(self, data: dict) -> dict:  # type: ignore[type-arg]
         payload = {**data, "tenant_id": self._tid, "updated_at": datetime.now(UTC).isoformat()}
         existing = (
@@ -656,24 +859,14 @@ class FinancialRepository:
             .eq("initiative_id", initiative_id)
             .execute()
         )
-        (
-            self._c.table("financial_entries")
-            .delete()
-            .eq("tenant_id", self._tid)
-            .eq("initiative_id", initiative_id)
-            .execute()
-        )
-        try:
+        for table_name in ("financial_metric_values", "financial_benefit_lines"):
             (
-                self._c.table("financial_metric_values")
+                self._c.table(table_name)
                 .delete()
                 .eq("tenant_id", self._tid)
                 .eq("initiative_id", initiative_id)
                 .execute()
             )
-        except Exception as exc:
-            if not self._is_missing_table(exc, "financial_metric_values"):
-                raise
 
     def initiative_exists(self, initiative_id: str) -> bool:
         result = (
@@ -713,8 +906,15 @@ class FinancialRepository:
 
     def get_all_entries(self) -> list[dict]:  # type: ignore[type-arg]
         """Return all financial_entries for the tenant (portfolio-level)."""
-        result = self._c.table("financial_entries").select("*").eq("tenant_id", self._tid).execute()
-        return result.data or []
+        try:
+            result = (
+                self._c.table("financial_entries").select("*").eq("tenant_id", self._tid).execute()
+            )
+            return result.data or []
+        except Exception as exc:
+            if self._is_missing_table(exc, "financial_entries"):
+                return []
+            raise
 
     def get_all_cost_lines(self) -> list[dict]:  # type: ignore[type-arg]
         """Return all cost lines for the tenant (portfolio-level)."""
@@ -897,6 +1097,79 @@ class FinancialRepository:
                 return []
             raise
         return result.data or []
+
+    def _find_configurable_metric_value(
+        self,
+        initiative_id: str,
+        row: dict,  # type: ignore[type-arg]
+    ) -> dict | None:  # type: ignore[type-arg]
+        query = (
+            self._c.table("financial_metric_values")
+            .select("id")
+            .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
+            .eq("metric_definition_id", row["metric_definition_id"])
+            .eq("scenario_id", row["scenario_id"])
+            .eq("year", row["year"])
+            .eq("month", row["month"])
+        )
+        benefit_line_id = row.get("benefit_line_id")
+        if benefit_line_id:
+            query = query.eq("benefit_line_id", benefit_line_id)
+        else:
+            query = query.is_("benefit_line_id", "null")
+        result = query.maybe_single().execute()
+        return result.data if result and result.data else None
+
+    def _upsert_metric_values_from_legacy_entries(
+        self,
+        initiative_id: str,
+        rows: list[dict],
+    ) -> list[dict]:  # type: ignore[type-arg]
+        definitions = {row["key"]: row["id"] for row in self.list_metric_definitions()}
+        scenarios = {row["key"]: row["id"] for row in self.list_financial_scenarios()}
+        metric_field_map = {
+            "revenue_uplift": (
+                "revenue_uplift_base",
+                "revenue_uplift_high",
+                "revenue_uplift_actual",
+            ),
+            "gross_margin": ("gross_margin_base", "gross_margin_high", "gross_margin_actual"),
+            "gm_uplift": ("gm_uplift_base", "gm_uplift_high", "gm_uplift_actual"),
+            "cogs": ("cogs_base", "cogs_high", "cogs_actual"),
+        }
+        scenario_keys = ("plan_base", "plan_high", "actual")
+        payload: list[dict] = []
+        for row in rows:
+            year = int(row["year"])
+            month = int(row.get("month") or ((int(row.get("quarter") or 1) - 1) * 3 + 1))
+            for scenario_key in scenario_keys:
+                scenario_id = scenarios.get(scenario_key)
+                if not scenario_id:
+                    continue
+                for metric_key, field_names in metric_field_map.items():
+                    field_name = field_names[scenario_keys.index(scenario_key)]
+                    value = row.get(field_name)
+                    if value is None:
+                        continue
+                    metric_definition_id = definitions.get(metric_key)
+                    if not metric_definition_id:
+                        continue
+                    payload.append(
+                        {
+                            "metric_definition_id": metric_definition_id,
+                            "scenario_id": scenario_id,
+                            "benefit_line_id": None,
+                            "year": year,
+                            "month": month,
+                            "value": value,
+                            "status": "draft",
+                            "note": None,
+                        }
+                    )
+        if not payload:
+            return []
+        return self.upsert_configurable_metric_values_batch(initiative_id, payload)
 
     def _find_forecasts(self, initiative_id: str, row: dict) -> list[dict]:  # type: ignore[type-arg]
         query = (

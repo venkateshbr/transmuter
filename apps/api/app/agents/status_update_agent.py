@@ -2,19 +2,99 @@
 
 from __future__ import annotations
 
+import asyncio
 from uuid import uuid4
 
 from langfuse.types import TraceContext
+from openai import AsyncOpenAI
+from pydantic_ai import Agent
+from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.providers.openai import OpenAIProvider
 
 from app.agents.initiative_intake_agent import _get_langfuse
 from app.core.config import settings
 from app.domain.initiative_context import InitiativeContextPullResult
 from app.domain.status_updates import StatusUpdateDraftSuggestion
 
+status_update_agent: Agent[None, StatusUpdateDraftSuggestion] | None = None
+STATUS_UPDATE_AGENT_TIMEOUT_SECONDS = 8
 
-def draft_status_update(context: InitiativeContextPullResult) -> StatusUpdateDraftSuggestion:
-    """Draft a status update only from supplied initiative context."""
+
+def _get_status_update_agent() -> Agent[None, StatusUpdateDraftSuggestion]:
+    global status_update_agent
+    if status_update_agent is None:
+        client = AsyncOpenAI(
+            base_url=settings.openrouter_base_url,
+            api_key=settings.openrouter_api_key,
+        )
+        provider = OpenAIProvider(openai_client=client)
+        model = OpenAIChatModel(settings.default_model, provider=provider)
+        status_update_agent = Agent(
+            model,
+            output_type=StatusUpdateDraftSuggestion,
+            system_prompt=(
+                "You are Transmuter's status update drafting assistant. Draft a concise, "
+                "executive-ready initiative status update using only the supplied context. "
+                "Do not invent milestones, risks, KPIs, financials, names, dates, or owners. "
+                "Return typed JSON only."
+            ),
+        )
+    return status_update_agent
+
+
+async def draft_status_update(context: InitiativeContextPullResult) -> StatusUpdateDraftSuggestion:
+    """Draft a status update from supplied initiative context, using AI when configured."""
     trace_id = _trace_id()
+    fallback = deterministic_status_update(context, trace_id=trace_id)
+
+    if settings.ai_enabled and settings.openrouter_api_key:
+        try:
+            prompt = _prompt(context)
+            langfuse = _get_langfuse()
+            if langfuse:
+                with langfuse.start_as_current_observation(
+                    name="status_update_drafting",
+                    as_type="agent",
+                    trace_context=TraceContext(trace_id=trace_id),
+                    input={
+                        "initiative_id": context.initiative_id,
+                        "period_start": context.period_start,
+                        "period_end": context.period_end,
+                        "sources": context.sources,
+                    },
+                    metadata={"source": "status_update_generation"},
+                    model=settings.default_model,
+                ):
+                    result = await asyncio.wait_for(
+                        _get_status_update_agent().run(prompt),
+                        timeout=STATUS_UPDATE_AGENT_TIMEOUT_SECONDS,
+                    )
+                    generated = _with_trace(result.output, trace_id, langfuse)
+                    generated.agent_status = "generated"
+                    langfuse.update_current_span(output=generated.model_dump(mode="json"))
+                    langfuse.flush()
+                    return generated
+
+            result = await asyncio.wait_for(
+                _get_status_update_agent().run(prompt),
+                timeout=STATUS_UPDATE_AGENT_TIMEOUT_SECONDS,
+            )
+            generated = _with_trace(result.output, trace_id, None)
+            generated.agent_status = "generated"
+            return generated
+        except Exception:
+            return fallback
+
+    return fallback
+
+
+def deterministic_status_update(
+    context: InitiativeContextPullResult,
+    *,
+    trace_id: str | None = None,
+) -> StatusUpdateDraftSuggestion:
+    """Build a deterministic status update only from supplied initiative context."""
+    resolved_trace_id = trace_id or _trace_id()
     milestones = context.milestones_summary
     risks = context.risks_summary
     kpis = context.kpis_summary.kpis
@@ -35,7 +115,7 @@ def draft_status_update(context: InitiativeContextPullResult) -> StatusUpdateDra
         summary += f" The previous submitted update was {context.last_update.rag_status}."
 
     result = StatusUpdateDraftSuggestion(
-        trace_id=trace_id,
+        trace_id=resolved_trace_id,
         rag_status=rag_status,
         summary=summary,
         achievements=_achievement_bullets(completed),
@@ -45,6 +125,26 @@ def draft_status_update(context: InitiativeContextPullResult) -> StatusUpdateDra
         sources=context.sources,
     )
     return _trace_status_update(context, result)
+
+
+def _prompt(context: InitiativeContextPullResult) -> str:
+    return (
+        "Draft an initiative status update from this context. "
+        "Use only these facts and return a StatusUpdateDraftSuggestion JSON object.\n\n"
+        f"{context.model_dump_json()}"
+    )
+
+
+def _with_trace(
+    result: StatusUpdateDraftSuggestion,
+    trace_id: str,
+    langfuse: object | None,
+) -> StatusUpdateDraftSuggestion:
+    result.trace_id = trace_id
+    result.trace_url = langfuse.get_trace_url(trace_id=trace_id) if langfuse else None  # type: ignore[attr-defined]
+    if not result.sources:
+        result.sources = []
+    return result
 
 
 def _rag_status(context: InitiativeContextPullResult) -> str:

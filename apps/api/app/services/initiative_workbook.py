@@ -41,6 +41,7 @@ OVERVIEW_COLUMNS = [
     "tag",
     "priority",
     "summary",
+    "context_problem",
     "value_logic",
     "dependencies_text",
     "planned_start",
@@ -61,6 +62,7 @@ SAMPLE_OVERVIEW = [
     "automation",
     "medium",
     "Imported from the Transmuter initiative template.",
+    "Manual intake makes it hard to compare and govern initiatives consistently.",
     "Reduce manual effort and improve monthly close predictability.",
     "Finance, IT, and change management alignment.",
     "2026-06-01",
@@ -498,7 +500,7 @@ def _alchemist_overview_rows(overview: dict[str, str]) -> list[list[str]]:
         ["", ""],
         ["DESCRIPTION", ""],
         ["Description", overview.get("summary", "")],
-        ["Context & Problem", ""],
+        ["Context & Problem", overview.get("context_problem", "")],
         ["Value Logic / Assumptions", overview.get("value_logic", "")],
     ]
 
@@ -1066,9 +1068,8 @@ def _parse_alchemist_overview(
             country=_blank_to_none(_clean_text(values.get("Country"))),
             tag=_initiative_tag(values.get("Initiative Tag")),
             priority=_choice(values.get("Priority"), {"high", "medium", "low"}) or "medium",
-            summary=_blank_to_none(
-                _clean_text(values.get("Description") or values.get("Context & Problem"))
-            ),
+            summary=_blank_to_none(_clean_text(values.get("Description"))),
+            context_problem=_blank_to_none(_clean_text(values.get("Context & Problem"))),
             value_logic=_blank_to_none(_clean_text(values.get("Value Logic / Assumptions"))),
             dependencies_text=_blank_to_none(_clean_text(values.get("Dependencies"))),
             planned_start=_blank_to_none(_date_text(values.get("Planned Start Date"))),
@@ -1397,6 +1398,7 @@ def _parse_overview(
             tag=_blank_to_none(row["tag"]),
             priority=row["priority"] or "medium",
             summary=_blank_to_none(row["summary"]),
+            context_problem=_blank_to_none(row["context_problem"]),
             value_logic=_blank_to_none(row["value_logic"]),
             dependencies_text=_blank_to_none(row["dependencies_text"]),
             planned_start=_blank_to_none(row["planned_start"]),

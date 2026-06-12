@@ -88,6 +88,9 @@ import { ActivatedRoute } from '@angular/router';
                  <span class="text-[10px] font-black px-2 py-0.5 rounded bg-[var(--t-accent-soft)] text-[var(--t-accent)]">
                    TRN-{{ s.initiative_id.substring(0,3).toUpperCase() }}
                  </span>
+                 <span class="text-[10px] font-black px-2 py-0.5 rounded border border-[var(--t-border)] text-[var(--t-text-secondary)]">
+                   {{ gateDefinition(s.gate_number)?.label || ('Gate ' + s.gate_number) }}
+                 </span>
                  <span class="text-xs font-bold text-[var(--t-text-secondary)] uppercase tracking-tighter italic">Pending Transformation Review</span>
                </div>
                <h3 class="text-lg font-black text-[var(--t-text-primary)] truncate">
@@ -95,6 +98,16 @@ import { ActivatedRoute } from '@angular/router';
                </h3>
                <p class="text-xs font-bold text-[var(--t-text-secondary)] uppercase tracking-tight">
                  {{ countTickedCriteria(s) }} of {{ s.criteria_snapshot?.length || 0 }} criteria ready
+               </p>
+               <p class="mt-1 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">
+                 Approvers:
+                 <span class="text-[var(--t-text-secondary)]">
+                   {{ rolesText(gateDefinition(s.gate_number)?.approver_roles || ['transformation_office']) }}
+                 </span>
+                 <span class="mx-2">|</span>
+                 <span [class.text-emerald-600]="gateDefinition(s.gate_number)?.approval_required !== false">
+                   {{ gateDefinition(s.gate_number)?.approval_required === false ? 'No approval required' : 'Approval required' }}
+                 </span>
                </p>
                <div class="mt-2 flex items-center gap-6">
                  <div class="flex items-center gap-2">
@@ -175,6 +188,7 @@ export class GovernanceComponent implements OnInit {
   protected readonly auth = inject(AuthService);
   
   allSubmissions = signal<any[]>([]);
+  stageGateDefinitions = signal<any[]>([]);
   healthScore = signal('0/0');
   statusFilter = signal('');
 
@@ -190,6 +204,7 @@ export class GovernanceComponent implements OnInit {
       this.statusFilter.set(params.get('status') ?? '');
     });
     this.fetchSubmissions();
+    this.fetchStageGateDefinitions();
   }
 
   fetchSubmissions() {
@@ -202,12 +217,27 @@ export class GovernanceComponent implements OnInit {
     });
   }
 
+  fetchStageGateDefinitions() {
+    this.api.get<any[]>('/governance/stage-gates').subscribe({
+      next: data => this.stageGateDefinitions.set(Array.isArray(data) ? data : []),
+      error: err => console.error('Failed to fetch stage gate definitions', err),
+    });
+  }
+
   getCount(status: string): number {
     return this.allSubmissions().filter(s => s.decision === status).length;
   }
 
   countTickedCriteria(submission: any): number {
     return (submission.criteria_snapshot || []).filter((criterion: any) => criterion?.ticked).length;
+  }
+
+  gateDefinition(gateNumber: number): any | undefined {
+    return this.stageGateDefinitions().find(gate => Number(gate.gate_number) === Number(gateNumber));
+  }
+
+  rolesText(roles: string[] | null | undefined): string {
+    return (roles || []).join(', ');
   }
 
   getDecisionClass(decision: string): string {

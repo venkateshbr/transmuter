@@ -16,6 +16,11 @@ interface FilterOption {
   business_unit_id?: string | null;
 }
 
+interface StageDefinition {
+  id: string;
+  label: string;
+}
+
 interface DecisionQueueItem {
   label: string;
   description: string;
@@ -394,7 +399,7 @@ const DASHBOARD_FILTER_STATE_KEY = 'transmuter.filters.dashboard';
         <div class="lg:col-span-2 space-y-8">
           
           <!-- Pipeline by Stage -->
-          <app-dashboard-echart-card kind="stage" [data]="data()" [stages]="stages" />
+          <app-dashboard-echart-card kind="stage" [data]="data()" [stages]="stages()" />
 
           <!-- RAG Breakdown -->
           <app-dashboard-echart-card kind="rag" [data]="data()" />
@@ -1011,11 +1016,22 @@ export class DashboardComponent implements OnInit {
     target_year: '',
   });
   heatmapLevels = ['high', 'medium', 'low'];
-  stages = [
-    { id: 'scoping', label: 'Scoping' },
-    { id: 'in_progress', label: 'In-Progress' },
-    { id: 'complete', label: 'Complete' }
-  ];
+  readonly stages = computed<StageDefinition[]>(() => {
+    const stages = this.data()?.available_filters?.stages;
+    if (Array.isArray(stages) && stages.length) {
+      return stages
+        .map((stage: any) => ({
+          id: String(stage.id || ''),
+          label: String(stage.name || stage.label || stage.id || ''),
+        }))
+        .filter(stage => Boolean(stage.id));
+    }
+    return [
+      { id: 'scoping', label: 'Scoping' },
+      { id: 'in_progress', label: 'In Progress' },
+      { id: 'complete', label: 'Complete' },
+    ];
+  });
   readonly executivePersonas: { id: ExecutiveBriefPersona; label: string }[] = [
     { id: 'management', label: 'Management' },
     { id: 'investor', label: 'Investor' },

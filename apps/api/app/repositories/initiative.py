@@ -70,7 +70,17 @@ class InitiativeRepository:
 
         if not include_archived:
             q = q.is_("archived_at", "null")
+        explicit_workstream_ids = list(workstream_ids) if workstream_ids else None
         if business_unit_ids:
+            initiative_ids = set()
+            linked_result = (
+                self._c.table("initiative_business_units")
+                .select("initiative_id")
+                .eq("tenant_id", self._tid)
+                .in_("business_unit_id", business_unit_ids)
+                .execute()
+            )
+            initiative_ids.update(row["initiative_id"] for row in linked_result.data or [])
             workstream_result = (
                 self._c.table("workstreams")
                 .select("id")
@@ -79,12 +89,24 @@ class InitiativeRepository:
                 .execute()
             )
             bu_workstream_ids = [row["id"] for row in workstream_result.data or []]
-            if workstream_ids:
-                workstream_ids = [ws_id for ws_id in workstream_ids if ws_id in bu_workstream_ids]
+            if explicit_workstream_ids:
+                workstream_ids = [
+                    ws_id for ws_id in explicit_workstream_ids if ws_id in bu_workstream_ids
+                ]
             else:
-                workstream_ids = bu_workstream_ids
-            if not workstream_ids:
+                workstream_ids = None
+            if bu_workstream_ids:
+                workstream_initiatives = (
+                    self._c.table("initiatives")
+                    .select("id")
+                    .eq("tenant_id", self._tid)
+                    .in_("workstream_id", bu_workstream_ids)
+                    .execute()
+                )
+                initiative_ids.update(row["id"] for row in workstream_initiatives.data or [])
+            if not initiative_ids:
                 return [], 0
+            q = q.in_("id", sorted(initiative_ids))
         if workstream_ids:
             q = q.in_("workstream_id", workstream_ids)
         if rag_statuses:

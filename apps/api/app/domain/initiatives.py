@@ -19,7 +19,7 @@ InitiativeType = Literal[
 ImpactType = Literal["recurring", "one_off"]
 Priority = Literal["high", "medium", "low"]
 RAGStatus = Literal["red", "amber", "green"]
-Stage = Literal["scoping", "in_progress", "complete"]
+Stage = str
 InitiativeTag = str
 RealizationStatus = Literal[
     "not_started", "forecasted", "committed", "partially_realized", "realized", "at_risk"
@@ -41,6 +41,7 @@ class InitiativeCreate(BaseModel):
     tag: InitiativeTag | None = None
     priority: Priority = "medium"
     summary: str | None = None
+    context_problem: str | None = None
     value_logic: str | None = None
     dependencies_text: str | None = None
     benefit_confidence: Decimal = Field(Decimal("50.00"), ge=0, le=100)
@@ -65,6 +66,7 @@ class InitiativeUpdate(BaseModel):
     stage: Stage | None = None
     summary: str | None = None
     lessons_learned: str | None = None
+    context_problem: str | None = None
     value_logic: str | None = None
     dependencies_text: str | None = None
     benefit_confidence: Decimal | None = Field(None, ge=0, le=100)
@@ -165,6 +167,7 @@ class InitiativeDetail(BaseModel):
     stage: str
     summary: str | None
     lessons_learned: str | None = None
+    context_problem: str | None = None
     value_logic: str | None
     dependencies_text: str | None
     benefit_confidence: str = "50.00"

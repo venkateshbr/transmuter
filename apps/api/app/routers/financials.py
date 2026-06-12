@@ -27,6 +27,8 @@ from app.domain.financials import (
     BenefitLedgerRollupSummaryResponse,
     BenefitLedgerSummaryResponse,
     BreakEvenResponse,
+    ConfigurableFinancialGridResponse,
+    ConfigurableFinancialGridUpdate,
     CostLineCreate,
     CostLineItem,
     CostLineListResponse,
@@ -38,14 +40,22 @@ from app.domain.financials import (
     FinancialCellAssumptionUpdate,
     FinancialConfigurationResponse,
     FinancialConfigurationUpdate,
+    FinancialEngineConfigurationResponse,
     FinancialForecastResponse,
     FinancialForecastUpdate,
     FinancialGovernanceSettings,
     FinancialGovernanceSettingsUpdate,
     FinancialGridResponse,
-    FinancialGridUpdate,
     FinancialMetricDeactivateRequest,
+    FinancialMetricDefinition,
+    FinancialMetricDefinitionCreate,
+    FinancialMetricDefinitionUpdate,
+    FinancialReportingSettings,
+    FinancialReportingSettingsUpdate,
     FinancialScenario,
+    FinancialScenarioDefinition,
+    FinancialScenarioDefinitionCreate,
+    FinancialScenarioDefinitionUpdate,
     InitiativeFinancialSelections,
     InitiativeFinancialSelectionsResponse,
     PortfolioFinancialContributorsResponse,
@@ -79,28 +89,32 @@ def _admin_svc(
 # ── Financial Grid ────────────────────────────────────────────────────────────
 
 
-@router.get("/initiatives/{initiative_id}/financials", response_model=FinancialGridResponse)
+@router.get(
+    "/initiatives/{initiative_id}/financials", response_model=ConfigurableFinancialGridResponse
+)
 async def get_financials(
     initiative_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
     client: Annotated[Client, Depends(get_supabase_request_client)],
-) -> FinancialGridResponse:
-    """Return full financial grid (2026–2030, quarterly) for an initiative."""
+) -> ConfigurableFinancialGridResponse:
+    """Return the configurable monthly financial grid for an initiative."""
     assert_can_view_initiative(client, current_user, initiative_id)
-    return svc.get_financial_grid(initiative_id)
+    return svc.get_configurable_financial_grid(initiative_id)
 
 
-@router.put("/initiatives/{initiative_id}/financials", response_model=FinancialGridResponse)
+@router.put(
+    "/initiatives/{initiative_id}/financials", response_model=ConfigurableFinancialGridResponse
+)
 async def update_financials(
     initiative_id: str,
-    body: FinancialGridUpdate,
+    body: ConfigurableFinancialGridUpdate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
-) -> FinancialGridResponse:
-    """Upsert the full financial grid for an initiative."""
+) -> ConfigurableFinancialGridResponse:
+    """Upsert the configurable monthly financial grid for an initiative."""
     assert_can_manage_initiatives(current_user)
-    return svc.update_financial_grid(initiative_id, body)
+    return svc.update_configurable_financial_grid(initiative_id, body, str(current_user.id))
 
 
 @router.get(
@@ -478,6 +492,87 @@ async def get_readonly_financial_configuration(
 ) -> FinancialConfigurationResponse:
     assert_can_view_portfolio(current_user)
     return svc.get_configuration()
+
+
+@router.get(
+    "/financial-engine-configuration",
+    response_model=FinancialEngineConfigurationResponse,
+)
+async def get_financial_engine_configuration(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> FinancialEngineConfigurationResponse:
+    assert_can_view_portfolio(current_user)
+    return svc.get_engine_configuration()
+
+
+@router.put(
+    "/admin/financial-engine/reporting-settings",
+    response_model=FinancialReportingSettings,
+)
+async def update_financial_reporting_settings(
+    body: FinancialReportingSettingsUpdate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> FinancialReportingSettings:
+    assert_can_manage_initiatives(current_user)
+    return svc.update_reporting_settings(body)
+
+
+@router.post(
+    "/admin/financial-engine/metrics",
+    response_model=FinancialMetricDefinition,
+    status_code=201,
+)
+async def create_financial_metric_definition(
+    body: FinancialMetricDefinitionCreate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> FinancialMetricDefinition:
+    assert_can_manage_initiatives(current_user)
+    return svc.create_metric_definition(body, str(current_user.id))
+
+
+@router.patch(
+    "/admin/financial-engine/metrics/{metric_definition_id}",
+    response_model=FinancialMetricDefinition,
+)
+async def update_financial_metric_definition(
+    metric_definition_id: str,
+    body: FinancialMetricDefinitionUpdate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> FinancialMetricDefinition:
+    assert_can_manage_initiatives(current_user)
+    return svc.update_metric_definition(metric_definition_id, body, str(current_user.id))
+
+
+@router.post(
+    "/admin/financial-engine/scenarios",
+    response_model=FinancialScenarioDefinition,
+    status_code=201,
+)
+async def create_financial_scenario_definition(
+    body: FinancialScenarioDefinitionCreate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> FinancialScenarioDefinition:
+    assert_can_manage_initiatives(current_user)
+    return svc.create_scenario_definition(body)
+
+
+@router.patch(
+    "/admin/financial-engine/scenarios/{scenario_id}",
+    response_model=FinancialScenarioDefinition,
+)
+async def update_financial_scenario_definition(
+    scenario_id: str,
+    body: FinancialScenarioDefinitionUpdate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> FinancialScenarioDefinition:
+    assert_can_manage_initiatives(current_user)
+    return svc.update_scenario_definition(scenario_id, body)
 
 
 @router.put(

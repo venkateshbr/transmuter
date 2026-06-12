@@ -148,7 +148,7 @@ async def generate_status_update_draft(
     svc: Annotated[StatusUpdateService, Depends(_svc)],
 ) -> StatusUpdateDraftSuggestion:
     assert_can_manage_initiatives(current_user)
-    return svc.generate_draft(initiative_id)
+    return await svc.generate_draft(initiative_id)
 
 
 @router.post(

@@ -58,7 +58,7 @@ interface RiskHeatmapPoint {
         [attr.aria-label]="chartAriaLabel()"></div>
 
       @if (kind === 'stage') {
-        <div class="mt-4 grid grid-cols-3 gap-2">
+        <div class="mt-4 grid gap-2" [style.grid-template-columns]="'repeat(' + (stages.length || 1) + ', minmax(0, 1fr))'">
           @for (stage of stages; track stage.id) {
             <a
               routerLink="/initiatives/pipeline"

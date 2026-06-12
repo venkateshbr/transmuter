@@ -77,6 +77,7 @@ interface InitiativeDetail {
   rag_status: string;
   stage: string;
   summary: string | null;
+  context_problem: string | null;
   dependencies_text: string | null;
   value_logic: string | null;
   planned_start: string | null;
@@ -114,6 +115,14 @@ interface WorkstreamOption {
 interface BusinessUnitOption {
   id: string;
   name: string;
+}
+
+interface StageGateDefinition {
+  gate_number: number;
+  label: string;
+  from_stage: string;
+  to_stage: string;
+  is_active: boolean;
 }
 
 @Component({
@@ -213,6 +222,16 @@ interface BusinessUnitOption {
               <p class="text-sm leading-relaxed" style="color:var(--t-text-primary)">
                 {{ detail()!.summary || 'No summary provided.' }}
               </p>
+              @if (detail()!.context_problem) {
+                <div class="mt-6 pt-6 border-t" style="border-color:var(--t-border)">
+                  <h4 class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--t-text-secondary)">
+                    Context & Problem
+                  </h4>
+                  <p class="text-sm" style="color:var(--t-text-secondary)">
+                    {{ detail()!.context_problem }}
+                  </p>
+                </div>
+              }
               @if (detail()!.value_logic) {
                 <div class="mt-6 pt-6 border-t" style="border-color:var(--t-border)">
                   <h4 class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--t-text-secondary)">
@@ -479,9 +498,9 @@ interface BusinessUnitOption {
                 <div>
                   <label class="block text-xs font-semibold uppercase text-[var(--t-text-secondary)] mb-1">Stage</label>
                   <select [(ngModel)]="editData.stage" class="w-full bg-[var(--t-surface-raised)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text-primary)] focus:border-[var(--t-primary)] outline-none">
-                    <option value="scoping">Scoping</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="complete">Complete</option>
+                    @for (stage of stageOptions(); track stage) {
+                      <option [value]="stage">{{ labelize(stage) }}</option>
+                    }
                   </select>
                 </div>
                 <div>
@@ -516,6 +535,10 @@ interface BusinessUnitOption {
               <div>
                 <label class="block text-xs font-semibold uppercase text-[var(--t-text-secondary)] mb-1">Description (Summary)</label>
                 <textarea [(ngModel)]="editData.summary" rows="4" class="w-full bg-[var(--t-surface-raised)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text-primary)] focus:border-[var(--t-primary)] outline-none"></textarea>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold uppercase text-[var(--t-text-secondary)] mb-1">Context & Problem</label>
+                <textarea [(ngModel)]="editData.context_problem" rows="3" class="w-full bg-[var(--t-surface-raised)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text-primary)] focus:border-[var(--t-primary)] outline-none"></textarea>
               </div>
               <div>
                 <label class="block text-xs font-semibold uppercase text-[var(--t-text-secondary)] mb-1">Value Logic</label>
@@ -562,6 +585,7 @@ export class OverviewTabComponent implements OnInit {
   markets = signal<string[]>([]);
   themes = signal<string[]>([]);
   tags = signal<string[]>([]);
+  stageDefinitions = signal<StageGateDefinition[]>([]);
 
   isEditing = signal(false);
   saving = signal(false);
@@ -682,6 +706,7 @@ export class OverviewTabComponent implements OnInit {
       stage: d.stage,
       rag_status: d.rag_status,
       summary: d.summary,
+      context_problem: d.context_problem,
       value_logic: d.value_logic,
       dependencies_text: d.dependencies_text,
       planned_start: d.planned_start,
@@ -740,6 +765,10 @@ export class OverviewTabComponent implements OnInit {
       },
       error: () => {},
     });
+    this.api.get<StageGateDefinition[]>('/governance/stage-gates').subscribe({
+      next: r => this.stageDefinitions.set((r || []).filter(stage => stage.is_active !== false)),
+      error: () => {},
+    });
   }
 
   filteredWorkstreams(): WorkstreamOption[] {
@@ -758,6 +787,16 @@ export class OverviewTabComponent implements OnInit {
 
   tagOptions(): string[] {
     return this.withCurrentOption(this.tags(), this.editData.tag || '');
+  }
+
+  stageOptions(): string[] {
+    const stages: string[] = [];
+    for (const gate of [...this.stageDefinitions()].sort((a, b) => (a.gate_number || 0) - (b.gate_number || 0))) {
+      for (const stage of [gate.from_stage, gate.to_stage]) {
+        if (stage && !stages.includes(stage)) stages.push(stage);
+      }
+    }
+    return this.withCurrentOption(stages.length ? stages : ['scoping', 'in_progress', 'complete'], this.editData.stage || '');
   }
 
   onEditBusinessUnitChange(businessUnitId: string): void {

@@ -25,6 +25,17 @@ class DashboardRepository:
         res = res.execute()
         return res.data or []
 
+    def get_stage_gate_definitions(self) -> list[dict[str, Any]]:
+        res = (
+            self.client.table("stage_gate_definitions")
+            .select("gate_number,label,from_stage,to_stage,is_active")
+            .eq("tenant_id", self.tenant_id)
+            .eq("is_active", True)
+            .order("gate_number")
+            .execute()
+        )
+        return res.data or []
+
     def get_my_milestones(self, user_id: UUID, limit: int = 5) -> list[dict[str, Any]]:
         res = (
             self.client.table("milestones")
@@ -96,16 +107,27 @@ class DashboardRepository:
         return kpis, entries
 
     def get_financial_summary_data(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        entry_select = (
-            "initiative_id, year, quarter, revenue_uplift_base, revenue_uplift_high, revenue_uplift_actual, "
-            "gm_uplift_base, gm_uplift_high, gm_uplift_actual"
-        )
-        entries = (
-            self.client.table("financial_entries")
-            .select(entry_select)
-            .eq("tenant_id", self.tenant_id)
-            .execute()
-        ).data or []
+        try:
+            entry_select = (
+                "initiative_id, year, quarter, revenue_uplift_base, revenue_uplift_high, revenue_uplift_actual, "
+                "gm_uplift_base, gm_uplift_high, gm_uplift_actual"
+            )
+            entries = (
+                self.client.table("financial_entries")
+                .select(entry_select)
+                .eq("tenant_id", self.tenant_id)
+                .execute()
+            ).data or []
+        except Exception as exc:
+            text = str(exc)
+            if "financial_entries" in text and (
+                "Could not find the table" in text
+                or "does not exist" in text
+                or "schema cache" in text
+            ):
+                entries = []
+            else:
+                raise
 
         costs = (
             self.client.table("financial_cost_lines")

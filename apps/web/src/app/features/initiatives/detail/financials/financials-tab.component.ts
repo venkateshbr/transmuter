@@ -56,6 +56,10 @@ interface FinancialSummary {
 
 interface FinancialGrid {
   initiative_id: string;
+  definitions?: FinancialMetricDefinition[];
+  scenarios?: FinancialScenarioDefinition[];
+  values?: ConfigurableMetricValue[];
+  settings?: { fiscal_year_start_month: number; reporting_currency: string };
   entries: FinancialEntry[];
   metric_values: FinancialMetricValue[];
   selections: InitiativeFinancialSelections;
@@ -72,6 +76,39 @@ interface FinancialMetricValue {
   value_base: string;
   value_high: string;
   value_actual: string | null;
+}
+
+interface FinancialMetricDefinition {
+  id: string;
+  key: string;
+  label: string;
+  group_key?: string | null;
+  value_type: 'currency' | 'percent' | 'number';
+  aggregation: 'sum' | 'avg' | 'last' | 'formula';
+  is_benefit: boolean;
+  benefit_class?: string | null;
+  is_active: boolean;
+}
+
+interface FinancialScenarioDefinition {
+  id: string;
+  key: string;
+  label: string;
+  kind: 'baseline' | 'plan' | 'forecast' | 'actual';
+  is_primary: boolean;
+  is_active: boolean;
+}
+
+interface ConfigurableMetricValue {
+  id: string;
+  metric_definition_id: string;
+  scenario_id: string;
+  benefit_line_id?: string | null;
+  year: number;
+  month: number;
+  value: string;
+  status: 'draft' | 'submitted' | 'approved';
+  note?: string | null;
 }
 
 interface InitiativeFinancialSelections {
@@ -168,6 +205,8 @@ interface GridMetric {
   source: 'financial_entry' | 'cost_line' | 'metric_value';
   costCategoryKey?: string;
   metricValueKey?: string;
+  metricDefinitionId?: string;
+  scenarioId?: string;
   metricScenario?: FinancialScenario;
   isRecurring?: boolean;
   actual?: boolean;
@@ -448,6 +487,31 @@ export class FinancialsTabComponent implements OnInit {
   isLocked = computed(() => Boolean(this.grid()?.locked));
 
   configuredMetrics = computed<GridMetric[]>(() => {
+    const cleanDefinitions = this.grid()?.definitions || [];
+    const cleanScenario = this.selectedScenarioDefinition();
+    if (cleanDefinitions.length && cleanScenario) {
+      const metricRows = cleanDefinitions
+        .filter(definition => definition.is_active !== false && definition.aggregation !== 'formula')
+        .sort((a, b) => (a.group_key || '').localeCompare(b.group_key || '') || a.label.localeCompare(b.label))
+        .map((definition): GridMetric => ({
+          category: this.metricCategoryLabel(definition),
+          label: `${definition.label} (${cleanScenario.label})`,
+          key: `metric_${definition.id}_${cleanScenario.id}`,
+          source: 'metric_value' as const,
+          metricDefinitionId: definition.id,
+          scenarioId: cleanScenario.id,
+          metricValueKey: definition.key,
+          metricScenario: this.scenario(),
+        }));
+      const costRows: GridMetric[] = [
+        { category: 'Costs', label: 'Recurring Costs (Plan)', key: 'costs_recurring_plan', source: 'cost_line', isRecurring: true, actual: false },
+        { category: 'Costs', label: 'Recurring Costs (Actual)', key: 'costs_recurring_actual', source: 'cost_line', isRecurring: true, actual: true },
+        { category: 'Costs', label: 'One-off Costs (Plan)', key: 'costs_one_off_plan', source: 'cost_line', isRecurring: false, actual: false },
+        { category: 'Costs', label: 'One-off Costs (Actual)', key: 'costs_one_off_actual', source: 'cost_line', isRecurring: false, actual: true },
+      ];
+      return [...metricRows, ...costRows];
+    }
+
     const config = this.configuration();
     const selectedMetrics = this.selectedMetricKeySet();
     const selectedCosts = this.selectedCostCategoryKeySet();
@@ -524,6 +588,32 @@ export class FinancialsTabComponent implements OnInit {
     const configured = [...configuredMetrics, ...configuredCosts];
     return configured;
   });
+
+  selectedScenarioDefinition(): FinancialScenarioDefinition | null {
+    const scenarios = (this.grid()?.scenarios || []).filter(item => item.is_active !== false);
+    const keyByScenario: Record<FinancialScenario, string[]> = {
+      base: ['plan_base', 'base'],
+      high: ['plan_high', 'high'],
+      actual: ['actual'],
+    };
+    const preferredKeys = keyByScenario[this.scenario()];
+    return scenarios.find(item => preferredKeys.includes(item.key))
+      || (this.scenario() === 'base' ? scenarios.find(item => item.kind === 'plan' && item.is_primary) : null)
+      || scenarios.find(item => item.kind === (this.scenario() === 'actual' ? 'actual' : 'plan'))
+      || scenarios[0]
+      || null;
+  }
+
+  metricCategoryLabel(definition: FinancialMetricDefinition): string {
+    if (definition.group_key) {
+      return definition.group_key
+        .split(/[_\s-]+/)
+        .map(part => part ? part.charAt(0).toUpperCase() + part.slice(1) : part)
+        .join(' ');
+    }
+    if (definition.is_benefit) return 'Benefits';
+    return 'Financials';
+  }
 
   private metricSelected(metric: GridMetric, selectedMetrics: Set<string>, selectedCosts: Set<string>): boolean {
     if (metric.source === 'cost_line') {
@@ -803,13 +893,26 @@ export class FinancialsTabComponent implements OnInit {
     const entryMap = new Map<string, any>();
     const costMap = new Map<string, any>();
     const metricValueMap = new Map<string, any>();
+    const cleanValueMap = new Map<string, any>();
 
     pivotedData.forEach((row: any) => {
       const metricKey = row.key;
       this.editableMonths().forEach(period => {
         const val = row[`col_${period.year}_m${period.month}`] || 0;
         const numericVal = this.parseMoney(val);
-        if (row.source === 'metric_value') {
+        if (row.source === 'metric_value' && row.metricDefinitionId && row.scenarioId) {
+          const key = `${row.metricDefinitionId}_${row.scenarioId}_${period.year}_${period.month}`;
+          if (!numericVal && !this.hasExistingConfigurableValue(period.year, period.month, row.metricDefinitionId, row.scenarioId)) return;
+          cleanValueMap.set(key, {
+            metric_definition_id: row.metricDefinitionId,
+            scenario_id: row.scenarioId,
+            benefit_line_id: null,
+            year: period.year,
+            month: period.month,
+            value: numericVal.toString(),
+            status: 'draft',
+          });
+        } else if (row.source === 'metric_value') {
           const customMetricKey = row.metricValueKey || metricKey;
           const scenario = row.metricScenario || 'base';
           const key = `${customMetricKey}_${period.year}_${period.month}_null`;
@@ -859,6 +962,7 @@ export class FinancialsTabComponent implements OnInit {
       entries: Array.from(entryMap.values()), 
       cost_lines: Array.from(costMap.values()),
       metric_values: Array.from(metricValueMap.values()),
+      values: Array.from(cleanValueMap.values()),
     }).subscribe({
       next: () => {
         this.saving.set(false);
@@ -930,6 +1034,11 @@ export class FinancialsTabComponent implements OnInit {
        let sum = 0;
        const months = [(q-1)*3+1, (q-1)*3+2, (q-1)*3+3];
        if (m.source === 'metric_value') {
+         if (m.metricDefinitionId && m.scenarioId) {
+           return (this.grid()?.values || [])
+             .filter(x => x.metric_definition_id === m.metricDefinitionId && x.scenario_id === m.scenarioId && x.year === year && months.includes(x.month))
+             .reduce((s, x) => s + parseFloat(x.value || '0'), 0);
+         }
          const monthlyValues = metricValues.filter(x => x.metric_key === metricValueKey && x.year === year && months.includes(x.month!) && this.metricValueHasValue(x));
          const periodValues = monthlyValues.length
            ? monthlyValues
@@ -961,6 +1070,23 @@ export class FinancialsTabComponent implements OnInit {
     }
 
     if (m.source === 'metric_value') {
+      if (m.metricDefinitionId && m.scenarioId) {
+        const cleanValues = this.grid()?.values || [];
+        if (mon) {
+          return cleanValues
+            .filter(x => x.metric_definition_id === m.metricDefinitionId && x.scenario_id === m.scenarioId && x.year === year && x.month === mon)
+            .reduce((sum, x) => sum + parseFloat(x.value || '0'), 0);
+        }
+        if (q) {
+          const months = [(q-1)*3+1, (q-1)*3+2, (q-1)*3+3];
+          return cleanValues
+            .filter(x => x.metric_definition_id === m.metricDefinitionId && x.scenario_id === m.scenarioId && x.year === year && months.includes(x.month))
+            .reduce((sum, x) => sum + parseFloat(x.value || '0'), 0);
+        }
+        return cleanValues
+          .filter(x => x.metric_definition_id === m.metricDefinitionId && x.scenario_id === m.scenarioId && x.year === year)
+          .reduce((sum, x) => sum + parseFloat(x.value || '0'), 0);
+      }
       const exactRows = metricValues
         .filter(x => x.metric_key === metricValueKey && x.year === year && x.month === mon && x.quarter === q);
       if (exactRows.length) {
@@ -1136,6 +1262,15 @@ export class FinancialsTabComponent implements OnInit {
       metric.metric_key === metricKey
       && metric.year === year
       && metric.month === month
+    );
+  }
+
+  private hasExistingConfigurableValue(year: number, month: number, metricDefinitionId: string, scenarioId: string): boolean {
+    return (this.grid()?.values || []).some(value =>
+      value.metric_definition_id === metricDefinitionId
+      && value.scenario_id === scenarioId
+      && value.year === year
+      && value.month === month
     );
   }
 
