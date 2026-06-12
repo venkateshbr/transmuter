@@ -506,6 +506,29 @@ class PortfolioFinancialPeriod(BaseModel):
     net_value_actual: str = "0"
 
 
+class PortfolioValueRampPeriod(PortfolioFinancialPeriod):
+    cumulative_net_value_plan: str = "0"
+    cumulative_net_value_actual: str = "0"
+
+
+class PortfolioInYearValueCard(BaseModel):
+    key: str
+    label: str
+    plan: str = "0"
+    actual: str = "0"
+    variance: str = "0"
+
+
+class PortfolioValueRampResponse(BaseModel):
+    granularity: PortfolioGranularity
+    run_rate_year: int | None = None
+    as_of_date: date | None = None
+    stage: str | None = None
+    periods: list[PortfolioValueRampPeriod]
+    in_year: list[PortfolioInYearValueCard]
+    financial_mode: FinancialModeDescriptor | None = None
+
+
 class PortfolioFinancialBreakdown(BaseModel):
     key: str
     label: str

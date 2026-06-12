@@ -88,6 +88,29 @@ interface FinancialConfiguration {
   items: Array<{ key: string; label: string; item_type: string; is_active: boolean }>;
 }
 
+interface StageGateDefinition {
+  id: string;
+  label: string;
+  from_stage: string;
+  to_stage: string;
+  is_active: boolean;
+}
+
+interface ValueRampPeriod extends PeriodRow {
+  cumulative_net_value_plan: string;
+  cumulative_net_value_actual: string;
+}
+
+interface ValueRampResponse {
+  granularity: Granularity;
+  run_rate_year: number | null;
+  as_of_date: string | null;
+  stage: string | null;
+  periods: ValueRampPeriod[];
+  in_year: SummaryCard[];
+  financial_mode?: unknown;
+}
+
 @Component({
   selector: 'app-portfolio-financials',
   standalone: true,
@@ -152,6 +175,13 @@ interface FinancialConfiguration {
             Actuals {{ actualsAvailable() ? (showActuals() ? 'On' : 'Off') : 'Unavailable' }}
           </button>
           <input class="input-field w-28 py-2 text-xs" type="number" [ngModel]="year()" (ngModelChange)="setYear($event)" aria-label="Filter financial year">
+          <input class="input-field w-40 py-2 text-xs" type="date" [ngModel]="asOfDate()" (ngModelChange)="setAsOfDate($event)" aria-label="Plan as-of date">
+          <select class="input-field w-52 py-2 text-xs" [ngModel]="stage()" (ngModelChange)="setStage($event)" aria-label="Filter stage">
+            <option value="">All stages</option>
+            @for (option of stageOptions(); track option.id) {
+              <option [value]="option.id">{{ option.label }}</option>
+            }
+          </select>
           <select class="input-field w-48 py-2 text-xs" [ngModel]="categoryKey()" (ngModelChange)="setCategory($event)" aria-label="Filter cost category">
             <option value="">All categories</option>
             @for (category of costCategories(); track category.key) {
@@ -189,6 +219,84 @@ interface FinancialConfiguration {
         [showActuals]="showActuals()"
         [financialMode]="financialMode()"
         (periodSelected)="openTrendPeriod($event)" />
+
+      <section class="grid gap-6 xl:grid-cols-[1fr_1.4fr]">
+        <div class="card p-5">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">In-year value</p>
+              <h2 class="mt-1 text-lg font-black text-[var(--t-text-primary)]">{{ year() || 'All years' }}</h2>
+            </div>
+            <span class="border border-[var(--t-border)] px-2 py-1 text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">
+              {{ selectedStageLabel() }}
+            </span>
+          </div>
+          <div class="mt-5 grid gap-3 sm:grid-cols-2">
+            @for (card of valueRamp()?.in_year || []; track card.key) {
+              <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4">
+                <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">{{ card.label }}</p>
+                <p class="mt-2 text-lg font-black text-[var(--t-text-primary)]">{{ formatMoney(card.plan) }}</p>
+                @if (showActuals()) {
+                  <p class="mt-1 text-xs font-bold text-[var(--t-text-secondary)]">
+                    {{ formatMoney(card.actual) }} actual · {{ formatMoney(card.variance) }} variance
+                  </p>
+                }
+              </div>
+            } @empty {
+              <p class="text-sm font-bold text-[var(--t-text-secondary)]">No in-year value is available for the selected filters.</p>
+            }
+          </div>
+        </div>
+
+        <div class="card overflow-hidden">
+          <div class="border-b border-[var(--t-border)] p-5">
+            <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">Run-rate value ramp</p>
+            <h2 class="mt-1 text-lg font-black text-[var(--t-text-primary)]">Cumulative net value</h2>
+            <p class="mt-2 text-xs font-bold text-[var(--t-text-secondary)]">
+              {{ valueRamp()?.periods?.length || 0 }} periods
+              @if (asOfDate()) {
+                <span> · as of {{ asOfDate() }}</span>
+              }
+            </p>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full min-w-[680px] text-left text-xs">
+              <thead class="bg-[var(--t-surface-raised)] text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">
+                <tr>
+                  <th class="px-4 py-3">Period</th>
+                  <th class="px-4 py-3">Net Plan</th>
+                  @if (showActuals()) {
+                    <th class="px-4 py-3">Net Actual</th>
+                  }
+                  <th class="px-4 py-3">Cumulative Plan</th>
+                  @if (showActuals()) {
+                    <th class="px-4 py-3">Cumulative Actual</th>
+                  }
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-[var(--t-border)]">
+                @for (row of valueRamp()?.periods || []; track row.period) {
+                  <tr>
+                    <td class="px-4 py-3 font-black text-[var(--t-text-primary)]">{{ row.period }}</td>
+                    <td class="px-4 py-3">{{ formatMoney(row.net_value_plan) }}</td>
+                    @if (showActuals()) {
+                      <td class="px-4 py-3">{{ formatMoney(row.net_value_actual) }}</td>
+                    }
+                    <td class="px-4 py-3 font-black text-[var(--t-accent)]">{{ formatMoney(row.cumulative_net_value_plan) }}</td>
+                    @if (showActuals()) {
+                      <td class="px-4 py-3 font-black text-[var(--t-accent)]">{{ formatMoney(row.cumulative_net_value_actual) }}</td>
+                    }
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td class="px-4 py-8 text-sm font-bold text-[var(--t-text-secondary)]" [attr.colspan]="showActuals() ? 5 : 3">No value ramp is available for the selected filters.</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
 
       <section class="grid gap-6 xl:grid-cols-[1.4fr_0.8fr]">
         <div class="card overflow-hidden">
@@ -425,13 +533,17 @@ export class PortfolioFinancialsComponent implements OnInit {
   private readonly api = inject(ApiService);
 
   response = signal<PortfolioFinancialsResponse | null>(null);
+  valueRamp = signal<ValueRampResponse | null>(null);
   contributors = signal<ContributorsResponse | null>(null);
   selectedPeriod = signal<PeriodRow | null>(null);
   contributorsLoading = signal(false);
   configuration = signal<FinancialConfiguration | null>(null);
+  stageGateDefinitions = signal<StageGateDefinition[]>([]);
   granularity = signal<Granularity>('monthly');
   year = signal<number | null>(new Date().getFullYear());
   categoryKey = signal('');
+  stage = signal('');
+  asOfDate = signal('');
   showBenefits = signal(false);
   showActuals = signal(false);
   financialMode = computed(() => resolveFinancialMode(this.response()?.financial_mode, this.response(), this.configuration()));
@@ -445,6 +557,18 @@ export class PortfolioFinancialsComponent implements OnInit {
 
   costCategories = computed(() => (this.configuration()?.items || [])
     .filter(item => item.item_type === 'cost_category' && item.is_active));
+  stageOptions = computed(() => {
+    const seen = new Set<string>();
+    const options: Array<{ id: string; label: string }> = [];
+    for (const gate of this.stageGateDefinitions().filter(item => item.is_active !== false)) {
+      for (const [id, label] of [[gate.from_stage, this.stageLabel(gate.from_stage)], [gate.to_stage, this.stageLabel(gate.to_stage)]]) {
+        if (!id || seen.has(id)) continue;
+        options.push({ id, label });
+        seen.add(id);
+      }
+    }
+    return options;
+  });
 
   visibleSummaryCards = computed(() => {
     const summary = this.response()?.summary || [];
@@ -456,6 +580,10 @@ export class PortfolioFinancialsComponent implements OnInit {
     this.api.get<FinancialConfiguration>('/financial-configuration').subscribe({
       next: config => this.configuration.set(config),
       error: () => this.configuration.set({ items: [] }),
+    });
+    this.api.get<StageGateDefinition[]>('/governance/stage-gates').subscribe({
+      next: gates => this.stageGateDefinitions.set(Array.isArray(gates) ? gates : []),
+      error: () => this.stageGateDefinitions.set([]),
     });
     this.load();
   }
@@ -479,12 +607,38 @@ export class PortfolioFinancialsComponent implements OnInit {
     this.load();
   }
 
+  setStage(value: string): void {
+    this.stage.set(value || '');
+    this.closeDrawer();
+    this.load();
+  }
+
+  setAsOfDate(value: string): void {
+    this.asOfDate.set(value || '');
+    this.loadValueRamp();
+  }
+
   load(): void {
     const params = new URLSearchParams({ granularity: this.granularity() });
     if (this.year()) params.set('year', String(this.year()));
     if (this.categoryKey()) params.set('category_key', this.categoryKey());
+    if (this.stage()) params.set('stage', this.stage());
     this.api.get<PortfolioFinancialsResponse>(`/portfolio/financials?${params.toString()}`)
       .subscribe(res => this.response.set(res));
+    this.loadValueRamp();
+  }
+
+  loadValueRamp(): void {
+    const params = new URLSearchParams({ granularity: this.granularity() });
+    if (this.year()) params.set('run_rate_year', String(this.year()));
+    if (this.categoryKey()) params.set('category_key', this.categoryKey());
+    if (this.stage()) params.set('stage', this.stage());
+    if (this.asOfDate()) params.set('as_of_date', this.asOfDate());
+    this.api.get<ValueRampResponse>(`/portfolio/value-ramp?${params.toString()}`)
+      .subscribe({
+        next: res => this.valueRamp.set(res),
+        error: () => this.valueRamp.set(null),
+      });
   }
 
   openPeriod(row: PeriodRow): void {
@@ -497,6 +651,7 @@ export class PortfolioFinancialsComponent implements OnInit {
       year: String(row.year),
     });
     if (this.categoryKey()) params.set('category_key', this.categoryKey());
+    if (this.stage()) params.set('stage', this.stage());
     this.api.get<ContributorsResponse>(`/portfolio/financials/contributors?${params.toString()}`)
       .subscribe({
         next: res => {
@@ -538,5 +693,15 @@ export class PortfolioFinancialsComponent implements OnInit {
     if (value === null || value === undefined) return 0;
     const parsed = typeof value === 'string' ? Number(value) : value;
     return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  selectedStageLabel(): string {
+    const stage = this.stage();
+    if (!stage) return 'All stages';
+    return this.stageOptions().find(option => option.id === stage)?.label || this.stageLabel(stage);
+  }
+
+  private stageLabel(value: string): string {
+    return value.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
   }
 }

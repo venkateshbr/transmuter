@@ -62,6 +62,7 @@ from app.domain.financials import (
     PortfolioFinancialContributorsResponse,
     PortfolioFinancialsResponse,
     PortfolioGranularity,
+    PortfolioValueRampResponse,
     ScenarioFinancialSummary,
     ValueBridgeResponse,
     WorkstreamTargetLockRequest,
@@ -762,6 +763,7 @@ async def get_portfolio_financials(
     initiative_id: str | None = Query(None),
     workstream_id: str | None = Query(None),
     business_unit_id: str | None = Query(None),
+    stage: str | None = Query(None),
     tag: str | None = Query(None),
     category_key: str | None = Query(None),
 ) -> PortfolioFinancialsResponse:
@@ -772,6 +774,35 @@ async def get_portfolio_financials(
         initiative_id=initiative_id,
         workstream_id=workstream_id,
         business_unit_id=business_unit_id,
+        stage=stage,
+        tag=tag,
+        category_key=category_key,
+    )
+
+
+@router.get("/portfolio/value-ramp", response_model=PortfolioValueRampResponse)
+async def get_portfolio_value_ramp(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+    granularity: PortfolioGranularity = Query("monthly"),
+    run_rate_year: int | None = Query(None),
+    as_of_date: date | None = Query(None),
+    initiative_id: str | None = Query(None),
+    workstream_id: str | None = Query(None),
+    business_unit_id: str | None = Query(None),
+    stage: str | None = Query(None),
+    tag: str | None = Query(None),
+    category_key: str | None = Query(None),
+) -> PortfolioValueRampResponse:
+    assert_can_view_portfolio(current_user)
+    return svc.get_portfolio_value_ramp(
+        granularity=granularity,
+        run_rate_year=run_rate_year,
+        as_of_date=as_of_date,
+        initiative_id=initiative_id,
+        workstream_id=workstream_id,
+        business_unit_id=business_unit_id,
+        stage=stage,
         tag=tag,
         category_key=category_key,
     )
@@ -790,6 +821,7 @@ async def get_portfolio_financial_contributors(
     initiative_id: str | None = Query(None),
     workstream_id: str | None = Query(None),
     business_unit_id: str | None = Query(None),
+    stage: str | None = Query(None),
     tag: str | None = Query(None),
     category_key: str | None = Query(None),
 ) -> PortfolioFinancialContributorsResponse:
@@ -801,6 +833,7 @@ async def get_portfolio_financial_contributors(
         initiative_id=initiative_id,
         workstream_id=workstream_id,
         business_unit_id=business_unit_id,
+        stage=stage,
         tag=tag,
         category_key=category_key,
     )
