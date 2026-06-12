@@ -286,111 +286,119 @@ import { forkJoin } from 'rxjs';
       }
 
       @if (editing()) {
-        <div class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-6">
-          <form (ngSubmit)="saveMeeting()" class="card w-full max-w-xl p-6 space-y-5 shadow-2xl" style="background:var(--t-surface)">
-            <div class="flex items-start justify-between gap-4">
+        <div class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 md:p-6">
+          <form
+            (ngSubmit)="saveMeeting()"
+            class="card flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden shadow-2xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-meeting-series-title"
+            style="background:var(--t-surface)">
+            <div class="flex items-start justify-between gap-4 border-b border-[var(--t-border)] p-6">
               <div>
-                <h2 class="text-xl font-bold text-[var(--t-text-primary)]">Edit meeting series</h2>
+                <h2 id="edit-meeting-series-title" class="text-xl font-bold text-[var(--t-text-primary)]">Edit meeting series</h2>
                 <p class="text-sm text-[var(--t-text-secondary)] mt-1">Changes save to the real meetings API.</p>
               </div>
               <button type="button" (click)="editing.set(false)" class="btn-ghost h-9 w-9 p-0" aria-label="Close edit meeting dialog">
                 <span class="material-icons text-sm">close</span>
               </button>
             </div>
-            <label>
-              <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Name</span>
-              <input [(ngModel)]="editDraft.name" name="edit_name" required class="input-field w-full" aria-label="Meeting name" />
-            </label>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="min-h-0 flex-1 space-y-5 overflow-y-auto p-6">
               <label>
-                <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Scope</span>
-                <select [(ngModel)]="editDraft.scope" name="edit_scope" class="input-field w-full" aria-label="Meeting scope">
-                  <option value="all">All</option>
-                  <option value="workstream">Workstream</option>
-                </select>
+                <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Name</span>
+                <input [(ngModel)]="editDraft.name" name="edit_name" required class="input-field w-full" aria-label="Meeting name" />
               </label>
-              <label>
-                <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Recurrence</span>
-                <select [(ngModel)]="editDraft.recurrence" name="edit_recurrence" class="input-field w-full" aria-label="Meeting recurrence">
-                  <option value="ad_hoc">One-off</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="biweekly">Biweekly</option>
-                  <option value="monthly">Monthly</option>
-                </select>
-              </label>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-              @if (editDraft.recurrence === 'ad_hoc') {
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <label>
-                  <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Date</span>
-                  <input [(ngModel)]="editDraft.one_off_date" name="edit_one_off_date" type="date" class="input-field w-full" aria-label="One-off date" />
-                </label>
-              } @else {
-                <label>
-                  <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Day</span>
-                  <select [(ngModel)]="editDraft.day_of_week" name="edit_day_of_week" class="input-field w-full" aria-label="Meeting day">
-                    @for (day of weekdays; track day.value) {
-                      <option [ngValue]="day.value">{{ day.label }}</option>
-                    }
+                  <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Scope</span>
+                  <select [(ngModel)]="editDraft.scope" name="edit_scope" class="input-field w-full" aria-label="Meeting scope">
+                    <option value="all">All</option>
+                    <option value="workstream">Workstream</option>
                   </select>
                 </label>
                 <label>
-                  <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Series end</span>
-                  <input [(ngModel)]="editDraft.series_end_date" name="edit_series_end_date" type="date" class="input-field w-full" aria-label="Meeting series end date" />
+                  <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Recurrence</span>
+                  <select [(ngModel)]="editDraft.recurrence" name="edit_recurrence" class="input-field w-full" aria-label="Meeting recurrence">
+                    <option value="ad_hoc">One-off</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="biweekly">Biweekly</option>
+                    <option value="monthly">Monthly</option>
+                  </select>
                 </label>
-              }
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                @if (editDraft.recurrence === 'ad_hoc') {
+                  <label>
+                    <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Date</span>
+                    <input [(ngModel)]="editDraft.one_off_date" name="edit_one_off_date" type="date" class="input-field w-full" aria-label="One-off date" />
+                  </label>
+                } @else {
+                  <label>
+                    <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Day</span>
+                    <select [(ngModel)]="editDraft.day_of_week" name="edit_day_of_week" class="input-field w-full" aria-label="Meeting day">
+                      @for (day of weekdays; track day.value) {
+                        <option [ngValue]="day.value">{{ day.label }}</option>
+                      }
+                    </select>
+                  </label>
+                  <label>
+                    <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Series end</span>
+                    <input [(ngModel)]="editDraft.series_end_date" name="edit_series_end_date" type="date" class="input-field w-full" aria-label="Meeting series end date" />
+                  </label>
+                }
+                <label>
+                  <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Start</span>
+                  <input [(ngModel)]="editDraft.start_time" name="edit_start_time" type="time" class="input-field w-full" aria-label="Meeting start time" />
+                </label>
+                <label>
+                  <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Duration</span>
+                  <input [(ngModel)]="editDraft.duration_minutes" name="edit_duration_minutes" type="number" min="1" max="1440" class="input-field w-full" aria-label="Meeting duration minutes" />
+                </label>
+                <label>
+                  <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Timezone</span>
+                  <input [(ngModel)]="editDraft.timezone" name="edit_timezone" class="input-field w-full" aria-label="Meeting timezone" />
+                </label>
+              </div>
               <label>
-                <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Start</span>
-                <input [(ngModel)]="editDraft.start_time" name="edit_start_time" type="time" class="input-field w-full" aria-label="Meeting start time" />
+                <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Description</span>
+                <textarea [(ngModel)]="editDraft.description" name="edit_description" rows="3" class="input-field w-full resize-none" aria-label="Meeting description"></textarea>
               </label>
-              <label>
-                <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Duration</span>
-                <input [(ngModel)]="editDraft.duration_minutes" name="edit_duration_minutes" type="number" min="1" max="1440" class="input-field w-full" aria-label="Meeting duration minutes" />
-              </label>
-              <label>
-                <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Timezone</span>
-                <input [(ngModel)]="editDraft.timezone" name="edit_timezone" class="input-field w-full" aria-label="Meeting timezone" />
-              </label>
+              <fieldset class="border border-[var(--t-border)] p-3">
+                <legend class="px-1 text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)]">Workstreams</legend>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                  @for (ws of workstreams(); track ws.id) {
+                    <label class="flex items-center gap-2 text-xs font-bold text-[var(--t-text-primary)]">
+                      <input
+                        type="checkbox"
+                        [checked]="editDraft.workstream_ids?.includes(ws.id)"
+                        (change)="toggleEditWorkstream(ws.id, $any($event.target).checked)"
+                        class="h-4 w-4"
+                        [attr.aria-label]="'Select workstream ' + ws.name"
+                      />
+                      <span>{{ ws.name }}</span>
+                    </label>
+                  }
+                </div>
+              </fieldset>
+              <fieldset class="border border-[var(--t-border)] p-3">
+                <legend class="px-1 text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)]">Default Participants</legend>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+                  @for (u of users(); track u.id) {
+                    <label class="flex items-center gap-2 text-xs font-bold text-[var(--t-text-primary)]">
+                      <input
+                        type="checkbox"
+                        [checked]="editDraft.participant_user_ids?.includes(u.id)"
+                        (change)="toggleEditParticipant(u.id, $any($event.target).checked)"
+                        class="h-4 w-4"
+                        [attr.aria-label]="'Select default participant ' + (u.display_name || u.email)"
+                      />
+                      <span class="min-w-0 truncate">{{ u.display_name || u.email }}</span>
+                    </label>
+                  }
+                </div>
+              </fieldset>
             </div>
-            <label>
-              <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Description</span>
-              <textarea [(ngModel)]="editDraft.description" name="edit_description" rows="3" class="input-field w-full resize-none" aria-label="Meeting description"></textarea>
-            </label>
-            <fieldset class="border border-[var(--t-border)] p-3">
-              <legend class="px-1 text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)]">Workstreams</legend>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
-                @for (ws of workstreams(); track ws.id) {
-                  <label class="flex items-center gap-2 text-xs font-bold text-[var(--t-text-primary)]">
-                    <input
-                      type="checkbox"
-                      [checked]="editDraft.workstream_ids?.includes(ws.id)"
-                      (change)="toggleEditWorkstream(ws.id, $any($event.target).checked)"
-                      class="h-4 w-4"
-                      [attr.aria-label]="'Select workstream ' + ws.name"
-                    />
-                    <span>{{ ws.name }}</span>
-                  </label>
-                }
-              </div>
-            </fieldset>
-            <fieldset class="border border-[var(--t-border)] p-3">
-              <legend class="px-1 text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)]">Default Participants</legend>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
-                @for (u of users(); track u.id) {
-                  <label class="flex items-center gap-2 text-xs font-bold text-[var(--t-text-primary)]">
-                    <input
-                      type="checkbox"
-                      [checked]="editDraft.participant_user_ids?.includes(u.id)"
-                      (change)="toggleEditParticipant(u.id, $any($event.target).checked)"
-                      class="h-4 w-4"
-                      [attr.aria-label]="'Select default participant ' + (u.display_name || u.email)"
-                    />
-                    <span>{{ u.display_name || u.email }}</span>
-                  </label>
-                }
-              </div>
-            </fieldset>
-            <div class="flex justify-end gap-3 pt-2">
+            <div class="flex justify-end gap-3 border-t border-[var(--t-border)] p-6">
               <button type="button" (click)="editing.set(false)" class="btn-ghost text-sm">Cancel</button>
               <button type="submit" class="btn-primary text-sm">Save changes</button>
             </div>
