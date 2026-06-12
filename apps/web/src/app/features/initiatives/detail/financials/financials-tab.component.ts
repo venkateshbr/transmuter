@@ -85,6 +85,7 @@ interface FinancialMetricDefinition {
   group_key?: string | null;
   value_type: 'currency' | 'percent' | 'number';
   aggregation: 'sum' | 'avg' | 'last' | 'formula';
+  formula?: string | null;
   is_benefit: boolean;
   benefit_class?: string | null;
   is_active: boolean;
@@ -210,6 +211,8 @@ interface GridMetric {
   metricScenario?: FinancialScenario;
   isRecurring?: boolean;
   actual?: boolean;
+  readOnly?: boolean;
+  formula?: string | null;
 }
 
 @Component({
@@ -407,6 +410,14 @@ interface GridMetric {
     :host ::ng-deep .hot-assumption-cell {
       box-shadow: inset 0 0 0 2px var(--t-accent);
     }
+    :host ::ng-deep .hot-computed-cell {
+      background: color-mix(in srgb, var(--t-surface-raised) 78%, var(--t-accent) 22%) !important;
+      color: var(--t-text-secondary) !important;
+      font-style: italic;
+    }
+    :host ::ng-deep .hot-assumption-cell.hot-computed-cell {
+      box-shadow: inset 0 0 0 2px var(--t-accent);
+    }
   `],
 })
 export class FinancialsTabComponent implements OnInit {
@@ -491,17 +502,19 @@ export class FinancialsTabComponent implements OnInit {
     const cleanScenario = this.selectedScenarioDefinition();
     if (cleanDefinitions.length && cleanScenario) {
       const metricRows = cleanDefinitions
-        .filter(definition => definition.is_active !== false && definition.aggregation !== 'formula')
+        .filter(definition => definition.is_active !== false)
         .sort((a, b) => (a.group_key || '').localeCompare(b.group_key || '') || a.label.localeCompare(b.label))
         .map((definition): GridMetric => ({
           category: this.metricCategoryLabel(definition),
-          label: `${definition.label} (${cleanScenario.label})`,
+          label: `${definition.label} (${cleanScenario.label})${definition.aggregation === 'formula' ? ' - computed' : ''}`,
           key: `metric_${definition.id}_${cleanScenario.id}`,
           source: 'metric_value' as const,
           metricDefinitionId: definition.id,
           scenarioId: cleanScenario.id,
           metricValueKey: definition.key,
           metricScenario: this.scenario(),
+          readOnly: definition.aggregation === 'formula',
+          formula: definition.aggregation === 'formula' ? (definition as any).formula || null : null,
         }));
       const costRows: GridMetric[] = [
         { category: 'Costs', label: 'Recurring Costs (Plan)', key: 'costs_recurring_plan', source: 'cost_line', isRecurring: true, actual: false },
@@ -780,6 +793,8 @@ export class FinancialsTabComponent implements OnInit {
         costCategoryKey: m.costCategoryKey,
         isRecurring: m.isRecurring,
         actual: m.actual,
+        readOnly: Boolean(m.readOnly),
+        formula: m.formula || null,
       };
       for (const year of years) {
         if (this.isEditing()) {
@@ -815,8 +830,16 @@ export class FinancialsTabComponent implements OnInit {
   hotCells = (row: number, col: number) => {
     const data = this.hotComponent?.hotInstance?.getSourceDataAtRow(row);
     const prop = this.hotComponent?.hotInstance?.colToProp(col);
-    if (!data || !prop || !this.hasAssumption(data.key, String(prop))) return {};
-    return { className: 'hot-assumption-cell' };
+    if (!data || !prop) return {};
+    const classes = [];
+    if (data.readOnly) classes.push('hot-computed-cell');
+    if (this.hasAssumption(data.key, String(prop))) classes.push('hot-assumption-cell');
+    if (!classes.length) return {};
+    return {
+      readOnly: data.readOnly || col < 2,
+      className: classes.join(' '),
+      renderer: data.readOnly ? 'text' : undefined,
+    };
   };
 
   setScenario(next: FinancialScenario): void {
@@ -844,6 +867,9 @@ export class FinancialsTabComponent implements OnInit {
         const sourceData = hotInstance.getSourceData();
         const sourceRowIndex = sourceData.findIndex((row: any) => row.key === rowKey);
         if (sourceRowIndex < 0) throw new Error(`Financial row not found: ${rowKey}`);
+        if ((sourceData[sourceRowIndex] as any).readOnly) {
+          throw new Error(`Financial row is computed and read-only: ${rowKey}`);
+        }
         (sourceData[sourceRowIndex] as any)[columnKey] = value;
         const visualRowIndex = hotInstance.toVisualRow(sourceRowIndex);
         hotInstance.setDataAtRowProp(visualRowIndex, columnKey, value, 'acceptance');
@@ -860,6 +886,8 @@ export class FinancialsTabComponent implements OnInit {
         costCategoryKey: row.costCategoryKey,
         isRecurring: row.isRecurring,
         actual: row.actual,
+        readOnly: row.readOnly,
+        formula: row.formula,
       })),
       editableMonths: () => this.editableMonths(),
       hasColumn: (columnKey: string) => this.hotColumns().some(column => column.data === columnKey),
@@ -896,6 +924,7 @@ export class FinancialsTabComponent implements OnInit {
     const cleanValueMap = new Map<string, any>();
 
     pivotedData.forEach((row: any) => {
+      if (row.readOnly) return;
       const metricKey = row.key;
       this.editableMonths().forEach(period => {
         const val = row[`col_${period.year}_m${period.month}`] || 0;
