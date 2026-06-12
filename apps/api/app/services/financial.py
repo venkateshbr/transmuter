@@ -2262,13 +2262,15 @@ class FinancialService:
             return values
         definitions = self._repo.list_metric_definitions()
         definition_by_id = {row["id"]: row for row in definitions}
-        formula_definitions = [
-            row
-            for row in definitions
-            if row.get("aggregation") == "formula"
-            and row.get("is_active", True)
-            and row.get("formula")
-        ]
+        formula_definitions = self._ordered_formula_definitions(
+            [
+                row
+                for row in definitions
+                if row.get("aggregation") == "formula"
+                and row.get("is_active", True)
+                and row.get("formula")
+            ]
+        )
         if not formula_definitions:
             return values
 
@@ -2344,6 +2346,34 @@ class FinancialService:
         except SyntaxError as exc:
             raise FormulaValidationError("Formula expression is invalid") from exc
         return {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}
+
+    @classmethod
+    def _ordered_formula_definitions(cls, definitions: list[dict]) -> list[dict]:  # type: ignore[type-arg]
+        definition_by_key = {str(row["key"]): row for row in definitions}
+        formula_keys = set(definition_by_key)
+        graph = {
+            key: cls._formula_identifiers(str(row.get("formula") or "")) & formula_keys
+            for key, row in definition_by_key.items()
+        }
+        ordered: list[dict] = []  # type: ignore[type-arg]
+        visiting: set[str] = set()
+        visited: set[str] = set()
+
+        def visit(key: str) -> None:
+            if key in visited:
+                return
+            if key in visiting:
+                raise FormulaValidationError("Formula metric dependencies cannot contain cycles")
+            visiting.add(key)
+            for dependency in sorted(graph.get(key, set())):
+                visit(dependency)
+            visiting.remove(key)
+            visited.add(key)
+            ordered.append(definition_by_key[key])
+
+        for row in definitions:
+            visit(str(row["key"]))
+        return ordered
 
     @classmethod
     def _validate_formula_expression(cls, formula: str, metric_keys: set[str]) -> None:

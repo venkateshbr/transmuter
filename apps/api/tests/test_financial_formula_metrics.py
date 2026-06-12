@@ -121,6 +121,55 @@ def test_formula_divide_by_zero_returns_zero_value() -> None:
     assert formula_rows[0]["value"] == "0.0000"
 
 
+def test_formula_metrics_are_computed_in_dependency_order() -> None:
+    definitions = [
+        {
+            "id": "metric-revenue",
+            "key": "revenue_uplift",
+            "aggregation": "sum",
+            "is_active": True,
+        },
+        {
+            "id": "metric-double-with-bonus",
+            "key": "double_with_bonus",
+            "aggregation": "formula",
+            "formula": "double_revenue + 5",
+            "is_active": True,
+        },
+        {
+            "id": "metric-double-revenue",
+            "key": "double_revenue",
+            "aggregation": "formula",
+            "formula": "revenue_uplift * 2",
+            "is_active": True,
+        },
+    ]
+    svc = _service(definitions)
+
+    values = svc._values_with_formula_metrics(
+        [
+            {
+                "id": "value-revenue",
+                "tenant_id": "tenant-1",
+                "initiative_id": "initiative-1",
+                "metric_definition_id": "metric-revenue",
+                "scenario_id": "scenario-base",
+                "year": 2026,
+                "month": 1,
+                "value": "10.0000",
+            },
+        ]
+    )
+
+    formula_values = {
+        row["metric_definition_id"]: row["value"] for row in values if row.get("_computed_formula")
+    }
+    assert formula_values == {
+        "metric-double-revenue": "20.0000",
+        "metric-double-with-bonus": "25.0000",
+    }
+
+
 def test_formula_metric_writes_are_rejected() -> None:
     svc = _service(
         [
