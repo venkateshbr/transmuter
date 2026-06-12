@@ -143,6 +143,7 @@ def test_real_financial_routes_cover_grid_costs_assumptions_and_rollups() -> Non
             f"/initiatives/{initiative_id}/financials/scenario-summary?scenario=actual",
             f"/initiatives/{initiative_id}/financials/break-even?scenario=base",
             "/portfolio/value-bridge",
+            f"/portfolio/value-ramp?granularity=quarterly&run_rate_year={entry['year']}",
             f"/portfolio/financials?granularity=quarterly&year={entry['year']}",
             f"/portfolio/financials/contributors?granularity=quarterly&period={entry['year']}-Q1&year={entry['year']}",
             "/financial-configuration",

@@ -16,6 +16,7 @@ from app.domain.financials import (
     FinancialGridUpdate,
     FinancialMetricValueUpdate,
     InitiativeFinancialSelections,
+    PortfolioFinancialPeriod,
 )
 from app.services.financial import FinancialService
 
@@ -448,6 +449,65 @@ def test_portfolio_financials_keeps_broader_periods_separate_for_monthly_view() 
     assert response.broader_period_totals[0].recurring_costs_actual == "275.0000"
     assert response.summary[0].plan == "4000.0000"
     assert response.summary[1].actual == "365.0000"
+
+
+def test_portfolio_value_ramp_accumulates_net_value_by_period() -> None:
+    ramp = FinancialService._portfolio_value_ramp_periods(
+        [
+            PortfolioFinancialPeriod(
+                period="2026-M02",
+                year=2026,
+                month=2,
+                net_value_plan="200.0000",
+                net_value_actual="150.0000",
+            ),
+            PortfolioFinancialPeriod(
+                period="2026-M01",
+                year=2026,
+                month=1,
+                net_value_plan="100.0000",
+                net_value_actual="75.0000",
+            ),
+        ]
+    )
+
+    assert [row.period for row in ramp] == ["2026-M01", "2026-M02"]
+    assert ramp[0].cumulative_net_value_plan == "100.0000"
+    assert ramp[1].cumulative_net_value_plan == "300.0000"
+    assert ramp[1].cumulative_net_value_actual == "225.0000"
+
+
+def test_portfolio_filter_matches_explicit_multi_business_unit_link() -> None:
+    assert FinancialService._portfolio_initiative_matches(
+        {
+            "id": "i1",
+            "stage": "in_execution",
+            "workstream_id": "ws1",
+            "tag": "commercial",
+            "workstreams": {"business_unit_id": "bu-default"},
+            "initiative_business_units": [{"business_unit_id": "bu-explicit"}],
+        },
+        initiative_id=None,
+        workstream_ids={"ws1"},
+        business_unit_ids={"bu-explicit"},
+        stages={"in_execution"},
+        tags={"commercial"},
+    )
+    assert not FinancialService._portfolio_initiative_matches(
+        {
+            "id": "i1",
+            "stage": "in_execution",
+            "workstream_id": "ws1",
+            "tag": "commercial",
+            "workstreams": {"business_unit_id": "bu-default"},
+            "initiative_business_units": [{"business_unit_id": "bu-explicit"}],
+        },
+        initiative_id=None,
+        workstream_ids=set(),
+        business_unit_ids={"bu-other"},
+        stages=set(),
+        tags=set(),
+    )
 
 
 def test_portfolio_contributors_group_period_values_by_initiative() -> None:
@@ -925,8 +985,9 @@ def test_financial_grid_normalization_moves_values_to_first_planned_month() -> N
 
 
 class _LockStateRepo:
-    def __init__(self, stage: str) -> None:
+    def __init__(self, stage: str, latest_plan: dict[str, object] | None = None) -> None:
         self.stage = stage
+        self.latest_plan = latest_plan
 
     def get_initiative_period(self, _initiative_id: str) -> dict:
         return {
@@ -935,13 +996,19 @@ class _LockStateRepo:
             "planned_end": "2026-06-30",
         }
 
+    def get_organization_settings(self) -> dict:
+        return {"bankable_plan_governance": {"plan_lock_on_approval": True}}
 
-def test_financial_lock_state_only_allows_planned_stage_edits() -> None:
+    def get_latest_bankable_plan(self, _initiative_id: str) -> dict[str, object] | None:
+        return self.latest_plan
+
+
+def test_financial_lock_state_blocks_after_bankable_plan_approval() -> None:
     service = FinancialService.__new__(FinancialService)
     service._repo = _LockStateRepo("scoping")
     service._assert_financials_editable("initiative-1")
 
-    service._repo = _LockStateRepo("in_progress")
+    service._repo = _LockStateRepo("in_progress", latest_plan={"id": "plan-1"})
     with pytest.raises(HTTPException) as exc:
         service._assert_financials_editable("initiative-1")
 
@@ -949,8 +1016,11 @@ def test_financial_lock_state_only_allows_planned_stage_edits() -> None:
 
 
 class _SelectionRepo:
-    def __init__(self, stage: str = "scoping") -> None:
+    def __init__(
+        self, stage: str = "scoping", latest_plan: dict[str, object] | None = None
+    ) -> None:
         self.stage = stage
+        self.latest_plan = latest_plan
         self.saved_metric_keys: list[str] = []
         self.saved_cost_keys: list[str] = []
         self.saved_all_metric_keys: list[str] = []
@@ -965,6 +1035,12 @@ class _SelectionRepo:
             "planned_start": "2026-04-01",
             "planned_end": "2026-06-30",
         }
+
+    def get_organization_settings(self) -> dict:
+        return {"bankable_plan_governance": {"plan_lock_on_approval": True}}
+
+    def get_latest_bankable_plan(self, _initiative_id: str) -> dict[str, object] | None:
+        return self.latest_plan
 
     def list_config_groups(self) -> list[dict]:
         return [
@@ -1155,7 +1231,7 @@ def test_explicit_financial_selection_does_not_reenable_hidden_data_bearing_rows
 
 
 def test_financial_selection_updates_raise_conflict_after_financial_values_lock() -> None:
-    repo = _SelectionRepo(stage="in_progress")
+    repo = _SelectionRepo(stage="in_progress", latest_plan={"id": "plan-1"})
     service = FinancialService.__new__(FinancialService)
     service._repo = repo
 

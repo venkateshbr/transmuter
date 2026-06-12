@@ -82,6 +82,9 @@ from app.domain.financials import (
     PortfolioFinancialsResponse,
     PortfolioFinancialSummaryCard,
     PortfolioGranularity,
+    PortfolioInYearValueCard,
+    PortfolioValueRampPeriod,
+    PortfolioValueRampResponse,
     ScenarioFinancialSummary,
     ValueBridgeCase,
     ValueBridgeResponse,
@@ -1601,16 +1604,25 @@ class FinancialService:
         initiative_id: str | None = None,
         workstream_id: str | None = None,
         business_unit_id: str | None = None,
+        stage: str | None = None,
         tag: str | None = None,
         category_key: str | None = None,
     ) -> PortfolioFinancialsResponse:
+        business_unit_ids = self._split_filter_values(business_unit_id)
+        workstream_ids = self._split_filter_values(workstream_id)
+        stages = self._split_filter_values(stage)
+        tags = self._split_filter_values(tag)
         initiatives = {
             row["id"]: row
             for row in self._repo.get_portfolio_initiatives()
-            if (not initiative_id or row["id"] == initiative_id)
-            and (not workstream_id or row.get("workstream_id") == workstream_id)
-            and (not business_unit_id or row.get("business_unit_id") == business_unit_id)
-            and (not tag or row.get("tag") == tag)
+            if self._portfolio_initiative_matches(
+                row,
+                initiative_id=initiative_id,
+                workstream_ids=workstream_ids,
+                business_unit_ids=business_unit_ids,
+                stages=stages,
+                tags=tags,
+            )
         }
         raw_entries = self._repo.get_all_entries()
         if not raw_entries:
@@ -1620,6 +1632,7 @@ class FinancialService:
                 initiative_id=initiative_id,
                 workstream_id=workstream_id,
                 business_unit_id=business_unit_id,
+                stage=stage,
                 tag=tag,
                 category_key=category_key,
             )
@@ -1661,18 +1674,27 @@ class FinancialService:
         initiative_id: str | None = None,
         workstream_id: str | None = None,
         business_unit_id: str | None = None,
+        stage: str | None = None,
         tag: str | None = None,
         category_key: str | None = None,
     ) -> PortfolioFinancialContributorsResponse:
         period_key = self._parse_portfolio_period(period, granularity)
         effective_year = year or period_key[1]
+        business_unit_ids = self._split_filter_values(business_unit_id)
+        workstream_ids = self._split_filter_values(workstream_id)
+        stages = self._split_filter_values(stage)
+        tags = self._split_filter_values(tag)
         initiatives = {
             row["id"]: row
             for row in self._repo.get_portfolio_initiatives()
-            if (not initiative_id or row["id"] == initiative_id)
-            and (not workstream_id or row.get("workstream_id") == workstream_id)
-            and (not business_unit_id or row.get("business_unit_id") == business_unit_id)
-            and (not tag or row.get("tag") == tag)
+            if self._portfolio_initiative_matches(
+                row,
+                initiative_id=initiative_id,
+                workstream_ids=workstream_ids,
+                business_unit_ids=business_unit_ids,
+                stages=stages,
+                tags=tags,
+            )
         }
         entries = [
             row
@@ -1707,6 +1729,169 @@ class FinancialService:
             period,
             period_key,
         )
+
+    def get_portfolio_value_ramp(
+        self,
+        granularity: PortfolioGranularity,
+        run_rate_year: int | None = None,
+        as_of_date: date | None = None,
+        initiative_id: str | None = None,
+        workstream_id: str | None = None,
+        business_unit_id: str | None = None,
+        stage: str | None = None,
+        tag: str | None = None,
+        category_key: str | None = None,
+    ) -> PortfolioValueRampResponse:
+        response = self.get_portfolio_financials(
+            granularity=granularity,
+            year=run_rate_year,
+            initiative_id=initiative_id,
+            workstream_id=workstream_id,
+            business_unit_id=business_unit_id,
+            stage=stage,
+            tag=tag,
+            category_key=category_key,
+        )
+        periods = [
+            row
+            for row in response.periods
+            if as_of_date is None or self._portfolio_period_start(row) <= as_of_date
+        ]
+        ramp = self._portfolio_value_ramp_periods(periods)
+        in_year = self._portfolio_in_year_cards(ramp)
+        return PortfolioValueRampResponse(
+            granularity=granularity,
+            run_rate_year=run_rate_year,
+            as_of_date=as_of_date,
+            stage=stage,
+            periods=ramp,
+            in_year=in_year,
+            financial_mode=response.financial_mode,
+        )
+
+    @staticmethod
+    def _split_filter_values(value: str | None) -> set[str]:
+        if not value:
+            return set()
+        return {item.strip() for item in value.split(",") if item.strip()}
+
+    @staticmethod
+    def _initiative_business_unit_ids(row: dict) -> set[str]:  # type: ignore[type-arg]
+        ids = {
+            str(link.get("business_unit_id"))
+            for link in row.get("initiative_business_units") or []
+            if link.get("business_unit_id")
+        }
+        workstream = row.get("workstreams") if isinstance(row.get("workstreams"), dict) else {}
+        workstream_bu = workstream.get("business_unit_id") if workstream else None
+        if workstream_bu:
+            ids.add(str(workstream_bu))
+        direct_bu = row.get("business_unit_id")
+        if direct_bu:
+            ids.add(str(direct_bu))
+        return ids
+
+    @classmethod
+    def _portfolio_initiative_matches(
+        cls,
+        row: dict,  # type: ignore[type-arg]
+        *,
+        initiative_id: str | None,
+        workstream_ids: set[str],
+        business_unit_ids: set[str],
+        stages: set[str],
+        tags: set[str],
+    ) -> bool:
+        if initiative_id and row.get("id") != initiative_id:
+            return False
+        if workstream_ids and str(row.get("workstream_id") or "") not in workstream_ids:
+            return False
+        if business_unit_ids and not (cls._initiative_business_unit_ids(row) & business_unit_ids):
+            return False
+        if stages and str(row.get("stage") or "") not in stages:
+            return False
+        return not (tags and str(row.get("tag") or "") not in tags)
+
+    @classmethod
+    def _portfolio_value_ramp_periods(
+        cls,
+        periods: list[PortfolioFinancialPeriod],
+    ) -> list[PortfolioValueRampPeriod]:
+        cumulative_plan = Decimal("0")
+        cumulative_actual = Decimal("0")
+        ramp: list[PortfolioValueRampPeriod] = []
+        for row in sorted(
+            periods, key=lambda item: cls._period_sort((item.year, item.quarter, item.month))
+        ):
+            cumulative_plan += _dec(row.net_value_plan)
+            cumulative_actual += _dec(row.net_value_actual)
+            ramp.append(
+                PortfolioValueRampPeriod(
+                    **row.model_dump(),
+                    cumulative_net_value_plan=_money(cumulative_plan),
+                    cumulative_net_value_actual=_money(cumulative_actual),
+                )
+            )
+        return ramp
+
+    @classmethod
+    def _portfolio_in_year_cards(
+        cls,
+        periods: list[PortfolioValueRampPeriod],
+    ) -> list[PortfolioInYearValueCard]:
+        totals = cls._empty_portfolio_period("In-year", 0, None, None)
+        for row in periods:
+            totals["benefits_plan"] += _dec(row.benefits_plan)
+            totals["benefits_actual"] += _dec(row.benefits_actual)
+            totals["recurring_costs_plan"] += _dec(row.recurring_costs_plan)
+            totals["recurring_costs_actual"] += _dec(row.recurring_costs_actual)
+            totals["one_off_costs_plan"] += _dec(row.one_off_costs_plan)
+            totals["one_off_costs_actual"] += _dec(row.one_off_costs_actual)
+        total_period = cls._to_portfolio_period(totals)
+        cards = [
+            (
+                "benefits",
+                "In-year Benefits",
+                total_period.benefits_plan,
+                total_period.benefits_actual,
+            ),
+            (
+                "recurring_costs",
+                "In-year Recurring Costs",
+                total_period.recurring_costs_plan,
+                total_period.recurring_costs_actual,
+            ),
+            (
+                "one_off_costs",
+                "In-year One-time Costs",
+                total_period.one_off_costs_plan,
+                total_period.one_off_costs_actual,
+            ),
+            (
+                "net_value",
+                "In-year Net Value",
+                total_period.net_value_plan,
+                total_period.net_value_actual,
+            ),
+        ]
+        return [
+            PortfolioInYearValueCard(
+                key=key,
+                label=label,
+                plan=plan,
+                actual=actual,
+                variance=_money(_dec(actual) - _dec(plan)),
+            )
+            for key, label, plan, actual in cards
+        ]
+
+    @staticmethod
+    def _portfolio_period_start(row: PortfolioFinancialPeriod) -> date:
+        if row.month is not None:
+            return date(row.year, row.month, 1)
+        if row.quarter is not None:
+            return date(row.year, ((row.quarter - 1) * 3) + 1, 1)
+        return date(row.year, 1, 1)
 
     # ── Value Bridge ──────────────────────────────────────────────────────────
 
@@ -3318,16 +3503,25 @@ class FinancialService:
         initiative_id: str | None = None,
         workstream_id: str | None = None,
         business_unit_id: str | None = None,
+        stage: str | None = None,
         tag: str | None = None,
         category_key: str | None = None,
     ) -> PortfolioFinancialsResponse:
+        business_unit_ids = self._split_filter_values(business_unit_id)
+        workstream_ids = self._split_filter_values(workstream_id)
+        stages = self._split_filter_values(stage)
+        tags = self._split_filter_values(tag)
         initiatives = {
             row["id"]: row
             for row in self._repo.get_portfolio_initiatives()
-            if (not initiative_id or row["id"] == initiative_id)
-            and (not workstream_id or row.get("workstream_id") == workstream_id)
-            and (not business_unit_id or row.get("business_unit_id") == business_unit_id)
-            and (not tag or row.get("tag") == tag)
+            if self._portfolio_initiative_matches(
+                row,
+                initiative_id=initiative_id,
+                workstream_ids=workstream_ids,
+                business_unit_ids=business_unit_ids,
+                stages=stages,
+                tags=tags,
+            )
         }
         values = self._values_with_formula_metrics(
             [
