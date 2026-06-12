@@ -1,6 +1,6 @@
 # Hostinger VPS Deployment Runbook
 
-Last updated: 2026-06-09
+Last updated: 2026-06-12
 
 ## Target
 
@@ -113,6 +113,75 @@ To run the schema migration on the VPS immediately before restarting containers:
 RUN_DB_SCHEMA_MIGRATION=1 ./infra/hostinger/deploy.sh
 ```
 
+## v0.4.0 Clean Financial Refactor Rollout
+
+`v0.4.0` is the rollback baseline before the clean configurable financial
+metrics refactor. The refactor intentionally replaces reloadable tenant
+portfolio data with the clean financial engine and the anonymised workbook
+reload path.
+
+Preflight from the repo root:
+
+```bash
+git fetch origin --tags
+git rev-parse v0.4.0
+git diff --check
+```
+
+Before destructive reset/reload, validate the anonymised workbook without
+writing data:
+
+```bash
+cd apps/api
+uv run python scripts/load_portfolio_workbook.py \
+  --tenant-id <tenant-uuid> \
+  --user-id <tenant-admin-user-uuid> \
+  --workbook ../../Initiative_Portfolio_Anonymised.xlsx \
+  --dry-run
+```
+
+The dry run must report `ready: true` before reload. Expected deterministic
+workbook counts:
+
+- 21 initiatives
+- 9 business units and 4 workstreams
+- 63 benefit lines and 4,694 metric values
+- 867 cost lines
+- 83 KPIs and 313 KPI entries
+- 292 milestones, 33 risks, and 4 status updates
+- Required metrics: `gm_uplift`, `gm_uplift_pct`, `gross_margin`, `revenue_uplift`
+- Required scenarios: `actual`, `plan_base`, `plan_high`
+- Required stage gate numbers: `3`
+
+After deploy and migration, run the destructive reload only with explicit
+confirmation:
+
+```bash
+cd apps/api
+uv run python scripts/load_portfolio_workbook.py \
+  --tenant-id <tenant-uuid> \
+  --user-id <tenant-admin-user-uuid> \
+  --workbook ../../Initiative_Portfolio_Anonymised.xlsx \
+  --confirm-reset
+```
+
+Do not use the reload command for normal tenant signup. New tenants should
+start blank and self-configure master data, financial metrics, scenarios, stage
+gates, gate criteria, workstreams, and business units through Admin before
+creating or importing initiatives.
+
+Rollback to the pre-refactor baseline:
+
+```bash
+git checkout v0.4.0
+./infra/hostinger/deploy.sh
+```
+
+If the schema migration has already been applied, rollback also requires
+restoring the target Supabase database from a pre-refactor backup. Code rollback
+alone does not reverse destructive table truncation or clean-model schema
+changes.
+
 ## Minimal Local Bootstrap
 
 After the local `transmuter` schema has been built and `SUPABASE_TARGET=local`
@@ -128,11 +197,12 @@ The bootstrap creates or updates:
 - One platform admin Supabase Auth user with platform admin app metadata.
 - One blank admin tenant and tenant admin user.
 - Subscription plans and a `tenant_subscriptions` shell.
-- Financial configuration groups/items and gate criteria via `TenantBootstrapService`.
+- Organization reporting defaults required for safe empty-state operation.
 
 It intentionally does not create initiatives, meetings, agenda items, attendees,
-sessions, action items, financial entries, cost lines, risks, KPIs, or other
-operational tenant data.
+sessions, action items, business units, workstreams, financial configuration,
+financial metrics, financial scenarios, stage gates, gate criteria, cost lines,
+risks, KPIs, or other operational tenant data.
 
 What the script does:
 
@@ -167,6 +237,24 @@ For local Supabase validation, also verify browser login as the platform/admin
 seed user and `/auth/me` through the app API. Platform/admin pages should load
 with only bootstrap/admin and master configuration data, not migrated
 operational tenant data.
+
+For the clean financial refactor rollout, validate:
+
+- Admin Setup Status shows blank-tenant prerequisites when no tenant master data
+  has been configured.
+- Initiative create/import flows are blocked until required tenant configuration
+  exists.
+- Admin Financial Configuration can create metrics, scenarios, bridge rows, and
+  line attribute definitions.
+- Admin Governance Engine can create stage gates and gate criteria.
+- Portfolio Financials loads after workbook reload and shows in-year value plus
+  run-rate value ramp data.
+- Public domain checks pass:
+
+```bash
+curl -fsS https://transmuter.ishirock.tech/health
+curl -fsS https://transmuter.ishirock.tech/api/health
+```
 
 If Stripe signup is enabled, use:
 

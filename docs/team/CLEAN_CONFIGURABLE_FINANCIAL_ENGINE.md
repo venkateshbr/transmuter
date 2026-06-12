@@ -74,6 +74,11 @@ Core tables:
   Tenant-configurable value bridge rows. Reports render these rows dynamically
   rather than relying on fixed `ValueBridgeCase` fields.
 
+- `financial_attribute_definitions`
+  Tenant-configurable registry for benefit-line and cost-line attributes. This
+  lets admins define reusable text, numeric, currency, percent, date, select, or
+  boolean fields without hardcoding workbook-specific columns into the product.
+
 - `initiative_business_units`
   Many-to-many mapping so initiatives can span multiple business units
   independently of workstream.
@@ -210,3 +215,38 @@ Prahari review is required before merge for:
 The current implementation can be removed as each area is replaced. Avoid
 maintaining parallel legacy contracts unless needed temporarily for a single PR
 to keep the app buildable.
+
+## Release Notes
+
+### Clean Configurable Financial Engine
+
+This release is a breaking financial data model change. The pre-refactor code
+baseline is tagged as `v0.4.0`; rolling back code should use that tag.
+
+What changed:
+
+- Financial metrics, scenarios, bridge rows, and line attributes are now tenant
+  configuration rather than hardcoded application assumptions.
+- Initiative financial values are stored as monthly configurable metric values
+  by metric definition, scenario, and optional benefit line.
+- Benefit lines and cost lines support phasing metadata and free-form
+  attributes governed by tenant attribute definitions.
+- Stage gates, approval criteria, and dashboard stage reporting are
+  tenant-configurable.
+- Initiatives can map to multiple business units.
+- Portfolio financials include dynamic value bridge rows, in-year value, and a
+  cumulative run-rate value ramp.
+- Normal tenant onboarding is blank; tenants configure business units,
+  workstreams, financial metrics, scenarios, gates, and criteria before creating
+  or importing initiatives.
+
+Operational impact:
+
+- Existing demo/portfolio financial data is reloadable, not migrated in place.
+- Destructive reloads must use `scripts/load_portfolio_workbook.py
+  --confirm-reset`.
+- Run `scripts/load_portfolio_workbook.py --dry-run` before reset/reload to
+  confirm required tenant metrics, scenarios, and stage gates exist.
+- Rollback after migrations/data reload requires restoring the target Supabase
+  database from a pre-refactor backup; code rollback to `v0.4.0` alone is not
+  enough after destructive reset.
