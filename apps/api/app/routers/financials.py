@@ -33,6 +33,7 @@ from app.domain.financials import (
     CostLineItem,
     CostLineListResponse,
     CostLineUpdate,
+    FinancialBridgeRow,
     FinancialCategoryDeleteRequest,
     FinancialCellAssumption,
     FinancialCellAssumptionCreate,
@@ -573,6 +574,34 @@ async def update_financial_scenario_definition(
 ) -> FinancialScenarioDefinition:
     assert_can_manage_initiatives(current_user)
     return svc.update_scenario_definition(scenario_id, body)
+
+
+@router.post(
+    "/admin/financial-engine/bridge-rows",
+    response_model=FinancialBridgeRow,
+    status_code=201,
+)
+async def create_financial_bridge_row(
+    body: FinancialBridgeRow,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> FinancialBridgeRow:
+    assert_can_manage_initiatives(current_user)
+    return svc.create_bridge_row(body)
+
+
+@router.patch(
+    "/admin/financial-engine/bridge-rows/{bridge_row_id}",
+    response_model=FinancialBridgeRow,
+)
+async def update_financial_bridge_row(
+    bridge_row_id: str,
+    body: FinancialBridgeRow,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> FinancialBridgeRow:
+    assert_can_manage_initiatives(current_user)
+    return svc.update_bridge_row(bridge_row_id, body)
 
 
 @router.put(
