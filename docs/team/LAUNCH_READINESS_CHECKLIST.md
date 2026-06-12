@@ -12,6 +12,9 @@ Local launch gate reports:
 - RLS: Supabase catalog verification passed on 2026-05-04 with 34 tables checked, 32 tenant tables, 0 blockers, and 0 warnings
 - Prahari: Billing/RBAC/RLS security review is documented in `docs/team/PRAHARI_SECURITY_REVIEW_BILLING_RBAC.md`
 - Platform Admin: SaaS operator login and `/platform` console are available through server-side `PLATFORM_ADMIN_EMAILS`
+- Clean configurable financial engine: `v0.4.0` is tagged as the pre-refactor
+  rollback baseline; current rollout uses blank-tenant self-configuration and
+  optional anonymised workbook reload.
 
 ## Launch-Critical Controls
 
@@ -38,3 +41,41 @@ Local launch gate reports:
 - Run the full real API acceptance suite and browser E2E suite in CI against a seeded test tenant.
 - Complete Prahari security review for auth, RLS, Stripe, Supabase service-role usage, and AI data masking.
 - Configure production `PLATFORM_ADMIN_EMAILS` with named operator accounts and require MFA in Supabase Auth.
+
+## Clean Financial Refactor Launch Gate
+
+- Confirm target Supabase has a pre-refactor backup before applying clean
+  financial migrations.
+- Confirm `git rev-parse v0.4.0` resolves and is documented as the code rollback
+  baseline.
+- Run workbook dry-run before destructive reload:
+
+```bash
+cd apps/api
+uv run python scripts/load_portfolio_workbook.py \
+  --tenant-id <tenant-uuid> \
+  --user-id <tenant-admin-user-uuid> \
+  --workbook ../../Initiative_Portfolio_Anonymised.xlsx \
+  --dry-run
+```
+
+- Dry-run must return `ready: true` and the deterministic workbook counts from
+  `docs/team/HOSTINGER_VPS_DEPLOYMENT.md`.
+- Destructive reload must use `--confirm-reset`; no other reset path is approved
+  for launch data.
+- New tenant signup must remain blank: no initiatives, business units,
+  workstreams, financial config, metric definitions, scenarios, stage gates,
+  gate criteria, meetings, KPIs, risks, or cost lines should be seeded by normal
+  provisioning.
+- Tenant admins must be able to complete self-configuration through Admin before
+  initiative creation/import is enabled.
+- Public-domain validation must include:
+
+```bash
+curl -fsS https://transmuter.ishirock.tech/health
+curl -fsS https://transmuter.ishirock.tech/api/health
+```
+
+- Browser validation must cover Admin setup, metric/scenario/gate configuration,
+  workbook reload result visibility, Portfolio Financials value ramp, and an
+  initiative detail financial grid after reload.
