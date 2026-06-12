@@ -15,12 +15,18 @@ from app.core.rbac import (
     assert_can_view_portfolio,
 )
 from app.domain.governance import (
+    GateCriteriaCreate,
+    GateCriteriaItem,
     GateCriteriaState,
+    GateCriteriaUpdate,
     GateDecisionPatch,
     GateSubmissionCreate,
     GateSubmissionItem,
     GovernanceStatusResponse,
     PortfolioGovernanceResponse,
+    StageGateDefinition,
+    StageGateDefinitionCreate,
+    StageGateDefinitionUpdate,
 )
 from app.services.governance import GovernanceService
 
@@ -31,7 +37,7 @@ def _svc(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> GovernanceService:
-    return GovernanceService(client, current_user.tenant_id, current_user.id)
+    return GovernanceService(client, current_user.tenant_id, current_user.id, current_user.role)
 
 
 @router.get(
@@ -76,6 +82,125 @@ async def list_gate_criteria(
 
 
 @router.get(
+    "/governance/stage-gates",
+    response_model=list[StageGateDefinition],
+)
+async def list_tenant_stage_gate_definitions(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[GovernanceService, Depends(_svc)],
+) -> list[StageGateDefinition]:
+    assert_can_view_portfolio(current_user)
+    return svc.list_gate_definitions()
+
+
+@router.get(
+    "/admin/governance/stage-gates",
+    response_model=list[StageGateDefinition],
+)
+async def list_stage_gate_definitions(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[GovernanceService, Depends(_svc)],
+) -> list[StageGateDefinition]:
+    assert_can_view_portfolio(current_user)
+    return svc.list_gate_definitions()
+
+
+@router.post(
+    "/admin/governance/stage-gates",
+    response_model=StageGateDefinition,
+    status_code=201,
+)
+async def create_stage_gate_definition(
+    body: StageGateDefinitionCreate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[GovernanceService, Depends(_svc)],
+) -> StageGateDefinition:
+    assert_can_manage_initiatives(current_user)
+    return svc.create_gate_definition(body)
+
+
+@router.patch(
+    "/admin/governance/stage-gates/{definition_id}",
+    response_model=StageGateDefinition,
+)
+async def update_stage_gate_definition(
+    definition_id: str,
+    body: StageGateDefinitionUpdate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[GovernanceService, Depends(_svc)],
+) -> StageGateDefinition:
+    assert_can_manage_initiatives(current_user)
+    return svc.update_gate_definition(definition_id, body)
+
+
+@router.delete(
+    "/admin/governance/stage-gates/{definition_id}",
+    status_code=204,
+)
+async def delete_stage_gate_definition(
+    definition_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[GovernanceService, Depends(_svc)],
+) -> None:
+    assert_can_manage_initiatives(current_user)
+    svc.delete_gate_definition(definition_id)
+
+
+@router.get(
+    "/admin/governance/gate-criteria",
+    response_model=list[GateCriteriaItem],
+)
+async def list_gate_criteria_config(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[GovernanceService, Depends(_svc)],
+    gate_number: int | None = None,
+) -> list[GateCriteriaItem]:
+    assert_can_view_portfolio(current_user)
+    return svc.list_gate_criteria_config(gate_number)
+
+
+@router.post(
+    "/admin/governance/gate-criteria",
+    response_model=GateCriteriaItem,
+    status_code=201,
+)
+async def create_gate_criterion_config(
+    body: GateCriteriaCreate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[GovernanceService, Depends(_svc)],
+) -> GateCriteriaItem:
+    assert_can_manage_initiatives(current_user)
+    return svc.create_gate_criterion(body)
+
+
+@router.patch(
+    "/admin/governance/gate-criteria/{criterion_id}",
+    response_model=GateCriteriaItem,
+)
+async def update_gate_criterion_config(
+    criterion_id: str,
+    body: GateCriteriaUpdate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[GovernanceService, Depends(_svc)],
+) -> GateCriteriaItem:
+    assert_can_manage_initiatives(current_user)
+    return svc.update_gate_criterion(criterion_id, body)
+
+
+@router.delete(
+    "/admin/governance/gate-criteria/{criterion_id}",
+    status_code=204,
+)
+async def delete_gate_criterion_config(
+    criterion_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[GovernanceService, Depends(_svc)],
+) -> None:
+    assert_can_manage_initiatives(current_user)
+    svc.delete_gate_criterion(criterion_id)
+
+
+@router.get(
     "/initiatives/{id}/gates/{gate_number}/criteria",
     response_model=list[GateCriteriaState],
 )
@@ -102,7 +227,6 @@ async def submit_gate(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[GovernanceService, Depends(_svc)],
 ) -> GateSubmissionItem:
-    assert_can_manage_initiatives(current_user)
     return svc.submit_gate(id, gate_number, body)
 
 
@@ -140,7 +264,6 @@ async def record_gate_decision(
     svc: Annotated[GovernanceService, Depends(_svc)],
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> GateSubmissionItem:
-    assert_can_manage_initiatives(current_user)
     return svc.record_decision(submission_id, body)
 
 
@@ -154,5 +277,4 @@ async def post_gate_decision(
     svc: Annotated[GovernanceService, Depends(_svc)],
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> GateSubmissionItem:
-    assert_can_manage_initiatives(current_user)
     return svc.record_decision(submission_id, body)

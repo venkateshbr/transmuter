@@ -34,12 +34,19 @@ interface FilterOption {
   business_unit_id?: string | null;
 }
 
-const STAGE_ORDER = ['scoping', 'in_progress', 'complete'] as const;
-const STAGE_LABELS: Record<string, string> = {
-  scoping: 'Scoping',
-  in_progress: 'In-Progress',
-  complete: 'Complete',
-};
+interface StageGateDefinition {
+  gate_number: number;
+  label: string;
+  from_stage: string;
+  to_stage: string;
+  is_active: boolean;
+}
+
+const FALLBACK_STAGES: FilterOption[] = [
+  { id: 'scoping', name: 'Scoping' },
+  { id: 'in_progress', name: 'In-Progress' },
+  { id: 'complete', name: 'Complete' },
+];
 const FILTER_STATE_KEY = 'transmuter.filters.initiatives.pipeline';
 
 @Component({
@@ -249,8 +256,8 @@ const FILTER_STATE_KEY = 'transmuter.filters.initiatives.pipeline';
     <!-- Stage groups -->
     @if (!loading() && total() > 0) {
       <div class="space-y-4">
-        @for (stage of stageOrder; track stage) {
-          @let stageItems = grouped()[stage];
+        @for (stage of stageOptions(); track stage.id) {
+          @let stageItems = grouped()[stage.id];
           @if (stageItems.length > 0) {
             <div class="rounded-xl overflow-hidden border" style="border-color:var(--t-border)">
 
@@ -262,7 +269,7 @@ const FILTER_STATE_KEY = 'transmuter.filters.initiatives.pipeline';
                        style="width:3px;height:16px;background:var(--t-accent)"></div>
                   <span class="text-xs font-bold uppercase tracking-widest"
                         style="color:var(--t-text-primary);letter-spacing:.12em">
-                    {{ stageLabels[stage] }}
+                    {{ stage.name }}
                   </span>
                   <span class="text-xs rounded-full px-2 py-0.5 font-medium"
                         style="background:var(--t-border);color:var(--t-text-secondary)">
@@ -270,7 +277,7 @@ const FILTER_STATE_KEY = 'transmuter.filters.initiatives.pipeline';
                   </span>
                 </div>
                 <span class="text-xs font-mono" style="color:var(--t-text-secondary)">
-                  {{ stageTotalValue(stage) }}
+                  {{ stageTotalValue(stage.id) }}
                 </span>
               </div>
 
@@ -470,20 +477,28 @@ export class PipelineComponent {
   stageFilter = '';
   priorityFilter: string[] = [];
   tagFilter: string[] = [];
+  stageDefinitions = signal<StageGateDefinition[]>([]);
 
   readonly skeletons = Array.from({ length: 7 }, (_, i) => i);
-  readonly stageOrder = STAGE_ORDER;
-  readonly stageLabels = STAGE_LABELS;
+  readonly stageOptions = computed(() => {
+    const configured = this.configuredStageOptions();
+    const initiativeStages = this.initiatives().map(item => item.stage).filter(Boolean);
+    const extras = initiativeStages
+      .filter(stage => !configured.some(option => option.id === stage))
+      .map(stage => ({ id: stage, name: this.labelize(stage) }));
+    const options = configured.length ? configured : FALLBACK_STAGES;
+    return [...options, ...extras];
+  });
 
   readonly grouped = computed(() => {
     const items = this.initiatives();
     return Object.fromEntries(
-      STAGE_ORDER.map(s => [s, items.filter(i => i.stage === s)])
+      this.stageOptions().map(s => [s.id, items.filter(i => i.stage === s.id)])
     ) as Record<string, InitiativeItem[]>;
   });
 
   readonly activeStageCount = computed(() =>
-    STAGE_ORDER.filter(s => (this.grouped()[s]?.length ?? 0) > 0).length
+    this.stageOptions().filter(s => (this.grouped()[s.id]?.length ?? 0) > 0).length
   );
 
   private readonly router = inject(Router);
@@ -568,11 +583,7 @@ export class PipelineComponent {
         key: 'stage',
         label: 'Stage',
         mode: 'single',
-        options: [
-          { id: 'scoping', name: 'Scoping' },
-          { id: 'in_progress', name: 'In-Progress' },
-          { id: 'complete', name: 'Complete' },
-        ],
+        options: this.stageOptions(),
         selected: this.stageFilter ? [this.stageFilter] : [],
       },
       {
@@ -607,6 +618,10 @@ export class PipelineComponent {
           tags: filters.tags || [],
         });
       },
+      error: () => undefined,
+    });
+    this.api.get<StageGateDefinition[]>('/governance/stage-gates').subscribe({
+      next: response => this.stageDefinitions.set((response || []).filter(stage => stage.is_active !== false)),
       error: () => undefined,
     });
   }
@@ -791,6 +806,26 @@ export class PipelineComponent {
     const items = this.grouped()[stage] ?? [];
     const total = items.reduce((s, i) => s + (parseFloat(i.planned_value_base ?? '0') || 0), 0);
     return total > 0 ? this.formatValue(String(total)) : '';
+  }
+
+  private configuredStageOptions(): FilterOption[] {
+    const options: FilterOption[] = [];
+    for (const gate of this.stageDefinitions().sort((a, b) => (a.gate_number || 0) - (b.gate_number || 0))) {
+      for (const stage of [gate.from_stage, gate.to_stage]) {
+        if (stage && !options.some(option => option.id === stage)) {
+          options.push({ id: stage, name: this.labelize(stage) });
+        }
+      }
+    }
+    return options;
+  }
+
+  labelize(value: string): string {
+    return value
+      .replace(/[_-]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/\b\w/g, c => c.toUpperCase());
   }
 
   capitalize(s: string): string {

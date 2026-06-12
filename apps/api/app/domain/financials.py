@@ -33,6 +33,15 @@ WorkstreamCutoffRule = Literal["approved_at_lte_lock_date"]
 WorkstreamValuationMethod = Literal["run_rate"]
 WorkstreamLockedValueBasis = Literal["net_run_rate", "benefit_run_rate"]
 FinancialForecastLineType = Literal["metric", "cost"]
+FinancialMetricValueType = Literal["currency", "percent", "number"]
+FinancialMetricDirection = Literal["increase_good", "decrease_good", "neutral"]
+FinancialMetricAggregation = Literal["sum", "avg", "last", "formula"]
+FinancialMetricAppliesTo = Literal["all", "opt_in"]
+FinancialBenefitClass = Literal["savings", "avoidance", "revenue", "margin", "other"]
+FinancialCostBehavior = Literal["recurring", "one_time"]
+FinancialScenarioKind = Literal["baseline", "plan", "forecast", "actual"]
+FinancialLineImpactType = Literal["recurring", "one_time"]
+FinancialValueStatus = Literal["draft", "submitted", "approved"]
 
 
 class FinancialModeDescriptor(BaseModel):
@@ -65,6 +74,189 @@ class FinancialGovernanceSettingsUpdate(BaseModel):
     valuation_method: WorkstreamValuationMethod | None = None
     locked_value_basis: WorkstreamLockedValueBasis | None = None
     workstream_target_versioning: bool | None = None
+
+
+class FinancialReportingSettings(BaseModel):
+    fiscal_year_start_month: int = Field(1, ge=1, le=12)
+    reporting_currency: str = Field("USD", min_length=3, max_length=3)
+
+
+class FinancialReportingSettingsUpdate(BaseModel):
+    fiscal_year_start_month: int | None = Field(None, ge=1, le=12)
+    reporting_currency: str | None = Field(None, min_length=3, max_length=3)
+
+
+class FinancialMetricDefinitionBase(BaseModel):
+    key: str = Field(..., min_length=1, max_length=120)
+    label: str = Field(..., min_length=1, max_length=200)
+    description: str | None = None
+    group_key: str | None = Field(None, max_length=120)
+    value_type: FinancialMetricValueType
+    unit: str | None = Field(None, max_length=40)
+    direction: FinancialMetricDirection = "increase_good"
+    aggregation: FinancialMetricAggregation = "sum"
+    rollup_type: FinancialRollupType | None = None
+    is_benefit: bool = False
+    benefit_class: FinancialBenefitClass | None = None
+    cost_behavior: FinancialCostBehavior | None = None
+    formula: str | None = None
+    formula_inputs: list[str] = Field(default_factory=list)
+    precision: int = Field(4, ge=0, le=8)
+    display_order: int = 0
+    applies_to: FinancialMetricAppliesTo = "opt_in"
+    validation: dict[str, object] = Field(default_factory=dict)
+    is_system: bool = False
+    is_active: bool = True
+
+
+class FinancialMetricDefinitionCreate(FinancialMetricDefinitionBase):
+    pass
+
+
+class FinancialMetricDefinitionUpdate(BaseModel):
+    label: str | None = Field(None, min_length=1, max_length=200)
+    description: str | None = None
+    group_key: str | None = Field(None, max_length=120)
+    value_type: FinancialMetricValueType | None = None
+    unit: str | None = Field(None, max_length=40)
+    direction: FinancialMetricDirection | None = None
+    aggregation: FinancialMetricAggregation | None = None
+    rollup_type: FinancialRollupType | None = None
+    is_benefit: bool | None = None
+    benefit_class: FinancialBenefitClass | None = None
+    cost_behavior: FinancialCostBehavior | None = None
+    formula: str | None = None
+    formula_inputs: list[str] | None = None
+    precision: int | None = Field(None, ge=0, le=8)
+    display_order: int | None = None
+    applies_to: FinancialMetricAppliesTo | None = None
+    validation: dict[str, object] | None = None
+    is_active: bool | None = None
+
+
+class FinancialMetricDefinition(FinancialMetricDefinitionBase):
+    id: str
+    created_by: str | None = None
+    updated_by: str | None = None
+
+
+class FinancialScenarioDefinitionBase(BaseModel):
+    key: str = Field(..., min_length=1, max_length=120)
+    label: str = Field(..., min_length=1, max_length=200)
+    kind: FinancialScenarioKind
+    is_primary: bool = False
+    is_system: bool = False
+    is_active: bool = True
+    display_order: int = 0
+
+
+class FinancialScenarioDefinitionCreate(FinancialScenarioDefinitionBase):
+    pass
+
+
+class FinancialScenarioDefinitionUpdate(BaseModel):
+    label: str | None = Field(None, min_length=1, max_length=200)
+    kind: FinancialScenarioKind | None = None
+    is_primary: bool | None = None
+    is_active: bool | None = None
+    display_order: int | None = None
+
+
+class FinancialScenarioDefinition(FinancialScenarioDefinitionBase):
+    id: str
+
+
+class FinancialBridgeRow(BaseModel):
+    id: str | None = None
+    key: str = Field(..., min_length=1, max_length=120)
+    label: str = Field(..., min_length=1, max_length=200)
+    row_kind: Literal["metric_set", "cost_set", "subtotal", "net"]
+    metric_definition_ids: list[str] = Field(default_factory=list)
+    cost_category_keys: list[str] = Field(default_factory=list)
+    sign: Literal[-1, 1] = 1
+    display_order: int = 0
+    is_active: bool = True
+
+
+class FinancialEngineConfigurationResponse(BaseModel):
+    definitions: list[FinancialMetricDefinition]
+    scenarios: list[FinancialScenarioDefinition]
+    bridge_rows: list[FinancialBridgeRow]
+    settings: FinancialReportingSettings
+
+
+class FinancialBenefitLineBase(BaseModel):
+    metric_definition_id: str
+    name: str = Field(..., min_length=1, max_length=200)
+    description: str | None = None
+    impact_type: FinancialLineImpactType | None = None
+    timing: str | None = Field(None, max_length=120)
+    confidence: Decimal | None = Field(None, ge=0, le=100)
+    phasing: dict[str, object] = Field(default_factory=dict)
+    attributes: dict[str, object] = Field(default_factory=dict)
+    show_in_summary: bool = True
+    display_order: int = 0
+
+
+class FinancialBenefitLineCreate(FinancialBenefitLineBase):
+    pass
+
+
+class FinancialBenefitLineUpdate(BaseModel):
+    metric_definition_id: str | None = None
+    name: str | None = Field(None, min_length=1, max_length=200)
+    description: str | None = None
+    impact_type: FinancialLineImpactType | None = None
+    timing: str | None = Field(None, max_length=120)
+    confidence: Decimal | None = Field(None, ge=0, le=100)
+    phasing: dict[str, object] | None = None
+    attributes: dict[str, object] | None = None
+    show_in_summary: bool | None = None
+    display_order: int | None = None
+
+
+class FinancialBenefitLine(FinancialBenefitLineBase):
+    id: str
+    created_by: str | None = None
+    updated_by: str | None = None
+
+
+class FinancialMetricValue(BaseModel):
+    metric_definition_id: str
+    scenario_id: str
+    year: int = Field(..., ge=2020, le=2060)
+    month: int = Field(..., ge=1, le=12)
+    value: Decimal = Decimal("0")
+    benefit_line_id: str | None = None
+    status: FinancialValueStatus = "draft"
+    note: str | None = None
+
+
+class ConfigurableFinancialMetricValueRow(FinancialMetricValue):
+    id: str
+    value: str = "0"
+
+
+class ConfigurableFinancialGridUpdate(BaseModel):
+    values: list[FinancialMetricValue] = Field(default_factory=list)
+    benefit_lines: list[FinancialBenefitLineCreate] | None = None
+    cost_lines: list[CostLineCreate] | None = None
+
+
+class ConfigurableFinancialGridResponse(BaseModel):
+    initiative_id: str
+    definitions: list[FinancialMetricDefinition]
+    scenarios: list[FinancialScenarioDefinition]
+    benefit_lines: list[FinancialBenefitLine] = Field(default_factory=list)
+    values: list[ConfigurableFinancialMetricValueRow] = Field(default_factory=list)
+    cost_lines: list[CostLineItem] = Field(default_factory=list)
+    settings: FinancialReportingSettings
+    entries: list[FinancialEntryRow] = Field(default_factory=list)
+    metric_values: list[FinancialMetricValueRow] = Field(default_factory=list)
+    selections: InitiativeFinancialSelections | None = None
+    summary: FinancialSummary | None = None
+    locked: bool = False
+    lock_reason: str | None = None
 
 
 class FinancialConfigGroup(BaseModel):
@@ -603,6 +795,8 @@ class WorkstreamTargetLockResponse(BaseModel):
 # Fix forward references
 BankablePlanSnapshot.model_rebuild()
 BankablePlanVersion.model_rebuild()
+ConfigurableFinancialGridUpdate.model_rebuild()
+ConfigurableFinancialGridResponse.model_rebuild()
 FinancialGridUpdate.model_rebuild()
 FinancialGridResponse.model_rebuild()
 

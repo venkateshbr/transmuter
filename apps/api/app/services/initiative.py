@@ -134,6 +134,7 @@ class InitiativeService:
         return self._to_detail(row, counts, fin_summary, team_members, kpi_indicators)
 
     def create_initiative(self, data: InitiativeCreate, created_by: UUID) -> InitiativeDetail:
+        self._assert_tenant_ready_for_creation()
         # Generate unique code — retry up to 5 times on conflict
         for _ in range(5):
             code = self._repo.next_code()
@@ -154,6 +155,7 @@ class InitiativeService:
                         "tag": data.tag,
                         "priority": data.priority,
                         "summary": data.summary,
+                        "context_problem": data.context_problem,
                         "value_logic": data.value_logic,
                         "dependencies_text": data.dependencies_text,
                         "benefit_confidence": str(data.benefit_confidence),
@@ -164,7 +166,7 @@ class InitiativeService:
                         else None,
                         "planned_end": data.planned_end.isoformat() if data.planned_end else None,
                         "rag_status": "green",
-                        "stage": "scoping",
+                        "stage": self._initial_stage(),
                     }
                 )
                 break
@@ -359,6 +361,7 @@ class InitiativeService:
         return build_preview(parse_initiative_template(data))
 
     def import_template(self, data: bytes, created_by: UUID) -> InitiativeDetail:
+        self._assert_tenant_ready_for_creation()
         parsed = parse_initiative_template(data)
         if parsed.validation_errors:
             raise HTTPException(
@@ -601,6 +604,7 @@ class InitiativeService:
             initiative.tag or "",
             initiative.priority,
             initiative.summary or "",
+            initiative.context_problem or "",
             initiative.value_logic or "",
             initiative.dependencies_text or "",
             str(initiative.planned_start or ""),
@@ -612,6 +616,7 @@ class InitiativeService:
         data: InitiativeIntakeCreate,
         created_by: UUID,
     ) -> InitiativeDetail:
+        self._assert_tenant_ready_for_creation()
         created = self.create_initiative(data.initiative, created_by)
         initiative_id = str(created.id)
         suggestions = data.suggestions
@@ -649,13 +654,46 @@ class InitiativeService:
                 status_code=status.HTTP_404_NOT_FOUND, detail="Initiative not found"
             )
 
+    def _assert_tenant_ready_for_creation(self) -> None:
+        required_tables = {
+            "business_units": "business units",
+            "workstreams": "workstreams",
+            "financial_config_groups": "financial configuration groups",
+            "financial_config_items": "financial configuration items",
+            "financial_metric_definitions": "financial metric definitions",
+            "financial_scenarios": "financial scenarios",
+            "stage_gate_definitions": "stage gates",
+            "gate_criteria": "gate criteria",
+        }
+        missing = [
+            label for table, label in required_tables.items() if not self._table_has_rows(table)
+        ]
+        if missing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Tenant setup is incomplete. Configure "
+                    f"{', '.join(missing)} before creating initiatives."
+                ),
+            )
+
+    def _table_has_rows(self, table: str) -> bool:
+        result = (
+            self._client.table(table)
+            .select("id", count="exact")
+            .eq("tenant_id", str(self._tenant_id))
+            .execute()
+        )
+        return bool(result.count and result.count > 0)
+
     def _assert_stage_transition_allowed(
         self,
         initiative_id: str,
         current_stage: str,
         requested_stage: str,
     ) -> None:
-        stage_order = ["scoping", "in_progress", "complete"]
+        definitions = self._stage_gate_definitions()
+        stage_order = self._stage_order(definitions)
         if requested_stage == current_stage:
             return
         if requested_stage not in stage_order or current_stage not in stage_order:
@@ -667,15 +705,41 @@ class InitiativeService:
             return
 
         for stage_index in range(current_index + 1, requested_index + 1):
-            gate_number = stage_index
+            gate_number = int(definitions[stage_index - 1]["gate_number"])
             if not self._repo.has_approved_gate_submission(initiative_id, gate_number):
+                gate_label = definitions[stage_index - 1].get("label") or f"Gate {gate_number}"
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=(
-                        f"Gate {gate_number} must be approved before advancing "
+                        f"{gate_label} must be approved before advancing "
                         f"to {stage_order[stage_index]}."
                     ),
                 )
+
+    def _initial_stage(self) -> str:
+        definitions = self._stage_gate_definitions()
+        return str(definitions[0]["from_stage"]) if definitions else "scoping"
+
+    def _stage_gate_definitions(self) -> list[dict]:  # type: ignore[type-arg]
+        result = (
+            self._client.table("stage_gate_definitions")
+            .select("gate_number,label,from_stage,to_stage,is_active,sort_order")
+            .eq("tenant_id", str(self._tenant_id))
+            .eq("is_active", True)
+            .order("gate_number")
+            .execute()
+        )
+        return result.data or []
+
+    @staticmethod
+    def _stage_order(definitions: list[dict]) -> list[str]:  # type: ignore[type-arg]
+        stages: list[str] = []
+        for definition in definitions:
+            for key in ("from_stage", "to_stage"):
+                value = str(definition.get(key) or "").strip()
+                if value and value not in stages:
+                    stages.append(value)
+        return stages
 
     @staticmethod
     def _as_kpi_create(data: object) -> KPICreate:
@@ -806,6 +870,7 @@ class InitiativeService:
             stage=row["stage"],
             summary=row.get("summary"),
             lessons_learned=row.get("lessons_learned"),
+            context_problem=row.get("context_problem"),
             value_logic=row.get("value_logic"),
             dependencies_text=row.get("dependencies_text"),
             benefit_confidence=str(row.get("benefit_confidence") or "50.00"),

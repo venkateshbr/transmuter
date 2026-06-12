@@ -31,8 +31,12 @@ PORTFOLIO_CLEANUP_TABLES = [
     "stage_gates",
     "nudge_log",
     "status_updates",
+    "financial_forecasts",
+    "benefit_realization_ledger",
+    "bankable_plans",
     "financial_cost_lines",
-    "financial_entries",
+    "financial_metric_values",
+    "financial_benefit_lines",
     "financial_cell_assumptions",
     "risks",
     "kpi_entries",
@@ -40,6 +44,7 @@ PORTFOLIO_CLEANUP_TABLES = [
     "milestone_dependencies",
     "milestone_checklist",
     "milestones",
+    "initiative_business_units",
     "initiative_team",
     "initiatives",
 ]
@@ -197,7 +202,7 @@ class AdminService:
             "organizations",
             "users",
             "initiatives",
-            "financial_entries",
+            "financial_metric_values",
             "financial_cost_lines",
             "kpis",
             "risks",
@@ -237,7 +242,11 @@ class AdminService:
             "business_units": self._count_tenant_rows("business_units"),
             "workstreams": self._count_tenant_rows("workstreams"),
             "users": self._count_users(),
+            "stage_gate_definitions": self._count_tenant_rows("stage_gate_definitions"),
+            "financial_config_groups": self._count_tenant_rows("financial_config_groups"),
             "financial_config_items": self._count_tenant_rows("financial_config_items"),
+            "financial_metric_definitions": self._count_tenant_rows("financial_metric_definitions"),
+            "financial_scenarios": self._count_tenant_rows("financial_scenarios"),
             "gate_criteria": self._count_tenant_rows("gate_criteria"),
             "initiatives": self._count_tenant_rows("initiatives"),
         }
@@ -260,7 +269,19 @@ class AdminService:
             {
                 "key": "financial_config",
                 "label": "Financial configuration",
-                "complete": counts["financial_config_items"] > 0,
+                "complete": counts["financial_config_groups"] > 0
+                and counts["financial_config_items"] > 0,
+            },
+            {
+                "key": "financial_engine",
+                "label": "Financial engine",
+                "complete": counts["financial_metric_definitions"] > 0
+                and counts["financial_scenarios"] > 0,
+            },
+            {
+                "key": "stage_gates",
+                "label": "Stage gates",
+                "complete": counts["stage_gate_definitions"] > 0,
             },
             {
                 "key": "gate_criteria",
@@ -563,9 +584,13 @@ class AdminService:
         groups = {
             "initiatives": ["initiatives", "initiative_team"],
             "financials": [
-                "financial_entries",
                 "financial_cost_lines",
+                "financial_metric_values",
+                "financial_benefit_lines",
                 "financial_cell_assumptions",
+                "financial_forecasts",
+                "benefit_realization_ledger",
+                "bankable_plans",
             ],
             "kpis": ["kpis", "kpi_entries"],
             "risks": ["risks"],

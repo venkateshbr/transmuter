@@ -17,6 +17,61 @@ class GateCriteriaItem(BaseModel):
     is_active: bool = True
 
 
+class GateCriteriaCreate(BaseModel):
+    gate_number: int = Field(..., ge=1, le=10)
+    criterion_id: str = Field(..., min_length=1, max_length=120)
+    label: str = Field(..., min_length=1, max_length=300)
+    guidance: str | None = None
+    sort_order: int = 0
+    is_active: bool = True
+
+
+class GateCriteriaUpdate(BaseModel):
+    gate_number: int | None = Field(None, ge=1, le=10)
+    criterion_id: str | None = Field(None, min_length=1, max_length=120)
+    label: str | None = Field(None, min_length=1, max_length=300)
+    guidance: str | None = None
+    sort_order: int | None = None
+    is_active: bool | None = None
+
+
+class StageGateDefinitionBase(BaseModel):
+    gate_number: int = Field(..., ge=1, le=10)
+    key: str = Field(..., min_length=1, max_length=120)
+    label: str = Field(..., min_length=1, max_length=200)
+    from_stage: str = Field(..., min_length=1, max_length=120)
+    to_stage: str = Field(..., min_length=1, max_length=120)
+    description: str | None = None
+    approval_required: bool = True
+    approver_roles: list[str] = Field(default_factory=lambda: ["transformation_office"])
+    require_all_criteria: bool = True
+    sort_order: int = 0
+    is_system: bool = False
+    is_active: bool = True
+
+
+class StageGateDefinitionCreate(StageGateDefinitionBase):
+    pass
+
+
+class StageGateDefinitionUpdate(BaseModel):
+    gate_number: int | None = Field(None, ge=1, le=10)
+    key: str | None = Field(None, min_length=1, max_length=120)
+    label: str | None = Field(None, min_length=1, max_length=200)
+    from_stage: str | None = Field(None, min_length=1, max_length=120)
+    to_stage: str | None = Field(None, min_length=1, max_length=120)
+    description: str | None = None
+    approval_required: bool | None = None
+    approver_roles: list[str] | None = None
+    require_all_criteria: bool | None = None
+    sort_order: int | None = None
+    is_active: bool | None = None
+
+
+class StageGateDefinition(StageGateDefinitionBase):
+    id: str
+
+
 class GateCriteriaState(BaseModel):
     id: str
     criterion_id: str
@@ -35,6 +90,9 @@ class GateItem(BaseModel):
     label: str
     from_stage: str
     to_stage: str
+    approval_required: bool = True
+    approver_roles: list[str] = Field(default_factory=lambda: ["transformation_office"])
+    require_all_criteria: bool = True
 
 
 class GateSubmissionCreate(BaseModel):

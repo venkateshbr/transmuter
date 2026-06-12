@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import date
 from uuid import uuid4
 
+import pytest
+
 from app.agents.initiative_intake_agent import (
     deterministic_field_extraction,
     scan_risk_patterns,
@@ -80,7 +82,11 @@ def test_meeting_notes_skills_extract_actions_decisions_and_updates() -> None:
     assert decisions.initiative_updates[0].rag_status == "amber"
 
 
-def test_status_update_drafting_uses_only_context_facts() -> None:
+@pytest.mark.asyncio
+async def test_status_update_drafting_uses_only_context_facts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("app.agents.status_update_agent.settings.ai_enabled", False)
     context = InitiativeContextPullResult(
         initiative_id=str(uuid4()),
         period_start="2026-04-01",
@@ -99,7 +105,7 @@ def test_status_update_drafting_uses_only_context_facts() -> None:
         sources=["milestones", "kpis", "risks", "financial_entries"],
     )
 
-    draft = draft_status_update(context)
+    draft = await draft_status_update(context)
 
     assert draft.rag_status == "red"
     assert "1 high risks" in draft.summary

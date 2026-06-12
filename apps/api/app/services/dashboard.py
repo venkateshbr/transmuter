@@ -41,10 +41,11 @@ class DashboardService:
         total_initiatives = len(filtered_inits)
         at_risk = len([i for i in filtered_inits if i["rag_status"] == "red"])
 
+        stage_definitions = self.repo.get_stage_gate_definitions()
+        stage_options = self._stage_options(stage_definitions, all_inits)
         pipeline_by_stage = {
-            "scoping": len([i for i in filtered_inits if i["stage"] == "scoping"]),
-            "in_progress": len([i for i in filtered_inits if i["stage"] == "in_progress"]),
-            "complete": len([i for i in filtered_inits if i["stage"] == "complete"]),
+            stage["id"]: len([i for i in filtered_inits if i["stage"] == stage["id"]])
+            for stage in stage_options
         }
 
         rag_breakdown = {
@@ -145,6 +146,7 @@ class DashboardService:
             "available_filters": {
                 "business_units": bus,
                 "workstreams": wss,
+                "stages": stage_options,
                 "rag_statuses": [{"id": v, "name": v.title()} for v in rag_values],
                 "priorities": [{"id": v, "name": v.title()} for v in priority_values],
                 "tags": [{"id": v, "name": self._label(v)} for v in tag_values],
@@ -427,6 +429,44 @@ class DashboardService:
         ordered = [value for value in preferred_order if value in values]
         ordered.extend(sorted(values - set(preferred_order)))
         return ordered
+
+    def _stage_options(
+        self,
+        stage_definitions: list[dict[str, Any]],
+        initiatives: list[dict[str, Any]],
+    ) -> list[dict[str, str]]:
+        options: list[dict[str, str]] = []
+        seen: set[str] = set()
+
+        for row in stage_definitions:
+            stage_id = str(row.get("to_stage") or "").strip()
+            if not stage_id or stage_id in seen:
+                continue
+            options.append(
+                {
+                    "id": stage_id,
+                    "name": str(row.get("label") or self._label(stage_id)),
+                }
+            )
+            seen.add(stage_id)
+
+        for stage_id in self._ordered_values(
+            {str(row.get("stage")) for row in initiatives if row.get("stage")},
+            ["identified", "scoping", "planning", "in_execution", "complete", "realized"],
+        ):
+            if stage_id in seen:
+                continue
+            options.append({"id": stage_id, "name": self._label(stage_id)})
+            seen.add(stage_id)
+
+        if not options:
+            options = [
+                {"id": "scoping", "name": "Scoping"},
+                {"id": "in_progress", "name": "In Progress"},
+                {"id": "complete", "name": "Complete"},
+            ]
+
+        return options
 
     @staticmethod
     def _label(value: str) -> str:

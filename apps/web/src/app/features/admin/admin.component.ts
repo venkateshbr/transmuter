@@ -481,7 +481,7 @@ import { FormsModule } from '@angular/forms';
                 
                 <div class="space-y-3">
                   @for (ws of workstreams(); track ws.id) {
-                    <div class="grid gap-4 p-4 rounded-xl border border-[var(--t-border)] hover:bg-[var(--t-surface-raised)]/30 transition-all sm:grid-cols-[1fr_220px_auto] sm:items-center">
+                    <div class="grid gap-4 p-4 rounded-xl border border-[var(--t-border)] hover:bg-[var(--t-surface-raised)]/30 transition-all sm:grid-cols-[1fr_180px_180px_180px_auto] sm:items-center">
                       <div class="flex items-center gap-4 min-w-0">
                         <div class="w-8 h-8 rounded-lg bg-[var(--t-accent-soft)] flex items-center justify-center text-[var(--t-accent)]">
                           <span class="material-icons text-sm">hub</span>
@@ -498,6 +498,26 @@ import { FormsModule } from '@angular/forms';
                           <option [value]="bu.id">{{ bu.name }}</option>
                         }
                       </select>
+                      <select
+                        [ngModel]="ws.lead_user_id || ''"
+                        (ngModelChange)="ws.lead_user_id = $event || null; updateWorkstream(ws)"
+                        aria-label="Workstream lead"
+                        class="input-field w-full py-2 text-xs">
+                        <option value="">No lead</option>
+                        @for (user of users(); track user.id) {
+                          <option [value]="user.id">{{ user.display_name || user.email }}</option>
+                        }
+                      </select>
+                      <select
+                        [ngModel]="ws.sponsor_user_id || ''"
+                        (ngModelChange)="ws.sponsor_user_id = $event || null; updateWorkstream(ws)"
+                        aria-label="Workstream sponsor"
+                        class="input-field w-full py-2 text-xs">
+                        <option value="">No sponsor</option>
+                        @for (user of users(); track user.id) {
+                          <option [value]="user.id">{{ user.display_name || user.email }}</option>
+                        }
+                      </select>
                       <button type="button" (click)="deleteWorkstream(ws.id)" aria-label="Delete workstream" class="btn-ghost p-2 text-red-500/60 hover:text-red-500 hover:bg-red-500/10">
                         <span class="material-icons text-sm">delete</span>
                       </button>
@@ -505,7 +525,7 @@ import { FormsModule } from '@angular/forms';
                   }
                   
                   <!-- Inline Add -->
-                  <div class="grid gap-4 p-4 rounded-xl border border-dashed border-[var(--t-border)] sm:grid-cols-[1fr_220px_auto] sm:items-center">
+                  <div class="grid gap-4 p-4 rounded-xl border border-dashed border-[var(--t-border)] sm:grid-cols-[1fr_180px_180px_180px_auto] sm:items-center">
                     <div class="flex items-center gap-4 min-w-0">
                       <div class="w-8 h-8 rounded-lg bg-[var(--t-surface-raised)] flex items-center justify-center text-[var(--t-text-tertiary)]">
                         <span class="material-icons text-sm">add</span>
@@ -520,6 +540,26 @@ import { FormsModule } from '@angular/forms';
                       <option value="">No business unit</option>
                       @for (bu of businessUnits(); track bu.id) {
                         <option [value]="bu.id">{{ bu.name }}</option>
+                      }
+                    </select>
+                    <select
+                      [ngModel]="newWorkstreamLeadUserId()"
+                      (ngModelChange)="newWorkstreamLeadUserId.set($event)"
+                      aria-label="New workstream lead"
+                      class="input-field w-full py-2 text-xs">
+                      <option value="">No lead</option>
+                      @for (user of users(); track user.id) {
+                        <option [value]="user.id">{{ user.display_name || user.email }}</option>
+                      }
+                    </select>
+                    <select
+                      [ngModel]="newWorkstreamSponsorUserId()"
+                      (ngModelChange)="newWorkstreamSponsorUserId.set($event)"
+                      aria-label="New workstream sponsor"
+                      class="input-field w-full py-2 text-xs">
+                      <option value="">No sponsor</option>
+                      @for (user of users(); track user.id) {
+                        <option [value]="user.id">{{ user.display_name || user.email }}</option>
                       }
                     </select>
                     <button type="button" (click)="addWorkstream()" [disabled]="!newWorkstreamName().trim()" aria-label="Create workstream" class="text-[var(--t-accent)] font-black text-[10px] uppercase tracking-widest disabled:cursor-not-allowed disabled:opacity-40">Create</button>
@@ -672,6 +712,123 @@ import { FormsModule } from '@angular/forms';
 
           @if (activeTab === 'Financial Configuration') {
             <div class="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+              <div class="card p-8 xl:col-span-2">
+                <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Financial Metric Engine</h3>
+                    <p class="mt-1 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Tenant-owned metrics, scenarios, currency, and fiscal calendar</p>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-3">
+                    <label class="grid gap-1">
+                      <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Currency</span>
+                      <input class="input-field w-24 py-2 text-xs uppercase" [ngModel]="reportingSettings().reporting_currency" (ngModelChange)="updateReportingCurrency($event)" maxlength="3" aria-label="Reporting currency">
+                    </label>
+                    <label class="grid gap-1">
+                      <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Fiscal Start</span>
+                      <select class="input-field w-36 py-2 text-xs" [ngModel]="reportingSettings().fiscal_year_start_month" (ngModelChange)="updateFiscalStartMonth($event)" aria-label="Fiscal year start month">
+                        @for (month of fiscalMonths; track month.value) {
+                          <option [ngValue]="month.value">{{ month.label }}</option>
+                        }
+                      </select>
+                    </label>
+                    <button type="button" class="btn-primary px-4 py-2 text-[10px]" (click)="saveReportingSettings()" aria-label="Save reporting settings">Save Settings</button>
+                  </div>
+                </div>
+
+                <div class="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+                  <section class="border border-[var(--t-border)]">
+                    <div class="flex items-center justify-between gap-3 border-b border-[var(--t-border)] bg-[var(--t-surface-raised)] px-4 py-3">
+                      <div>
+                        <p class="text-xs font-black uppercase tracking-widest text-[var(--t-accent)]">Metric Definitions</p>
+                        <p class="mt-1 text-[10px] text-[var(--t-text-tertiary)]">{{ metricDefinitions().length }} configured metrics</p>
+                      </div>
+                      <button type="button" class="btn-secondary px-3 py-2 text-[10px]" (click)="addMetricDefinition()" aria-label="Add metric definition">Add Metric</button>
+                    </div>
+                    <div class="divide-y divide-[var(--t-border)]">
+                      @for (metric of metricDefinitions(); track metric.id || metric.key) {
+                        <div class="grid gap-3 p-4 lg:grid-cols-[1fr_120px_120px_120px_auto] lg:items-end">
+                          <label class="grid gap-1">
+                            <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Label</span>
+                            <input class="input-field py-2 text-xs font-bold" [ngModel]="metric.label" (ngModelChange)="metric.label = $event" aria-label="Metric definition label">
+                          </label>
+                          <label class="grid gap-1">
+                            <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Type</span>
+                            <select class="input-field py-2 text-xs" [ngModel]="metric.value_type" (ngModelChange)="metric.value_type = $event" aria-label="Metric value type">
+                              <option value="currency">Currency</option>
+                              <option value="percent">Percent</option>
+                              <option value="number">Number</option>
+                            </select>
+                          </label>
+                          <label class="grid gap-1">
+                            <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Aggregation</span>
+                            <select class="input-field py-2 text-xs" [ngModel]="metric.aggregation" (ngModelChange)="metric.aggregation = $event" aria-label="Metric aggregation">
+                              <option value="sum">Sum</option>
+                              <option value="avg">Average</option>
+                              <option value="last">Last</option>
+                              <option value="formula">Formula</option>
+                            </select>
+                          </label>
+                          <label class="grid gap-1">
+                            <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Benefit</span>
+                            <select class="input-field py-2 text-xs" [ngModel]="metric.benefit_class || ''" (ngModelChange)="updateMetricBenefitClass(metric, $event)" aria-label="Benefit class">
+                              <option value="">No</option>
+                              <option value="revenue">Revenue</option>
+                              <option value="margin">Margin</option>
+                              <option value="savings">Savings</option>
+                              <option value="avoidance">Avoidance</option>
+                              <option value="other">Other</option>
+                            </select>
+                          </label>
+                          <div class="flex items-center gap-2">
+                            <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="metric.is_active = !metric.is_active" [attr.aria-label]="'Toggle ' + metric.label">{{ metric.is_active ? 'Active' : 'Hidden' }}</button>
+                            <button type="button" class="btn-primary px-3 py-2 text-[10px]" (click)="saveMetricDefinition(metric)" aria-label="Save metric definition">Save</button>
+                          </div>
+                          @if (metric.aggregation === 'formula') {
+                            <label class="grid gap-1 lg:col-span-5">
+                              <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Formula</span>
+                              <input class="input-field py-2 text-xs font-mono" [ngModel]="metric.formula || ''" (ngModelChange)="metric.formula = $event || null" aria-label="Metric formula" placeholder="revenue_uplift / baseline_revenue * 100">
+                            </label>
+                          }
+                        </div>
+                      }
+                    </div>
+                  </section>
+
+                  <section class="border border-[var(--t-border)]">
+                    <div class="flex items-center justify-between gap-3 border-b border-[var(--t-border)] bg-[var(--t-surface-raised)] px-4 py-3">
+                      <div>
+                        <p class="text-xs font-black uppercase tracking-widest text-[var(--t-accent)]">Scenarios</p>
+                        <p class="mt-1 text-[10px] text-[var(--t-text-tertiary)]">Plan, actual, baseline, and tenant-specific lanes</p>
+                      </div>
+                      <button type="button" class="btn-secondary px-3 py-2 text-[10px]" (click)="addScenarioDefinition()" aria-label="Add scenario">Add Scenario</button>
+                    </div>
+                    <div class="divide-y divide-[var(--t-border)]">
+                      @for (scenario of scenarioDefinitions(); track scenario.id || scenario.key) {
+                        <div class="grid gap-3 p-4 sm:grid-cols-[1fr_120px_auto] sm:items-end">
+                          <label class="grid gap-1">
+                            <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Label</span>
+                            <input class="input-field py-2 text-xs font-bold" [ngModel]="scenario.label" (ngModelChange)="scenario.label = $event" aria-label="Scenario label">
+                          </label>
+                          <label class="grid gap-1">
+                            <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Kind</span>
+                            <select class="input-field py-2 text-xs" [ngModel]="scenario.kind" (ngModelChange)="scenario.kind = $event" aria-label="Scenario kind">
+                              <option value="baseline">Baseline</option>
+                              <option value="plan">Plan</option>
+                              <option value="forecast">Forecast</option>
+                              <option value="actual">Actual</option>
+                            </select>
+                          </label>
+                          <div class="flex items-center gap-2">
+                            <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="scenario.is_active = !scenario.is_active" [attr.aria-label]="'Toggle ' + scenario.label">{{ scenario.is_active ? 'Active' : 'Hidden' }}</button>
+                            <button type="button" class="btn-primary px-3 py-2 text-[10px]" (click)="saveScenarioDefinition(scenario)" aria-label="Save scenario">Save</button>
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  </section>
+                </div>
+              </div>
+
               <div class="card p-8 space-y-6">
                 <div class="flex items-start justify-between gap-4">
                   <div>
@@ -818,70 +975,79 @@ import { FormsModule } from '@angular/forms';
 
           @if (activeTab === 'Governance Engine') {
              <div class="space-y-8">
-                <!-- Gate 1 Criteria -->
                 <div class="card p-8">
-                  <div class="flex justify-between items-center mb-6">
-                    <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Stage Gate 1 Criteria (Scoping → Execution)</h3>
-                    <button type="button" (click)="addCriterion(1)" aria-label="Add gate 1 criterion" class="btn-primary text-[10px] py-2 px-4 rounded-xl font-black uppercase">Add Rule</button>
-                  </div>
-                  <div class="space-y-3">
-                    @for (c of gateCriteria(); track c.id) {
-                      @if (c.gate_number === 1) {
-                        <div class="flex items-center justify-between p-4 rounded-xl border border-[var(--t-border)]">
-                          <div class="flex items-center gap-4">
-                            <input type="checkbox" [checked]="c.is_active" (change)="toggleCriterion(c)" aria-label="Toggle gate criterion" class="w-4 h-4 rounded border-[var(--t-border)] text-[var(--t-accent)]">
-                            <p class="text-sm font-bold text-[var(--t-text-primary)]">{{ c.label }}</p>
-                          </div>
-                          <button type="button" (click)="deleteCriterion(c.id)" aria-label="Delete gate criterion" class="btn-ghost p-2 text-red-500/60 hover:text-red-500 hover:bg-red-500/10">
-                            <span class="material-icons text-sm">delete</span>
-                          </button>
-                        </div>
-                      }
-                    }
-                    
-                    <!-- Inline Add -->
-                    <div class="flex items-center justify-between p-4 rounded-xl border border-dashed border-[var(--t-border)]">
-                      <div class="flex items-center gap-4">
-                        <span class="material-icons text-sm text-[var(--t-text-tertiary)]">add</span>
-                        <input type="text" [ngModel]="newCriterionG1()" (ngModelChange)="newCriterionG1.set($event)" (keyup.enter)="addCriterion(1)" aria-label="New gate 1 criterion" placeholder="Add scoping criterion..." class="bg-transparent border-none outline-none text-sm text-[var(--t-text-primary)] min-w-[300px]">
-                      </div>
-                      @if (newCriterionG1()) {
-                        <button type="button" (click)="addCriterion(1)" aria-label="Create gate 1 criterion" class="text-[var(--t-accent)] font-black text-[10px] uppercase tracking-widest">Add</button>
-                      }
+                  <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Stage Gates</h3>
+                      <p class="mt-1 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Configure tenant stage transitions, approval rules, and movement criteria</p>
                     </div>
+                    <button type="button" (click)="addStageGateDefinition()" aria-label="Add stage gate" class="btn-primary px-4 py-2 text-[10px]">Add Gate</button>
                   </div>
-                </div>
 
-                <!-- Gate 2 Criteria -->
-                <div class="card p-8">
-                  <div class="flex justify-between items-center mb-6">
-                    <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Stage Gate 2 Criteria (Execution → Complete)</h3>
-                  </div>
-                  <div class="space-y-3">
-                    @for (c of gateCriteria(); track c.id) {
-                      @if (c.gate_number === 2) {
-                        <div class="flex items-center justify-between p-4 rounded-xl border border-[var(--t-border)]">
-                          <div class="flex items-center gap-4">
-                            <input type="checkbox" [checked]="c.is_active" (change)="toggleCriterion(c)" aria-label="Toggle gate criterion" class="w-4 h-4 rounded border-[var(--t-border)] text-[var(--t-accent)]">
-                            <p class="text-sm font-bold text-[var(--t-text-primary)]">{{ c.label }}</p>
+                  <div class="space-y-5">
+                    @for (gate of stageGateDefinitions(); track gate.id || gate.key) {
+                      <section class="border border-[var(--t-border)] bg-[var(--t-surface)]">
+                        <div class="grid gap-3 border-b border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4 lg:grid-cols-[80px_1fr_1fr_1fr_auto] lg:items-end">
+                          <label class="grid gap-1">
+                            <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Gate</span>
+                            <input type="number" min="1" max="10" class="input-field py-2 text-xs" [ngModel]="gate.gate_number" (ngModelChange)="gate.gate_number = numberValue($event)" aria-label="Gate number">
+                          </label>
+                          <label class="grid gap-1">
+                            <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Label</span>
+                            <input class="input-field py-2 text-xs font-bold" [ngModel]="gate.label" (ngModelChange)="gate.label = $event" aria-label="Gate label">
+                          </label>
+                          <label class="grid gap-1">
+                            <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">From Stage</span>
+                            <input class="input-field py-2 text-xs" [ngModel]="gate.from_stage" (ngModelChange)="gate.from_stage = $event" aria-label="Gate from stage">
+                          </label>
+                          <label class="grid gap-1">
+                            <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">To Stage</span>
+                            <input class="input-field py-2 text-xs" [ngModel]="gate.to_stage" (ngModelChange)="gate.to_stage = $event" aria-label="Gate to stage">
+                          </label>
+                          <div class="flex items-center gap-2">
+                            <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="gate.is_active = !gate.is_active" [attr.aria-label]="'Toggle ' + gate.label">{{ gate.is_active ? 'Active' : 'Hidden' }}</button>
+                            <button type="button" class="btn-primary px-3 py-2 text-[10px]" (click)="saveStageGateDefinition(gate)" aria-label="Save stage gate">Save</button>
                           </div>
-                          <button type="button" (click)="deleteCriterion(c.id)" aria-label="Delete gate criterion" class="btn-ghost p-2 text-red-500/60 hover:text-red-500 hover:bg-red-500/10">
-                            <span class="material-icons text-sm">delete</span>
-                          </button>
                         </div>
-                      }
-                    }
 
-                    <!-- Inline Add -->
-                    <div class="flex items-center justify-between p-4 rounded-xl border border-dashed border-[var(--t-border)]">
-                      <div class="flex items-center gap-4">
-                        <span class="material-icons text-sm text-[var(--t-text-tertiary)]">add</span>
-                        <input type="text" [ngModel]="newCriterionG2()" (ngModelChange)="newCriterionG2.set($event)" (keyup.enter)="addCriterion(2)" aria-label="New gate 2 criterion" placeholder="Add execution criterion..." class="bg-transparent border-none outline-none text-sm text-[var(--t-text-primary)] min-w-[300px]">
-                      </div>
-                      @if (newCriterionG2()) {
-                        <button type="button" (click)="addCriterion(2)" aria-label="Create gate 2 criterion" class="text-[var(--t-accent)] font-black text-[10px] uppercase tracking-widest">Add</button>
-                      }
-                    </div>
+                        <div class="grid gap-4 p-4 lg:grid-cols-[1fr_1fr]">
+                          <label class="flex items-center gap-3 text-xs font-bold text-[var(--t-text-primary)]">
+                            <input type="checkbox" [checked]="gate.approval_required" (change)="gate.approval_required = !gate.approval_required" aria-label="Approval required">
+                            Approval required
+                          </label>
+                          <label class="flex items-center gap-3 text-xs font-bold text-[var(--t-text-primary)]">
+                            <input type="checkbox" [checked]="gate.require_all_criteria" (change)="gate.require_all_criteria = !gate.require_all_criteria" aria-label="Require all criteria">
+                            Require all active criteria
+                          </label>
+                          <label class="grid gap-1 lg:col-span-2">
+                            <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Approver Roles</span>
+                            <input class="input-field py-2 text-xs font-mono" [ngModel]="rolesText(gate.approver_roles)" (ngModelChange)="gate.approver_roles = splitRoles($event)" aria-label="Approver roles" placeholder="transformation_office, initiative_owner">
+                          </label>
+                        </div>
+
+                        <div class="border-t border-[var(--t-border)] p-4">
+                          <div class="mb-3 flex items-center justify-between gap-3">
+                            <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Checklist Criteria</p>
+                            <span class="text-[10px] text-[var(--t-text-tertiary)]">{{ criteriaForGate(gate.gate_number).length }} rules</span>
+                          </div>
+
+                          <div class="space-y-2">
+                            @for (criterion of criteriaForGate(gate.gate_number); track criterion.id) {
+                              <div class="grid gap-3 border border-[var(--t-border)] p-3 sm:grid-cols-[auto_1fr_auto] sm:items-center">
+                                <input type="checkbox" [checked]="criterion.is_active" (change)="toggleCriterion(criterion)" aria-label="Toggle gate criterion" class="h-4 w-4 border-[var(--t-border)] text-[var(--t-accent)]">
+                                <input class="input-field py-2 text-xs font-bold" [ngModel]="criterion.label" (ngModelChange)="criterion.label = $event" (blur)="saveCriterion(criterion)" aria-label="Gate criterion label">
+                                <button type="button" (click)="deleteCriterion(criterion.id)" aria-label="Delete gate criterion" class="btn-ghost px-3 py-2 text-[10px]">Delete</button>
+                              </div>
+                            }
+
+                            <div class="grid gap-3 border border-dashed border-[var(--t-border)] p-3 sm:grid-cols-[1fr_auto]">
+                              <input type="text" [ngModel]="newCriterionForGate(gate.gate_number)" (ngModelChange)="setNewCriterionForGate(gate.gate_number, $event)" (keyup.enter)="addCriterion(gate.gate_number)" aria-label="New gate criterion" placeholder="Add movement criterion..." class="input-field py-2 text-xs">
+                              <button type="button" (click)="addCriterion(gate.gate_number)" [disabled]="!newCriterionForGate(gate.gate_number).trim()" aria-label="Create gate criterion" class="btn-primary px-4 py-2 text-[10px]">Add Rule</button>
+                            </div>
+                          </div>
+                        </div>
+                      </section>
+                    }
                   </div>
                 </div>
              </div>
@@ -964,23 +1130,44 @@ export class AdminComponent implements OnInit {
   meetingCleanupError = signal<string | null>(null);
   meetingCleanupResult = signal<any | null>(null);
   gateCriteria = signal<any[]>([]);
+  stageGateDefinitions = signal<any[]>([]);
   auditLogs = signal<any[]>([]);
   financialGroups = signal<any[]>([]);
   financialItems = signal<any[]>([]);
+  metricDefinitions = signal<any[]>([]);
+  scenarioDefinitions = signal<any[]>([]);
+  reportingSettings = signal<any>({ fiscal_year_start_month: 1, reporting_currency: 'USD' });
 
   // Inline add state
   newWorkstreamName = signal('');
   newWorkstreamBusinessUnitId = signal('');
+  newWorkstreamLeadUserId = signal('');
+  newWorkstreamSponsorUserId = signal('');
   newBusinessUnitName = signal('');
   newMarketName = signal('');
   newThemeName = signal('');
   newTagName = signal('');
   newCriterionG1 = signal('');
   newCriterionG2 = signal('');
+  newCriteriaByGate = signal<Record<number, string>>({});
   newMetricNames = signal<Record<string, string>>({});
   newCostCategoryNames = signal<Record<string, string>>({});
 
   private readonly defaultTags = ['automation', 'offshoring', 'commercial', 'other'];
+  readonly fiscalMonths = [
+    { value: 1, label: 'January' },
+    { value: 2, label: 'February' },
+    { value: 3, label: 'March' },
+    { value: 4, label: 'April' },
+    { value: 5, label: 'May' },
+    { value: 6, label: 'June' },
+    { value: 7, label: 'July' },
+    { value: 8, label: 'August' },
+    { value: 9, label: 'September' },
+    { value: 10, label: 'October' },
+    { value: 11, label: 'November' },
+    { value: 12, label: 'December' },
+  ];
 
   ngOnInit() {
     this.loadAll();
@@ -997,8 +1184,10 @@ export class AdminComponent implements OnInit {
     this.loadInitiativeDeleteCandidates();
     this.loadMeetingCleanupCandidates();
     this.loadGateCriteria();
+    this.loadStageGateDefinitions();
     this.loadAuditLogs();
     this.loadFinancialConfiguration();
+    this.loadFinancialEngineConfiguration();
   }
 
   loadWorkstreams() {
@@ -1072,7 +1261,11 @@ export class AdminComponent implements OnInit {
   }
 
   loadGateCriteria() {
-    this.api.get<any>('/admin/gate-criteria').subscribe(res => this.gateCriteria.set(res.items || []));
+    this.api.get<any>('/admin/governance/gate-criteria').subscribe(res => this.gateCriteria.set(Array.isArray(res) ? res : (res.items || [])));
+  }
+
+  loadStageGateDefinitions() {
+    this.api.get<any[]>('/admin/governance/stage-gates').subscribe(res => this.stageGateDefinitions.set(res || []));
   }
 
   loadAuditLogs() {
@@ -1083,6 +1276,14 @@ export class AdminComponent implements OnInit {
     this.api.get<any>('/admin/financial-configuration').subscribe(res => {
       this.financialGroups.set(res.groups || []);
       this.financialItems.set(res.items || []);
+    });
+  }
+
+  loadFinancialEngineConfiguration() {
+    this.api.get<any>('/financial-engine-configuration').subscribe(res => {
+      this.metricDefinitions.set(res.definitions || []);
+      this.scenarioDefinitions.set(res.scenarios || []);
+      this.reportingSettings.set(res.settings || { fiscal_year_start_month: 1, reporting_currency: 'USD' });
     });
   }
 
@@ -1102,10 +1303,14 @@ export class AdminComponent implements OnInit {
     this.api.post('/workstreams', {
       name,
       business_unit_id: this.newWorkstreamBusinessUnitId() || null,
+      lead_user_id: this.newWorkstreamLeadUserId() || null,
+      sponsor_user_id: this.newWorkstreamSponsorUserId() || null,
     }).subscribe(() => {
       this.loadWorkstreams();
       this.newWorkstreamName.set('');
       this.newWorkstreamBusinessUnitId.set('');
+      this.newWorkstreamLeadUserId.set('');
+      this.newWorkstreamSponsorUserId.set('');
     });
   }
 
@@ -1115,6 +1320,8 @@ export class AdminComponent implements OnInit {
     this.api.put(`/workstreams/${ws.id}`, {
       name,
       business_unit_id: ws.business_unit_id || null,
+      lead_user_id: ws.lead_user_id || null,
+      sponsor_user_id: ws.sponsor_user_id || null,
     }).subscribe(() => {
       this.loadWorkstreams();
       this.loadAuditLogs();
@@ -1260,6 +1467,128 @@ export class AdminComponent implements OnInit {
       items: this.financialItems(),
     }).subscribe(() => {
       this.loadFinancialConfiguration();
+      this.loadAuditLogs();
+    });
+  }
+
+  updateReportingCurrency(value: string) {
+    const currency = String(value || '').toUpperCase().slice(0, 3);
+    this.reportingSettings.update(settings => ({ ...settings, reporting_currency: currency }));
+  }
+
+  updateFiscalStartMonth(value: number | string) {
+    this.reportingSettings.update(settings => ({ ...settings, fiscal_year_start_month: this.numberValue(value) }));
+  }
+
+  saveReportingSettings() {
+    const settings = this.reportingSettings();
+    this.api.put('/admin/financial-engine/reporting-settings', {
+      fiscal_year_start_month: Number(settings.fiscal_year_start_month || 1),
+      reporting_currency: String(settings.reporting_currency || 'USD').toUpperCase().slice(0, 3),
+    }).subscribe(() => {
+      this.loadFinancialEngineConfiguration();
+      this.loadAuditLogs();
+    });
+  }
+
+  addMetricDefinition() {
+    const index = this.metricDefinitions().length + 1;
+    const key = `custom_metric_${Date.now()}`;
+    this.metricDefinitions.update(metrics => [
+      ...metrics,
+      {
+        key,
+        label: `Custom Metric ${index}`,
+        group_key: 'custom',
+        value_type: 'currency',
+        unit: null,
+        direction: 'increase_good',
+        aggregation: 'sum',
+        rollup_type: 'benefit',
+        is_benefit: true,
+        benefit_class: 'other',
+        cost_behavior: null,
+        formula: null,
+        formula_inputs: [],
+        precision: 4,
+        display_order: 1000 + index,
+        applies_to: 'opt_in',
+        validation: {},
+        is_system: false,
+        is_active: true,
+      },
+    ]);
+  }
+
+  saveMetricDefinition(metric: any) {
+    const payload = {
+      key: metric.key || this.uniqueEngineKey(metric.label, 'metric', this.metricDefinitions()),
+      label: metric.label,
+      description: metric.description || null,
+      group_key: metric.group_key || null,
+      value_type: metric.value_type || 'currency',
+      unit: metric.unit || null,
+      direction: metric.direction || 'increase_good',
+      aggregation: metric.aggregation || 'sum',
+      rollup_type: metric.rollup_type || null,
+      is_benefit: Boolean(metric.is_benefit),
+      benefit_class: metric.benefit_class || null,
+      cost_behavior: metric.cost_behavior || null,
+      formula: metric.formula || null,
+      formula_inputs: metric.formula_inputs || [],
+      precision: Number(metric.precision ?? 4),
+      display_order: Number(metric.display_order || 0),
+      applies_to: metric.applies_to || 'opt_in',
+      validation: metric.validation || {},
+      is_system: Boolean(metric.is_system),
+      is_active: metric.is_active !== false,
+    };
+    const request = metric.id
+      ? this.api.patch(`/admin/financial-engine/metrics/${metric.id}`, payload)
+      : this.api.post('/admin/financial-engine/metrics', payload);
+    request.subscribe(() => {
+      this.loadFinancialEngineConfiguration();
+      this.loadAuditLogs();
+    });
+  }
+
+  updateMetricBenefitClass(metric: any, value: string) {
+    metric.benefit_class = value || null;
+    metric.is_benefit = Boolean(value);
+    metric.rollup_type = value ? 'benefit' : null;
+  }
+
+  addScenarioDefinition() {
+    const index = this.scenarioDefinitions().length + 1;
+    this.scenarioDefinitions.update(scenarios => [
+      ...scenarios,
+      {
+        key: `custom_scenario_${Date.now()}`,
+        label: `Scenario ${index}`,
+        kind: 'plan',
+        is_primary: false,
+        is_system: false,
+        is_active: true,
+        display_order: 1000 + index,
+      },
+    ]);
+  }
+
+  saveScenarioDefinition(scenario: any) {
+    const payload = {
+      key: scenario.key || this.uniqueEngineKey(scenario.label, 'scenario', this.scenarioDefinitions()),
+      label: scenario.label,
+      kind: scenario.kind || 'plan',
+      is_primary: Boolean(scenario.is_primary),
+      is_system: Boolean(scenario.is_system),
+      is_active: scenario.is_active !== false,
+      display_order: Number(scenario.display_order || 0),
+    };
+    const request = scenario.id
+      ? this.api.patch(`/admin/financial-engine/scenarios/${scenario.id}`, payload)
+      : this.api.post('/admin/financial-engine/scenarios', payload);
+    request.subscribe(() => {
+      this.loadFinancialEngineConfiguration();
       this.loadAuditLogs();
     });
   }
@@ -1426,6 +1755,31 @@ export class AdminComponent implements OnInit {
     return `${base}_${index}`;
   }
 
+  private uniqueEngineKey(label: string, fallbackPrefix: string, rows: any[]): string {
+    const base = String(label || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '') || `${fallbackPrefix}_${Date.now()}`;
+    const existing = new Set(rows.map(row => row.key));
+    if (!existing.has(base)) return base;
+    let index = 2;
+    while (existing.has(`${base}_${index}`)) index += 1;
+    return `${base}_${index}`;
+  }
+
+  private uniqueCriterionKey(gate: number, label: string): string {
+    const base = String(label || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '') || `gate_${gate}_criterion_${Date.now()}`;
+    const prefixed = `g${gate}_${base}`;
+    const existing = new Set(this.gateCriteria().map(row => row.criterion_id));
+    if (!existing.has(prefixed)) return prefixed;
+    let index = 2;
+    while (existing.has(`${prefixed}_${index}`)) index += 1;
+    return `${prefixed}_${index}`;
+  }
+
   private normalizeConfigList(values: unknown): string[] {
     if (!Array.isArray(values)) return [];
     return [...new Set(values.map(value => String(value).trim()).filter(Boolean))];
@@ -1451,28 +1805,113 @@ export class AdminComponent implements OnInit {
   }
 
   addCriterion(gate: number) {
-    const label = gate === 1 ? this.newCriterionG1() : this.newCriterionG2();
+    const label = this.newCriterionForGate(gate).trim();
     if (!label) return;
-    const criterion_id = 'g' + gate + '-' + Math.random().toString(36).substring(2, 5);
-    this.api.post('/admin/gate-criteria', { 
-      gate_number: gate, 
-      label, 
+    const criterion_id = this.uniqueCriterionKey(gate, label);
+    this.api.post('/admin/governance/gate-criteria', {
+      gate_number: gate,
+      label,
       criterion_id,
       is_active: true,
       sort_order: this.gateCriteria().filter(c => c.gate_number === gate).length + 1
     }).subscribe(() => {
       this.loadGateCriteria();
-      if (gate === 1) this.newCriterionG1.set('');
-      else this.newCriterionG2.set('');
+      this.setNewCriterionForGate(gate, '');
     });
   }
 
   toggleCriterion(c: any) {
-    this.api.post('/admin/gate-criteria', { ...c, is_active: !c.is_active }).subscribe(() => this.loadGateCriteria());
+    this.api.patch(`/admin/governance/gate-criteria/${c.id}`, { is_active: !c.is_active }).subscribe(() => this.loadGateCriteria());
+  }
+
+  saveCriterion(c: any) {
+    this.api.patch(`/admin/governance/gate-criteria/${c.id}`, {
+      gate_number: Number(c.gate_number),
+      criterion_id: c.criterion_id,
+      label: c.label,
+      guidance: c.guidance || null,
+      sort_order: Number(c.sort_order || 0),
+      is_active: c.is_active !== false,
+    }).subscribe(() => this.loadGateCriteria());
   }
 
   deleteCriterion(id: string) {
-    this.api.delete(`/admin/gate-criteria/${id}`).subscribe(() => this.loadGateCriteria());
+    this.api.delete(`/admin/governance/gate-criteria/${id}`).subscribe(() => this.loadGateCriteria());
+  }
+
+  criteriaForGate(gateNumber: number): any[] {
+    return this.gateCriteria()
+      .filter(c => Number(c.gate_number) === Number(gateNumber))
+      .sort((a, b) => Number(a.sort_order || 0) - Number(b.sort_order || 0));
+  }
+
+  addStageGateDefinition() {
+    const nextGate = Math.min(Math.max(...this.stageGateDefinitions().map(g => Number(g.gate_number || 0)), 0) + 1, 10);
+    this.stageGateDefinitions.update(gates => [
+      ...gates,
+      {
+        gate_number: nextGate,
+        key: `custom_gate_${Date.now()}`,
+        label: `Gate ${nextGate}`,
+        from_stage: 'current',
+        to_stage: 'next',
+        description: null,
+        approval_required: true,
+        approver_roles: ['transformation_office'],
+        require_all_criteria: true,
+        sort_order: nextGate * 10,
+        is_system: false,
+        is_active: true,
+      },
+    ]);
+  }
+
+  saveStageGateDefinition(gate: any) {
+    const payload = {
+      gate_number: Number(gate.gate_number || 1),
+      key: gate.key || this.uniqueEngineKey(gate.label, 'gate', this.stageGateDefinitions()),
+      label: gate.label,
+      from_stage: gate.from_stage,
+      to_stage: gate.to_stage,
+      description: gate.description || null,
+      approval_required: gate.approval_required !== false,
+      approver_roles: gate.approver_roles?.length ? gate.approver_roles : ['transformation_office'],
+      require_all_criteria: gate.require_all_criteria !== false,
+      sort_order: Number(gate.sort_order || 0),
+      is_system: Boolean(gate.is_system),
+      is_active: gate.is_active !== false,
+    };
+    const request = gate.id
+      ? this.api.patch(`/admin/governance/stage-gates/${gate.id}`, payload)
+      : this.api.post('/admin/governance/stage-gates', payload);
+    request.subscribe(() => {
+      this.loadStageGateDefinitions();
+      this.loadAuditLogs();
+    });
+  }
+
+  newCriterionForGate(gate: number): string {
+    return this.newCriteriaByGate()[gate] || '';
+  }
+
+  setNewCriterionForGate(gate: number, value: string) {
+    this.newCriteriaByGate.update(current => ({ ...current, [gate]: value }));
+  }
+
+  rolesText(roles: string[] | null | undefined): string {
+    return (roles || []).join(', ');
+  }
+
+  splitRoles(value: string): string[] {
+    return String(value || '')
+      .split(',')
+      .map(role => role.trim())
+      .filter(Boolean);
+  }
+
+  numberValue(value: number | string): number {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 1;
   }
 
   deletePortfolioData() {

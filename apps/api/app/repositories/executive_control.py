@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from decimal import Decimal
 from uuid import UUID, uuid4
 
 from supabase import Client
@@ -28,8 +29,15 @@ class ExecutiveControlRepository:
         return result.data or []
 
     def list_financial_entries(self) -> list[dict]:
-        result = self._c.table("financial_entries").select("*").eq("tenant_id", self._tid).execute()
-        return result.data or []
+        try:
+            result = (
+                self._c.table("financial_entries").select("*").eq("tenant_id", self._tid).execute()
+            )
+            return result.data or []
+        except Exception as exc:
+            if not self._is_missing_table(exc, "financial_entries"):
+                raise
+        return self._list_clean_financial_entries()
 
     def list_direct_cost_lines(self) -> list[dict]:
         result = (
@@ -257,3 +265,105 @@ class ExecutiveControlRepository:
             .execute()
         )
         return result.data or []
+
+    def list_metric_definitions(self) -> list[dict]:
+        result = (
+            self._c.table("financial_metric_definitions")
+            .select("id,key,rollup_type,benefit_class,is_benefit")
+            .eq("tenant_id", self._tid)
+            .eq("is_active", True)
+            .execute()
+        )
+        return result.data or []
+
+    def list_financial_scenarios(self) -> list[dict]:
+        result = (
+            self._c.table("financial_scenarios")
+            .select("id,key,kind,is_primary,is_active")
+            .eq("tenant_id", self._tid)
+            .eq("is_active", True)
+            .execute()
+        )
+        return result.data or []
+
+    def list_metric_values(self) -> list[dict]:
+        result = (
+            self._c.table("financial_metric_values")
+            .select("initiative_id,metric_definition_id,scenario_id,year,month,value")
+            .eq("tenant_id", self._tid)
+            .execute()
+        )
+        return result.data or []
+
+    def _list_clean_financial_entries(self) -> list[dict]:
+        definitions = {row["id"]: row for row in self.list_metric_definitions()}
+        scenarios = {row["id"]: row for row in self.list_financial_scenarios()}
+        plan_scenario_ids = [
+            row["id"]
+            for row in scenarios.values()
+            if row.get("kind") == "plan" and row.get("is_primary")
+        ]
+        if not plan_scenario_ids:
+            plan_scenario_ids = [
+                row["id"] for row in scenarios.values() if row.get("kind") == "plan"
+            ]
+        actual_scenario_ids = {
+            row["id"] for row in scenarios.values() if row.get("kind") == "actual"
+        }
+        entries: dict[tuple[str, int, int], dict] = {}
+        for row in self.list_metric_values():
+            scenario_id = row.get("scenario_id")
+            if scenario_id not in set(plan_scenario_ids) | actual_scenario_ids:
+                continue
+            definition = definitions.get(row.get("metric_definition_id"))
+            if not definition:
+                continue
+            year = int(row["year"])
+            month = int(row["month"])
+            key = (str(row["initiative_id"]), year, month)
+            entry = entries.setdefault(
+                key,
+                {
+                    "initiative_id": str(row["initiative_id"]),
+                    "year": year,
+                    "quarter": None,
+                    "month": month,
+                    "revenue_uplift_base": None,
+                    "revenue_uplift_high": None,
+                    "revenue_uplift_actual": None,
+                    "gm_uplift_base": None,
+                    "gm_uplift_high": None,
+                    "gm_uplift_actual": None,
+                },
+            )
+            amount = Decimal(str(row.get("value") or "0"))
+            scenario_kind = scenarios.get(scenario_id, {}).get("kind")
+            target = "actual" if scenario_kind == "actual" else "base"
+            metric_key = definition.get("key")
+            rollup_type = definition.get("rollup_type")
+            benefit_class = definition.get("benefit_class")
+            if metric_key == "revenue_uplift" or benefit_class == "revenue":
+                slot = f"revenue_uplift_{target}"
+            elif (
+                rollup_type == "benefit"
+                or definition.get("is_benefit")
+                or metric_key
+                in {
+                    "gross_margin",
+                    "gm_uplift",
+                    "cost_savings",
+                }
+            ):
+                slot = f"gm_uplift_{target}"
+            else:
+                continue
+            current = entry.get(slot)
+            entry[slot] = str((Decimal(str(current or "0")) + amount).quantize(Decimal("0.0001")))
+        return list(entries.values())
+
+    @staticmethod
+    def _is_missing_table(exc: Exception, table_name: str) -> bool:
+        text = str(exc)
+        return table_name in text and (
+            "Could not find the table" in text or "does not exist" in text or "schema cache" in text
+        )

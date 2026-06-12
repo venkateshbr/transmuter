@@ -174,7 +174,7 @@ class CopilotToolRegistry:
                 row for row in self._query("kpi_entries", "*") if row.get("kpi_id") in kpi_ids
             ],
             financial_entries=self._filter_initiative_rows(
-                self._query("financial_entries", "*"),
+                self._query_optional("financial_entries", "*"),
                 initiative_ids,
             ),
             cost_lines=self._filter_initiative_rows(
@@ -228,6 +228,14 @@ class CopilotToolRegistry:
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"Copilot data source unavailable: {table}",
             ) from exc
+
+    def _query_optional(self, table: str, select: str) -> list[dict[str, Any]]:
+        try:
+            return self._query(table, select)
+        except HTTPException as exc:
+            if exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE:
+                return []
+            raise
 
     @staticmethod
     def _filter_initiative_rows(

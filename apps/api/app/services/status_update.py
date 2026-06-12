@@ -105,11 +105,11 @@ class StatusUpdateService:
         rows = self._repo.list_recent_updates()
         return [self._to_item(r) for r in rows]
 
-    def generate_draft(self, initiative_id: str) -> StatusUpdateDraftSuggestion:
+    async def generate_draft(self, initiative_id: str) -> StatusUpdateDraftSuggestion:
         context = InitiativeContextService(self._repo.client, self._tenant_id).pull_context(
             initiative_id
         )
-        return draft_status_update(context)
+        return await draft_status_update(context)
 
     def get_compliance_stats(self) -> StatusComplianceResponse:
         rows = self._repo.list_compliance()

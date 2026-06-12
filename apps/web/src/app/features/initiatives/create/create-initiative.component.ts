@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { AuthService } from '../../../core/services/auth.service';
 
 interface WorkstreamOption {
   id: string;
@@ -168,9 +169,33 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
           style="color:var(--t-text-primary)">
         Create Initiative<span style="color:var(--t-accent)">.</span>
       </h1>
-      <p class="mb-8" style="color:var(--t-text-secondary)">
+        <p class="mb-8" style="color:var(--t-text-secondary)">
         Choose how you'd like to create your initiative.
       </p>
+
+      <div *ngIf="!editId && isCreationBlocked()" class="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 p-5">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <p class="text-[10px] font-black uppercase tracking-widest text-amber-600">Tenant setup required</p>
+            <h2 class="mt-1 text-lg font-black" style="color:var(--t-text-primary)">Configure the tenant before creating initiatives</h2>
+            <p class="mt-2 max-w-3xl text-sm leading-6" style="color:var(--t-text-secondary)">
+              Complete the setup checklist in Admin first. That includes business units, workstreams, financial configuration,
+              financial engine definitions, stage gates, and gate criteria.
+            </p>
+          </div>
+          <a routerLink="/admin" class="btn-primary px-4 py-2 text-[10px] font-black uppercase tracking-widest" aria-label="Open tenant administration setup">
+            Open Admin
+          </a>
+        </div>
+        <div *ngIf="setupStatus().checks?.length" class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div *ngFor="let check of setupStatus().checks || []" class="border border-[var(--t-border)] bg-[var(--t-surface)] p-3">
+            <p class="text-[9px] font-black uppercase tracking-widest" [class.text-emerald-600]="check.complete" [class.text-amber-600]="!check.complete">
+              {{ check.complete ? 'Complete' : 'Open' }}
+            </p>
+            <p class="mt-1 text-xs font-black text-[var(--t-text-primary)]">{{ check.label }}</p>
+          </div>
+        </div>
+      </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
 
@@ -223,6 +248,14 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
 
     <!-- ═══════════════ MANUAL FORM ═══════════════ -->
     <div *ngIf="currentPath === 'form'" class="slide-up">
+      <div *ngIf="!editId && isCreationBlocked()" class="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 p-5">
+        <p class="text-[10px] font-black uppercase tracking-widest text-amber-600">Tenant setup required</p>
+        <p class="mt-2 text-sm font-bold text-[var(--t-text-primary)]">This tenant must finish setup before a new initiative can be created.</p>
+        <p class="mt-1 text-sm leading-6 text-[var(--t-text-secondary)]">
+          Open Admin and complete the missing setup checks first. New initiative creation is intentionally blocked until the setup checklist is complete.
+        </p>
+      </div>
+
       <div class="flex items-center justify-between mb-6">
         <div>
           <h1 class="text-3xl font-bold tracking-tight"
@@ -348,6 +381,13 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
             <textarea id="init-summary" class="input-field" rows="3"
                       [(ngModel)]="form.summary"
                       placeholder="End-to-end accounting process automation..."></textarea>
+          </div>
+
+          <div>
+            <label for="init-context-problem" class="field-label">Context & Problem</label>
+            <textarea id="init-context-problem" class="input-field" rows="3"
+                      [(ngModel)]="form.context_problem"
+                      placeholder="Current pain points, operating context, and why this initiative matters..."></textarea>
           </div>
 
           <div>
@@ -540,7 +580,7 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
             </button>
             <button *ngIf="formStep === 3 && !editId" class="btn-primary text-sm"
                     (click)="generateSuggestions()"
-                    [disabled]="submitting() || generating()"
+                    [disabled]="submitting() || generating() || isCreationBlocked()"
                     aria-label="Generate initiative suggestions">
               <span *ngIf="!generating()">Generate Suggestions</span>
               <span *ngIf="generating()">Generating…</span>
@@ -560,7 +600,7 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
             </button>
             <button *ngIf="formStep === 4" class="btn-primary text-sm"
                     (click)="submitForm()"
-                    [disabled]="submitting()"
+                    [disabled]="submitting() || isCreationBlocked()"
                     aria-label="Create initiative">
               <span *ngIf="!submitting()">Create Initiative</span>
               <span *ngIf="submitting()">Creating…</span>
@@ -578,6 +618,14 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
 
     <!-- ═══════════════ EXCEL UPLOAD ═══════════════ -->
     <div *ngIf="currentPath === 'upload'" class="slide-up">
+      <div *ngIf="!editId && isCreationBlocked()" class="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 p-5">
+        <p class="text-[10px] font-black uppercase tracking-widest text-amber-600">Tenant setup required</p>
+        <p class="mt-2 text-sm font-bold text-[var(--t-text-primary)]">Upload is disabled until the tenant setup checklist is complete.</p>
+        <p class="mt-1 text-sm leading-6 text-[var(--t-text-secondary)]">
+          Configure business units, workstreams, financial configuration, financial engine definitions, stage gates, and gate criteria in Admin first.
+        </p>
+      </div>
+
       <h1 class="text-3xl font-bold tracking-tight mb-2"
           style="color:var(--t-text-primary)">
         Upload Initiative<span style="color:var(--t-accent)">.</span>
@@ -663,7 +711,7 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
             ← Change method
           </button>
           <button class="btn-primary text-sm"
-                  [disabled]="!uploadedFileName() || submitting() || !!uploadPreview()?.validation_errors?.length"
+                  [disabled]="!uploadedFileName() || submitting() || !!uploadPreview()?.validation_errors?.length || isCreationBlocked()"
                   (click)="submitUpload()"
                   aria-label="Upload and create initiative">
             <span *ngIf="!submitting()">Upload & Create</span>
@@ -684,6 +732,7 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
 })
 export class CreateInitiativeComponent {
   private readonly api = inject(ApiService);
+  private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
 
@@ -702,8 +751,13 @@ export class CreateInitiativeComponent {
   readonly tags = signal<string[]>([]);
   readonly users = signal<UserOption[]>([]);
   readonly financialConfiguration = signal<FinancialConfiguration | null>(null);
+  readonly financialEngineConfiguration = signal<any>({ definitions: [], scenarios: [], settings: {} });
+  readonly stageGateDefinitions = signal<any[]>([]);
+  readonly gateCriteria = signal<any[]>([]);
   readonly financialSelectionsLocked = signal(false);
   readonly financialSelectionsLockReason = signal<string | null>(null);
+  readonly setupStatus = signal<any>({ complete: false, completed: 0, total: 0, checks: [] });
+  readonly setupStatusLoaded = signal(false);
   readonly selectedMetricKeys = signal<string[]>([
     'revenue_uplift_base',
     'revenue_uplift_high',
@@ -734,6 +788,7 @@ export class CreateInitiativeComponent {
     tag: '',
     priority: 'medium',
     summary: '',
+    context_problem: '',
     value_logic: '',
     dependencies_text: '',
     planned_start: '',
@@ -742,6 +797,7 @@ export class CreateInitiativeComponent {
 
   constructor() {
     this.loadDropdownData();
+    this.loadSetupStatus();
     this.editId = this.route.snapshot.paramMap.get('id');
     if (this.editId) {
       this.currentPath = 'form';
@@ -788,6 +844,34 @@ export class CreateInitiativeComponent {
       next: r => this.financialConfiguration.set(r),
       error: () => this.financialConfiguration.set(null),
     });
+    this.api.get<any>('/financial-engine-configuration').subscribe({
+      next: r => this.financialEngineConfiguration.set(r || { definitions: [], scenarios: [], settings: {} }),
+      error: () => this.financialEngineConfiguration.set({ definitions: [], scenarios: [], settings: {} }),
+    });
+    this.api.get<any[]>('/governance/stage-gates').subscribe({
+      next: r => this.stageGateDefinitions.set(Array.isArray(r) ? r : []),
+      error: () => this.stageGateDefinitions.set([]),
+    });
+    this.api.get<any>('/admin/governance/gate-criteria').subscribe({
+      next: r => this.gateCriteria.set(Array.isArray(r) ? r : (r.items || [])),
+      error: () => this.gateCriteria.set([]),
+    });
+  }
+
+  private loadSetupStatus(): void {
+    if (this.auth.getRole() !== 'transformation_office') {
+      this.setupStatusLoaded.set(true);
+      return;
+    }
+    this.api.get<any>('/admin/setup-status').subscribe({
+      next: status => {
+        this.setupStatus.set(status || { complete: false, completed: 0, total: 0, checks: [] });
+        this.setupStatusLoaded.set(true);
+      },
+      error: () => {
+        this.setupStatusLoaded.set(true);
+      },
+    });
   }
 
   private loadForEdit(id: string): void {
@@ -806,6 +890,7 @@ export class CreateInitiativeComponent {
           tag: item.tag ?? '',
           priority: item.priority ?? 'medium',
           summary: item.summary ?? '',
+          context_problem: item.context_problem ?? '',
           value_logic: item.value_logic ?? '',
           dependencies_text: item.dependencies_text ?? '',
           planned_start: item.planned_start ?? '',
@@ -831,6 +916,10 @@ export class CreateInitiativeComponent {
   }
 
   private validateForm(): boolean {
+    if (this.isCreationBlocked() && !this.editId) {
+      this.error.set('Complete tenant setup in Admin before creating a new initiative.');
+      return false;
+    }
     if (!this.form.name.trim()) {
       this.error.set('Initiative name is required.');
       return false;
@@ -854,9 +943,10 @@ export class CreateInitiativeComponent {
     if (this.editId || this.form.country) payload['country'] = this.form.country || null;
     if (this.editId || this.form.tag) payload['tag'] = this.form.tag || null;
     if (this.form.priority) payload['priority'] = this.form.priority;
-    if (this.form.summary) payload['summary'] = this.form.summary;
-    if (this.form.value_logic) payload['value_logic'] = this.form.value_logic;
-    if (this.form.dependencies_text) payload['dependencies_text'] = this.form.dependencies_text;
+    if (this.editId || this.form.summary) payload['summary'] = this.form.summary || null;
+    if (this.editId || this.form.context_problem) payload['context_problem'] = this.form.context_problem || null;
+    if (this.editId || this.form.value_logic) payload['value_logic'] = this.form.value_logic || null;
+    if (this.editId || this.form.dependencies_text) payload['dependencies_text'] = this.form.dependencies_text || null;
     if (this.form.planned_start) payload['planned_start'] = this.form.planned_start;
     if (this.form.planned_end) payload['planned_end'] = this.form.planned_end;
     return payload;
@@ -960,6 +1050,10 @@ export class CreateInitiativeComponent {
   }
 
   generateSuggestions(): void {
+    if (this.isCreationBlocked() && !this.editId) {
+      this.error.set('Complete tenant setup in Admin before generating new initiative suggestions.');
+      return;
+    }
     if (!this.validateForm()) return;
 
     this.generating.set(true);
@@ -1097,6 +1191,10 @@ export class CreateInitiativeComponent {
 
   submitUpload(): void {
     if (!this.uploadedFile) return;
+    if (this.isCreationBlocked() && !this.editId) {
+      this.error.set('Complete tenant setup in Admin before uploading a new initiative.');
+      return;
+    }
 
     this.submitting.set(true);
     this.error.set(null);
@@ -1124,5 +1222,27 @@ export class CreateInitiativeComponent {
         .join('\n');
     }
     return detail ?? fallback;
+  }
+
+  isCreationBlocked(): boolean {
+    if (this.editId) return false;
+    const localReady = this.hasLocalSetupReady();
+    if (this.auth.getRole() === 'transformation_office' && this.setupStatusLoaded()) {
+      return !Boolean(this.setupStatus()?.complete) || !localReady;
+    }
+    return !localReady;
+  }
+
+  private hasLocalSetupReady(): boolean {
+    return Boolean(
+      this.businessUnits().length &&
+      this.workstreams().length &&
+      this.financialConfiguration()?.groups?.length &&
+      this.financialConfiguration()?.items?.length &&
+      this.financialEngineConfiguration()?.definitions?.length &&
+      this.financialEngineConfiguration()?.scenarios?.length &&
+      this.stageGateDefinitions().length &&
+      this.gateCriteria().length
+    );
   }
 }

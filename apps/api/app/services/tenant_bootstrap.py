@@ -255,9 +255,10 @@ class TenantBootstrapService:
         tid = str(tenant_id)
         return {
             "settings": self._bootstrap_settings(tid),
-            "financial_groups": self._bootstrap_financial_groups(tid),
-            "financial_items": self._bootstrap_financial_items(tid),
-            "gate_criteria": self._bootstrap_gate_criteria(tid),
+            "financial_groups": 0,
+            "financial_items": 0,
+            "gate_criteria": 0,
+            "stage_gate_definitions": 0,
         }
 
     def _bootstrap_settings(self, tenant_id: str) -> int:
