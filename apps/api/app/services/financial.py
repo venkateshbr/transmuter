@@ -6,6 +6,8 @@ All financial calculations use Decimal arithmetic. Never float.
 from __future__ import annotations
 
 # ruff: noqa: F401
+import ast
+import operator
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID
@@ -140,6 +142,21 @@ _ENTRY_FIELDS = [
     "cogs_pct_high",
     "cogs_pct_actual",
 ]
+
+
+_FORMULA_OPERATORS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+}
+
+
+class FormulaValidationError(ValueError):
+    pass
+
+
+class FormulaDivideByZeroError(ZeroDivisionError):
+    pass
 
 
 class FinancialService:
@@ -326,6 +343,8 @@ class FinancialService:
         locked, lock_reason = self._financial_lock_state(initiative_id)
         config = self.get_engine_configuration()
         legacy_summary = self.get_financial_summary(initiative_id)
+        stored_values = self._repo.list_configurable_metric_values(initiative_id)
+        values = self._values_with_formula_metrics(stored_values)
         return ConfigurableFinancialGridResponse(
             initiative_id=initiative_id,
             definitions=config.definitions,
@@ -333,10 +352,7 @@ class FinancialService:
             benefit_lines=[
                 self._to_benefit_line(row) for row in self._repo.list_benefit_lines(initiative_id)
             ],
-            values=[
-                self._to_configurable_metric_value(row)
-                for row in self._repo.list_configurable_metric_values(initiative_id)
-            ],
+            values=[self._to_configurable_metric_value(row) for row in values],
             cost_lines=[
                 self._to_cost_line(row) for row in self._repo.list_cost_lines(initiative_id)
             ],
@@ -355,7 +371,9 @@ class FinancialService:
         costs = self._repo.list_cost_lines(initiative_id)
         clean_values = self._repo.list_configurable_metric_values(initiative_id)
         if clean_values or (not rows and self._repo.list_metric_definitions()):
-            return self._compute_clean_summary(clean_values, costs)
+            return self._compute_clean_summary(
+                self._values_with_formula_metrics(clean_values), costs
+            )
         metric_values = self._repo.list_metric_values(initiative_id)
         config = self.get_configuration()
         selections = self._resolve_selections(initiative_id, rows, costs, metric_values, config)
@@ -570,6 +588,7 @@ class FinancialService:
             )
 
         if data.values:
+            self._assert_no_formula_metric_values(data.values)
             self._repo.upsert_configurable_metric_values_batch(
                 initiative_id,
                 [
@@ -707,6 +726,7 @@ class FinancialService:
         data: FinancialMetricDefinitionCreate,
         user_id: str | None = None,
     ) -> FinancialMetricDefinition:
+        self._validate_metric_definition_payload(data.model_dump(mode="json"))
         row = self._repo.create_metric_definition(data.model_dump(mode="json"), user_id=user_id)
         return self._to_metric_definition(row)
 
@@ -716,6 +736,7 @@ class FinancialService:
         data: FinancialMetricDefinitionUpdate,
         user_id: str | None = None,
     ) -> FinancialMetricDefinition:
+        self._validate_metric_definition_update(metric_definition_id, data)
         row = self._repo.update_metric_definition(
             metric_definition_id,
             data.model_dump(mode="json", exclude_none=True),
@@ -1674,7 +1695,7 @@ class FinancialService:
         clean_values = self._repo.list_configurable_metric_values(initiative_id)
         if clean_values or not raw_entries:
             return self._compute_clean_value_bridge(
-                clean_values,
+                self._values_with_formula_metrics(clean_values),
                 raw_cost_lines,
                 initiative_id=initiative_id,
             )
@@ -1707,7 +1728,7 @@ class FinancialService:
         clean_values = self._repo.list_configurable_metric_values(initiative_id)
         if clean_values or not raw_entries:
             return self._compute_clean_scenario_summary(
-                clean_values,
+                self._values_with_formula_metrics(clean_values),
                 raw_cost_lines,
                 scenario,
             )
@@ -1737,7 +1758,7 @@ class FinancialService:
         if clean_values or not raw_entries:
             return self._compute_clean_break_even(
                 initiative_id,
-                clean_values,
+                self._values_with_formula_metrics(clean_values),
                 raw_cost_lines,
                 scenario,
             )
@@ -1828,7 +1849,7 @@ class FinancialService:
         raw_entries = self._repo.get_all_entries()
         if not raw_entries:
             return self._compute_clean_value_bridge(
-                self._repo.get_all_metric_values(),
+                self._values_with_formula_metrics(self._repo.get_all_metric_values()),
                 self._repo.get_all_cost_lines(),
                 initiative_id=None,
             )
@@ -1884,6 +1905,241 @@ class FinancialService:
         self._repo.delete_cell_assumption(initiative_id, assumption_id)
 
     # ── Private helpers ───────────────────────────────────────────────────────
+
+    def _assert_no_formula_metric_values(self, values: list[object]) -> None:
+        formula_definition_ids = {
+            row["id"]
+            for row in self._repo.list_metric_definitions()
+            if row.get("aggregation") == "formula"
+        }
+        for value in values:
+            if getattr(value, "metric_definition_id", None) in formula_definition_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Formula metrics are read-only and are computed from input metrics",
+                )
+
+    def _validate_metric_definition_update(
+        self,
+        metric_definition_id: str,
+        data: FinancialMetricDefinitionUpdate,
+    ) -> None:
+        existing = self._repo.list_metric_definitions()
+        current = next((row for row in existing if row.get("id") == metric_definition_id), None)
+        if not current:
+            return
+        candidate = {**current, **data.model_dump(mode="json", exclude_none=True)}
+        self._validate_metric_definition_payload(candidate, existing, metric_definition_id)
+
+    def _validate_metric_definition_payload(
+        self,
+        candidate: dict[str, object],
+        existing: list[dict] | None = None,  # type: ignore[type-arg]
+        existing_id: str | None = None,
+    ) -> None:
+        definitions = list(
+            existing if existing is not None else self._repo.list_metric_definitions()
+        )
+        if existing_id:
+            definitions = [row for row in definitions if row.get("id") != existing_id]
+        definitions.append(candidate)
+
+        if candidate.get("aggregation") != "formula":
+            return
+
+        formula = str(candidate.get("formula") or "").strip()
+        if not formula:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Formula metrics require a formula expression",
+            )
+
+        metric_keys = {str(row["key"]) for row in definitions if row.get("is_active", True)}
+        try:
+            referenced_keys = self._formula_identifiers(formula)
+            self._validate_formula_expression(formula, metric_keys)
+        except FormulaValidationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
+
+        formula_inputs = {str(item) for item in candidate.get("formula_inputs") or []}
+        if formula_inputs and formula_inputs != referenced_keys:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Formula inputs must match the metric keys referenced in the formula",
+            )
+        if str(candidate.get("key")) in referenced_keys:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Formula metrics cannot reference themselves",
+            )
+        self._validate_formula_graph(definitions)
+
+    def _validate_formula_graph(self, definitions: list[dict]) -> None:  # type: ignore[type-arg]
+        formula_keys = {
+            str(row["key"])
+            for row in definitions
+            if row.get("aggregation") == "formula" and row.get("is_active", True)
+        }
+        graph: dict[str, set[str]] = {}
+        for row in definitions:
+            key = str(row["key"])
+            if key not in formula_keys:
+                continue
+            formula = str(row.get("formula") or "").strip()
+            if not formula:
+                continue
+            graph[key] = self._formula_identifiers(formula) & formula_keys
+
+        visiting: set[str] = set()
+        visited: set[str] = set()
+
+        def visit(key: str) -> None:
+            if key in visited:
+                return
+            if key in visiting:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Formula metric dependencies cannot contain cycles",
+                )
+            visiting.add(key)
+            for dependency in graph.get(key, set()):
+                visit(dependency)
+            visiting.remove(key)
+            visited.add(key)
+
+        for key in graph:
+            visit(key)
+
+    def _values_with_formula_metrics(self, values: list[dict]) -> list[dict]:  # type: ignore[type-arg]
+        if not values:
+            return values
+        definitions = self._repo.list_metric_definitions()
+        definition_by_id = {row["id"]: row for row in definitions}
+        formula_definitions = [
+            row
+            for row in definitions
+            if row.get("aggregation") == "formula"
+            and row.get("is_active", True)
+            and row.get("formula")
+        ]
+        if not formula_definitions:
+            return values
+
+        stored_values = [
+            row
+            for row in values
+            if definition_by_id.get(row.get("metric_definition_id"), {}).get("aggregation")
+            != "formula"
+        ]
+        group_keys = sorted(
+            {
+                (
+                    row.get("tenant_id"),
+                    row.get("initiative_id"),
+                    row.get("scenario_id"),
+                    int(row["year"]),
+                    int(row["month"]),
+                )
+                for row in stored_values
+            },
+            key=lambda item: tuple(str(part) for part in item),
+        )
+        computed: list[dict] = []
+        for tenant_id, initiative_id, scenario_id, year, month in group_keys:
+            env: dict[str, Decimal] = {}
+            for row in stored_values:
+                if (
+                    row.get("tenant_id"),
+                    row.get("initiative_id"),
+                    row.get("scenario_id"),
+                    int(row["year"]),
+                    int(row["month"]),
+                ) != (tenant_id, initiative_id, scenario_id, year, month):
+                    continue
+                definition = definition_by_id.get(row.get("metric_definition_id"))
+                if not definition:
+                    continue
+                key = str(definition["key"])
+                env[key] = env.get(key, Decimal("0")) + _dec(row.get("value"))
+
+            for definition in formula_definitions:
+                key = str(definition["key"])
+                formula = str(definition.get("formula") or "")
+                try:
+                    env[key] = self._evaluate_formula(formula, env)
+                except (FormulaValidationError, FormulaDivideByZeroError):
+                    env[key] = Decimal("0")
+                computed.append(
+                    {
+                        "id": (
+                            f"formula:{initiative_id or 'portfolio'}:{scenario_id}:"
+                            f"{year}:{month}:{definition['id']}"
+                        ),
+                        "tenant_id": tenant_id,
+                        "initiative_id": initiative_id,
+                        "metric_definition_id": definition["id"],
+                        "benefit_line_id": None,
+                        "scenario_id": scenario_id,
+                        "year": year,
+                        "month": month,
+                        "value": _money(env[key]),
+                        "status": "approved",
+                        "note": "Computed formula metric",
+                        "_computed_formula": True,
+                    }
+                )
+        return [*stored_values, *computed]
+
+    @staticmethod
+    def _formula_identifiers(formula: str) -> set[str]:
+        try:
+            tree = ast.parse(formula, mode="eval")
+        except SyntaxError as exc:
+            raise FormulaValidationError("Formula expression is invalid") from exc
+        return {node.id for node in ast.walk(tree) if isinstance(node, ast.Name)}
+
+    @classmethod
+    def _validate_formula_expression(cls, formula: str, metric_keys: set[str]) -> None:
+        referenced_keys = cls._formula_identifiers(formula)
+        unknown = sorted(referenced_keys - metric_keys)
+        if unknown:
+            raise FormulaValidationError(
+                f"Formula references unknown metric keys: {', '.join(unknown)}"
+            )
+        cls._evaluate_formula(formula, {key: Decimal("1") for key in referenced_keys})
+
+    @classmethod
+    def _evaluate_formula(cls, formula: str, values: dict[str, Decimal]) -> Decimal:
+        try:
+            tree = ast.parse(formula, mode="eval")
+        except SyntaxError as exc:
+            raise FormulaValidationError("Formula expression is invalid") from exc
+        return cls._evaluate_formula_node(tree.body, values)
+
+    @classmethod
+    def _evaluate_formula_node(cls, node: ast.AST, values: dict[str, Decimal]) -> Decimal:
+        if isinstance(node, ast.BinOp):
+            left = cls._evaluate_formula_node(node.left, values)
+            right = cls._evaluate_formula_node(node.right, values)
+            if isinstance(node.op, ast.Div):
+                if right == Decimal("0"):
+                    raise FormulaDivideByZeroError("Formula division by zero")
+                return left / right
+            operator_fn = _FORMULA_OPERATORS.get(type(node.op))
+            if operator_fn is None:
+                raise FormulaValidationError("Formula uses an unsupported operator")
+            return operator_fn(left, right)
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+            value = cls._evaluate_formula_node(node.operand, values)
+            return value if isinstance(node.op, ast.UAdd) else -value
+        if isinstance(node, ast.Name):
+            return values.get(node.id, Decimal("0"))
+        if isinstance(node, ast.Constant) and isinstance(node.value, int | float):
+            return Decimal(str(node.value))
+        raise FormulaValidationError("Formula uses unsupported syntax")
 
     @staticmethod
     def _to_entry_row(row: dict) -> FinancialEntryRow:  # type: ignore[type-arg]
@@ -3050,11 +3306,14 @@ class FinancialService:
             and (not business_unit_id or row.get("business_unit_id") == business_unit_id)
             and (not tag or row.get("tag") == tag)
         }
-        values = [
-            row
-            for row in self._repo.get_all_metric_values()
-            if row.get("initiative_id") in initiatives and (year is None or row.get("year") == year)
-        ]
+        values = self._values_with_formula_metrics(
+            [
+                row
+                for row in self._repo.get_all_metric_values()
+                if row.get("initiative_id") in initiatives
+                and (year is None or row.get("year") == year)
+            ]
+        )
         costs = [
             row
             for row in self._repo.get_all_cost_lines()
@@ -3160,7 +3419,9 @@ class FinancialService:
             if not scenario or scenario.get("key") != scenario_key:
                 continue
             definition = definitions.get(row.get("metric_definition_id"))
-            if not definition or definition.get("aggregation") == "formula":
+            if not definition or (
+                definition.get("aggregation") == "formula" and not row.get("_computed_formula")
+            ):
                 continue
             amount = _dec(row.get("value"))
             totals["has_values"] = True
