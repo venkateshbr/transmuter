@@ -143,6 +143,9 @@ jobs:
       - name: Validate YAML specs against JSON schemas
         run: python scripts/validate_specs.py
 
+      - name: Check Supabase migration drift
+        run: python scripts/check_migration_drift.py
+
   secret-scan:
     name: Secret scan
     runs-on: ubuntu-latest

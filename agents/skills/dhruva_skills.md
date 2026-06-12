@@ -207,3 +207,57 @@ WHERE t.id NOT IN (
   WHERE created_at > now() - interval '30 days'
 );
 ```
+
+---
+
+## Skill: AI Cost and Quality Observability
+
+Track agent quality and OpenRouter spend together. Cost without quality is noise; quality without cost can still be unsustainable.
+
+```sql
+SELECT
+  agent_id,
+  count(*) AS runs,
+  round(avg(confidence)::numeric, 3) AS avg_confidence,
+  round(percentile_cont(0.95) WITHIN GROUP (ORDER BY latency_ms)) AS p95_latency_ms,
+  count(*) FILTER (WHERE error IS NOT NULL) AS error_count
+FROM agent_audit_log
+WHERE created_at >= now() - interval '7 days'
+GROUP BY agent_id
+ORDER BY runs DESC;
+```
+
+Report alongside Langfuse cost by agent/model:
+
+- Total tokens and USD by tenant, agent, model, and environment
+- Cost per successful workflow, not just cost per trace
+- Agents with rising cost and flat or declining confidence
+- Traces missing tenant, user, or issue correlation metadata
+
+---
+
+## Skill: Platform SLO Instrumentation
+
+Review these SLOs weekly and before launch:
+
+- API p95 and p99 latency by endpoint family
+- API 5xx rate and validation failure rate
+- Frontend route load time for dashboard, initiatives, meetings, and administration
+- Background worker queue depth, retry rate, and oldest pending job
+- Email/Teams delivery success rate
+- Tenant onboarding completion rate and setup abandonment points
+- Data import success/failure counts with rejected-row reasons
+
+Create a follow-up if an SLO lacks a measurable source, dashboard, owner, or alert threshold.
+
+---
+
+## Skill: Data Retention and Audit Monitoring
+
+For compliance-sensitive workflows, verify:
+
+- Audit logs include tenant, actor, action, resource, result, and timestamp
+- PII is masked in logs and external observability tools
+- Retention expectations are documented per data category
+- Deletion/anonymization jobs have evidence of execution
+- Analytics queries do not mix tenant data unless explicitly platform-admin scoped

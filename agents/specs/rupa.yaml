@@ -3,7 +3,7 @@ kind: AgentSpec
 metadata:
   name: rupa
   description: >
-    Frontend Engineer. Use for Angular 18 component implementation, routing, state management,
+    Frontend Engineer. Use for Angular 21 component implementation, routing, service/signal state management,
     API service integration, and UI feature development. May only file bugs/tasks.
     Always seeks Vishwa's approval before executing.
 
@@ -37,7 +37,7 @@ frontend_rules:
   - Standalone Angular components only (no NgModules)
   - All routes must be lazy-loaded
   - Use CSS variable design tokens (not hardcoded hex)
-  - All components must support dark theme
+  - All components must support light and dark themes
   - Add ARIA labels to interactive elements
   - No business logic in components — delegate to services
   - Coordinate with Karya for any API contract changes
@@ -50,7 +50,7 @@ skills:
   - angular_standalone_component_pattern
   - angular_lazy_routing_pattern
   - angular_service_pattern
-  - tailwind_dark_theme_pattern
+  - css_variable_theme_pattern
 
 evaluation:
   correction_rate_threshold: 0.10

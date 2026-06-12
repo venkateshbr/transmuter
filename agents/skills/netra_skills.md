@@ -73,12 +73,24 @@ to the correct expense account, so that I can save time on data entry.
 
 When evaluating features against competitors:
 
-| Criterion | Aethos | QuickBooks | Xero | FreshBooks |
+| Criterion | Transmuter | Transformation spreadsheets | Generic PM tools | BI dashboards |
 |-----------|--------|------------|------|------------|
-| Agent autonomy | ✅ L0-L3 | ❌ | ❌ | ❌ |
-| HITL checkpoints | ✅ | ❌ | ❌ | ❌ |
-| Multi-tenant | ✅ RLS | ✅ | ✅ | ✅ |
-| Open API | ✅ | ✅ | ✅ | ✅ |
-| GAAP compliance | ✅ | ✅ | ✅ | ⚠️ |
+| Tenant-configurable financial metrics | Yes | Manual | Limited | Read-only |
+| Configurable stage gates and approvals | Yes | Manual | Partial | No |
+| Initiative-to-benefit traceability | Yes | Fragile | Partial | Reporting only |
+| Multi-tenant isolation | Yes, RLS-backed | No | Varies | Varies |
+| AI-assisted governance | Progressive, HITL-gated | No | Limited | No |
 
-Always position Aethos differentiation on: **AI-first agent autonomy with progressive trust building.**
+Always position Transmuter differentiation on: **tenant-configurable transformation governance with AI assistance that never blocks core platform workflows.**
+
+## Skill: Requirements Quality Gates
+
+Before handing requirements to Vastu/Karya/Rupa, verify:
+
+- [ ] Tenant configurability is explicit: what is global, tenant-defined, inherited, or locked
+- [ ] Stage gates, checklist items, approvals, financial metrics, KPIs, workstreams, countries, and tags are not hardcoded unless justified
+- [ ] Acceptance criteria state setup/admin behavior before initiative creation
+- [ ] Data import requirements define blank, duplicate, invalid, and unmapped-value handling
+- [ ] Reporting requirements define formula source, precision, aggregation, and filter behavior
+- [ ] AI recommendations include fallback behavior when OpenRouter/Langfuse is unavailable
+- [ ] Audit/RBAC expectations are stated for administration, configuration, approval, and deletion actions

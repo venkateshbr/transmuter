@@ -184,11 +184,54 @@ async def classify(self, data: dict) -> MyAgentOutput:
 Before any schema change:
 - [ ] Add `tenant_id` column with NOT NULL
 - [ ] Add RLS policy: `CREATE POLICY ... USING (tenant_id = current_setting('app.current_tenant_id'))`
-- [ ] Use `NUMERIC(15,2)` for monetary columns
+- [ ] Use `NUMERIC(15,4)` for monetary columns
 - [ ] Add proper indexes for query patterns
 - [ ] Test with multi-tenant data to verify RLS
 - [ ] Add `created_at` and `updated_at` timestamps
 - [ ] Use `deleted_at` for soft deletes (never hard delete financial records)
+- [ ] State rollback category: reversible, forward-fix-only, or requires-backup
+- [ ] Confirm canonical migration directory is `supabase/migrations/`
+
+## Skill: Coverage Standard
+
+Changed backend business logic requires focused tests at the layer where the behavior lives:
+
+- Services: unit or integration tests for business rules, tenant scoping, Decimal handling, and error paths.
+- Repositories: tests for query shape, tenant filters, idempotency, and persistence side effects where practical.
+- Routers: tests for auth/RBAC, response contracts, and status codes.
+
+CI may still ratchet coverage gradually, but Karya should not treat router-only coverage as sufficient for completion.
+
+## Skill: Background Job Reliability Pattern
+
+Every Procrastinate task must document:
+
+- Idempotency key or natural idempotency boundary.
+- Retry strategy and maximum retry count.
+- Failure recording via `record_worker_job()` or equivalent telemetry.
+- Dead-letter/quarantine handling for exhausted retries.
+- Tenant scoping and service-role justification when using admin clients.
+
+Do not add background jobs that can silently lose failures.
+
+## Skill: API Versioning & Deprecation Policy
+
+FastAPI generates the OpenAPI surface automatically, but Karya owns contract discipline:
+
+- Avoid breaking response shapes, status codes, or required fields without Vishwa/Vastu approval.
+- For breaking changes, document the compatibility window and migration path.
+- Add or update response models for public API contracts.
+- Keep endpoint summaries and tags accurate enough for `/docs` to remain useful.
+
+## Skill: Webhook Integrity Pattern
+
+For every webhook endpoint:
+
+- Verify provider signature before processing.
+- Reject processing when the signing secret is missing in production.
+- Store or derive an idempotency key from the provider event id.
+- Make event processing safe to replay.
+- Return generic errors externally; log detailed provider failures internally without secrets or PII.
 
 ## Skill: Secure Coding Checklist
 
