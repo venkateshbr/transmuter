@@ -42,6 +42,10 @@ FinancialCostBehavior = Literal["recurring", "one_time"]
 FinancialScenarioKind = Literal["baseline", "plan", "forecast", "actual"]
 FinancialLineImpactType = Literal["recurring", "one_time"]
 FinancialValueStatus = Literal["draft", "submitted", "approved"]
+FinancialAttributeEntityType = Literal["benefit_line", "cost_line"]
+FinancialAttributeValueType = Literal[
+    "text", "number", "currency", "percent", "date", "select", "boolean"
+]
 
 
 class FinancialModeDescriptor(BaseModel):
@@ -178,10 +182,23 @@ class FinancialBridgeRow(BaseModel):
     is_active: bool = True
 
 
+class FinancialAttributeDefinition(BaseModel):
+    id: str | None = None
+    key: str = Field(..., min_length=1, max_length=120)
+    label: str = Field(..., min_length=1, max_length=200)
+    entity_type: FinancialAttributeEntityType
+    value_type: FinancialAttributeValueType = "text"
+    options: list[str] = Field(default_factory=list)
+    is_required: bool = False
+    display_order: int = 0
+    is_active: bool = True
+
+
 class FinancialEngineConfigurationResponse(BaseModel):
     definitions: list[FinancialMetricDefinition]
     scenarios: list[FinancialScenarioDefinition]
     bridge_rows: list[FinancialBridgeRow]
+    attribute_definitions: list[FinancialAttributeDefinition] = Field(default_factory=list)
     settings: FinancialReportingSettings
 
 
