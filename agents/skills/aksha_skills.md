@@ -93,10 +93,12 @@ When picking up an IN_QA ticket:
 - [ ] Responsive at all breakpoints
 - [ ] Keyboard navigable
 - [ ] No console errors
+- [ ] Browser acceptance covers the real Angular app on port 4300 against the real API
 
 ### Regression Testing
-- [ ] Existing test suite passes: `cd backend && pytest`
-- [ ] Frontend tests pass: `cd frontend && ng test`
+- [ ] Existing API suite passes: `cd apps/api && pytest`
+- [ ] Acceptance API suite passes: `cd apps/api && pytest tests/acceptance`
+- [ ] Browser UI acceptance passes: `cd apps/web && node e2e/real-ui-acceptance.mjs`
 - [ ] No flaky tests introduced
 
 ## Skill: Security Test Patterns
@@ -185,23 +187,36 @@ async def test_login_rate_limit_enforced(http_client):
     assert res.status_code == 429, "Rate limiting not enforced on login!"
 ```
 
-### Cypress Security Scenarios (E2E)
-```typescript
-// cypress/e2e/security.cy.ts
-describe('Security: Auth enforcement', () => {
-  it('redirects unauthenticated users to login', () => {
-    cy.clearLocalStorage();
-    cy.visit('/invoices');
-    cy.url().should('include', '/login');
-  });
+### Browser Security Scenarios (E2E)
+```javascript
+// apps/web/e2e/security-auth.mjs
+import { chromium } from 'playwright';
 
-  it('does not store JWT in localStorage', () => {
-    cy.login('user@example.com', 'password');
-    cy.window().then(win => {
-      const keys = Object.keys(win.localStorage);
-      const hasJwt = keys.some(k => win.localStorage.getItem(k)?.startsWith('eyJ'));
-      expect(hasJwt).to.be.false;
-    });
-  });
-});
+const appUrl = process.env.APP_URL || 'http://localhost:4300';
+
+const browser = await chromium.launch();
+const page = await browser.newPage();
+
+await page.goto(`${appUrl}/initiatives`);
+await page.waitForURL(/login|auth/, { timeout: 10_000 });
+
+// The current shared auth service uses browser storage for Supabase auth state.
+// Verify behavior and exposure deliberately instead of assuming memory-only tokens.
+const storageKeys = await page.evaluate(() => Object.keys(window.localStorage));
+if (storageKeys.some((key) => /service_role|admin|secret/i.test(key))) {
+  throw new Error(`Sensitive key leaked into browser storage: ${storageKeys.join(', ')}`);
+}
+
+await browser.close();
 ```
+
+## Skill: Real Acceptance Gate
+
+Aksha sign-off is not based on smoke tests. For any touched user-facing workflow, acceptance must include:
+
+- Real FastAPI server, not `TestClient` alone
+- Real Supabase-compatible database state with deterministic seed/reset
+- Real authenticated users and tenant-scoped data
+- Browser automation against the Angular app on port 4300
+- Evidence for initiatives, meetings, agenda items, attendees, sessions, action items, financial entries, and cost lines when those areas are touched
+- Verification that data written through UI/API is persisted in the database and visible again through the UI

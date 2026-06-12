@@ -16,7 +16,7 @@ product assumptions, and known follow-up issues.
 
 ## Stack
 - **Backend**: FastAPI 0.115+ / Python 3.12+ / PydanticAI / Procrastinate
-- **Frontend**: Angular 18 standalone / Tailwind CSS / CSS variables
+- **Frontend**: Angular 21 standalone / Tailwind CSS / CSS variables
 - **Database**: Supabase PostgreSQL 15+ / RLS enforced
 - **LLM**: OpenRouter gateway / PydanticAI agents
 - **Observability**: Langfuse (traces + evals)
@@ -27,6 +27,7 @@ product assumptions, and known follow-up issues.
 ### SDLC / Vishwa-First Execution
 - Vishwa is the default role for every unassigned request and must triage before implementation.
 - Before writing code, sync GitHub Issues, confirm or create the relevant issue, and move the active issue to `status:in-progress`.
+- Founder-directed governance, team-skill, and documentation hygiene batches may skip GitHub issue creation when they do not change runtime behavior; record the exception in the final summary.
 - Use existing issues when they match scope; create new issues only for missing work or blockers.
 - Follow the required order for feature work: Netra requirements → Vastu architecture → Chitra design → Karya/Rupa implementation → Vastu post-review → Aksha testing → Sthira deploy readiness → Vishwa final review/close.
 - Only Vishwa closes issues; only Aksha moves tested work to `status:in-review`.

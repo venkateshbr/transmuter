@@ -200,13 +200,26 @@ pressure_updated_at TIMESTAMPTZ,    -- when last recalculated
 
 ---
 
+## ADR-006: Supabase migrations — canonical directory
+**Status**: Accepted | **Date**: 2026-06-12
+
+**Decision**: `supabase/migrations/` is the canonical source of truth for Transmuter database migrations. New migrations must be added there. `infra/supabase/migrations/` is a legacy/deployment subset and must not receive new migration work unless explicitly needed by an infra migration flow.
+
+**Consequences**:
+- ✅ Product schema history lives in one complete migration tree.
+- ✅ CI checks that any migration duplicated in the legacy infra tree matches the canonical copy.
+- ⚠️ The legacy infra subset should be retired once deployment tooling no longer references it.
+- ⚠️ Destructive migrations must state rollback category: reversible, forward-fix-only, or requires-backup.
+
+---
+
 ## Technical Debt Register
 
 | ID | Description | Priority | Owner |
 |---|---|---|---|
 | TD-01 | mypy strict mode disabled during ramp-up | Medium | Karya |
 | TD-02 | Angular lint rules set to warn-only | Low | Rupa |
-| TD-03 | No Supabase local instance in Docker — uses hosted dev project | Medium | Sthira |
+| TD-03 | Legacy `infra/supabase/migrations/` subset remains during migration-directory cleanup | Medium | Sthira |
 | TD-04 | Pressure score sub-formula B-7 details to confirm with stakeholder | Medium | Karya |
 
 ---
@@ -219,3 +232,7 @@ pressure_updated_at TIMESTAMPTZ,    -- when last recalculated
 - ADR-003: DB schema conventions (resolves issue #28)
 - ADR-004: Agent framework design
 - ADR-005: Angular frontend architecture
+
+### 2026-06-12 — Migration ownership update
+- ADR-006: `supabase/migrations/` is canonical for database migrations.
+- Added CI drift check for migrations duplicated under `infra/supabase/migrations/`.

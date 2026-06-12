@@ -55,6 +55,7 @@
 - [ ] No JWT secret in client-side code or Angular environment files
 - [ ] Password change requires old password — cannot reset to anything without verification
 - [ ] Session invalidation: logout actually invalidates token server-side (or is stateless with short expiry)
+- [ ] Browser storage posture is documented and reviewed; do not assume tokens are memory-only when Supabase auth state uses local/session storage
 
 ### A08 — Software Integrity Failures
 - [ ] GitHub Actions use pinned SHA for third-party actions — not `@main` or `@v1`
@@ -135,7 +136,7 @@ assert payload["exp"] - payload["iat"] <= 86400, "Token valid > 24h — reduce e
 ### Service Role Key Audit
 ```bash
 # Find every usage of get_service_db() — each must be justified
-grep -rn "get_service_db\|service_role" backend/app/ --include="*.py"
+rg -n "get_service_db|service_role" apps/api/app --glob "*.py"
 # Legitimate: auth.py (RBAC lookup), admin.py (super admin ops)
 # Suspicious: any business API that could use tenant-scoped get_db() instead
 ```
@@ -214,14 +215,14 @@ security-scan:
     - name: Install Bandit
       run: pip install bandit[toml]
     - name: Run Bandit SAST
-      run: bandit -r backend/app/ -ll -ii --exit-zero  # -ll = medium+, -ii = medium+ confidence
+      run: bandit -r apps/api/app/ -ll -ii --exit-zero  # -ll = medium+, -ii = medium+ confidence
       # Change --exit-zero to fail on findings when baseline is clean
 
     # Python dependency audit
     - name: Run pip-audit
       run: |
         pip install pip-audit
-        pip-audit --requirement backend/requirements.txt --fail-on-vuln --severity high
+        pip-audit --requirement apps/api/requirements.txt --fail-on-vuln --severity high
 
     # Secret detection — catches leaked keys in code/history
     - name: Run Gitleaks
@@ -242,12 +243,12 @@ security-scan:
     # npm audit for frontend
     - name: Frontend dependency audit
       run: npm audit --audit-level=high
-      working-directory: frontend
+      working-directory: apps/web
 ```
 
 ### Semgrep Custom Rule — Detect Unprotected Endpoints
 ```yaml
-# .semgrep/aethos-rules.yml
+# .semgrep/transmuter-rules.yml
 rules:
   - id: unprotected-fastapi-endpoint
     patterns:
@@ -319,3 +320,27 @@ rules:
 - [ ] High findings resolved or risk-accepted by Vishwa
 - [ ] Regression tests added by Aksha for each finding
 ```
+
+---
+
+## Skill: RLS Regression Review
+
+Use this checklist when migrations, repositories, or tenant-scoped APIs change:
+
+- [ ] Every new table has `tenant_id uuid NOT NULL`
+- [ ] RLS is enabled on every tenant table
+- [ ] Policies enforce tenant isolation through JWT tenant claims or explicit platform-admin bypass
+- [ ] Service-role access is isolated to platform administration, migrations, or tenant bootstrap code
+- [ ] `apps/api/tests/test_rls_behavior.py` or an equivalent acceptance test covers read/write denial across tenants
+- [ ] Destructive migrations include backup, rollback, and verification steps
+
+---
+
+## Skill: Secret and Dependency Hygiene
+
+Run these checks before release readiness:
+
+- [ ] No `.env`, Supabase service role key, OpenRouter key, Langfuse secret, SMTP password, Teams secret, or Stripe key appears in git history or committed files
+- [ ] Dependency audit findings are reviewed with severity and exploitability, not blanket ignored
+- [ ] Docker images and GitHub Actions are pinned to stable major versions or SHAs with a documented upgrade cadence
+- [ ] Production secrets have owner, rotation interval, last rotation date, and emergency revocation path in the runbook

@@ -77,3 +77,45 @@ Flag issues:
 - Agent with > 5 ASSIGNED tickets = overloaded
 - Tickets IN_PROGRESS for > 2 days = potentially blocked
 - IN_QA tickets without Aksha assignment = QA bottleneck
+
+## Skill: Release Management Protocol
+
+Use this for production releases and Hostinger deploys.
+
+### Release Gate
+- Identify the exact commit being released.
+- Confirm migrations and rollback category are known.
+- Confirm CI is green for backend, frontend, secret scan, and spec/migration validation.
+- Confirm launch-readiness deltas against `docs/team/LAUNCH_READINESS_CHECKLIST.md`.
+- Confirm Aksha acceptance evidence for touched workflows.
+- Confirm Prahari review for auth, JWT, RLS, RBAC, billing, payments, agent tools, and integrations.
+
+### Tagging
+- Production deploys should map to a release tag unless the founder explicitly approves an emergency untagged deploy.
+- Release notes must include merged PRs, migrations, operational changes, and validation evidence.
+
+### Go / No-Go
+- No-go on failed CI, unapplied migrations, unresolved P0/P1 security issues, or missing rollback/backup posture for destructive changes.
+- Go requires a short final Vishwa summary: commit, deploy target, migration state, validation evidence, residual risks.
+
+## Skill: Doc Freshness Audit
+
+Run at least quarterly, and after major launch/deploy/refactor periods.
+
+- Compare `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md`; `AGENTS.md` is canonical.
+- Check role files under `agents/` for stale stack references.
+- Check skill files under `agents/skills/` against actual repo patterns.
+- Verify `domain_packs/transmuter/pack.yaml` artifact references exist or have a documented canonical replacement.
+- Verify `docs/team/ARCHITECTURE.md`, `team/DESIGN_SYSTEM.md`, and `docs/team/CODEX_CONTEXT.md` match current runtime reality.
+- Produce a concise stale-doc list and fix immediately when the changes are low risk.
+
+## Skill: Risk Register Cadence
+
+Monthly, review:
+- open high-priority issues;
+- Prahari findings;
+- Sthira deploy/backup/incident notes;
+- Dhruva SLO/cost/anomaly reports;
+- unresolved test or migration drift.
+
+Output the top five risks with owner, impact, likelihood, mitigation, and target review date.

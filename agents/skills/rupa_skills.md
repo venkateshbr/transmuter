@@ -1,17 +1,16 @@
 # Rupa — Frontend Engineering Skills
 
-## Skill: Angular 19 Component Pattern
+## Skill: Angular 21 Component Pattern
 
 All components must be standalone. No NgModules.
+Use the existing app pattern first: standalone components, Angular signals, service-backed state, lazy routes, Tailwind utilities, and CSS variable design tokens. Do not introduce Angular Material or NgRx unless the existing feature area already uses it or Vastu approves the dependency.
 
 ### New Feature Component Template
 ```typescript
 // feature.component.ts
 import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { HttpClient } from '@angular/common/http';
-import { MatTableModule } from '@angular/material/table';
-import { MatButtonModule } from '@angular/material/button';
+import { ApiService } from '../../core/services/api.service';
 
 interface FeatureItem {
   id: string;
@@ -22,43 +21,51 @@ interface FeatureItem {
 @Component({
   selector: 'app-feature',
   standalone: true,
-  imports: [CommonModule, MatTableModule, MatButtonModule],
+  imports: [CommonModule],
   template: `
-    <div class="p-6">
-      <h1 class="text-2xl font-semibold text-slate-50 mb-4">Feature</h1>
+    <section class="space-y-5 p-8" style="background:var(--t-bg)">
+      <header class="border-b border-[var(--t-border)] pb-4">
+        <h1 class="text-2xl font-black text-[var(--t-text-primary)]">Feature</h1>
+      </header>
+
       @if (loading()) {
-        <div class="flex justify-center py-8">
-          <mat-spinner diameter="32" />
+        <p class="text-sm text-[var(--t-text-secondary)]">Loading...</p>
+      } @else if (error()) {
+        <div class="border border-red-500/30 bg-red-500/10 p-4 text-sm font-bold text-red-500">
+          {{ error() }}
         </div>
+      } @else if (!items().length) {
+        <p class="text-sm text-[var(--t-text-secondary)]">No items yet.</p>
       } @else {
-        <mat-table [dataSource]="items()" class="bg-slate-800 rounded-lg">
-          <ng-container matColumnDef="name">
-            <mat-header-cell *matHeaderCellDef class="text-slate-300">Name</mat-header-cell>
-            <mat-cell *matCellDef="let item" class="text-slate-50">{{ item.name }}</mat-cell>
-          </ng-container>
-          <ng-container matColumnDef="amount">
-            <mat-header-cell *matHeaderCellDef class="text-slate-300">Amount</mat-header-cell>
-            <mat-cell *matCellDef="let item" class="text-slate-50">{{ item.amount | currency }}</mat-cell>
-          </ng-container>
-          <mat-header-row *matHeaderRowDef="['name', 'amount']" />
-          <mat-row *matRowDef="let row; columns: ['name', 'amount']" />
-        </mat-table>
+        <div class="divide-y divide-[var(--t-border)] border border-[var(--t-border)]">
+          @for (item of items(); track item.id) {
+            <div class="grid grid-cols-2 gap-4 p-4">
+              <span class="font-bold text-[var(--t-text-primary)]">{{ item.name }}</span>
+              <span class="text-right text-[var(--t-text-secondary)]">{{ item.amount }}</span>
+            </div>
+          }
+        </div>
       }
-    </div>
+    </section>
   `,
 })
 export class FeatureComponent implements OnInit {
-  private http = inject(HttpClient);
+  private readonly api = inject(ApiService);
   loading = signal(true);
+  error = signal<string | null>(null);
   items = signal<FeatureItem[]>([]);
-  totalAmount = computed(() =>
-    this.items().reduce((sum, item) => sum + parseFloat(item.amount), 0)
-  );
+  itemCount = computed(() => this.items().length);
 
   ngOnInit() {
-    this.http.get<FeatureItem[]>('/api/v1/features').subscribe({
-      next: (data) => { this.items.set(data); this.loading.set(false); },
-      error: () => this.loading.set(false),
+    this.api.get<{ items: FeatureItem[] }>('/features').subscribe({
+      next: (data) => {
+        this.items.set(data.items || []);
+        this.loading.set(false);
+      },
+      error: () => {
+        this.error.set('Could not load feature data.');
+        this.loading.set(false);
+      },
     });
   }
 }
@@ -74,51 +81,82 @@ export class FeatureComponent implements OnInit {
 }
 ```
 
-## Skill: NgRx Signal Store Pattern
+## Skill: Service/Signal State Pattern
+
+Prefer simple injectable services with signals for shared feature state. Promote to a store library only after Vastu agrees the feature has real cross-component state complexity.
 
 ```typescript
-import { signalStore, withState, withMethods, withComputed, patchState } from '@ngrx/signals';
-import { inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { Injectable, computed, inject, signal } from '@angular/core';
+import { ApiService } from '../core/services/api.service';
 
-interface FeatureState {
-  items: FeatureItem[];
-  loading: boolean;
-  error: string | null;
+interface FeatureItem {
+  id: string;
+  name: string;
 }
 
-export const FeatureStore = signalStore(
-  withState<FeatureState>({ items: [], loading: false, error: null }),
-  withComputed((store) => ({
-    itemCount: computed(() => store.items().length),
-  })),
-  withMethods((store) => {
-    const http = inject(HttpClient);
-    return {
-      loadItems() {
-        patchState(store, { loading: true, error: null });
-        http.get<FeatureItem[]>('/api/v1/features').subscribe({
-          next: (items) => patchState(store, { items, loading: false }),
-          error: (e) => patchState(store, { error: e.message, loading: false }),
-        });
+@Injectable({ providedIn: 'root' })
+export class FeatureStateService {
+  private readonly api = inject(ApiService);
+
+  readonly items = signal<FeatureItem[]>([]);
+  readonly loading = signal(false);
+  readonly error = signal<string | null>(null);
+  readonly count = computed(() => this.items().length);
+
+  load(): void {
+    this.loading.set(true);
+    this.error.set(null);
+    this.api.get<{ items: FeatureItem[] }>('/features').subscribe({
+      next: response => {
+        this.items.set(response.items || []);
+        this.loading.set(false);
       },
-    };
-  }),
-);
+      error: () => {
+        this.error.set('Could not load feature data.');
+        this.loading.set(false);
+      },
+    });
+  }
+}
 ```
 
 ## Skill: Theme Compliance Checklist
 
 Before submitting any component:
-- [ ] Uses `bg-slate-900` for page background (or appropriate `var(--t-*)` token)
-- [ ] Cards use `bg-slate-800` with `border-slate-700`
-- [ ] Text uses `text-slate-50` (primary) or `text-slate-300` (secondary)
-- [ ] Accent colors use `indigo-400/500` or `amber-400/500`
+- [ ] Uses `var(--t-bg)` for page background or an established layout wrapper
+- [ ] Cards/panels use `card`, `var(--t-surface)`, `var(--t-surface-raised)`, and `var(--t-border)`
+- [ ] Text uses `var(--t-text-primary)`, `var(--t-text-secondary)`, and `var(--t-text-tertiary)`
+- [ ] Accents use `var(--t-accent)` and existing semantic tokens
 - [ ] Works in both light and dark mode
 - [ ] Hover/focus/active states present on all interactive elements
-- [ ] No hardcoded colors — all via Tailwind classes or CSS variables
-- [ ] All monetary values use `| currency` pipe
+- [ ] No hardcoded hex colors
+- [ ] Monetary values preserve API string precision; do not use `parseFloat` for financial calculations
 - [ ] Responsive at `sm`, `md`, and `lg` breakpoints
+
+## Skill: Component Testing Standard
+
+Every new or materially changed component must include a focused spec for component logic unless Vishwa explicitly waives it for a docs-only or markup-only change.
+
+- Test signal state transitions, computed values, and API success/error handling.
+- Use Angular TestBed with mocked services for unit tests.
+- Do not count mocked unit tests as product acceptance; Aksha still requires real API/browser coverage for touched workflows.
+- Prefer small component specs over broad brittle snapshots.
+
+## Skill: Frontend Error Handling Standard
+
+- Never leave an empty `catch {}` block.
+- Every error path must do at least one of: recover deterministically, show a user-facing message, or report telemetry.
+- User-facing messages must be safe and actionable; do not expose database, stack, or provider internals.
+- Keep the full technical detail in telemetry/console only when it does not include PII.
+
+## Skill: API Client Resilience Pattern
+
+When changing `ApiService` or shared API behavior:
+- Add explicit timeout behavior for network calls.
+- Retry only idempotent reads, with bounded backoff.
+- Do not retry writes unless the endpoint is explicitly idempotent.
+- Map HTTP errors into typed, user-safe messages before they reach components.
+- Preserve auth/session-expiry handling in the existing interceptor flow.
 
 ## Skill: Frontend Security Checklist
 
@@ -132,15 +170,11 @@ Before submitting any component that handles user data, auth, or financial info:
 
 ### Secure Data Handling
 ```typescript
-// BAD — storing JWT in localStorage (accessible to XSS)
-localStorage.setItem('token', jwt);
-
-// GOOD — store in memory only (service-level signal)
-// AuthService holds the token in a private signal — not persisted to browser storage
-private _token = signal<string | null>(null);
+// Avoid adding new sensitive localStorage values.
+// If auth-token storage changes, Prahari must review the XSS/session tradeoff.
 ```
 
-- [ ] JWT tokens stored in memory (Angular service), NOT localStorage or sessionStorage
+- [ ] No new sensitive localStorage/sessionStorage values without Prahari review
 - [ ] No sensitive data (account numbers, tax IDs) rendered in component state longer than needed
 - [ ] Payment card numbers masked: show only last 4 digits
 

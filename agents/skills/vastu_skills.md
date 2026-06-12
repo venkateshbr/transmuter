@@ -45,6 +45,48 @@ For any new feature, verify:
 - [ ] Cross-tenant aggregation is impossible without admin role
 - [ ] **Security gate**: Prahari reviews any new endpoint that crosses tenant or auth boundaries
 
+## Skill: Capacity & Scale Review
+
+Use this before approving features that add portfolio-wide reads, financial grids, dashboards, search, background jobs, or external integrations.
+
+### Capacity Questions
+- Expected tenant count, users per tenant, and active concurrent users.
+- Endpoint class: interactive read, bulk read, write, agent run, export/import, background job.
+- Data growth driver: initiatives, financial periods, meetings, action items, audit rows, agent traces.
+- Database query shape: tenant-scoped filter, indexes used, sort/pagination strategy, expected row counts.
+- Connection budget: API containers, worker containers, Supabase pooler/direct connection limits.
+- Queue budget: worker throughput, retry behavior, queue depth alert threshold.
+
+### Required Evidence
+- Query-plan review for portfolio-wide or financial-grid queries.
+- Explicit pagination/windowing for unbounded lists.
+- Index proposal for any new filter/sort path over tenant data.
+- SLO impact statement: API p99 target, agent p95 target, worker queue-depth target.
+
+## Skill: Migration Rollback Design
+
+Every migration PR must state one rollback category:
+
+- `reversible`: a clear down migration or manual reverse SQL exists.
+- `forward-fix-only`: rollback is intentionally another migration; explain why.
+- `requires-backup`: destructive or hard-to-reverse; Sthira must confirm a restorable backup before deploy.
+
+Vastu review is required for:
+- dropping/renaming columns or tables;
+- modifying financial precision or semantics;
+- changing RLS policies;
+- moving schemas or migration directories;
+- backfilling tenant data at scale.
+
+## Skill: DR / Business Continuity Review
+
+Before tenant-facing SLA commitments, define:
+- RPO/RTO by data class: financial entries, initiatives, audit logs, auth/users, UI preferences, agent traces.
+- Backup mechanism for the active Supabase target.
+- Restore-test cadence and evidence location.
+- Manual operational fallback for degraded AI, worker, email, Stripe, and Microsoft Graph dependencies.
+- Tenant communication path for incidents and recovery windows.
+
 ## Skill: Threat Modeling (STRIDE)
 
 For any new feature handling sensitive data or crossing trust boundaries, produce a STRIDE analysis before Karya writes code.

@@ -6,7 +6,7 @@
 
 ```bash
 # After any pyproject.toml dependency addition:
-cd erpcore/backend && uv pip install -e .
+cd apps/api && uv pip install -e .
 # or install the specific package directly:
 uv pip install <package>
 
@@ -36,11 +36,11 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -e ".[dev]"
-        working-directory: backend
+        working-directory: apps/api
       - run: ruff check .
-        working-directory: backend
+        working-directory: apps/api
       - run: pytest --cov=app --cov-report=xml
-        working-directory: backend
+        working-directory: apps/api
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -53,11 +53,11 @@ jobs:
         with:
           node-version: '20'
       - run: npm ci
-        working-directory: frontend
+        working-directory: apps/web
       - run: npm run lint
-        working-directory: frontend
+        working-directory: apps/web
       - run: npm test -- --no-watch --code-coverage
-        working-directory: frontend
+        working-directory: apps/web
 
   security-scan:
     runs-on: ubuntu-latest
@@ -70,14 +70,14 @@ jobs:
       - name: Run Bandit SAST
         run: |
           pip install bandit[toml]
-          bandit -r backend/app/ -ll -ii --format json -o bandit-report.json || true
+          bandit -r apps/api/app/ -ll -ii --format json -o bandit-report.json || true
         working-directory: .
 
       # Python dependency vulnerability audit
       - name: Run pip-audit
         run: |
           pip install pip-audit
-          pip-audit -r backend/requirements.txt --fail-on-vuln --severity high
+          pip-audit -r apps/api/requirements.txt --fail-on-vuln --severity high
         working-directory: .
 
       # Semgrep — pattern-based SAST (FastAPI, JWT, SQL injection)
@@ -95,13 +95,13 @@ jobs:
       # npm audit for frontend
       - name: npm audit
         run: npm audit --audit-level=high
-        working-directory: frontend
+        working-directory: apps/web
 ```
 
 ## Skill: Docker Multi-Stage Build
 
 ```dockerfile
-# backend/Dockerfile
+# apps/api/Dockerfile
 FROM python:3.12-slim AS builder
 WORKDIR /app
 COPY pyproject.toml .
@@ -155,6 +155,80 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8010"]
 - [ ] LLM API timeout rate tracked
 - [ ] Disk/memory usage alerts set
 - [ ] Health check endpoint returning status of all dependencies
+
+## Skill: Secrets Lifecycle Runbook
+
+Maintain an inventory for each environment:
+- JWT secret
+- Supabase anon/service keys
+- database URLs/passwords
+- OpenRouter key
+- Langfuse keys
+- Stripe secret/webhook keys
+- encryption key
+- Microsoft Graph client secret
+- deployment credentials
+
+For each secret, document:
+- owner;
+- storage location;
+- rotation cadence;
+- exact rotation steps;
+- deploy/restart requirement;
+- blast radius if compromised;
+- validation after rotation.
+
+Run gitleaks before push when secrets or environment files are touched. CI secret scanning is a backstop, not the first line of defense.
+
+## Skill: Backup & Restore Drill
+
+Self-hosted Supabase on Hostinger requires tested backups before any tenant-facing SLA.
+
+Minimum standard:
+- scheduled PostgreSQL backup or Supabase-supported backup;
+- off-VPS storage;
+- retention window by environment;
+- restore test at least quarterly;
+- documented restore evidence: date, source backup, target, duration, and verification query.
+
+An untested backup does not count as a backup.
+
+## Skill: Deployment Rollback Procedure
+
+Every production deployment must answer:
+- What commit/image is currently running?
+- What commit/image is being deployed?
+- How do we return to the previous known-good image or bundle?
+- Are migrations reversible, forward-fix-only, or backup-dependent?
+- What health checks determine rollback?
+
+For Hostinger deployments, prefer retaining the previous image and staged bundle until validation completes. A deployment that cannot be rolled back must be called out explicitly in Vishwa's go/no-go summary.
+
+## Skill: Uptime & Alerting
+
+Monitor externally, not only from inside the Docker host:
+- public web health: `/health`;
+- public API health through web proxy: `/api/health`;
+- Supabase REST health where applicable;
+- API error rate and latency;
+- worker queue depth and job failure rate.
+
+Alerts must include owner, severity, likely first command, and link to the runbook. Remove noisy alerts instead of training operators to ignore them.
+
+## Skill: Migration Drift Check
+
+`supabase/migrations/` is canonical. `infra/supabase/migrations/` is a legacy subset.
+
+CI must fail if a migration duplicated in the legacy tree differs from the canonical file, or if the legacy tree contains a file with no canonical counterpart. New migrations should be added only to `supabase/migrations/`.
+
+## Skill: Worker Operations
+
+For Procrastinate workers:
+- document whether the worker is enabled in the current environment;
+- define deploy/restart sequencing relative to API migrations;
+- track queue depth, job duration, retries, and failures;
+- document dead-letter/quarantine handling;
+- include a safe drain/shutdown procedure before disruptive deploys.
 
 ## Skill: Infrastructure Security Checklist
 
