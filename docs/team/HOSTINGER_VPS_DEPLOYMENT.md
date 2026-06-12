@@ -185,7 +185,7 @@ changes.
 ## Minimal Local Bootstrap
 
 After the local `transmuter` schema has been built and `SUPABASE_TARGET=local`
-is configured, seed only platform/admin and master configuration data:
+is configured, seed only platform/admin shell data:
 
 ```bash
 cd apps/api
@@ -235,8 +235,7 @@ curl -fsS https://supabase.ishirock.tech/rest/v1/
 
 For local Supabase validation, also verify browser login as the platform/admin
 seed user and `/auth/me` through the app API. Platform/admin pages should load
-with only bootstrap/admin and master configuration data, not migrated
-operational tenant data.
+with only bootstrap/admin shell data, not migrated operational tenant data.
 
 For the clean financial refactor rollout, validate:
 

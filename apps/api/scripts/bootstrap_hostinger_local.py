@@ -90,7 +90,7 @@ def bootstrap(client: Client, config: BootstrapConfig) -> dict[str, Any]:
     ensure_tenant_admin_user(client, tenant_id, tenant_user_id, config)
     plans = ensure_subscription_plans(client, tenant_id)
     subscription = ensure_tenant_subscription(client, tenant_id, plans[0], config)
-    master_config = TenantBootstrapService(client).bootstrap_tenant(tenant_id)
+    tenant_shell = TenantBootstrapService(client).bootstrap_tenant(tenant_id)
 
     return {
         "supabase_target": settings.supabase_target,
@@ -100,7 +100,7 @@ def bootstrap(client: Client, config: BootstrapConfig) -> dict[str, Any]:
         "tenant_admin_user_id": tenant_user_id,
         "subscription_plan_count": len(plans),
         "tenant_subscription_id": subscription.get("id"),
-        "master_config": master_config,
+        "tenant_shell": tenant_shell,
     }
 
 
@@ -212,7 +212,12 @@ def ensure_tenant_admin_user(
         "updated_at": datetime.now(UTC).isoformat(),
     }
     existing = (
-        client.table("users").select("id").eq("tenant_id", tenant_id).eq("id", user_id).maybe_single().execute()
+        client.table("users")
+        .select("id")
+        .eq("tenant_id", tenant_id)
+        .eq("id", user_id)
+        .maybe_single()
+        .execute()
     )
     if existing and existing.data:
         client.table("users").update(payload).eq("tenant_id", tenant_id).eq("id", user_id).execute()
@@ -304,7 +309,10 @@ def upsert_subscription_plan(
     )
     if existing and existing.data:
         result = (
-            client.table("subscription_plans").update(payload).eq("id", existing.data["id"]).execute()
+            client.table("subscription_plans")
+            .update(payload)
+            .eq("id", existing.data["id"])
+            .execute()
         )
         return result.data[0] if result.data else {**existing.data, **payload}
     result = client.table("subscription_plans").insert(payload).execute()
@@ -368,7 +376,7 @@ def main() -> int:
     print(f"Supabase target: {result['supabase_target']}")
     print(f"Tenant: {result['tenant_slug']} ({result['tenant_id']})")
     print(f"Subscription plans: {result['subscription_plan_count']}")
-    print(f"Master config: {result['master_config']}")
+    print(f"Tenant shell: {result['tenant_shell']}")
     return 0
 
 

@@ -26,8 +26,9 @@ Safety checks:
   `current_user_role() = 'transformation_office'`.
 - Adds `financial_cost_lines.category_key TEXT NOT NULL DEFAULT 'other'`.
 - Adds an index on `(tenant_id, category_key)` for portfolio filtering.
-- Seeds default groups/items for every existing tenant with
-  `ON CONFLICT (tenant_id, key) DO NOTHING`.
+- Historical migration seeded default groups/items for existing tenants with
+  `ON CONFLICT (tenant_id, key) DO NOTHING`; normal new-tenant onboarding no
+  longer seeds financial configuration rows.
 - Backfills blank or null cost-line categories to `other`.
 
 Default cost categories:
@@ -49,7 +50,8 @@ Default metric groups:
 Before release:
 
 - Confirm the migration has been applied once in the target Supabase project.
-- Confirm all tenants have default financial configuration rows.
+- Confirm existing upgraded tenants have default financial configuration rows;
+  newly registered tenants should start blank and self-configure.
 - Confirm existing financial cost lines have non-empty `category_key`.
 - Confirm transformation office users can save Admin financial configuration.
 - Confirm viewers can read `/financial-configuration` and `/portfolio/financials`.

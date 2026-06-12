@@ -1,64 +1,54 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-from typing import Any
-
 from app.services.tenant_bootstrap import TenantBootstrapService
 
 
-class FakeQuery:
-    def __init__(self, table_name: str, tables: dict[str, list[dict[str, Any]]]) -> None:
-        self.table_name = table_name
-        self.tables = tables
-        self.filters: list[tuple[str, Any]] = []
-        self.payload: dict[str, Any] | None = None
-        self.single = False
+class _Result:
+    def __init__(self, data: object = None) -> None:
+        self.data = data
 
-    def select(self, *_args: str, **_kwargs: Any) -> FakeQuery:
+
+class _Query:
+    def __init__(self, client: _Client, table_name: str) -> None:
+        self._client = client
+        self._table_name = table_name
+        self._operation = "select"
+
+    def select(self, *_args: str) -> _Query:
+        self._operation = "select"
         return self
 
-    def eq(self, column: str, value: Any) -> FakeQuery:
-        self.filters.append((column, value))
+    def update(self, _payload: dict[str, object]) -> _Query:
+        self._operation = "update"
         return self
 
-    def maybe_single(self) -> FakeQuery:
-        self.single = True
+    def eq(self, *_args: object) -> _Query:
         return self
 
-    def update(self, payload: dict[str, Any]) -> FakeQuery:
-        self.payload = payload
+    def maybe_single(self) -> _Query:
         return self
 
-    def execute(self) -> SimpleNamespace:
-        rows = self.tables.setdefault(self.table_name, [])
-        matched = [
-            row
-            for row in rows
-            if all(str(row.get(column)) == str(value) for column, value in self.filters)
-        ]
-        if self.payload is not None:
-            for row in matched:
-                row.update(self.payload)
-            return SimpleNamespace(data=matched)
-        return SimpleNamespace(data=(matched[0] if self.single and matched else matched))
+    def execute(self) -> _Result:
+        self._client.executed.append((self._table_name, self._operation))
+        if self._table_name == "organizations" and self._operation == "select":
+            return _Result({"id": "tenant-1", "settings": {}})
+        return _Result()
 
 
-class FakeClient:
+class _Client:
     def __init__(self) -> None:
-        self.tables: dict[str, list[dict[str, Any]]] = {
-            "organizations": [{"id": "tenant-1", "settings": {}}],
-        }
         self.touched_tables: list[str] = []
+        self.executed: list[tuple[str, str]] = []
 
-    def table(self, name: str) -> FakeQuery:
-        self.touched_tables.append(name)
-        return FakeQuery(name, self.tables)
+    def table(self, table_name: str) -> _Query:
+        self.touched_tables.append(table_name)
+        return _Query(self, table_name)
 
 
-def test_tenant_bootstrap_does_not_seed_business_configuration() -> None:
-    client = FakeClient()
+def test_tenant_bootstrap_creates_only_blank_tenant_shell_settings() -> None:
+    client = _Client()
 
-    result = TenantBootstrapService(client).bootstrap_tenant("tenant-1")
+    result = TenantBootstrapService(client).bootstrap_tenant("tenant-1")  # type: ignore[arg-type]
 
     assert result == {
         "settings": 1,
@@ -67,7 +57,8 @@ def test_tenant_bootstrap_does_not_seed_business_configuration() -> None:
         "gate_criteria": 0,
         "stage_gate_definitions": 0,
     }
-    assert "financial_config_groups" not in client.touched_tables
-    assert "financial_config_items" not in client.touched_tables
-    assert "gate_criteria" not in client.touched_tables
-    assert "stage_gate_definitions" not in client.touched_tables
+    assert set(client.touched_tables) == {"organizations"}
+    assert client.executed == [
+        ("organizations", "select"),
+        ("organizations", "update"),
+    ]
