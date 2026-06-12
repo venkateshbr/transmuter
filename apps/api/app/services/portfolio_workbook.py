@@ -105,6 +105,28 @@ class PortfolioWorkbookReloadService:
 
         return counts
 
+    def dry_run(self, data: bytes) -> dict[str, Any]:
+        parsed = self.parse(data)
+        summary = self.workbook_summary(parsed)
+        metric_defs = self._metric_definitions()
+        scenarios = self._financial_scenarios()
+        stages = self._stage_by_gate_number()
+        summary["missing_metric_keys"] = [
+            key for key in summary["required_metric_keys"] if key not in metric_defs
+        ]
+        summary["missing_scenario_keys"] = [
+            key for key in summary["required_scenario_keys"] if key not in scenarios
+        ]
+        summary["missing_stage_gate_numbers"] = [
+            gate for gate in summary["required_stage_gate_numbers"] if gate not in stages
+        ]
+        summary["ready"] = not (
+            summary["missing_metric_keys"]
+            or summary["missing_scenario_keys"]
+            or summary["missing_stage_gate_numbers"]
+        )
+        return summary
+
     def parse(self, data: bytes) -> dict[str, WorkbookInitiative]:
         with ZipFile(BytesIO(data)) as zf:
             sheets = _sheet_paths(zf)
@@ -122,6 +144,106 @@ class PortfolioWorkbookReloadService:
         self._merge_rows(rows_by_sheet.get("Risks", []), initiatives, "risks")
         self._merge_rows(rows_by_sheet.get("Status Updates", []), initiatives, "status_updates")
         return initiatives
+
+    @classmethod
+    def workbook_summary(cls, parsed: dict[str, WorkbookInitiative]) -> dict[str, Any]:
+        business_units = sorted(
+            {name for item in parsed.values() for name in cls._business_unit_names(item)}
+        )
+        workstreams = sorted(
+            {cls._workstream_name(item) for item in parsed.values() if cls._workstream_name(item)}
+        )
+        required_metric_keys = sorted(
+            {_benefit_metric_key(row) for item in parsed.values() for row in item.benefits}
+        )
+        required_scenario_keys = sorted(
+            {
+                _scenario_key(row.get("Lane"))
+                for item in parsed.values()
+                for row in item.benefits
+                if _scenario_key(row.get("Lane"))
+            }
+        )
+        required_stage_gate_numbers = sorted(
+            {
+                gate
+                for item in parsed.values()
+                for gate in [_stage_gate_number(item)]
+                if gate is not None
+            }
+        )
+        benefit_line_keys = {
+            (
+                item.reference,
+                _clean_text(row.get("_id")) or _clean_text(row.get("Name")),
+                _benefit_metric_key(row),
+                _clean_text(row.get("Name")),
+            )
+            for item in parsed.values()
+            for row in item.benefits
+            if _clean_text(row.get("Name"))
+        }
+        metric_values = sum(
+            1
+            for item in parsed.values()
+            for row in item.benefits
+            for _year, _month, value in _monthly_values(row)
+            if _workbook_financial_value(value, row.get("Denomination")) is not None
+        )
+        cost_lines = sum(
+            1
+            for item in parsed.values()
+            for row in item.costs
+            for _year, _month, value in (_monthly_values(row) or _fallback_cost_periods(row))
+            if _clean_text(row.get("Lane")).lower() in {"plan", "actual"}
+            and _workbook_money(value) is not None
+        )
+        kpi_names = {
+            (item.reference, _clean_text(row.get("Name")))
+            for item in parsed.values()
+            for row in item.kpis
+            if _clean_text(row.get("Name"))
+        }
+        kpi_entries = {
+            (item.reference, _clean_text(row.get("Name")), year, ((month - 1) // 3) + 1)
+            for item in parsed.values()
+            for row in item.kpis
+            for year, month, value in _monthly_values(row)
+            if _clean_text(row.get("Name")) and _decimal_or_none(value) is not None
+        }
+        return {
+            "initiatives": len(parsed),
+            "business_units": len(business_units),
+            "workstreams": len(workstreams),
+            "benefit_lines": len(benefit_line_keys),
+            "metric_values": metric_values,
+            "cost_lines": cost_lines,
+            "kpis": len(kpi_names),
+            "kpi_entries": len(kpi_entries),
+            "milestones": sum(
+                1
+                for item in parsed.values()
+                for row in item.milestones
+                if _clean_text(row.get("Name"))
+            ),
+            "risks": sum(
+                1
+                for item in parsed.values()
+                for row in item.risks
+                if _clean_text(row.get("Description") or row.get("Name"))
+            ),
+            "status_updates": sum(
+                1
+                for item in parsed.values()
+                for row in item.status_updates
+                if _clean_text(row.get("Summary"))
+            ),
+            "business_unit_names": business_units,
+            "workstream_names": workstreams,
+            "required_metric_keys": required_metric_keys,
+            "required_scenario_keys": required_scenario_keys,
+            "required_stage_gate_numbers": required_stage_gate_numbers,
+        }
 
     def reset_portfolio_data(self) -> None:
         for table in (
@@ -728,11 +850,13 @@ class PortfolioWorkbookReloadService:
             return stages[int(match.group(0))]
         return _clean_text(raw).lower().replace(" ", "_") or "identified"
 
-    def _business_unit_names(self, item: WorkbookInitiative) -> list[str]:
+    @staticmethod
+    def _business_unit_names(item: WorkbookInitiative) -> list[str]:
         raw = item.charter.get("Business Units") or item.summary.get("Business Units") or ""
         return [part.strip() for part in re.split(r"[,;/]", raw) if part.strip()]
 
-    def _workstream_name(self, item: WorkbookInitiative) -> str:
+    @staticmethod
+    def _workstream_name(item: WorkbookInitiative) -> str:
         return _clean_text(item.charter.get("Workstream") or item.summary.get("Workstream"))
 
     def _delete_tenant_rows(self, table: str) -> None:
@@ -904,6 +1028,12 @@ def _scenario_key(value: str | None) -> str:
         "actual": "actual",
         "baseline": "baseline",
     }.get(cleaned, cleaned.replace(" ", "_"))
+
+
+def _stage_gate_number(item: WorkbookInitiative) -> int | None:
+    raw = item.charter.get("Stage gate") or item.summary.get("Stage") or ""
+    match = re.search(r"\d+", raw)
+    return int(match.group(0)) if match else None
 
 
 def _category_key(value: str | None) -> str:

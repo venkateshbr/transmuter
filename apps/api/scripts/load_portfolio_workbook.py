@@ -8,6 +8,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 from uuid import UUID
 
@@ -23,10 +24,13 @@ def main() -> None:
     parser.add_argument("--no-reset", action="store_true")
     parser.add_argument("--confirm-reset", action="store_true")
     parser.add_argument("--parse-only", action="store_true")
+    parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
-    if not args.parse_only and not args.no_reset and not args.confirm_reset:
-        parser.error("--confirm-reset is required unless --no-reset or --parse-only is used")
+    if not (args.parse_only or args.dry_run) and not args.no_reset and not args.confirm_reset:
+        parser.error(
+            "--confirm-reset is required unless --no-reset, --parse-only, or --dry-run is used"
+        )
 
     workbook_path = Path(args.workbook).expanduser().resolve()
     data = workbook_path.read_bytes()
@@ -37,9 +41,12 @@ def main() -> None:
     )
     if args.parse_only:
         parsed = service.parse(data)
-        print({"initiatives": len(parsed)})
+        print(json.dumps(service.workbook_summary(parsed), indent=2, sort_keys=True))
         return
-    print(service.reload(data, reset=not args.no_reset))
+    if args.dry_run:
+        print(json.dumps(service.dry_run(data), indent=2, sort_keys=True))
+        return
+    print(json.dumps(service.reload(data, reset=not args.no_reset), indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":
