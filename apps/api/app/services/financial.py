@@ -37,6 +37,7 @@ from app.domain.financials import (
     CostLineItem,
     CostLineListResponse,
     CostLineUpdate,
+    FinancialAttributeDefinition,
     FinancialBenefitLine,
     FinancialBridgeRow,
     FinancialCategoryDeleteRequest,
@@ -705,6 +706,10 @@ class FinancialService:
             bridge_rows=[
                 self._to_bridge_row(row) for row in self._repo.list_financial_bridge_rows()
             ],
+            attribute_definitions=[
+                self._to_attribute_definition(row)
+                for row in self._repo.list_financial_attribute_definitions()
+            ],
             settings=FinancialReportingSettings(
                 fiscal_year_start_month=settings_row.get("fiscal_year_start_month") or 1,
                 reporting_currency=settings_row.get("reporting_currency") or "USD",
@@ -796,6 +801,38 @@ class FinancialService:
                 detail="Financial bridge row not found",
             )
         return self._to_bridge_row(row)
+
+    def create_attribute_definition(
+        self,
+        data: FinancialAttributeDefinition,
+    ) -> FinancialAttributeDefinition:
+        payload = self._attribute_definition_payload(data)
+        payload.pop("id", None)
+        row = self._repo.create_financial_attribute_definition(payload)
+        return self._to_attribute_definition(row)
+
+    def update_attribute_definition(
+        self,
+        attribute_definition_id: str,
+        data: FinancialAttributeDefinition,
+    ) -> FinancialAttributeDefinition:
+        payload = self._attribute_definition_payload(data)
+        payload.pop("id", None)
+        row = self._repo.update_financial_attribute_definition(attribute_definition_id, payload)
+        if not row:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Financial attribute definition not found",
+            )
+        return self._to_attribute_definition(row)
+
+    @staticmethod
+    def _attribute_definition_payload(data: FinancialAttributeDefinition) -> dict:
+        payload = data.model_dump(mode="json", exclude_none=True)
+        payload["options"] = [
+            str(item).strip() for item in payload.get("options") or [] if str(item).strip()
+        ]
+        return payload
 
     def get_governance_settings(self) -> FinancialGovernanceSettings:
         settings = self._repo.get_organization_settings()
@@ -3986,6 +4023,20 @@ class FinancialService:
             metric_definition_ids=row.get("metric_definition_ids") or [],
             cost_category_keys=row.get("cost_category_keys") or [],
             sign=row.get("sign") or 1,
+            display_order=row.get("display_order") or 0,
+            is_active=row.get("is_active", True),
+        )
+
+    @staticmethod
+    def _to_attribute_definition(row: dict) -> FinancialAttributeDefinition:  # type: ignore[type-arg]
+        return FinancialAttributeDefinition(
+            id=row.get("id"),
+            key=row["key"],
+            label=row["label"],
+            entity_type=row["entity_type"],
+            value_type=row.get("value_type") or "text",
+            options=row.get("options") or [],
+            is_required=row.get("is_required", False),
             display_order=row.get("display_order") or 0,
             is_active=row.get("is_active", True),
         )

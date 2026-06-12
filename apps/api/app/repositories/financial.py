@@ -649,6 +649,18 @@ class FinancialRepository:
         )
         return result.data or []
 
+    def list_financial_attribute_definitions(self) -> list[dict]:  # type: ignore[type-arg]
+        result = (
+            self._c.table("financial_attribute_definitions")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .order("entity_type")
+            .order("display_order")
+            .order("label")
+            .execute()
+        )
+        return result.data or []
+
     def create_financial_bridge_row(self, data: dict) -> dict:  # type: ignore[type-arg]
         payload = {**data, "tenant_id": self._tid}
         result = self._c.table("financial_bridge_rows").insert(payload).execute()
@@ -664,6 +676,26 @@ class FinancialRepository:
             .update(data)
             .eq("tenant_id", self._tid)
             .eq("id", bridge_row_id)
+            .execute()
+        )
+        return result.data[0] if result.data else None
+
+    def create_financial_attribute_definition(self, data: dict) -> dict:  # type: ignore[type-arg]
+        payload = {**data, "tenant_id": self._tid}
+        result = self._c.table("financial_attribute_definitions").insert(payload).execute()
+        return result.data[0]
+
+    def update_financial_attribute_definition(
+        self,
+        attribute_definition_id: str,
+        data: dict,  # type: ignore[type-arg]
+    ) -> dict | None:  # type: ignore[type-arg]
+        payload = {**data, "updated_at": datetime.now(UTC).isoformat()}
+        result = (
+            self._c.table("financial_attribute_definitions")
+            .update(payload)
+            .eq("tenant_id", self._tid)
+            .eq("id", attribute_definition_id)
             .execute()
         )
         return result.data[0] if result.data else None

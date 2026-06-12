@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from app.domain.financials import (
     CostLineCreate,
     CostLineUpdate,
+    FinancialAttributeDefinition,
     FinancialCellAssumptionUpdate,
     FinancialConfigGroup,
     FinancialConfigItem,
@@ -731,6 +732,82 @@ def test_update_configuration_rejects_cross_tenant_group_id() -> None:
         )
 
     assert exc.value.status_code == 400
+
+
+class _AttributeDefinitionRepo:
+    def __init__(self) -> None:
+        self.created: dict[str, object] | None = None
+        self.updated: dict[str, object] | None = None
+
+    def get_reporting_settings(self) -> dict:
+        return {"fiscal_year_start_month": 4, "reporting_currency": "USD"}
+
+    def list_metric_definitions(self) -> list[dict]:
+        return []
+
+    def list_financial_scenarios(self) -> list[dict]:
+        return []
+
+    def list_financial_bridge_rows(self) -> list[dict]:
+        return []
+
+    def list_financial_attribute_definitions(self) -> list[dict]:
+        return [
+            {
+                "id": "attr-1",
+                "key": "service_line",
+                "label": "Service Line",
+                "entity_type": "cost_line",
+                "value_type": "select",
+                "options": ["Digital", "Operations"],
+                "is_required": True,
+                "display_order": 10,
+                "is_active": True,
+            }
+        ]
+
+    def create_financial_attribute_definition(self, data: dict) -> dict:
+        self.created = data
+        return {"id": "created-attr", **data}
+
+    def update_financial_attribute_definition(
+        self,
+        _attribute_definition_id: str,
+        data: dict,
+    ) -> dict:
+        self.updated = data
+        return {"id": "updated-attr", **data}
+
+
+def test_engine_configuration_includes_attribute_definitions() -> None:
+    service = FinancialService.__new__(FinancialService)
+    service._repo = _AttributeDefinitionRepo()
+
+    response = service.get_engine_configuration()
+
+    assert response.attribute_definitions[0].key == "service_line"
+    assert response.attribute_definitions[0].entity_type == "cost_line"
+    assert response.attribute_definitions[0].options == ["Digital", "Operations"]
+
+
+def test_attribute_definition_create_normalizes_options() -> None:
+    repo = _AttributeDefinitionRepo()
+    service = FinancialService.__new__(FinancialService)
+    service._repo = repo
+
+    response = service.create_attribute_definition(
+        FinancialAttributeDefinition(
+            key="benefit_owner",
+            label="Benefit Owner",
+            entity_type="benefit_line",
+            value_type="select",
+            options=["  CFO  ", "", "COO"],
+        )
+    )
+
+    assert repo.created is not None
+    assert repo.created["options"] == ["CFO", "COO"]
+    assert response.options == ["CFO", "COO"]
 
 
 class _ModeRepo:

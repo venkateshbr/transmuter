@@ -899,6 +899,60 @@ import { FormsModule } from '@angular/forms';
                       }
                     </div>
                   </section>
+
+                  <section class="border border-[var(--t-border)]">
+                    <div class="flex items-center justify-between gap-3 border-b border-[var(--t-border)] bg-[var(--t-surface-raised)] px-4 py-3">
+                      <div>
+                        <p class="text-xs font-black uppercase tracking-widest text-[var(--t-accent)]">Line Attribute Registry</p>
+                        <p class="mt-1 text-[10px] text-[var(--t-text-tertiary)]">Reusable fields for benefit and cost lines</p>
+                      </div>
+                      <button type="button" class="btn-secondary px-3 py-2 text-[10px]" (click)="addAttributeDefinition()" aria-label="Add financial line attribute">Add Attribute</button>
+                    </div>
+                    <div class="divide-y divide-[var(--t-border)]">
+                      @for (attribute of attributeDefinitions(); track attribute.id || attribute.key) {
+                        <div class="grid gap-3 p-4 lg:grid-cols-[1fr_130px_130px_90px_auto] lg:items-end">
+                          <label class="grid gap-1">
+                            <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Label</span>
+                            <input class="input-field py-2 text-xs font-bold" [ngModel]="attribute.label" (ngModelChange)="attribute.label = $event" aria-label="Attribute label">
+                          </label>
+                          <label class="grid gap-1">
+                            <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Applies To</span>
+                            <select class="input-field py-2 text-xs" [ngModel]="attribute.entity_type" (ngModelChange)="attribute.entity_type = $event" aria-label="Attribute entity type">
+                              <option value="benefit_line">Benefit Lines</option>
+                              <option value="cost_line">Cost Lines</option>
+                            </select>
+                          </label>
+                          <label class="grid gap-1">
+                            <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Value Type</span>
+                            <select class="input-field py-2 text-xs" [ngModel]="attribute.value_type" (ngModelChange)="attribute.value_type = $event" aria-label="Attribute value type">
+                              <option value="text">Text</option>
+                              <option value="number">Number</option>
+                              <option value="currency">Currency</option>
+                              <option value="percent">Percent</option>
+                              <option value="date">Date</option>
+                              <option value="select">Select</option>
+                              <option value="boolean">Boolean</option>
+                            </select>
+                          </label>
+                          <label class="grid gap-1">
+                            <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Order</span>
+                            <input type="number" class="input-field py-2 text-xs" [ngModel]="attribute.display_order" (ngModelChange)="attribute.display_order = numberValue($event)" aria-label="Attribute display order">
+                          </label>
+                          <div class="flex items-center gap-2">
+                            <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="attribute.is_required = !attribute.is_required" [attr.aria-label]="'Toggle required for ' + attribute.label">{{ attribute.is_required ? 'Required' : 'Optional' }}</button>
+                            <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="attribute.is_active = !attribute.is_active" [attr.aria-label]="'Toggle ' + attribute.label">{{ attribute.is_active ? 'Active' : 'Hidden' }}</button>
+                            <button type="button" class="btn-primary px-3 py-2 text-[10px]" (click)="saveAttributeDefinition(attribute)" aria-label="Save attribute definition">Save</button>
+                          </div>
+                          @if (attribute.value_type === 'select') {
+                            <label class="grid gap-1 lg:col-span-5">
+                              <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Select Options</span>
+                              <input class="input-field py-2 text-xs" [ngModel]="attributeOptionsText(attribute)" (ngModelChange)="setAttributeOptionsText(attribute, $event)" aria-label="Attribute select options" placeholder="Option A, Option B, Option C">
+                            </label>
+                          }
+                        </div>
+                      }
+                    </div>
+                  </section>
                 </div>
               </div>
 
@@ -1210,6 +1264,7 @@ export class AdminComponent implements OnInit {
   metricDefinitions = signal<any[]>([]);
   scenarioDefinitions = signal<any[]>([]);
   bridgeRows = signal<any[]>([]);
+  attributeDefinitions = signal<any[]>([]);
   reportingSettings = signal<any>({ fiscal_year_start_month: 1, reporting_currency: 'USD' });
 
   // Inline add state
@@ -1358,6 +1413,7 @@ export class AdminComponent implements OnInit {
       this.metricDefinitions.set(res.definitions || []);
       this.scenarioDefinitions.set(res.scenarios || []);
       this.bridgeRows.set(res.bridge_rows || []);
+      this.attributeDefinitions.set(res.attribute_definitions || []);
       this.reportingSettings.set(res.settings || { fiscal_year_start_month: 1, reporting_currency: 'USD' });
     });
   }
@@ -1704,6 +1760,55 @@ export class AdminComponent implements OnInit {
       this.loadFinancialEngineConfiguration();
       this.loadAuditLogs();
     });
+  }
+
+  addAttributeDefinition() {
+    const index = this.attributeDefinitions().length + 1;
+    this.attributeDefinitions.update(attributes => [
+      ...attributes,
+      {
+        key: `custom_attribute_${Date.now()}`,
+        label: `Line Attribute ${index}`,
+        entity_type: 'benefit_line',
+        value_type: 'text',
+        options: [],
+        is_required: false,
+        display_order: 1000 + index,
+        is_active: true,
+      },
+    ]);
+  }
+
+  saveAttributeDefinition(attribute: any) {
+    const payload = {
+      id: attribute.id || null,
+      key: attribute.key || this.uniqueEngineKey(attribute.label, 'attribute', this.attributeDefinitions()),
+      label: attribute.label,
+      entity_type: attribute.entity_type || 'benefit_line',
+      value_type: attribute.value_type || 'text',
+      options: this.normalizeConfigList(attribute.options),
+      is_required: Boolean(attribute.is_required),
+      display_order: Number(attribute.display_order || 0),
+      is_active: attribute.is_active !== false,
+    };
+    const request = attribute.id
+      ? this.api.patch(`/admin/financial-engine/attribute-definitions/${attribute.id}`, payload)
+      : this.api.post('/admin/financial-engine/attribute-definitions', payload);
+    request.subscribe(() => {
+      this.loadFinancialEngineConfiguration();
+      this.loadAuditLogs();
+    });
+  }
+
+  attributeOptionsText(attribute: any): string {
+    return this.normalizeConfigList(attribute.options).join(', ');
+  }
+
+  setAttributeOptionsText(attribute: any, value: string) {
+    attribute.options = String(value || '')
+      .split(',')
+      .map(option => option.trim())
+      .filter(Boolean);
   }
 
   activeCostCategoryItems(): any[] {
