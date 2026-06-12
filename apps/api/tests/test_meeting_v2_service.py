@@ -36,6 +36,7 @@ class FakeMeetingV2Repository:
         self.attendee_sets: list[list[str]] = []
         self.created_sessions: list[tuple[str, str, dict]] = []
         self.snapshotted_sessions: list[str] = []
+        self.external_event_updates: list[dict] = []
         self.sessions_by_date: dict[str, dict] = {
             "2026-06-09": {
                 "id": "session-existing",
@@ -100,6 +101,10 @@ class FakeMeetingV2Repository:
         assert meeting_id == "meeting-1"
         return []
 
+    def update_external_event(self, event_id: str, data: dict) -> dict:
+        self.external_event_updates.append({"id": event_id, **data})
+        return {"id": event_id, **data}
+
     def get_initiatives(self, meeting_id: str) -> list[dict]:
         assert meeting_id == "meeting-1"
         return [
@@ -137,6 +142,23 @@ class FakeMeetingV2Repository:
                 session.update(data)
                 return session
         return {**self.session_detail, **data}
+
+    def cancel_open_sessions(self, meeting_id: str) -> int:
+        assert meeting_id == "meeting-1"
+        count = 0
+        for session in self.sessions_by_date.values():
+            if session["status"] in {"scheduled", "in_progress"}:
+                session["status"] = "cancelled"
+                count += 1
+        return count
+
+    def get_integration_connection(
+        self, provider: str, organizer_email: str | None = None
+    ) -> dict | None:
+        return None
+
+    def get_integration_connection_by_id(self, connection_id: str) -> dict | None:
+        return None
 
     def list_initiatives_for_workstreams(self, workstream_ids: list[str]) -> list[dict]:
         assert workstream_ids == ["ws-1"]
@@ -257,6 +279,38 @@ def test_update_meeting_can_clear_join_workstreams() -> None:
 
     assert repo.updated_payload == {"workstream_id": None}
     assert repo.workstream_sets == [[]]
+
+
+def test_cancel_meeting_series_marks_series_and_open_sessions_cancelled() -> None:
+    repo = FakeMeetingV2Repository()
+    repo.sessions_by_date["2026-06-16"] = {
+        "id": "session-scheduled",
+        "meeting_id": "meeting-1",
+        "session_date": "2026-06-16",
+        "status": "scheduled",
+    }
+    service = build_service(repo)
+
+    result = service.cancel_meeting_series("meeting-1")
+
+    assert result.meeting["status"] == "cancelled"
+    assert result.teams_status == "no_external_event"
+    assert result.cancelled_sessions == 2
+    assert repo.updated_payload is not None
+    assert repo.updated_payload["status"] == "cancelled"
+    assert {session["status"] for session in repo.sessions_by_date.values()} == {"cancelled"}
+
+
+def test_cancelled_meeting_series_cannot_start_session() -> None:
+    repo = FakeMeetingV2Repository()
+    repo.meeting["status"] = "cancelled"
+    service = build_service(repo)
+
+    with pytest.raises(HTTPException) as exc:
+        service.start_session("meeting-1", SessionStartRequest(session_date="2026-06-16"))
+
+    assert exc.value.status_code == 409
+    assert repo.created_sessions == []
 
 
 def test_start_session_is_date_specific_and_idempotent() -> None:

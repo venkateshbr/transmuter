@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field, model_validator
 
 MeetingScope = Literal["workstream", "all"]
 MeetingRecurrence = Literal["weekly", "biweekly", "monthly", "ad_hoc"]
-SessionStatus = Literal["scheduled", "in_progress", "completed"]
+SessionStatus = Literal["scheduled", "in_progress", "completed", "cancelled"]
 ActionPriority = Literal["high", "medium", "low"]
 ActionStatus = Literal["open", "in_progress", "completed", "cancelled"]
 MeetingArtifactType = Literal["action", "decision", "risk", "assumption", "issue"]
@@ -195,6 +195,13 @@ class MeetingTranscriptSyncResponse(BaseModel):
     status: str
     detail: str | None = None
     session: dict[str, Any] | None = None
+
+
+class MeetingSeriesCancelResponse(BaseModel):
+    meeting: dict[str, Any]
+    teams_status: str
+    teams_detail: str | None = None
+    cancelled_sessions: int = 0
 
 
 class MeetingListResponse(BaseModel):
