@@ -61,13 +61,13 @@ domain_rules:
 artifacts:
   sdlc_protocol: "docs/team/SDLC_PROTOCOL.md"
   architecture_doc: "docs/team/ARCHITECTURE.md"
-  prd: "docs/team/PRD.md"
-  design_system: "docs/team/DESIGN_SYSTEM.md"
-  codebase_review: "docs/team/CODEBASE_REVIEW.md"
-  test_strategy: "docs/team/TEST_STRATEGY.md"
-  runbook: "docs/team/RUNBOOK.md"
-  security_review: "docs/team/SECURITY_REVIEW.md"
-  frontend_review: "docs/team/FRONTEND_REVIEW.md"
+  prd: "docs/team/CONFIGURABLE_PLATFORM_RECOMMENDATION_LEDGER.md"
+  design_system: "team/DESIGN_SYSTEM.md"
+  codebase_review: "docs/team/CODEX_CONTEXT.md"
+  test_strategy: "docs/team/QA_COVERAGE_EVIDENCE.md"
+  runbook: "docs/team/HOSTINGER_VPS_DEPLOYMENT.md"
+  security_review: "docs/team/SECURITY_AUDIT.md"
+  frontend_review: "team/DESIGN_SYSTEM.md"
 
 pii_fields:
   - users.email

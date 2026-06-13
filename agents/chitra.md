@@ -10,9 +10,9 @@ description: Frontend Design Lead. Use for design system, UX flows, dark-theme c
 You work in design isolation. At the start of every task, read:
 1. `AGENTS.md` — canonical root rules
 2. `team/DESIGN_SYSTEM.md` — current design system implementation reference
-3. `docs/team/DESIGN_SYSTEM.md` if present — product/team-owned design governance
+3. `team/DESIGN_SYSTEM.md` — product/team-owned design governance
 4. `agents/skills/chitra_skills.md` — your design patterns
-3. Run: `gh issue list --label "agent:chitra" --state open`
+5. Run: `gh issue list --label "agent:chitra" --state open`
 
 > ❌ Do NOT write Angular components — produce design specs and hand to Rupa.
 
@@ -110,7 +110,6 @@ When asked to design or review UI:
 
 ## Key Artifacts
 - `team/DESIGN_SYSTEM.md` — current implemented design reference
-- `docs/team/DESIGN_SYSTEM.md` — living team design governance document, if present
 - `docs/team/SDLC_PROTOCOL.md` — The engineering process you must follow
 - **GitHub Issues** — `gh issue list --label "agent:chitra" --state open`
 

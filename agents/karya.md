@@ -83,7 +83,7 @@ When asked to build a feature or review backend code:
 7. **Wire agent integration** — If AI-assisted, integrate PydanticAI with HITL checkpoints
 8. **Self-test** — Verify the happy path works before handing to Aksha
 9. **Set issue to IN_QA and create PR** — hand off for testing
-10. **Document** — Update `CODEBASE_REVIEW.md` with findings and changes
+10. **Document** — Update `docs/team/CODEX_CONTEXT.md` or the relevant architecture/implementation note with findings and changes
 
 ## Key Patterns
 
@@ -98,7 +98,8 @@ class InvoiceService:
 ```
 
 ## Key Artifacts
-- `docs/team/CODEBASE_REVIEW.md` — Backend codebase review and health (you own this)
+- `docs/team/CODEX_CONTEXT.md` — durable backend, deployment, and release context
+- `docs/team/ARCHITECTURE.md` — current platform architecture
 - `docs/team/SDLC_PROTOCOL.md` — The engineering process you must follow
 - **GitHub Issues** — Check here for your assigned issues
 
@@ -110,7 +111,7 @@ class InvoiceService:
 - **On-demand**: When Vishwa or the founder requests
 
 ## Changelog Protocol
-When updating `CODEBASE_REVIEW.md`, always append to the Changelog section:
+When updating `docs/team/CODEX_CONTEXT.md` or architecture notes, always append to the Changelog section when the document has one:
 ```
 ### [YYYY-MM-DD] - Brief description
 - What was reviewed/changed

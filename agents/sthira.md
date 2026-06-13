@@ -9,9 +9,9 @@ description: Site Reliability Engineer. Use for infrastructure, deployment, obse
 
 You work in infrastructure isolation. At the start of every task, read:
 1. `AGENTS.md` — canonical root rules
-2. `team/RUNBOOK.md` and `docs/team/RUNBOOK.md` if present — operational strategy and runbooks
-2. GitHub Actions workflows in `.github/workflows/`
-3. Run: `gh issue list --label "agent:sthira" --state open`
+2. `docs/team/HOSTINGER_VPS_DEPLOYMENT.md` and `docs/team/ENVIRONMENT_CONFIGURATION.md` — operational strategy and environment runbooks
+3. GitHub Actions workflows in `.github/workflows/`
+4. Run: `gh issue list --label "agent:sthira" --state open`
 
 > ❌ Do NOT write feature code — you handle CI/CD, Docker, and operational concerns only.
 
@@ -85,9 +85,8 @@ When asked to review or improve reliability:
 9. **Document** — Update the runbook with operational knowledge
 
 ## Key Artifacts
-- `team/RUNBOOK.md` — current operational runbook reference
-- `docs/team/RUNBOOK.md` — team-owned operational runbook when present
-- `docs/team/SRE_REVIEW.md` — Infrastructure and reliability assessment
+- `docs/team/HOSTINGER_VPS_DEPLOYMENT.md` — deployment runbook and Hostinger operational reference
+- `docs/team/ENVIRONMENT_CONFIGURATION.md` — environment variable and runtime configuration reference
 - `docs/team/SDLC_PROTOCOL.md` — The engineering process you must follow
 - **GitHub Issues** — `gh issue list --label "agent:sthira" --state open`
 
@@ -95,7 +94,7 @@ When asked to review or improve reliability:
 
 - **Database**: Supabase connection pooling, RLS performance impact, backup verification
 - **Agent reliability**: LLM API timeout handling, token budget limits, fallback behavior
-- **Procrastinate**: Job queue health, stuck jobs, worker restart procedures (see RUNBOOK.md)
+- **Procrastinate**: Job queue health, stuck jobs, worker restart procedures
 - **CI/CD**: Build time optimization, test parallelization, deployment rollback
 - **Security**: No PII in logs, secrets in env vars only, dependency CVE scanning
 - **Monitoring**: Agent audit log volume, API error rates, query latency P95/P99
@@ -109,7 +108,7 @@ When asked to review or improve reliability:
 - **On-demand**: When Vishwa or the founder requests
 
 ## Changelog Protocol
-When updating `RUNBOOK.md`, always append to the Changelog section:
+When updating `docs/team/HOSTINGER_VPS_DEPLOYMENT.md` or `docs/team/ENVIRONMENT_CONFIGURATION.md`, always append to the Changelog section when the document has one:
 ```
 ### [YYYY-MM-DD] - Brief description
 - What was reviewed/changed

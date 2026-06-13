@@ -96,7 +96,6 @@ When assigned a security review:
 
 ## Key Artifacts
 - `agents/skills/prahari_skills.md` — Your security review checklists and code patterns
-- `team/SECURITY_REVIEW.md` — Living security posture document
 - `docs/team/SECURITY_AUDIT.md` and `docs/team/PRAHARI_SECURITY_REVIEW_BILLING_RBAC.md` — historical security evidence
 - **GitHub Issues** — `gh issue list --label "agent:prahari" --state open`
 
