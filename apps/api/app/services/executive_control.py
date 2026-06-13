@@ -513,11 +513,11 @@ class ExecutiveControlService:
         }
 
     def _matches_filters(self, row: dict, filters: dict[str, Any]) -> bool:
-        ws = row.get("workstreams") or {}
-        if (
-            filters.get("business_unit_id")
-            and ws.get("business_unit_id") != filters["business_unit_id"]
-        ):
+        if filters.get("business_unit_id") and filters["business_unit_id"] not in {
+            link.get("business_unit_id")
+            for link in row.get("initiative_business_units") or []
+            if link.get("business_unit_id")
+        }:
             return False
         for key in ("workstream_id", "tag", "country", "rag_status", "stage", "owner_id"):
             if filters.get(key) and row.get(key) != filters[key]:

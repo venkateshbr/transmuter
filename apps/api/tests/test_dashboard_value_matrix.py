@@ -18,10 +18,13 @@ def test_value_matrix_groups_workstreams_tags_and_selected_year() -> None:
             "rag_status": "green",
             "workstream_id": "ws-1",
             "tag": "automation",
-            "workstreams": {
-                "name": "Operations",
-                "business_units": {"name": "North America"},
-            },
+            "workstreams": {"name": "Operations"},
+            "initiative_business_units": [
+                {
+                    "business_unit_id": "bu-1",
+                    "business_units": {"id": "bu-1", "name": "North America"},
+                }
+            ],
         },
         {
             "id": "init-2",
@@ -31,10 +34,13 @@ def test_value_matrix_groups_workstreams_tags_and_selected_year() -> None:
             "rag_status": "amber",
             "workstream_id": "ws-1",
             "tag": "commercial",
-            "workstreams": {
-                "name": "Operations",
-                "business_units": {"name": "North America"},
-            },
+            "workstreams": {"name": "Operations"},
+            "initiative_business_units": [
+                {
+                    "business_unit_id": "bu-1",
+                    "business_units": {"id": "bu-1", "name": "North America"},
+                }
+            ],
         },
         {
             "id": "init-3",
@@ -44,7 +50,13 @@ def test_value_matrix_groups_workstreams_tags_and_selected_year() -> None:
             "rag_status": "green",
             "workstream_id": "ws-2",
             "tag": "offshoring",
-            "workstreams": {"name": "Finance", "business_units": {"name": "Shared Services"}},
+            "workstreams": {"name": "Finance"},
+            "initiative_business_units": [
+                {
+                    "business_unit_id": "bu-2",
+                    "business_units": {"id": "bu-2", "name": "Shared Services"},
+                }
+            ],
         },
     ]
     entries = [
@@ -133,10 +145,13 @@ def test_value_matrix_uses_latest_available_year_when_target_missing() -> None:
                 "rag_status": "green",
                 "workstream_id": "ws-1",
                 "tag": "automation",
-                "workstreams": {
-                    "name": "Operations",
-                    "business_units": {"name": "North America"},
-                },
+                "workstreams": {"name": "Operations"},
+                "initiative_business_units": [
+                    {
+                        "business_unit_id": "bu-1",
+                        "business_units": {"id": "bu-1", "name": "North America"},
+                    }
+                ],
             }
         ],
         entries=[

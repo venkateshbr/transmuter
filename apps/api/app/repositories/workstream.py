@@ -16,7 +16,7 @@ class WorkstreamRepository:
     def list(self) -> list[dict[str, Any]]:
         result = (
             self._c.table("workstreams")
-            .select("*, business_units(name)")
+            .select("*")
             .eq("tenant_id", self._tid)
             .order("name")
             .execute()

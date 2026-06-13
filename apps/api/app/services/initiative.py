@@ -17,6 +17,7 @@ from app.domain.initiative_intake import (
     InitiativeWorkbookPreview,
 )
 from app.domain.initiatives import (
+    InitiativeBusinessUnit,
     InitiativeCounts,
     InitiativeCreate,
     InitiativeDetail,
@@ -135,6 +136,7 @@ class InitiativeService:
 
     def create_initiative(self, data: InitiativeCreate, created_by: UUID) -> InitiativeDetail:
         self._assert_tenant_ready_for_creation()
+        business_unit_ids = [str(bu_id) for bu_id in data.business_unit_ids]
         # Generate unique code — retry up to 5 times on conflict
         for _ in range(5):
             code = self._repo.next_code()
@@ -177,6 +179,7 @@ class InitiativeService:
         else:
             raise HTTPException(status_code=500, detail="Could not generate unique initiative code")
 
+        self._repo.replace_business_units(row["id"], business_unit_ids)
         self._fin.initialize_default_selections(row["id"])
         initiative = self.get_initiative(row["id"])
         self._audit_change(
@@ -191,6 +194,7 @@ class InitiativeService:
                 status_code=status.HTTP_404_NOT_FOUND, detail="Initiative not found"
             )
         patch = {k: v for k, v in data.model_dump(exclude_unset=True).items()}
+        business_unit_ids = patch.pop("business_unit_ids", None)
         if "stage" in patch and patch["stage"] is not None:
             self._assert_stage_transition_allowed(
                 initiative_id,
@@ -209,6 +213,11 @@ class InitiativeService:
             patch["benefit_confidence"] = str(patch["benefit_confidence"])
         patch["updated_at"] = datetime.now(UTC).isoformat()
         self._repo.update(initiative_id, patch)
+        if business_unit_ids is not None:
+            self._repo.replace_business_units(
+                initiative_id,
+                [str(bu_id) for bu_id in business_unit_ids],
+            )
         initiative = self.get_initiative(initiative_id)
         self._audit_change(
             "update",
@@ -461,8 +470,10 @@ class InitiativeService:
             return overview
 
         patch = overview.model_dump()
-        business_unit_id = self._ensure_business_unit_id(metadata)
-        workstream_id = self._ensure_workstream_id(metadata, business_unit_id)
+        business_unit_ids = self._ensure_business_unit_ids(metadata)
+        if business_unit_ids:
+            patch["business_unit_ids"] = business_unit_ids
+        workstream_id = self._ensure_workstream_id(metadata)
         if workstream_id:
             patch["workstream_id"] = workstream_id
 
@@ -479,48 +490,37 @@ class InitiativeService:
 
         return InitiativeCreate(**patch)
 
-    def _ensure_business_unit_id(self, metadata: dict) -> str | None:
+    def _ensure_business_unit_ids(self, metadata: dict) -> list[str]:
         names = metadata.get("business_unit_names") or []
-        name = next((str(item).strip() for item in names if str(item).strip()), "")
-        if not name:
-            return None
+        cleaned_names = list(dict.fromkeys([str(item).strip() for item in names if str(item).strip()]))
+        if not cleaned_names:
+            return []
         repo = BusinessUnitRepository(self._client, self._tenant_id)
-        existing = next(
-            (row for row in repo.list() if row.get("name", "").lower() == name.lower()), None
-        )
-        if existing:
-            return existing["id"]
-        created = repo.create({"name": name, "code": self._business_unit_code(name)})
-        return created.get("id")
+        existing_by_name = {row.get("name", "").lower(): row for row in repo.list()}
+        business_unit_ids: list[str] = []
+        for name in cleaned_names:
+            existing = existing_by_name.get(name.lower())
+            if existing:
+                business_unit_ids.append(existing["id"])
+                continue
+            created = repo.create({"name": name, "code": self._business_unit_code(name)})
+            if created.get("id"):
+                business_unit_ids.append(created["id"])
+        return business_unit_ids
 
-    def _ensure_workstream_id(self, metadata: dict, business_unit_id: str | None) -> str | None:
+    def _ensure_workstream_id(self, metadata: dict) -> str | None:
         name = str(metadata.get("workstream_name") or "").strip()
         if not name:
             return None
         repo = WorkstreamRepository(self._client, self._tenant_id)
         workstreams = repo.list()
-        if business_unit_id:
-            scoped = next(
-                (
-                    row
-                    for row in workstreams
-                    if row.get("name", "").lower() == name.lower()
-                    and row.get("business_unit_id") == business_unit_id
-                ),
-                None,
-            )
-            if scoped:
-                return scoped["id"]
-            try:
-                created = repo.create({"name": name, "business_unit_id": business_unit_id})
-                if created.get("id"):
-                    return created["id"]
-            except Exception:
-                pass
         existing = next(
             (row for row in workstreams if row.get("name", "").lower() == name.lower()), None
         )
-        return existing["id"] if existing else None
+        if existing:
+            return existing["id"]
+        created = repo.create({"name": name})
+        return created.get("id")
 
     def _resolve_user_id(self, display_name: str | None) -> str | None:
         name = str(display_name or "").strip().lower()
@@ -787,6 +787,24 @@ class InitiativeService:
             return None
         return str(Decimal(benefit or "0") - Decimal(cost or "0"))
 
+    @staticmethod
+    def _business_units(row: dict) -> list[InitiativeBusinessUnit]:  # type: ignore[type-arg]
+        items: list[InitiativeBusinessUnit] = []
+        seen: set[str] = set()
+        for link in row.get("initiative_business_units") or []:
+            business_unit = link.get("business_units") if isinstance(link, dict) else None
+            bu_id = (
+                business_unit.get("id")
+                if isinstance(business_unit, dict)
+                else link.get("business_unit_id")
+            )
+            name = business_unit.get("name") if isinstance(business_unit, dict) else None
+            if not bu_id or str(bu_id) in seen:
+                continue
+            seen.add(str(bu_id))
+            items.append(InitiativeBusinessUnit(id=bu_id, name=name or "Business Unit"))
+        return items
+
     @classmethod
     def _to_list_item(
         cls,
@@ -794,16 +812,16 @@ class InitiativeService:
         fin: FinancialSummary | None = None,
     ) -> InitiativeListItem:
         ws = row.get("workstreams") or {}
-        bu = ws.get("business_units") if isinstance(ws, dict) else None
         owner = row.get("users") or {}
+        business_units = cls._business_units(row)
         return InitiativeListItem(
             id=row["id"],
             initiative_code=row["initiative_code"],
             name=row["name"],
             workstream_id=row.get("workstream_id"),
             workstream_name=ws.get("name") if isinstance(ws, dict) else None,
-            business_unit_id=ws.get("business_unit_id") if isinstance(ws, dict) else None,
-            business_unit_name=bu.get("name") if isinstance(bu, dict) else None,
+            business_unit_ids=[item.id for item in business_units],
+            business_units=business_units,
             owner_id=row.get("owner_id"),
             owner_name=owner.get("display_name") if isinstance(owner, dict) else None,
             type=row.get("type"),
@@ -846,16 +864,16 @@ class InitiativeService:
         kpi_indicators: list[InitiativeKPIIndicator] | None = None,
     ) -> InitiativeDetail:  # type: ignore[type-arg]
         ws = row.get("workstreams") or {}
-        bu = ws.get("business_units") if isinstance(ws, dict) else None
         sub = row.get("pressure_sub") or {}
+        business_units = InitiativeService._business_units(row)
         return InitiativeDetail(
             id=row["id"],
             initiative_code=row["initiative_code"],
             name=row["name"],
             workstream_id=row.get("workstream_id"),
             workstream_name=ws.get("name") if isinstance(ws, dict) else None,
-            business_unit_id=ws.get("business_unit_id") if isinstance(ws, dict) else None,
-            business_unit_name=bu.get("name") if isinstance(bu, dict) else None,
+            business_unit_ids=[item.id for item in business_units],
+            business_units=business_units,
             owner_id=row.get("owner_id"),
             owner_name=row.get("_owner_name"),
             group_owner_id=row.get("group_owner_id"),

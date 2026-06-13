@@ -64,8 +64,8 @@ interface InitiativeDetail {
   name: string;
   workstream_id: string | null;
   workstream_name: string | null;
-  business_unit_id: string | null;
-  business_unit_name: string | null;
+  business_unit_ids: string[];
+  business_units: BusinessUnitOption[];
   owner_name: string | null;
   group_owner_name: string | null;
   type: string | null;
@@ -109,7 +109,6 @@ interface InitiativeDetail {
 interface WorkstreamOption {
   id: string;
   name: string;
-  business_unit_id: string | null;
 }
 
 interface BusinessUnitOption {
@@ -170,7 +169,7 @@ interface StageGateDefinition {
                 {{ detail()!.name }}
               </h2>
               <div class="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs" style="color:var(--t-text-secondary)">
-                <span><strong style="color:var(--t-text-primary)">BU:</strong> {{ detail()!.business_unit_name || 'Unassigned' }}</span>
+                <span><strong style="color:var(--t-text-primary)">BU:</strong> {{ businessUnitLabel(detail()!) }}</span>
                 <span><strong style="color:var(--t-text-primary)">Workstream:</strong> {{ detail()!.workstream_name || 'Unassigned' }}</span>
                 <span><strong style="color:var(--t-text-primary)">Market:</strong> {{ detail()!.country || 'N/A' }}</span>
                 <span><strong style="color:var(--t-text-primary)">Theme:</strong> {{ detail()!.theme || 'N/A' }}</span>
@@ -447,22 +446,29 @@ interface StageGateDefinition {
               </div>
               <div class="grid grid-cols-2 gap-4">
                 <div>
-                  <label class="block text-xs font-semibold uppercase text-[var(--t-text-secondary)] mb-1">Business Unit</label>
-                  <select [(ngModel)]="editData.business_unit_id" (ngModelChange)="onEditBusinessUnitChange($event)" aria-label="Initiative business unit" class="w-full bg-[var(--t-surface-raised)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text-primary)] focus:border-[var(--t-primary)] outline-none">
-                    <option value="">Select business unit</option>
-                    @for (bu of businessUnits(); track bu.id) {
-                      <option [value]="bu.id">{{ bu.name }}</option>
+                  <label class="block text-xs font-semibold uppercase text-[var(--t-text-secondary)] mb-1">Workstream</label>
+                  <select [(ngModel)]="editData.workstream_id" aria-label="Initiative workstream" class="w-full bg-[var(--t-surface-raised)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text-primary)] focus:border-[var(--t-primary)] outline-none">
+                    <option value="">Select workstream</option>
+                    @for (ws of workstreams(); track ws.id) {
+                      <option [value]="ws.id">{{ ws.name }}</option>
                     }
                   </select>
                 </div>
                 <div>
-                  <label class="block text-xs font-semibold uppercase text-[var(--t-text-secondary)] mb-1">Workstream</label>
-                  <select [(ngModel)]="editData.workstream_id" (ngModelChange)="onEditWorkstreamChange($event)" aria-label="Initiative workstream" class="w-full bg-[var(--t-surface-raised)] border border-[var(--t-border)] rounded px-3 py-2 text-sm text-[var(--t-text-primary)] focus:border-[var(--t-primary)] outline-none">
-                    <option value="">Select workstream</option>
-                    @for (ws of filteredWorkstreams(); track ws.id) {
-                      <option [value]="ws.id">{{ ws.name }}</option>
+                  <p class="block text-xs font-semibold uppercase text-[var(--t-text-secondary)] mb-1">Impacted Business Units</p>
+                  <div class="max-h-36 overflow-auto border border-[var(--t-border)] bg-[var(--t-surface-raised)] px-3 py-2">
+                    @for (bu of businessUnits(); track bu.id) {
+                      <label class="flex items-center gap-2 py-1 text-sm font-semibold text-[var(--t-text-primary)]">
+                        <input
+                          type="checkbox"
+                          class="h-4 w-4 border border-[var(--t-border)]"
+                          [checked]="isEditBusinessUnitSelected(bu.id)"
+                          (change)="toggleEditBusinessUnit(bu.id, $any($event.target).checked)"
+                          [attr.aria-label]="'Toggle business unit ' + bu.name">
+                        <span>{{ bu.name }}</span>
+                      </label>
                     }
-                  </select>
+                  </div>
                 </div>
               </div>
               <div class="grid grid-cols-2 gap-4">
@@ -698,7 +704,7 @@ export class OverviewTabComponent implements OnInit {
     if (!d) return;
     this.editData = {
       name: d.name,
-      business_unit_id: d.business_unit_id || '',
+      business_unit_ids: d.business_unit_ids || [],
       workstream_id: d.workstream_id || '',
       country: d.country || '',
       theme: d.theme || '',
@@ -726,11 +732,11 @@ export class OverviewTabComponent implements OnInit {
     const payload = {
       ...this.editData,
       workstream_id: this.editData.workstream_id || null,
+      business_unit_ids: this.editData.business_unit_ids || [],
       country: this.editData.country || null,
       theme: this.editData.theme || null,
       tag: this.editData.tag || null,
     };
-    delete payload.business_unit_id;
     this.api.put(`/initiatives/${this.initiativeId}`, payload).subscribe({
       next: (d) => {
         this.detail.set(d as any);
@@ -771,12 +777,6 @@ export class OverviewTabComponent implements OnInit {
     });
   }
 
-  filteredWorkstreams(): WorkstreamOption[] {
-    const businessUnitId = this.editData.business_unit_id;
-    if (!businessUnitId) return this.workstreams();
-    return this.workstreams().filter(ws => ws.business_unit_id === businessUnitId);
-  }
-
   marketOptions(): string[] {
     return this.withCurrentOption(this.markets(), this.editData.country || '');
   }
@@ -799,21 +799,20 @@ export class OverviewTabComponent implements OnInit {
     return this.withCurrentOption(stages.length ? stages : ['scoping', 'in_progress', 'complete'], this.editData.stage || '');
   }
 
-  onEditBusinessUnitChange(businessUnitId: string): void {
-    this.editData.business_unit_id = businessUnitId;
-    if (!businessUnitId) return;
-    const selectedWorkstream = this.workstreams().find(ws => ws.id === this.editData.workstream_id);
-    if (selectedWorkstream && selectedWorkstream.business_unit_id !== businessUnitId) {
-      this.editData.workstream_id = '';
-    }
+  businessUnitLabel(detail: InitiativeDetail): string {
+    const names = (detail.business_units || []).map(bu => bu.name).filter(Boolean);
+    return names.length ? names.join(', ') : 'Unassigned';
   }
 
-  onEditWorkstreamChange(workstreamId: string): void {
-    this.editData.workstream_id = workstreamId;
-    const selectedWorkstream = this.workstreams().find(ws => ws.id === workstreamId);
-    if (selectedWorkstream?.business_unit_id) {
-      this.editData.business_unit_id = selectedWorkstream.business_unit_id;
-    }
+  isEditBusinessUnitSelected(businessUnitId: string): boolean {
+    return (this.editData.business_unit_ids || []).includes(businessUnitId);
+  }
+
+  toggleEditBusinessUnit(businessUnitId: string, checked: boolean): void {
+    const current = new Set<string>(this.editData.business_unit_ids || []);
+    if (checked) current.add(businessUnitId);
+    else current.delete(businessUnitId);
+    this.editData.business_unit_ids = Array.from(current);
   }
 
   private normalizeConfigList(values: unknown): string[] {

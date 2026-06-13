@@ -32,6 +32,7 @@ RealizationStatus = Literal[
 class InitiativeCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=300)
     workstream_id: UUID | None = None
+    business_unit_ids: list[UUID] = Field(default_factory=list)
     owner_id: UUID | None = None
     group_owner_id: UUID | None = None
     type: InitiativeType | None = None
@@ -54,6 +55,7 @@ class InitiativeCreate(BaseModel):
 class InitiativeUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=300)
     workstream_id: UUID | None = None
+    business_unit_ids: list[UUID] | None = None
     owner_id: UUID | None = None
     group_owner_id: UUID | None = None
     type: InitiativeType | None = None
@@ -90,6 +92,11 @@ class PressureBreakdown(BaseModel):
     self_reported: Decimal | None = None
 
 
+class InitiativeBusinessUnit(BaseModel):
+    id: UUID
+    name: str
+
+
 class InitiativeListItem(BaseModel):
     """Compact row for the pipeline list view."""
 
@@ -98,8 +105,8 @@ class InitiativeListItem(BaseModel):
     name: str
     workstream_id: UUID | None
     workstream_name: str | None
-    business_unit_id: UUID | None = None
-    business_unit_name: str | None = None
+    business_unit_ids: list[UUID] = Field(default_factory=list)
+    business_units: list[InitiativeBusinessUnit] = Field(default_factory=list)
     owner_id: UUID | None
     owner_name: str | None
     type: str | None
@@ -151,8 +158,8 @@ class InitiativeDetail(BaseModel):
     name: str
     workstream_id: UUID | None
     workstream_name: str | None
-    business_unit_id: UUID | None = None
-    business_unit_name: str | None = None
+    business_unit_ids: list[UUID] = Field(default_factory=list)
+    business_units: list[InitiativeBusinessUnit] = Field(default_factory=list)
     owner_id: UUID | None
     owner_name: str | None
     group_owner_id: UUID | None
@@ -180,8 +187,8 @@ class InitiativeDetail(BaseModel):
     pressure_score: str | None
     pressure_breakdown: PressureBreakdown | None
     counts: InitiativeCounts
-    team_members: list[InitiativeTeamMember] = []
-    kpi_indicators: list[InitiativeKPIIndicator] = []
+    team_members: list[InitiativeTeamMember] = Field(default_factory=list)
+    kpi_indicators: list[InitiativeKPIIndicator] = Field(default_factory=list)
     financial_summary: FinancialSummary | None = None
     archived_at: str | None
     created_at: str

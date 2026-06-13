@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import io
 from datetime import UTC
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from supabase import Client
 
@@ -61,7 +61,8 @@ class InitiativeRepository:
             .select(
                 "id, initiative_code, name, priority, rag_status, stage, "
                 "country, tag, planned_start, planned_end, pressure_score, archived_at, "
-                "workstream_id, workstreams(name, business_unit_id, business_units(name)), "
+                "workstream_id, workstreams(name), "
+                "initiative_business_units(business_unit_id, business_units(id, name)), "
                 "owner_id, users!initiatives_owner_id_fkey(display_name)",
                 count="exact",
             )
@@ -70,7 +71,6 @@ class InitiativeRepository:
 
         if not include_archived:
             q = q.is_("archived_at", "null")
-        explicit_workstream_ids = list(workstream_ids) if workstream_ids else None
         if business_unit_ids:
             initiative_ids = set()
             linked_result = (
@@ -81,29 +81,6 @@ class InitiativeRepository:
                 .execute()
             )
             initiative_ids.update(row["initiative_id"] for row in linked_result.data or [])
-            workstream_result = (
-                self._c.table("workstreams")
-                .select("id")
-                .eq("tenant_id", self._tid)
-                .in_("business_unit_id", business_unit_ids)
-                .execute()
-            )
-            bu_workstream_ids = [row["id"] for row in workstream_result.data or []]
-            if explicit_workstream_ids:
-                workstream_ids = [
-                    ws_id for ws_id in explicit_workstream_ids if ws_id in bu_workstream_ids
-                ]
-            else:
-                workstream_ids = None
-            if bu_workstream_ids:
-                workstream_initiatives = (
-                    self._c.table("initiatives")
-                    .select("id")
-                    .eq("tenant_id", self._tid)
-                    .in_("workstream_id", bu_workstream_ids)
-                    .execute()
-                )
-                initiative_ids.update(row["id"] for row in workstream_initiatives.data or [])
             if not initiative_ids:
                 return [], 0
             q = q.in_("id", sorted(initiative_ids))
@@ -132,7 +109,10 @@ class InitiativeRepository:
         # PostgREST can't join the same table twice; fetch user names separately.
         result = (
             self._c.table("initiatives")
-            .select("*, workstreams(id, name, business_unit_id, business_units(id, name))")
+            .select(
+                "*, workstreams(id, name), "
+                "initiative_business_units(business_unit_id, business_units(id, name))"
+            )
             .eq("tenant_id", self._tid)
             .eq("id", initiative_id)
             .maybe_single()
@@ -254,6 +234,34 @@ class InitiativeRepository:
             .execute()
         )
         return result.data[0]
+
+    def replace_business_units(self, initiative_id: str, business_unit_ids: list[str]) -> list[dict]:
+        (
+            self._c.table("initiative_business_units")
+            .delete()
+            .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
+            .execute()
+        )
+        unique_ids = list(dict.fromkeys([bu_id for bu_id in business_unit_ids if bu_id]))
+        if not unique_ids:
+            return []
+        result = (
+            self._c.table("initiative_business_units")
+            .insert(
+                [
+                    {
+                        "id": str(uuid4()),
+                        "tenant_id": self._tid,
+                        "initiative_id": initiative_id,
+                        "business_unit_id": bu_id,
+                    }
+                    for bu_id in unique_ids
+                ]
+            )
+            .execute()
+        )
+        return result.data or []
 
     def has_approved_gate_submission(self, initiative_id: str, gate_number: int) -> bool:
         result = (

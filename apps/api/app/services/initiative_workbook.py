@@ -489,8 +489,6 @@ def _alchemist_overview_rows(overview: dict[str, str]) -> list[list[str]]:
         ["Owner", overview.get("owner_email", "")],
         ["Group Owner", overview.get("group_owner_email", "")],
         ["Market Owner", ""],
-        ["Workstream Lead", ""],
-        ["Workstream Sponsor", ""],
         ["Planned Start Date", overview.get("planned_start", "")],
         ["Actual Start Date", ""],
         ["Planned Completion Date", overview.get("planned_end", "")],

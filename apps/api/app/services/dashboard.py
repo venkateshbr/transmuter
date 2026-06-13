@@ -272,8 +272,12 @@ class DashboardService:
         priorities: set[str],
         tags: set[str],
     ) -> bool:
-        ws = row.get("workstreams") or {}
-        if bu_ids and ws.get("business_unit_id") not in bu_ids:
+        row_bu_ids = {
+            str(link.get("business_unit_id"))
+            for link in row.get("initiative_business_units") or []
+            if link.get("business_unit_id")
+        }
+        if bu_ids and not (row_bu_ids & bu_ids):
             return False
         if ws_ids and row.get("workstream_id") not in ws_ids:
             return False
@@ -620,7 +624,7 @@ class DashboardService:
                 row_lookup[workstream_id] = {
                     "workstream_id": None if workstream_id == "unassigned" else workstream_id,
                     "workstream_name": ws.get("name") or "Unassigned",
-                    "business_unit_name": (ws.get("business_units") or {}).get("name"),
+                    "business_unit_name": self._business_unit_summary(initiative),
                     "cells": {tag: self._empty_matrix_cell(tag) for tag in tags},
                     "total": self._empty_matrix_cell("total"),
                 }
@@ -749,6 +753,20 @@ class DashboardService:
             "rows": sorted(row_lookup.values(), key=lambda r: r["workstream_name"]),
             "totals": {"cells": total_cells, "total": grand_total},
         }
+
+    @staticmethod
+    def _business_unit_summary(initiative: dict[str, Any]) -> str | None:
+        names = []
+        for link in initiative.get("initiative_business_units") or []:
+            business_unit = link.get("business_units") if isinstance(link, dict) else None
+            if isinstance(business_unit, dict) and business_unit.get("name"):
+                names.append(str(business_unit["name"]))
+        unique_names = list(dict.fromkeys(names))
+        if not unique_names:
+            return None
+        if len(unique_names) == 1:
+            return unique_names[0]
+        return f"{len(unique_names)} business units"
 
     def _empty_matrix_cell(self, tag: str) -> dict[str, Any]:
         return {
