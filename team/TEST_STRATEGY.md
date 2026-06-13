@@ -56,7 +56,7 @@
 |----------|------|-----|---------|
 | **Integration** | `test_scenarios.py` | 853 | Comprehensive API workflow tests (invoice lifecycle, payments, etc.) |
 | **Integration** | `test_phase2.py` | 445 | Phase 2 feature tests (quotes, credit notes, items, etc.) |
-| **Integration** | `test_api.py` | 408 | Core API endpoint tests |
+| **Archived diagnostic** | `archive/2026-06-13-repository-hygiene/diagnostics/test_api.py` | 408 | Former one-off core API endpoint probe |
 | **Unit** | `test_accounting_rules.py` | 355 | GAAP validation rule tests (VR-01..VR-12, DE-01) |
 | **Unit** | `test_fastapi_validation.py` | 56 | FastAPI request validation |
 | **Unit** | `test_login.py` | 24 | Auth login flow |
@@ -80,7 +80,7 @@
 | `debug_login.py` | Login flow debugging |
 | `debug_passlib.py` | Password library debugging |
 | `track_passlib.py` | Passlib version tracking |
-| `check_db.py` | Database connection check |
+| `archive/2026-06-13-repository-hygiene/diagnostics/check_db.py` | Archived database connection check |
 | `migrate_db.py` | Migration runner |
 | `run_migration_018.py` | Specific migration |
 | `run_migration_019.py` | Specific migration |
