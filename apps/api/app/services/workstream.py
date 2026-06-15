@@ -32,5 +32,7 @@ class WorkstreamService:
     def _clean_payload(data: dict[str, Any]) -> dict[str, Any]:
         name = str(data.get("name") or "").strip()
         if not name:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Name is required")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Name is required"
+            )
         return {"name": name}

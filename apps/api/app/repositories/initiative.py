@@ -235,7 +235,9 @@ class InitiativeRepository:
         )
         return result.data[0]
 
-    def replace_business_units(self, initiative_id: str, business_unit_ids: list[str]) -> list[dict]:
+    def replace_business_units(
+        self, initiative_id: str, business_unit_ids: list[str]
+    ) -> list[dict]:
         (
             self._c.table("initiative_business_units")
             .delete()

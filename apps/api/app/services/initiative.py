@@ -492,7 +492,9 @@ class InitiativeService:
 
     def _ensure_business_unit_ids(self, metadata: dict) -> list[str]:
         names = metadata.get("business_unit_names") or []
-        cleaned_names = list(dict.fromkeys([str(item).strip() for item in names if str(item).strip()]))
+        cleaned_names = list(
+            dict.fromkeys([str(item).strip() for item in names if str(item).strip()])
+        )
         if not cleaned_names:
             return []
         repo = BusinessUnitRepository(self._client, self._tenant_id)
