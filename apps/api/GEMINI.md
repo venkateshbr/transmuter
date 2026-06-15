@@ -8,7 +8,6 @@ FastAPI 0.115+ · Python 3.12+ · Pydantic v2 · PydanticAI · Supabase · Procr
 - Durable context: `../../docs/team/CODEX_CONTEXT.md` for launch, billing, RBAC, deployment, dashboard, and release context.
 - Backend rules: `CLAUDE.md`
 - Architecture: `../../docs/team/ARCHITECTURE.md`
-- Backend review: `../../team/CODEBASE_REVIEW.md`
 - Karya skills: `../../agents/skills/karya_skills.md`
 
 ## Non-Negotiable Rules

@@ -9,7 +9,6 @@ Check `package.json` for the exact installed Angular version before using framew
 - Root rules: `../../AGENTS.md`
 - Durable context: `../../docs/team/CODEX_CONTEXT.md` for launch, hostnames, release state, and known follow-ups.
 - Design system: `../../team/DESIGN_SYSTEM.md`
-- Frontend review: `../../team/FRONTEND_REVIEW.md`
 - Rupa skills: `../../agents/skills/rupa_skills.md`
 - Chitra skills: `../../agents/skills/chitra_skills.md`
 

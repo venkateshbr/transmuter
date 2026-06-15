@@ -436,46 +436,36 @@ export class App {
       ];
     }
     return [
-    { label: 'Dashboard',        path: '/dashboard',          icon: 'grid' },
-    {
-      label: 'Financials',
-      path: '/financials',
-      icon: 'payments',
-      children: [
-        { label: 'Overview', path: '/financials', icon: 'payments' },
-        { label: 'Bankable Plan', path: '/financials/bankable-plan', icon: 'account_balance' },
-        { label: 'Benefit Tracking', path: '/financials/benefit-tracking', icon: 'trending_up' },
-        { label: 'Waterline', path: '/financials/waterline', icon: 'water_drop' },
-      ],
-    },
-    { label: 'Shared Costs',     path: '/shared-costs',       icon: 'account_balance' },
-    { label: 'Initiatives',      path: '/initiatives/pipeline', icon: 'list' },
-    { label: 'Progress Monitor', path: '/progress',           icon: 'bar-chart' },
-    { label: 'Governance',       path: '/pmo/governance',     icon: 'shield' },
-    { label: 'KPIs',             path: '/pmo/kpis',           icon: 'bar-chart' },
-    { label: 'Risks',            path: '/pmo/risks',          icon: 'alert' },
-    {
-      label: 'Reports',
-      path: '/reports/control-tower',
-      icon: 'summarize',
-      children: [
-        { label: 'Control Tower', path: '/reports/control-tower', icon: 'summarize' },
-      ],
-    },
-    { label: 'Meetings',         path: '/meetings',           icon: 'calendar' },
-    { label: 'People',           path: '/people',             icon: 'users' },
-    ...(this.canManageTenant() ? [{ label: 'Admin', path: '/admin', icon: 'settings' }] : []),
+      {
+        label: 'Dashboard',
+        path: '/dashboard',
+        icon: 'grid',
+        children: [
+          { label: 'Executive Dashboard', path: '/dashboard', icon: 'grid' },
+          { label: 'Financial Overview', path: '/financials', icon: 'payments' },
+          { label: 'Bankable Plan', path: '/financials/bankable-plan', icon: 'account_balance' },
+          { label: 'Benefit Tracking', path: '/financials/benefit-tracking', icon: 'trending_up' },
+          { label: 'Waterline', path: '/financials/waterline', icon: 'water_drop' },
+          { label: 'Control Tower', path: '/reports/control-tower', icon: 'summarize' },
+        ],
+      },
+      { label: 'Shared Costs',     path: '/shared-costs',       icon: 'account_balance' },
+      { label: 'Initiatives',      path: '/initiatives/pipeline', icon: 'list' },
+      { label: 'Progress Monitor', path: '/progress',           icon: 'bar-chart' },
+      { label: 'Governance',       path: '/pmo/governance',     icon: 'shield' },
+      { label: 'KPIs',             path: '/pmo/kpis',           icon: 'bar-chart' },
+      { label: 'Risks',            path: '/pmo/risks',          icon: 'alert' },
+      { label: 'Meetings',         path: '/meetings',           icon: 'calendar' },
+      { label: 'People',           path: '/people',             icon: 'users' },
     ];
   }
 
   protected get primaryNavItems(): NavItem[] {
-    const overflowPaths = new Set(['/meetings', '/people', '/admin']);
-    return this.navItems.filter(item => !overflowPaths.has(item.path));
+    return this.navItems;
   }
 
   protected get overflowNavItems(): NavItem[] {
-    const overflowPaths = new Set(['/meetings', '/people', '/admin']);
-    return this.navItems.filter(item => overflowPaths.has(item.path));
+    return [];
   }
 
   protected readonly suggestedPrompts = [

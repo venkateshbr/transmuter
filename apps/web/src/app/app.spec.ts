@@ -135,30 +135,44 @@ describe('App', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('header')).toBeTruthy();
     expect(compiled.textContent).toContain('Dashboard');
+    expect(compiled.textContent).toContain('Meetings');
+    expect(compiled.textContent).toContain('People');
+    expect(compiled.textContent).not.toContain('More');
     expect(compiled.textContent).not.toContain('Control Tower');
-    expect(compiled.textContent).toContain('Financials');
+    expect(compiled.textContent).not.toContain('Financials');
+    expect(compiled.textContent).not.toContain('Reports');
     expect(compiled.textContent).toContain('Workspace sync');
     expect(compiled.textContent).toContain('Coffee-compatible loading in progress.');
     expect((fixture.componentInstance as any).homeLink()).toBe('/dashboard');
     expect((fixture.componentInstance as any).canManageTenant()).toBe(true);
   });
 
-  it('should expose financial and report submenu paths in the shell nav model', () => {
+  it('should expose financial and report paths under the dashboard menu', () => {
     const fixture = TestBed.createComponent(App);
     const navItems = (fixture.componentInstance as any).navItems;
 
-    const financials = navItems.find((item: any) => item.label === 'Financials');
-    expect(financials.children?.map((child: any) => child.path)).toEqual([
+    expect(navItems.some((item: any) => item.label === 'Financials')).toBe(false);
+    expect(navItems.some((item: any) => item.label === 'Reports')).toBe(false);
+    expect(navItems.some((item: any) => item.label === 'Admin')).toBe(false);
+
+    const dashboard = navItems.find((item: any) => item.label === 'Dashboard');
+    expect(dashboard.children?.map((child: any) => child.path)).toEqual([
+      '/dashboard',
       '/financials',
       '/financials/bankable-plan',
       '/financials/benefit-tracking',
       '/financials/waterline',
-    ]);
-
-    const reports = navItems.find((item: any) => item.label === 'Reports');
-    expect(reports.children?.map((child: any) => child.path)).toEqual([
       '/reports/control-tower',
     ]);
+  });
+
+  it('should expose meetings and people as primary navigation items without a More menu', () => {
+    const fixture = TestBed.createComponent(App);
+    const component = fixture.componentInstance as any;
+
+    expect(component.primaryNavItems.map((item: any) => item.path)).toContain('/meetings');
+    expect(component.primaryNavItems.map((item: any) => item.path)).toContain('/people');
+    expect(component.overflowNavItems).toEqual([]);
   });
 
   it('should render platform-only navigation for platform admins', async () => {
@@ -182,7 +196,7 @@ describe('App', () => {
     const fixture = TestBed.createComponent(App);
 
     await router.navigateByUrl('/meetings');
-    expect((fixture.componentInstance as any).isOverflowRouteActive()).toBe(true);
+    expect((fixture.componentInstance as any).isOverflowRouteActive()).toBe(false);
     expect((fixture.componentInstance as any).showAppChrome()).toBe(true);
 
     await router.navigateByUrl('/auth/login');

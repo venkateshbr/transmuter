@@ -39,6 +39,7 @@ supabase/.branches/
 
 # Docker
 *.log
+*.pid
 
 # Local operational scratch scripts and one-off diagnostics
 scratch/

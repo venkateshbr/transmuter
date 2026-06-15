@@ -13,7 +13,6 @@ type ExecutiveBriefPersona = 'management' | 'investor' | 'owner';
 interface FilterOption {
   id: string;
   name: string;
-  business_unit_id?: string | null;
 }
 
 interface StageDefinition {
@@ -1046,13 +1045,13 @@ export class DashboardComponent implements OnInit {
       selected: this.filters().business_unit_id,
       testId: 'dashboard-filter-business-unit',
     },
-    {
-      key: 'workstream_id',
-      label: 'Workstream',
-      options: this.availableWorkstreams(),
-      selected: this.filters().workstream_id,
-      testId: 'dashboard-filter-workstream',
-    },
+      {
+        key: 'workstream_id',
+        label: 'Workstream',
+        options: this.data()?.available_filters?.workstreams || [],
+        selected: this.filters().workstream_id,
+        testId: 'dashboard-filter-workstream',
+      },
     {
       key: 'priority',
       label: 'Priority',
@@ -1441,12 +1440,7 @@ export class DashboardComponent implements OnInit {
   onFilterGroupChange(change: { key: string; selected: string[] }) {
     this.filters.update(current => {
       const key = change.key as DashboardMultiFilterKey;
-      const next = { ...current, [key]: change.selected };
-      if (key === 'business_unit_id') {
-        const visibleWorkstreamIds = new Set(this.availableWorkstreams(change.selected).map(ws => ws.id));
-        next.workstream_id = next.workstream_id.filter(wsId => visibleWorkstreamIds.has(wsId));
-      }
-      return next;
+      return { ...current, [key]: change.selected };
     });
     this.loadDashboard();
   }
@@ -1457,21 +1451,9 @@ export class DashboardComponent implements OnInit {
       const nextValues = checked
         ? Array.from(new Set([...current[key], value]))
         : current[key].filter(item => item !== value);
-      const next = { ...current, [key]: nextValues };
-      if (key === 'business_unit_id') {
-        const visibleWorkstreamIds = new Set(this.availableWorkstreams(next.business_unit_id).map(ws => ws.id));
-        next.workstream_id = next.workstream_id.filter(wsId => visibleWorkstreamIds.has(wsId));
-      }
-      return next;
+      return { ...current, [key]: nextValues };
     });
     this.loadDashboard();
-  }
-
-  availableWorkstreams(selectedBusinessUnits = this.filters().business_unit_id): FilterOption[] {
-    const workstreams = this.data()?.available_filters?.workstreams || [];
-    if (!selectedBusinessUnits.length) return workstreams;
-    const selected = new Set(selectedBusinessUnits);
-    return workstreams.filter((ws: FilterOption) => selected.has(ws.business_unit_id || ''));
   }
 
   onTargetYearChange(event: Event) {

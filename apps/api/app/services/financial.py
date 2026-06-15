@@ -1814,19 +1814,11 @@ class FinancialService:
 
     @staticmethod
     def _initiative_business_unit_ids(row: dict) -> set[str]:  # type: ignore[type-arg]
-        ids = {
+        return {
             str(link.get("business_unit_id"))
             for link in row.get("initiative_business_units") or []
             if link.get("business_unit_id")
         }
-        workstream = row.get("workstreams") if isinstance(row.get("workstreams"), dict) else {}
-        workstream_bu = workstream.get("business_unit_id") if workstream else None
-        if workstream_bu:
-            ids.add(str(workstream_bu))
-        direct_bu = row.get("business_unit_id")
-        if direct_bu:
-            ids.add(str(direct_bu))
-        return ids
 
     @classmethod
     def _portfolio_initiative_matches(

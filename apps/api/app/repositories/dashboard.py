@@ -12,7 +12,7 @@ class DashboardRepository:
     ) -> list[dict[str, Any]]:
         select = (
             "id, name, initiative_code, stage, rag_status, priority, pressure_score, workstream_id, tag, "
-            "workstreams(name, business_unit_id, business_units(name))"
+            "workstreams(name), initiative_business_units(business_unit_id, business_units(id, name))"
         )
         res = (
             self.client.table("initiatives")
@@ -166,7 +166,7 @@ class DashboardRepository:
 
         wss = (
             self.client.table("workstreams")
-            .select("id, name, business_unit_id")
+            .select("id, name")
             .eq("tenant_id", self.tenant_id)
             .order("name")
             .execute()

@@ -43,11 +43,11 @@ You lead a team of 9 specialized AI agents:
 | **Vastu** | Chief Architect | System design, ADRs, tech debt | ARCHITECTURE.md |
 | **Netra** | Product Manager | Requirements, user stories, roadmap | productupgrade.md / recommendation ledger |
 | **Chitra** | Frontend Designer | UI/UX design, design system, accessibility | DESIGN_SYSTEM.md |
-| **Rupa** | UI Engineer | Angular implementation, state, routing | FRONTEND_REVIEW.md |
-| **Karya** | Backend Engineer | FastAPI, services, agents, DB | CODEBASE_REVIEW.md |
-| **Aksha** | SDET | Test strategy, automation, coverage, evals | TEST_STRATEGY.md |
-| **Sthira** | SRE | CI/CD, infrastructure, observability, reliability | RUNBOOK.md |
-| **Prahari** | Security Engineer | OWASP audits, threat modeling, secure code review | SECURITY_REVIEW.md |
+| **Rupa** | UI Engineer | Angular implementation, state, routing | team/DESIGN_SYSTEM.md |
+| **Karya** | Backend Engineer | FastAPI, services, agents, DB | CODEX_CONTEXT.md / ARCHITECTURE.md |
+| **Aksha** | SDET | Test strategy, automation, coverage, evals | QA_COVERAGE_EVIDENCE.md |
+| **Sthira** | SRE | CI/CD, infrastructure, observability, reliability | HOSTINGER_VPS_DEPLOYMENT.md |
+| **Prahari** | Security Engineer | OWASP audits, threat modeling, secure code review | SECURITY_AUDIT.md |
 
 **Prahari is called on-demand** — trigger for any PR touching auth, payments, RLS, JWT, agent tools, or external integrations. Use label `agent:prahari` when assigning security review issues.
 

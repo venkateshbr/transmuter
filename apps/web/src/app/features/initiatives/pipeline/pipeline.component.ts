@@ -9,8 +9,8 @@ interface InitiativeItem {
   id: string;
   initiative_code: string;
   name: string;
-  business_unit_id: string | null;
-  business_unit_name: string | null;
+  business_unit_ids: string[];
+  business_units: Array<{ id: string; name: string }>;
   workstream_id: string | null;
   workstream_name: string | null;
   owner_name: string | null;
@@ -31,7 +31,6 @@ type PipelineMultiFilterKey = 'business_unit_id' | 'workstream_id' | 'priority' 
 interface FilterOption {
   id: string;
   name: string;
-  business_unit_id?: string | null;
 }
 
 interface StageGateDefinition {
@@ -575,7 +574,7 @@ export class PipelineComponent {
       {
         key: 'workstream_id',
         label: 'Workstream',
-        options: this.availableWorkstreams(),
+        options: this.availableFilters().workstreams,
         selected: this.workstreamFilter,
         testId: 'initiatives-filter-workstream',
       },
@@ -638,10 +637,6 @@ export class PipelineComponent {
     }
     const key = change.key as PipelineMultiFilterKey;
     this.setFilterValues(key, change.selected);
-    if (key === 'business_unit_id') {
-      const visibleWorkstreamIds = new Set(this.availableWorkstreams().map(ws => ws.id));
-      this.workstreamFilter = this.workstreamFilter.filter(wsId => visibleWorkstreamIds.has(wsId));
-    }
     this.reload();
   }
 
@@ -654,13 +649,6 @@ export class PipelineComponent {
         ? Array.from(new Set([...current, value]))
         : current.filter(item => item !== value),
     });
-  }
-
-  availableWorkstreams(): FilterOption[] {
-    const workstreams = this.availableFilters().workstreams;
-    if (!this.businessUnitFilter.length) return workstreams;
-    const selectedBusinessUnits = new Set(this.businessUnitFilter);
-    return workstreams.filter(ws => selectedBusinessUnits.has(ws.business_unit_id || ''));
   }
 
   hasFilters(): boolean {

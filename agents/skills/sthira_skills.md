@@ -235,7 +235,7 @@ For Procrastinate workers:
 ### Secrets Management
 - [ ] All secrets in environment variables — never hardcoded or in config files
 - [ ] `SUPABASE_SERVICE_ROLE_KEY` in GitHub Secrets — never in `.env` committed to repo
-- [ ] `JWT_SECRET` rotated at least quarterly — rotation procedure documented in RUNBOOK.md
+- [ ] `JWT_SECRET` rotated at least quarterly — rotation procedure documented in `docs/team/ENVIRONMENT_CONFIGURATION.md`
 - [ ] `.env` files in `.gitignore` — verify with: `git log --all -- "**/.env"`
 - [ ] Gitleaks runs in CI on every push — no secrets in git history
 

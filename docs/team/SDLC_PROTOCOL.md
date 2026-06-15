@@ -244,4 +244,4 @@ Use GitHub Issues exclusively for issue tracking.
 
 ### 2026-04-30
 
-- Initial Transmuter SDLC created from the Aethos protocol and adapted to the Transmuter domain.
+- Initial Transmuter SDLC created and adapted to the Transmuter domain.

@@ -8,7 +8,6 @@ import { AuthService } from '../../../core/services/auth.service';
 interface WorkstreamOption {
   id: string;
   name: string;
-  business_unit_id: string | null;
 }
 
 interface BusinessUnitOption {
@@ -302,17 +301,24 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
           <div class="grid grid-cols-2 gap-4">
             <div>
               <label for="init-workstream" class="field-label">Workstream</label>
-              <select id="init-workstream" class="input-field" [(ngModel)]="form.workstream_id" (ngModelChange)="onWorkstreamChange($event)">
+              <select id="init-workstream" class="input-field" [(ngModel)]="form.workstream_id">
                 <option value="">Select workstream</option>
-                <option *ngFor="let ws of filteredWorkstreams()" [value]="ws.id">{{ ws.name }}</option>
+                <option *ngFor="let ws of workstreams()" [value]="ws.id">{{ ws.name }}</option>
               </select>
             </div>
             <div>
-              <label for="init-business-unit" class="field-label">Business Unit</label>
-              <select id="init-business-unit" class="input-field" [(ngModel)]="form.business_unit_id" (ngModelChange)="onBusinessUnitChange($event)">
-                <option value="">Select business unit</option>
-                <option *ngFor="let bu of businessUnits()" [value]="bu.id">{{ bu.name }}</option>
-              </select>
+              <p class="field-label">Impacted Business Units</p>
+              <div class="max-h-36 overflow-auto border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-3">
+                <label *ngFor="let bu of businessUnits()" class="flex items-center gap-2 py-1 text-sm font-bold text-[var(--t-text-primary)]">
+                  <input
+                    type="checkbox"
+                    class="h-4 w-4 border border-[var(--t-border)]"
+                    [checked]="isBusinessUnitSelected(bu.id)"
+                    (change)="toggleBusinessUnit(bu.id, $any($event.target).checked)"
+                    [attr.aria-label]="'Toggle business unit ' + bu.name">
+                  <span>{{ bu.name }}</span>
+                </label>
+              </div>
             </div>
           </div>
 
@@ -777,7 +783,7 @@ export class CreateInitiativeComponent {
 
   form = {
     name: '',
-    business_unit_id: '',
+    business_unit_ids: [] as string[],
     workstream_id: '',
     owner_id: '',
     group_owner_id: '',
@@ -879,7 +885,7 @@ export class CreateInitiativeComponent {
       next: item => {
         this.form = {
           name: item.name ?? '',
-          business_unit_id: item.business_unit_id ?? '',
+          business_unit_ids: item.business_unit_ids ?? [],
           workstream_id: item.workstream_id ?? '',
           owner_id: item.owner_id ?? '',
           group_owner_id: item.group_owner_id ?? '',
@@ -935,6 +941,7 @@ export class CreateInitiativeComponent {
   private buildPayload(): Record<string, unknown> {
     const payload: Record<string, unknown> = { name: this.form.name.trim() };
     if (this.editId || this.form.workstream_id) payload['workstream_id'] = this.form.workstream_id || null;
+    if (this.editId || this.form.business_unit_ids.length) payload['business_unit_ids'] = this.form.business_unit_ids;
     if (this.form.owner_id) payload['owner_id'] = this.form.owner_id;
     if (this.form.group_owner_id) payload['group_owner_id'] = this.form.group_owner_id;
     if (this.form.type) payload['type'] = this.form.type;
@@ -950,12 +957,6 @@ export class CreateInitiativeComponent {
     if (this.form.planned_start) payload['planned_start'] = this.form.planned_start;
     if (this.form.planned_end) payload['planned_end'] = this.form.planned_end;
     return payload;
-  }
-
-  filteredWorkstreams(): WorkstreamOption[] {
-    const businessUnitId = this.form.business_unit_id;
-    if (!businessUnitId) return this.workstreams();
-    return this.workstreams().filter(ws => ws.business_unit_id === businessUnitId);
   }
 
   marketOptions(): string[] {
@@ -994,21 +995,15 @@ export class CreateInitiativeComponent {
     this.toggleSelection(this.selectedCostCategoryKeys, item.key, checked);
   }
 
-  onBusinessUnitChange(businessUnitId: string): void {
-    this.form.business_unit_id = businessUnitId;
-    if (!businessUnitId) return;
-    const selectedWorkstream = this.workstreams().find(ws => ws.id === this.form.workstream_id);
-    if (selectedWorkstream && selectedWorkstream.business_unit_id !== businessUnitId) {
-      this.form.workstream_id = '';
-    }
+  isBusinessUnitSelected(businessUnitId: string): boolean {
+    return this.form.business_unit_ids.includes(businessUnitId);
   }
 
-  onWorkstreamChange(workstreamId: string): void {
-    this.form.workstream_id = workstreamId;
-    const selectedWorkstream = this.workstreams().find(ws => ws.id === workstreamId);
-    if (selectedWorkstream?.business_unit_id) {
-      this.form.business_unit_id = selectedWorkstream.business_unit_id;
-    }
+  toggleBusinessUnit(businessUnitId: string, checked: boolean): void {
+    const current = new Set(this.form.business_unit_ids);
+    if (checked) current.add(businessUnitId);
+    else current.delete(businessUnitId);
+    this.form.business_unit_ids = Array.from(current);
   }
 
   private normalizeConfigList(values: unknown): string[] {

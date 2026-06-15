@@ -1299,7 +1299,8 @@ def test_real_api_initiative_overview_metadata_and_editing() -> None:
         original.raise_for_status()
         original_data = original.json()
 
-        assert "business_unit_name" in original_data
+        assert "business_unit_ids" in original_data
+        assert "business_units" in original_data
         assert "pressure_breakdown" in original_data
         assert "team_members" in original_data
         assert "kpi_indicators" in original_data

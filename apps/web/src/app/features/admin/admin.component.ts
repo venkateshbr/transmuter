@@ -481,43 +481,13 @@ import { FormsModule } from '@angular/forms';
                 
                 <div class="space-y-3">
                   @for (ws of workstreams(); track ws.id) {
-                    <div class="grid gap-4 p-4 rounded-xl border border-[var(--t-border)] hover:bg-[var(--t-surface-raised)]/30 transition-all sm:grid-cols-[1fr_180px_180px_180px_auto] sm:items-center">
+                    <div class="grid gap-4 p-4 rounded-xl border border-[var(--t-border)] hover:bg-[var(--t-surface-raised)]/30 transition-all sm:grid-cols-[1fr_auto] sm:items-center">
                       <div class="flex items-center gap-4 min-w-0">
                         <div class="w-8 h-8 rounded-lg bg-[var(--t-accent-soft)] flex items-center justify-center text-[var(--t-accent)]">
                           <span class="material-icons text-sm">hub</span>
                         </div>
                         <input type="text" [ngModel]="ws.name" (ngModelChange)="ws.name = $event" (blur)="updateWorkstream(ws)" aria-label="Workstream name" class="bg-transparent border-none outline-none font-bold text-sm text-[var(--t-text-primary)] min-w-0 w-full">
                       </div>
-                      <select
-                        [ngModel]="ws.business_unit_id || ''"
-                        (ngModelChange)="ws.business_unit_id = $event || null; updateWorkstream(ws)"
-                        aria-label="Workstream business unit"
-                        class="input-field w-full py-2 text-xs">
-                        <option value="">No business unit</option>
-                        @for (bu of businessUnits(); track bu.id) {
-                          <option [value]="bu.id">{{ bu.name }}</option>
-                        }
-                      </select>
-                      <select
-                        [ngModel]="ws.lead_user_id || ''"
-                        (ngModelChange)="ws.lead_user_id = $event || null; updateWorkstream(ws)"
-                        aria-label="Workstream lead"
-                        class="input-field w-full py-2 text-xs">
-                        <option value="">No lead</option>
-                        @for (user of users(); track user.id) {
-                          <option [value]="user.id">{{ user.display_name || user.email }}</option>
-                        }
-                      </select>
-                      <select
-                        [ngModel]="ws.sponsor_user_id || ''"
-                        (ngModelChange)="ws.sponsor_user_id = $event || null; updateWorkstream(ws)"
-                        aria-label="Workstream sponsor"
-                        class="input-field w-full py-2 text-xs">
-                        <option value="">No sponsor</option>
-                        @for (user of users(); track user.id) {
-                          <option [value]="user.id">{{ user.display_name || user.email }}</option>
-                        }
-                      </select>
                       <button type="button" (click)="deleteWorkstream(ws.id)" aria-label="Delete workstream" class="btn-ghost p-2 text-red-500/60 hover:text-red-500 hover:bg-red-500/10">
                         <span class="material-icons text-sm">delete</span>
                       </button>
@@ -525,43 +495,13 @@ import { FormsModule } from '@angular/forms';
                   }
                   
                   <!-- Inline Add -->
-                  <div class="grid gap-4 p-4 rounded-xl border border-dashed border-[var(--t-border)] sm:grid-cols-[1fr_180px_180px_180px_auto] sm:items-center">
+                  <div class="grid gap-4 p-4 rounded-xl border border-dashed border-[var(--t-border)] sm:grid-cols-[1fr_auto] sm:items-center">
                     <div class="flex items-center gap-4 min-w-0">
                       <div class="w-8 h-8 rounded-lg bg-[var(--t-surface-raised)] flex items-center justify-center text-[var(--t-text-tertiary)]">
                         <span class="material-icons text-sm">add</span>
                       </div>
                       <input type="text" [ngModel]="newWorkstreamName()" (ngModelChange)="newWorkstreamName.set($event)" (keyup.enter)="addWorkstream()" aria-label="New workstream name" placeholder="Type new workstream name..." class="bg-transparent border-none outline-none text-sm text-[var(--t-text-primary)] min-w-0 w-full">
                     </div>
-                    <select
-                      [ngModel]="newWorkstreamBusinessUnitId()"
-                      (ngModelChange)="newWorkstreamBusinessUnitId.set($event)"
-                      aria-label="New workstream business unit"
-                      class="input-field w-full py-2 text-xs">
-                      <option value="">No business unit</option>
-                      @for (bu of businessUnits(); track bu.id) {
-                        <option [value]="bu.id">{{ bu.name }}</option>
-                      }
-                    </select>
-                    <select
-                      [ngModel]="newWorkstreamLeadUserId()"
-                      (ngModelChange)="newWorkstreamLeadUserId.set($event)"
-                      aria-label="New workstream lead"
-                      class="input-field w-full py-2 text-xs">
-                      <option value="">No lead</option>
-                      @for (user of users(); track user.id) {
-                        <option [value]="user.id">{{ user.display_name || user.email }}</option>
-                      }
-                    </select>
-                    <select
-                      [ngModel]="newWorkstreamSponsorUserId()"
-                      (ngModelChange)="newWorkstreamSponsorUserId.set($event)"
-                      aria-label="New workstream sponsor"
-                      class="input-field w-full py-2 text-xs">
-                      <option value="">No sponsor</option>
-                      @for (user of users(); track user.id) {
-                        <option [value]="user.id">{{ user.display_name || user.email }}</option>
-                      }
-                    </select>
                     <button type="button" (click)="addWorkstream()" [disabled]="!newWorkstreamName().trim()" aria-label="Create workstream" class="text-[var(--t-accent)] font-black text-[10px] uppercase tracking-widest disabled:cursor-not-allowed disabled:opacity-40">Create</button>
                   </div>
                 </div>
@@ -1269,9 +1209,6 @@ export class AdminComponent implements OnInit {
 
   // Inline add state
   newWorkstreamName = signal('');
-  newWorkstreamBusinessUnitId = signal('');
-  newWorkstreamLeadUserId = signal('');
-  newWorkstreamSponsorUserId = signal('');
   newBusinessUnitName = signal('');
   newMarketName = signal('');
   newThemeName = signal('');
@@ -1433,15 +1370,9 @@ export class AdminComponent implements OnInit {
     if (!name) return;
     this.api.post('/workstreams', {
       name,
-      business_unit_id: this.newWorkstreamBusinessUnitId() || null,
-      lead_user_id: this.newWorkstreamLeadUserId() || null,
-      sponsor_user_id: this.newWorkstreamSponsorUserId() || null,
     }).subscribe(() => {
       this.loadWorkstreams();
       this.newWorkstreamName.set('');
-      this.newWorkstreamBusinessUnitId.set('');
-      this.newWorkstreamLeadUserId.set('');
-      this.newWorkstreamSponsorUserId.set('');
     });
   }
 
@@ -1450,9 +1381,6 @@ export class AdminComponent implements OnInit {
     if (!name) return;
     this.api.put(`/workstreams/${ws.id}`, {
       name,
-      business_unit_id: ws.business_unit_id || null,
-      lead_user_id: ws.lead_user_id || null,
-      sponsor_user_id: ws.sponsor_user_id || null,
     }).subscribe(() => {
       this.loadWorkstreams();
       this.loadAuditLogs();

@@ -20,7 +20,7 @@ class ExecutiveControlRepository:
             .select(
                 "id,initiative_code,name,owner_id,group_owner_id,workstream_id,rag_status,"
                 "stage,country,tag,planned_end,benefit_confidence,realization_status,"
-                "variance_explanation,workstreams(id,name,business_unit_id,business_units(id,name))"
+                "variance_explanation,workstreams(id,name),initiative_business_units(business_unit_id)"
             )
             .eq("tenant_id", self._tid)
             .is_("archived_at", "null")

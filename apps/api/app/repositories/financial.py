@@ -319,7 +319,7 @@ class FinancialRepository:
     def list_workstreams(self) -> list[dict]:  # type: ignore[type-arg]
         result = (
             self._c.table("workstreams")
-            .select("id,name,business_unit_id")
+            .select("id,name")
             .eq("tenant_id", self._tid)
             .order("name")
             .execute()
@@ -895,7 +895,7 @@ class FinancialRepository:
             self._c.table("initiatives")
             .select(
                 "id,initiative_code,name,stage,workstream_id,tag,"
-                "workstreams(name,business_unit_id),initiative_business_units(business_unit_id)"
+                "workstreams(name),initiative_business_units(business_unit_id)"
             )
             .eq("tenant_id", self._tid)
             .is_("archived_at", "null")

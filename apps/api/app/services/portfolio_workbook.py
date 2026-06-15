@@ -735,61 +735,36 @@ class PortfolioWorkbookReloadService:
     def _ensure_workstreams(
         self,
         parsed: dict[str, WorkbookInitiative],
-        business_units: dict[str, str],
-        user_ids_by_name: dict[str, str],
+        _business_units: dict[str, str],
+        _user_ids_by_name: dict[str, str],
     ) -> dict[str, str]:
         existing = {
             row["name"].lower(): row
             for row in self._client.table("workstreams")
-            .select("id,name,lead_user_id,sponsor_user_id")
+            .select("id,name")
             .eq("tenant_id", self._tenant_id)
             .execute()
             .data
             or []
         }
         rows = []
-        updates: list[tuple[str, dict[str, Any]]] = []
         for item in parsed.values():
             name = self._workstream_name(item)
             if not name:
                 continue
-            first_bu = next(iter(self._business_unit_names(item)), None)
-            lead_user_id = user_ids_by_name.get(
-                _clean_text(item.charter.get("Workstream Lead")).lower()
-            )
-            sponsor_user_id = user_ids_by_name.get(
-                _clean_text(item.charter.get("Workstream Sponsor")).lower()
-            )
             existing_row = existing.get(name.lower())
             if existing_row:
-                patch = {
-                    key: value
-                    for key, value in {
-                        "lead_user_id": lead_user_id,
-                        "sponsor_user_id": sponsor_user_id,
-                    }.items()
-                    if value and not existing_row.get(key)
-                }
-                if patch:
-                    updates.append((existing_row["id"], patch))
                 continue
             rows.append(
                 {
                     "id": str(uuid4()),
                     "tenant_id": self._tenant_id,
                     "name": name,
-                    "business_unit_id": business_units.get(first_bu.lower()) if first_bu else None,
-                    "lead_user_id": lead_user_id,
-                    "sponsor_user_id": sponsor_user_id,
                 }
             )
         if rows:
             for row in self._client.table("workstreams").insert(rows).execute().data or []:
                 existing[row["name"].lower()] = row
-        for workstream_id, patch in updates:
-            self._client.table("workstreams").update(patch).eq("tenant_id", self._tenant_id).eq(
-                "id", workstream_id
-            ).execute()
         return {row["name"].lower(): row["id"] for row in existing.values()}
 
     def _user_ids_by_name(self) -> dict[str, str]:
