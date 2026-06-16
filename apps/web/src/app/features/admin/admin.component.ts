@@ -735,6 +735,35 @@ import { FormsModule } from '@angular/forms';
                   </section>
 
                   <section class="border border-[var(--t-border)]">
+                    <div class="flex flex-wrap items-end justify-between gap-3 border-b border-[var(--t-border)] bg-[var(--t-surface-raised)] px-4 py-3">
+                      <div>
+                        <p class="text-xs font-black uppercase tracking-widest text-[var(--t-accent)]">Annual Baselines</p>
+                        <p class="mt-1 text-[10px] text-[var(--t-text-tertiary)]">Tenant-wide original operating metrics</p>
+                      </div>
+                      <div class="flex items-end gap-2">
+                        <label class="grid gap-1">
+                          <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Fiscal Year</span>
+                          <input type="number" min="2020" max="2060" class="input-field w-28 py-2 text-xs" [ngModel]="tenantBaselineYear()" (ngModelChange)="setTenantBaselineYear($event)" aria-label="Tenant baseline fiscal year">
+                        </label>
+                        <button type="button" class="btn-primary px-3 py-2 text-[10px]" (click)="saveTenantAnnualBaselines()" aria-label="Save tenant annual baselines">Save</button>
+                      </div>
+                    </div>
+                    <div class="grid gap-3 p-4 md:grid-cols-2">
+                      @for (metric of tenantBaselineMetrics(); track metric.id || metric.key) {
+                        <label class="grid gap-1">
+                          <span class="truncate text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">{{ metric.label }}</span>
+                          <input
+                            type="number"
+                            class="input-field py-2 text-xs"
+                            [ngModel]="tenantBaselineValue(metric.id)"
+                            (ngModelChange)="setTenantBaselineValue(metric.id, $event)"
+                            [attr.aria-label]="'Tenant annual baseline for ' + metric.label">
+                        </label>
+                      }
+                    </div>
+                  </section>
+
+                  <section class="border border-[var(--t-border)]">
                     <div class="flex items-center justify-between gap-3 border-b border-[var(--t-border)] bg-[var(--t-surface-raised)] px-4 py-3">
                       <div>
                         <p class="text-xs font-black uppercase tracking-widest text-[var(--t-accent)]">Scenarios</p>
@@ -1206,6 +1235,8 @@ export class AdminComponent implements OnInit {
   bridgeRows = signal<any[]>([]);
   attributeDefinitions = signal<any[]>([]);
   reportingSettings = signal<any>({ fiscal_year_start_month: 1, reporting_currency: 'USD' });
+  tenantBaselineYear = signal(new Date().getFullYear());
+  tenantAnnualBaselineValues = signal<Record<string, string>>({});
 
   // Inline add state
   newWorkstreamName = signal('');
@@ -1352,6 +1383,7 @@ export class AdminComponent implements OnInit {
       this.bridgeRows.set(res.bridge_rows || []);
       this.attributeDefinitions.set(res.attribute_definitions || []);
       this.reportingSettings.set(res.settings || { fiscal_year_start_month: 1, reporting_currency: 'USD' });
+      this.loadTenantAnnualBaselines();
     });
   }
 
@@ -1546,6 +1578,62 @@ export class AdminComponent implements OnInit {
       reporting_currency: String(settings.reporting_currency || 'USD').toUpperCase().slice(0, 3),
     }).subscribe(() => {
       this.loadFinancialEngineConfiguration();
+      this.loadAuditLogs();
+    });
+  }
+
+  loadTenantAnnualBaselines() {
+    this.api.get<any>('/admin/financial-engine/annual-baselines').subscribe({
+      next: response => {
+        const values: Record<string, string> = {};
+        const rows = response?.values || [];
+        for (const row of rows) {
+          if (Number(row.baseline_year) === Number(this.tenantBaselineYear())) {
+            values[row.metric_definition_id] = row.value;
+          }
+        }
+        this.tenantAnnualBaselineValues.set(values);
+      },
+      error: () => this.tenantAnnualBaselineValues.set({}),
+    });
+  }
+
+  tenantBaselineMetrics(): any[] {
+    return this.metricDefinitions()
+      .filter(metric => metric?.is_active !== false && metric?.aggregation !== 'formula')
+      .sort((a, b) =>
+        Number(a.display_order || 0) - Number(b.display_order || 0)
+        || String(a.label || '').localeCompare(String(b.label || '')),
+      );
+  }
+
+  tenantBaselineValue(metricDefinitionId: string): string {
+    return this.tenantAnnualBaselineValues()[metricDefinitionId] || '';
+  }
+
+  setTenantBaselineYear(value: number | string) {
+    this.tenantBaselineYear.set(this.numberValue(value));
+    this.loadTenantAnnualBaselines();
+  }
+
+  setTenantBaselineValue(metricDefinitionId: string, value: string | number) {
+    this.tenantAnnualBaselineValues.update(values => ({
+      ...values,
+      [metricDefinitionId]: String(value ?? ''),
+    }));
+  }
+
+  saveTenantAnnualBaselines() {
+    const baselineYear = Number(this.tenantBaselineYear());
+    const values = Object.entries(this.tenantAnnualBaselineValues())
+      .map(([metric_definition_id, raw]) => ({
+        metric_definition_id,
+        baseline_year: baselineYear,
+        value: String(raw ?? '').trim(),
+      }))
+      .filter(row => row.value !== '');
+    this.api.put('/admin/financial-engine/annual-baselines', { values }).subscribe(() => {
+      this.loadTenantAnnualBaselines();
       this.loadAuditLogs();
     });
   }

@@ -16,6 +16,7 @@ from fastapi import HTTPException, status
 from supabase import Client
 
 from app.domain.financials import (
+    AnnualBaselineMetricValueRow,
     BankablePlanResponse,
     BankablePlanSnapshot,
     BankablePlanVersion,
@@ -73,6 +74,8 @@ from app.domain.financials import (
     FinancialScenarioDefinitionCreate,
     FinancialScenarioDefinitionUpdate,
     FinancialSummary,
+    InitiativeAnnualBaselineResponse,
+    InitiativeAnnualBaselineUpdate,
     InitiativeFinancialSelections,
     InitiativeFinancialSelectionsResponse,
     PortfolioFinancialBreakdown,
@@ -87,6 +90,8 @@ from app.domain.financials import (
     PortfolioValueRampPeriod,
     PortfolioValueRampResponse,
     ScenarioFinancialSummary,
+    TenantAnnualBaselineResponse,
+    TenantAnnualBaselineUpdate,
     ValueBridgeCase,
     ValueBridgeResponse,
     ValueBridgeRow,
@@ -349,11 +354,16 @@ class FinancialService:
         config = self.get_engine_configuration()
         legacy_summary = self.get_financial_summary(initiative_id)
         stored_values = self._repo.list_configurable_metric_values(initiative_id)
-        values = self._values_with_formula_metrics(stored_values)
+        baseline = self.get_initiative_annual_baseline(initiative_id)
+        values = self._values_with_formula_metrics(
+            stored_values,
+            self._repo.list_initiative_annual_baselines(initiative_id),
+        )
         return ConfigurableFinancialGridResponse(
             initiative_id=initiative_id,
             definitions=config.definitions,
             scenarios=config.scenarios,
+            baseline=baseline,
             benefit_lines=[
                 self._to_benefit_line(row) for row in self._repo.list_benefit_lines(initiative_id)
             ],
@@ -377,7 +387,11 @@ class FinancialService:
         clean_values = self._repo.list_configurable_metric_values(initiative_id)
         if clean_values or (not rows and self._repo.list_metric_definitions()):
             return self._compute_clean_summary(
-                self._values_with_formula_metrics(clean_values), costs
+                self._values_with_formula_metrics(
+                    clean_values,
+                    self._repo.list_initiative_annual_baselines(initiative_id),
+                ),
+                costs,
             )
         metric_values = self._repo.list_metric_values(initiative_id)
         config = self.get_configuration()
@@ -853,6 +867,103 @@ class FinancialService:
         self._repo.update_organization_settings(org_settings)
         return next_settings
 
+    def get_tenant_annual_baselines(
+        self,
+        baseline_year: int | None = None,
+    ) -> TenantAnnualBaselineResponse:
+        definitions = {row["id"]: row for row in self._repo.list_metric_definitions()}
+        return TenantAnnualBaselineResponse(
+            values=[
+                self._to_annual_baseline_value(row, definitions)
+                for row in self._repo.list_tenant_annual_baselines(baseline_year)
+            ]
+        )
+
+    def update_tenant_annual_baselines(
+        self,
+        data: TenantAnnualBaselineUpdate,
+        user_id: str | None = None,
+    ) -> TenantAnnualBaselineResponse:
+        valid_metric_ids = {row["id"] for row in self._repo.list_metric_definitions()}
+        rows = []
+        for value in data.values:
+            if value.metric_definition_id not in valid_metric_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Baseline metric definition is not configured for this tenant",
+                )
+            rows.append(
+                {
+                    "metric_definition_id": value.metric_definition_id,
+                    "baseline_year": value.baseline_year,
+                    "value": _money(value.value),
+                    "note": value.note,
+                }
+            )
+        if rows:
+            self._repo.upsert_tenant_annual_baselines(rows, user_id=user_id)
+        return self.get_tenant_annual_baselines()
+
+    def get_initiative_annual_baseline(
+        self,
+        initiative_id: str,
+        baseline_year: int | None = None,
+    ) -> InitiativeAnnualBaselineResponse:
+        self._ensure_tenant_initiative(initiative_id)
+        rows = self._repo.list_initiative_annual_baselines(initiative_id, baseline_year)
+        locked, lock_reason = self._baseline_lock_state(initiative_id)
+        response_year = baseline_year
+        if response_year is None and rows:
+            response_year = int(rows[0]["baseline_year"])
+        definitions = {row["id"]: row for row in self._repo.list_metric_definitions()}
+        return InitiativeAnnualBaselineResponse(
+            initiative_id=initiative_id,
+            baseline_year=response_year,
+            values=[self._to_annual_baseline_value(row, definitions) for row in rows],
+            locked=locked,
+            lock_reason=lock_reason,
+        )
+
+    def update_initiative_annual_baseline(
+        self,
+        initiative_id: str,
+        data: InitiativeAnnualBaselineUpdate,
+        user_id: str | None = None,
+    ) -> InitiativeAnnualBaselineResponse:
+        self._ensure_tenant_initiative(initiative_id)
+        locked, lock_reason = self._baseline_lock_state(initiative_id)
+        if locked:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=lock_reason or "Initiative baseline is locked",
+            )
+        valid_metric_ids = {row["id"] for row in self._repo.list_metric_definitions()}
+        settings = self.get_governance_settings()
+        rows = []
+        for value in data.values:
+            if value.metric_definition_id not in valid_metric_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Baseline metric definition is not configured for this tenant",
+                )
+            rows.append(
+                {
+                    "metric_definition_id": value.metric_definition_id,
+                    "baseline_year": data.baseline_year,
+                    "value": _money(value.value),
+                    "source": "initiative",
+                    "lock_gate_number": settings.baseline_lock_gate_number,
+                    "note": value.note,
+                }
+            )
+        if rows:
+            self._repo.upsert_initiative_annual_baselines(
+                initiative_id,
+                rows,
+                user_id=user_id,
+            )
+        return self.get_initiative_annual_baseline(initiative_id, data.baseline_year)
+
     def update_configuration(
         self, data: FinancialConfigurationUpdate
     ) -> FinancialConfigurationResponse:
@@ -1309,6 +1420,28 @@ class FinancialService:
     def _build_bankable_plan_snapshot(self, initiative_id: str) -> BankablePlanSnapshot:
         entries = self._repo.get_entries(initiative_id)
         costs = self._repo.list_cost_lines(initiative_id)
+        baseline = self.get_initiative_annual_baseline(initiative_id)
+        clean_values = self._repo.list_configurable_metric_values(initiative_id)
+        if clean_values:
+            values = self._values_with_formula_metrics(
+                clean_values,
+                self._repo.list_initiative_annual_baselines(initiative_id),
+            )
+            summary = self._compute_clean_summary(values, costs)
+            return BankablePlanSnapshot(
+                entries=[],
+                cost_lines=[self._to_cost_line(row) for row in costs],
+                metric_values=[],
+                configurable_values=[self._to_configurable_metric_value(row) for row in values],
+                baseline=baseline,
+                selections=InitiativeFinancialSelections(),
+                financial_mode=FinancialModeDescriptor(
+                    key="multi_scenario",
+                    label="Configurable metric engine",
+                    scenarios=["baseline", "plan_base", "plan_high", "actual"],
+                ),
+                summary=summary,
+            )
         metric_values = self._repo.list_metric_values(initiative_id)
         config = self.get_configuration()
         selections = self._resolve_selections(initiative_id, entries, costs, metric_values, config)
@@ -1325,6 +1458,8 @@ class FinancialService:
             entries=[self._to_entry_row(row) for row in entries],
             cost_lines=[self._to_cost_line(row) for row in costs],
             metric_values=[self._to_metric_value_row(row) for row in metric_values],
+            configurable_values=[],
+            baseline=baseline,
             selections=selections,
             financial_mode=self._financial_mode_descriptor(
                 initiative_id,
@@ -1931,7 +2066,10 @@ class FinancialService:
         clean_values = self._repo.list_configurable_metric_values(initiative_id)
         if clean_values or not raw_entries:
             return self._compute_clean_value_bridge(
-                self._values_with_formula_metrics(clean_values),
+                self._values_with_formula_metrics(
+                    clean_values,
+                    self._repo.list_initiative_annual_baselines(initiative_id),
+                ),
                 raw_cost_lines,
                 initiative_id=initiative_id,
             )
@@ -1964,7 +2102,10 @@ class FinancialService:
         clean_values = self._repo.list_configurable_metric_values(initiative_id)
         if clean_values or not raw_entries:
             return self._compute_clean_scenario_summary(
-                self._values_with_formula_metrics(clean_values),
+                self._values_with_formula_metrics(
+                    clean_values,
+                    self._repo.list_initiative_annual_baselines(initiative_id),
+                ),
                 raw_cost_lines,
                 scenario,
             )
@@ -1994,7 +2135,10 @@ class FinancialService:
         if clean_values or not raw_entries:
             return self._compute_clean_break_even(
                 initiative_id,
-                self._values_with_formula_metrics(clean_values),
+                self._values_with_formula_metrics(
+                    clean_values,
+                    self._repo.list_initiative_annual_baselines(initiative_id),
+                ),
                 raw_cost_lines,
                 scenario,
             )
@@ -2085,7 +2229,10 @@ class FinancialService:
         raw_entries = self._repo.get_all_entries()
         if not raw_entries:
             return self._compute_clean_value_bridge(
-                self._values_with_formula_metrics(self._repo.get_all_metric_values()),
+                self._values_with_formula_metrics(
+                    self._repo.get_all_metric_values(),
+                    self._repo.list_all_initiative_annual_baselines(),
+                ),
                 self._repo.get_all_cost_lines(),
                 initiative_id=None,
             )
@@ -2191,6 +2338,7 @@ class FinancialService:
             )
 
         metric_keys = {str(row["key"]) for row in definitions if row.get("is_active", True)}
+        metric_keys |= {f"baseline_{key}" for key in metric_keys}
         try:
             referenced_keys = self._formula_identifiers(formula)
             self._validate_formula_expression(formula, metric_keys)
@@ -2249,7 +2397,11 @@ class FinancialService:
         for key in graph:
             visit(key)
 
-    def _values_with_formula_metrics(self, values: list[dict]) -> list[dict]:  # type: ignore[type-arg]
+    def _values_with_formula_metrics(
+        self,
+        values: list[dict],  # type: ignore[type-arg]
+        baseline_values: list[dict] | None = None,  # type: ignore[type-arg]
+    ) -> list[dict]:  # type: ignore[type-arg]
         if not values:
             return values
         definitions = self._repo.list_metric_definitions()
@@ -2285,9 +2437,20 @@ class FinancialService:
             },
             key=lambda item: tuple(str(part) for part in item),
         )
+        baseline_env_by_initiative: dict[object, dict[str, Decimal]] = {}
+        for row in baseline_values or []:
+            definition = definition_by_id.get(row.get("metric_definition_id"))
+            if not definition:
+                continue
+            initiative_id = row.get("initiative_id")
+            key = str(definition["key"])
+            env = baseline_env_by_initiative.setdefault(initiative_id, {})
+            amount = _dec(row.get("value"))
+            env.setdefault(key, amount)
+            env[f"baseline_{key}"] = amount
         computed: list[dict] = []
         for tenant_id, initiative_id, scenario_id, year, month in group_keys:
-            env: dict[str, Decimal] = {}
+            env: dict[str, Decimal] = dict(baseline_env_by_initiative.get(initiative_id, {}))
             for row in stored_values:
                 if (
                     row.get("tenant_id"),
@@ -2458,6 +2621,38 @@ class FinancialService:
             value_high=_money(row.get("value_high")),
             value_actual=_actual("value_actual"),
         )
+
+    @staticmethod
+    def _to_annual_baseline_value(
+        row: dict,  # type: ignore[type-arg]
+        definitions: dict[str, dict] | None = None,  # type: ignore[type-arg]
+    ) -> AnnualBaselineMetricValueRow:
+        definition = (definitions or {}).get(row.get("metric_definition_id")) or {}
+        return AnnualBaselineMetricValueRow(
+            id=row["id"],
+            metric_definition_id=row["metric_definition_id"],
+            metric_key=definition.get("key"),
+            metric_label=definition.get("label"),
+            baseline_year=int(row["baseline_year"]),
+            value=_money(row.get("value")),
+            note=row.get("note"),
+            source=row.get("source"),
+            locked_at=str(row["locked_at"]) if row.get("locked_at") else None,
+            locked_by=row.get("locked_by"),
+            lock_gate_number=row.get("lock_gate_number"),
+        )
+
+    def _baseline_lock_state(self, initiative_id: str) -> tuple[bool, str | None]:
+        settings = self.get_governance_settings()
+        if settings.baseline_lock_on_approval and self._repo.has_approved_gate_submission(
+            initiative_id,
+            settings.baseline_lock_gate_number,
+        ):
+            return (
+                True,
+                f"Annual baseline values are locked after Gate {settings.baseline_lock_gate_number} approval.",
+            )
+        return False, None
 
     def _financial_lock_state(self, initiative_id: str) -> tuple[bool, str | None]:
         settings = self.get_governance_settings()
@@ -3588,7 +3783,12 @@ class FinancialService:
                 for row in self._repo.get_all_metric_values()
                 if row.get("initiative_id") in initiatives
                 and (year is None or row.get("year") == year)
-            ]
+            ],
+            [
+                row
+                for row in self._repo.list_all_initiative_annual_baselines()
+                if row.get("initiative_id") in initiatives
+            ],
         )
         costs = [
             row
