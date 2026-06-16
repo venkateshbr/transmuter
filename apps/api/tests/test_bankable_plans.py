@@ -129,6 +129,16 @@ class FakeGovernanceRepo:
             }
         return None
 
+    def get_gate_definition(self, gate_number: int) -> dict | None:
+        if gate_number == 1:
+            return {
+                "id": "gate-definition-1",
+                "gate_number": 1,
+                "approver_roles": ["transformation_office"],
+                "is_active": True,
+            }
+        return None
+
     def update_initiative_stage(self, _initiative_id: str, stage: str) -> None:
         self.stage = stage
 
@@ -233,6 +243,7 @@ def governance_service() -> GovernanceService:
     service._audit = FakeAuditRepo()
     service._tenant_id = TENANT_ID
     service._user_id = str(USER_ID)
+    service._user_role = "transformation_office"
     return service
 
 

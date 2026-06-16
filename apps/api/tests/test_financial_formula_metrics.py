@@ -78,6 +78,85 @@ def test_formula_metric_values_are_computed_from_decimal_inputs() -> None:
     assert formula_rows[0]["status"] == "approved"
 
 
+def test_formula_metric_values_can_reference_annual_baseline_inputs() -> None:
+    definitions = [
+        {
+            "id": "metric-revenue-uplift",
+            "key": "revenue_uplift",
+            "aggregation": "sum",
+            "is_active": True,
+        },
+        {
+            "id": "metric-baseline-revenue",
+            "key": "baseline_revenue",
+            "aggregation": "last",
+            "is_active": True,
+        },
+        {
+            "id": "metric-revenue-uplift-pct",
+            "key": "revenue_uplift_pct",
+            "aggregation": "formula",
+            "formula": "revenue_uplift / baseline_revenue * 100",
+            "is_active": True,
+        },
+    ]
+    svc = _service(definitions)
+
+    values = svc._values_with_formula_metrics(
+        [
+            {
+                "id": "value-revenue",
+                "tenant_id": "tenant-1",
+                "initiative_id": "initiative-1",
+                "metric_definition_id": "metric-revenue-uplift",
+                "scenario_id": "scenario-base",
+                "year": 2027,
+                "month": 1,
+                "value": "200000.0000",
+            },
+        ],
+        [
+            {
+                "id": "baseline-revenue",
+                "tenant_id": "tenant-1",
+                "initiative_id": "initiative-1",
+                "metric_definition_id": "metric-baseline-revenue",
+                "baseline_year": 2026,
+                "value": "20000000.0000",
+            },
+        ],
+    )
+
+    formula_rows = [row for row in values if row.get("_computed_formula")]
+    assert len(formula_rows) == 1
+    assert formula_rows[0]["metric_definition_id"] == "metric-revenue-uplift-pct"
+    assert formula_rows[0]["value"] == "1.0000"
+
+
+def test_formula_validation_accepts_baseline_metric_aliases() -> None:
+    svc = _service(
+        [
+            {
+                "id": "metric-revenue-uplift",
+                "key": "revenue_uplift",
+                "aggregation": "sum",
+                "is_active": True,
+            }
+        ]
+    )
+
+    svc._validate_metric_definition_payload(
+        {
+            "id": "metric-improvement-pct",
+            "key": "improvement_pct",
+            "aggregation": "formula",
+            "formula": "revenue_uplift / baseline_revenue_uplift * 100",
+            "formula_inputs": ["revenue_uplift", "baseline_revenue_uplift"],
+            "is_active": True,
+        }
+    )
+
+
 def test_formula_divide_by_zero_returns_zero_value() -> None:
     definitions = [
         {

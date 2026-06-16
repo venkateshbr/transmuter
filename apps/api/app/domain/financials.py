@@ -59,6 +59,8 @@ class FinancialModeDescriptor(BaseModel):
 class FinancialGovernanceSettings(BaseModel):
     initiative_plan_lock_gate_number: int = Field(1, ge=1, le=10)
     plan_lock_on_approval: bool = True
+    baseline_lock_gate_number: int = Field(2, ge=1, le=10)
+    baseline_lock_on_approval: bool = True
     allow_rebaseline: bool = True
     rebaseline_roles: list[str] = Field(default_factory=lambda: ["transformation_office"])
     workstream_lock_cadence: WorkstreamLockCadence = "one_off"
@@ -71,6 +73,8 @@ class FinancialGovernanceSettings(BaseModel):
 class FinancialGovernanceSettingsUpdate(BaseModel):
     initiative_plan_lock_gate_number: int | None = Field(None, ge=1, le=10)
     plan_lock_on_approval: bool | None = None
+    baseline_lock_gate_number: int | None = Field(None, ge=1, le=10)
+    baseline_lock_on_approval: bool | None = None
     allow_rebaseline: bool | None = None
     rebaseline_roles: list[str] | None = None
     workstream_lock_cadence: WorkstreamLockCadence | None = None
@@ -88,6 +92,48 @@ class FinancialReportingSettings(BaseModel):
 class FinancialReportingSettingsUpdate(BaseModel):
     fiscal_year_start_month: int | None = Field(None, ge=1, le=12)
     reporting_currency: str | None = Field(None, min_length=3, max_length=3)
+
+
+class AnnualBaselineMetricValue(BaseModel):
+    metric_definition_id: str
+    baseline_year: int = Field(..., ge=2020, le=2060)
+    value: Decimal = Decimal("0")
+    note: str | None = None
+
+
+class AnnualBaselineMetricValueRow(BaseModel):
+    id: str
+    metric_definition_id: str
+    metric_key: str | None = None
+    metric_label: str | None = None
+    baseline_year: int
+    value: str = "0"
+    note: str | None = None
+    source: Literal["tenant_default", "initiative"] | None = None
+    locked_at: str | None = None
+    locked_by: str | None = None
+    lock_gate_number: int | None = None
+
+
+class TenantAnnualBaselineUpdate(BaseModel):
+    values: list[AnnualBaselineMetricValue] = Field(default_factory=list)
+
+
+class TenantAnnualBaselineResponse(BaseModel):
+    values: list[AnnualBaselineMetricValueRow] = Field(default_factory=list)
+
+
+class InitiativeAnnualBaselineUpdate(BaseModel):
+    baseline_year: int = Field(..., ge=2020, le=2060)
+    values: list[AnnualBaselineMetricValue] = Field(default_factory=list)
+
+
+class InitiativeAnnualBaselineResponse(BaseModel):
+    initiative_id: str
+    baseline_year: int | None = None
+    values: list[AnnualBaselineMetricValueRow] = Field(default_factory=list)
+    locked: bool = False
+    lock_reason: str | None = None
 
 
 class FinancialMetricDefinitionBase(BaseModel):
@@ -264,6 +310,7 @@ class ConfigurableFinancialGridResponse(BaseModel):
     initiative_id: str
     definitions: list[FinancialMetricDefinition]
     scenarios: list[FinancialScenarioDefinition]
+    baseline: InitiativeAnnualBaselineResponse | None = None
     benefit_lines: list[FinancialBenefitLine] = Field(default_factory=list)
     values: list[ConfigurableFinancialMetricValueRow] = Field(default_factory=list)
     cost_lines: list[CostLineItem] = Field(default_factory=list)
@@ -630,6 +677,8 @@ class BankablePlanSnapshot(BaseModel):
     entries: list[FinancialEntryRow] = Field(default_factory=list)
     cost_lines: list[CostLineItem] = Field(default_factory=list)
     metric_values: list[FinancialMetricValueRow] = Field(default_factory=list)
+    configurable_values: list[ConfigurableFinancialMetricValueRow] = Field(default_factory=list)
+    baseline: InitiativeAnnualBaselineResponse | None = None
     selections: InitiativeFinancialSelections = Field(default_factory=InitiativeFinancialSelections)
     financial_mode: FinancialModeDescriptor | None = None
     summary: FinancialSummary

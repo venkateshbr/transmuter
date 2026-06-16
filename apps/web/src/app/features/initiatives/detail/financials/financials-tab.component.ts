@@ -149,7 +149,7 @@ interface CostLineListResponse {
   total: number;
 }
 
-type FinancialScenario = 'base' | 'high' | 'actual';
+type FinancialScenario = 'baseline' | 'base' | 'high' | 'actual';
 
 interface ValueBridgeCase {
   revenue_uplift: string;
@@ -564,6 +564,7 @@ export class FinancialsTabComponent implements OnInit {
   newCostLineStartMonth = signal('');
   newCostLineEndMonth = signal('');
   readonly scenarios: { id: FinancialScenario; label: string }[] = [
+    { id: 'baseline', label: 'Baseline' },
     { id: 'base', label: 'Base' },
     { id: 'high', label: 'High' },
     { id: 'actual', label: 'Actuals' },
@@ -735,6 +736,7 @@ export class FinancialsTabComponent implements OnInit {
   selectedScenarioDefinition(): FinancialScenarioDefinition | null {
     const scenarios = (this.grid()?.scenarios || []).filter(item => item.is_active !== false);
     const keyByScenario: Record<FinancialScenario, string[]> = {
+      baseline: ['baseline'],
       base: ['plan_base', 'base'],
       high: ['plan_high', 'high'],
       actual: ['actual'],
@@ -742,7 +744,7 @@ export class FinancialsTabComponent implements OnInit {
     const preferredKeys = keyByScenario[this.scenario()];
     return scenarios.find(item => preferredKeys.includes(item.key))
       || (this.scenario() === 'base' ? scenarios.find(item => item.kind === 'plan' && item.is_primary) : null)
-      || scenarios.find(item => item.kind === (this.scenario() === 'actual' ? 'actual' : 'plan'))
+      || scenarios.find(item => item.kind === (this.scenario() === 'actual' ? 'actual' : this.scenario() === 'baseline' ? 'baseline' : 'plan'))
       || scenarios[0]
       || null;
   }

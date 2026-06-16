@@ -22,6 +22,24 @@ class FinancialRepository:
     def __init__(self, client: Client, tenant_id: UUID) -> None:
         self._c = client
         self._tid = str(tenant_id)
+        self._page_size = 1000
+
+    def _select_tenant_pages(self, table_name: str, columns: str = "*") -> list[dict]:  # type: ignore[type-arg]
+        rows: list[dict] = []  # type: ignore[type-arg]
+        start = 0
+        while True:
+            result = (
+                self._c.table(table_name)
+                .select(columns)
+                .eq("tenant_id", self._tid)
+                .range(start, start + self._page_size - 1)
+                .execute()
+            )
+            page = result.data or []
+            rows.extend(page)
+            if len(page) < self._page_size:
+                return rows
+            start += self._page_size
 
     # ── Financial Entries ─────────────────────────────────────────────────────
 
@@ -359,6 +377,19 @@ class FinancialRepository:
         )
         return result.data or []
 
+    def has_approved_gate_submission(self, initiative_id: str, gate_number: int) -> bool:
+        result = (
+            self._c.table("gate_submissions")
+            .select("id")
+            .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
+            .eq("gate_number", gate_number)
+            .eq("decision", "approved")
+            .limit(1)
+            .execute()
+        )
+        return bool(result.data)
+
     def list_workstream_target_locks(self, workstream_id: str) -> list[dict]:  # type: ignore[type-arg]
         try:
             result = (
@@ -626,6 +657,134 @@ class FinancialRepository:
             .execute()
         )
         return result.data or []
+
+    def list_tenant_annual_baselines(
+        self,
+        baseline_year: int | None = None,
+    ) -> list[dict]:  # type: ignore[type-arg]
+        query = (
+            self._c.table("financial_tenant_annual_baselines")
+            .select("*")
+            .eq("tenant_id", self._tid)
+        )
+        if baseline_year is not None:
+            query = query.eq("baseline_year", baseline_year)
+        result = query.order("baseline_year").execute()
+        return result.data or []
+
+    def list_initiative_annual_baselines(
+        self,
+        initiative_id: str,
+        baseline_year: int | None = None,
+    ) -> list[dict]:  # type: ignore[type-arg]
+        query = (
+            self._c.table("financial_initiative_annual_baselines")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
+        )
+        if baseline_year is not None:
+            query = query.eq("baseline_year", baseline_year)
+        result = query.order("baseline_year").execute()
+        return result.data or []
+
+    def list_all_initiative_annual_baselines(self) -> list[dict]:  # type: ignore[type-arg]
+        result = (
+            self._c.table("financial_initiative_annual_baselines")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .order("initiative_id")
+            .order("baseline_year")
+            .execute()
+        )
+        return result.data or []
+
+    def upsert_tenant_annual_baselines(
+        self,
+        rows: list[dict],  # type: ignore[type-arg]
+        user_id: str | None = None,
+    ) -> list[dict]:  # type: ignore[type-arg]
+        saved = []
+        now = datetime.now(UTC).isoformat()
+        for row in rows:
+            payload = {
+                **row,
+                "tenant_id": self._tid,
+                "updated_by": row.get("updated_by") or user_id,
+                "updated_at": row.get("updated_at") or now,
+            }
+            existing = (
+                self._c.table("financial_tenant_annual_baselines")
+                .select("id")
+                .eq("tenant_id", self._tid)
+                .eq("metric_definition_id", payload["metric_definition_id"])
+                .eq("baseline_year", payload["baseline_year"])
+                .maybe_single()
+                .execute()
+            )
+            if existing and existing.data:
+                result = (
+                    self._c.table("financial_tenant_annual_baselines")
+                    .update(payload)
+                    .eq("tenant_id", self._tid)
+                    .eq("id", existing.data["id"])
+                    .execute()
+                )
+            else:
+                payload["id"] = payload.get("id") or str(uuid4())
+                payload["created_by"] = payload.get("created_by") or user_id
+                payload["created_at"] = payload.get("created_at") or now
+                result = (
+                    self._c.table("financial_tenant_annual_baselines").insert(payload).execute()
+                )
+            if result.data:
+                saved.append(result.data[0])
+        return saved
+
+    def upsert_initiative_annual_baselines(
+        self,
+        initiative_id: str,
+        rows: list[dict],  # type: ignore[type-arg]
+        user_id: str | None = None,
+    ) -> list[dict]:  # type: ignore[type-arg]
+        saved = []
+        now = datetime.now(UTC).isoformat()
+        for row in rows:
+            payload = {
+                **row,
+                "tenant_id": self._tid,
+                "initiative_id": initiative_id,
+                "updated_by": row.get("updated_by") or user_id,
+                "updated_at": row.get("updated_at") or now,
+            }
+            existing = (
+                self._c.table("financial_initiative_annual_baselines")
+                .select("id")
+                .eq("tenant_id", self._tid)
+                .eq("initiative_id", initiative_id)
+                .eq("metric_definition_id", payload["metric_definition_id"])
+                .eq("baseline_year", payload["baseline_year"])
+                .maybe_single()
+                .execute()
+            )
+            if existing and existing.data:
+                result = (
+                    self._c.table("financial_initiative_annual_baselines")
+                    .update(payload)
+                    .eq("tenant_id", self._tid)
+                    .eq("id", existing.data["id"])
+                    .execute()
+                )
+            else:
+                payload["id"] = payload.get("id") or str(uuid4())
+                payload["created_by"] = payload.get("created_by") or user_id
+                payload["created_at"] = payload.get("created_at") or now
+                result = (
+                    self._c.table("financial_initiative_annual_baselines").insert(payload).execute()
+                )
+            if result.data:
+                saved.append(result.data[0])
+        return saved
 
     def list_financial_scenarios(self) -> list[dict]:  # type: ignore[type-arg]
         result = (
@@ -959,10 +1118,7 @@ class FinancialRepository:
     def get_all_entries(self) -> list[dict]:  # type: ignore[type-arg]
         """Return all financial_entries for the tenant (portfolio-level)."""
         try:
-            result = (
-                self._c.table("financial_entries").select("*").eq("tenant_id", self._tid).execute()
-            )
-            return result.data or []
+            return self._select_tenant_pages("financial_entries")
         except Exception as exc:
             if self._is_missing_table(exc, "financial_entries"):
                 return []
@@ -970,21 +1126,12 @@ class FinancialRepository:
 
     def get_all_cost_lines(self) -> list[dict]:  # type: ignore[type-arg]
         """Return all cost lines for the tenant (portfolio-level)."""
-        result = (
-            self._c.table("financial_cost_lines").select("*").eq("tenant_id", self._tid).execute()
-        )
-        return result.data or []
+        return self._select_tenant_pages("financial_cost_lines")
 
     def get_all_metric_values(self) -> list[dict]:  # type: ignore[type-arg]
         """Return all custom financial metric values for the tenant."""
         try:
-            result = (
-                self._c.table("financial_metric_values")
-                .select("*")
-                .eq("tenant_id", self._tid)
-                .execute()
-            )
-            return result.data or []
+            return self._select_tenant_pages("financial_metric_values")
         except Exception as exc:
             if self._is_missing_table(exc, "financial_metric_values"):
                 return []

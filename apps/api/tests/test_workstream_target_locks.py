@@ -169,6 +169,16 @@ class FakeTargetRepo:
     def list_metric_values(self, _initiative_id: str) -> list[dict[str, object]]:
         return []
 
+    def list_configurable_metric_values(self, _initiative_id: str) -> list[dict[str, object]]:
+        return []
+
+    def list_initiative_annual_baselines(
+        self,
+        _initiative_id: str,
+        _baseline_year: int | None = None,
+    ) -> list[dict[str, object]]:
+        return []
+
     def list_financial_selections(self, _initiative_id: str) -> list[dict[str, object]]:
         return []
 
@@ -176,6 +186,9 @@ class FakeTargetRepo:
         return []
 
     def list_config_items(self) -> list[dict[str, object]]:
+        return []
+
+    def list_metric_definitions(self) -> list[dict[str, object]]:
         return []
 
     def upsert_entries_batch(

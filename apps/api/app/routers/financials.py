@@ -58,6 +58,8 @@ from app.domain.financials import (
     FinancialScenarioDefinition,
     FinancialScenarioDefinitionCreate,
     FinancialScenarioDefinitionUpdate,
+    InitiativeAnnualBaselineResponse,
+    InitiativeAnnualBaselineUpdate,
     InitiativeFinancialSelections,
     InitiativeFinancialSelectionsResponse,
     PortfolioFinancialContributorsResponse,
@@ -65,6 +67,8 @@ from app.domain.financials import (
     PortfolioGranularity,
     PortfolioValueRampResponse,
     ScenarioFinancialSummary,
+    TenantAnnualBaselineResponse,
+    TenantAnnualBaselineUpdate,
     ValueBridgeResponse,
     WorkstreamTargetLockRequest,
     WorkstreamTargetLockResponse,
@@ -118,6 +122,37 @@ async def update_financials(
     """Upsert the configurable monthly financial grid for an initiative."""
     assert_can_manage_initiatives(current_user)
     return svc.update_configurable_financial_grid(initiative_id, body, str(current_user.id))
+
+
+@router.get(
+    "/initiatives/{initiative_id}/financials/baseline",
+    response_model=InitiativeAnnualBaselineResponse,
+)
+async def get_initiative_annual_baseline(
+    initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
+    baseline_year: int | None = Query(None, ge=2020, le=2060),
+) -> InitiativeAnnualBaselineResponse:
+    """Return annual original-baseline metrics for an initiative."""
+    assert_can_view_initiative(client, current_user, initiative_id)
+    return svc.get_initiative_annual_baseline(initiative_id, baseline_year)
+
+
+@router.put(
+    "/initiatives/{initiative_id}/financials/baseline",
+    response_model=InitiativeAnnualBaselineResponse,
+)
+async def update_initiative_annual_baseline(
+    initiative_id: str,
+    body: InitiativeAnnualBaselineUpdate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> InitiativeAnnualBaselineResponse:
+    """Upsert annual original-baseline metrics for an initiative."""
+    assert_can_manage_initiatives(current_user)
+    return svc.update_initiative_annual_baseline(initiative_id, body, str(current_user.id))
 
 
 @router.get(
@@ -507,6 +542,32 @@ async def get_financial_engine_configuration(
 ) -> FinancialEngineConfigurationResponse:
     assert_can_view_portfolio(current_user)
     return svc.get_engine_configuration()
+
+
+@router.get(
+    "/admin/financial-engine/annual-baselines",
+    response_model=TenantAnnualBaselineResponse,
+)
+async def get_tenant_annual_baselines(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+    baseline_year: int | None = Query(None, ge=2020, le=2060),
+) -> TenantAnnualBaselineResponse:
+    assert_can_manage_initiatives(current_user)
+    return svc.get_tenant_annual_baselines(baseline_year)
+
+
+@router.put(
+    "/admin/financial-engine/annual-baselines",
+    response_model=TenantAnnualBaselineResponse,
+)
+async def update_tenant_annual_baselines(
+    body: TenantAnnualBaselineUpdate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> TenantAnnualBaselineResponse:
+    assert_can_manage_initiatives(current_user)
+    return svc.update_tenant_annual_baselines(body, str(current_user.id))
 
 
 @router.put(

@@ -486,6 +486,45 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
                 </label>
               </div>
             </section>
+
+            <section class="lg:col-span-2 rounded-lg border p-4" style="border-color:var(--t-border);background:var(--t-bg)">
+              <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p class="text-[10px] font-bold uppercase tracking-wider" style="color:var(--t-text-secondary)">Annual Baseline</p>
+                  <h3 class="text-sm font-bold" style="color:var(--t-text-primary)">Original operating metrics</h3>
+                </div>
+                <div class="w-32">
+                  <label for="init-baseline-year" class="field-label">Fiscal Year</label>
+                  <input
+                    id="init-baseline-year"
+                    type="number"
+                    min="2020"
+                    max="2060"
+                    class="input-field"
+                    [disabled]="baselineLocked()"
+                    [(ngModel)]="form.baseline_year"
+                    aria-label="Baseline fiscal year">
+                </div>
+              </div>
+              <div *ngIf="baselineLocked()" class="mb-3 border-l-4 border-[var(--t-accent)] bg-[var(--t-surface-raised)] px-4 py-3 text-sm" style="color:var(--t-text-secondary)">
+                <span class="font-bold" style="color:var(--t-text-primary)">Annual baseline locked.</span>
+                {{ baselineLockReason() || 'Baseline updates are locked by governance.' }}
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                <label *ngFor="let metric of baselineMetricOptions()"
+                       class="block rounded border px-3 py-2"
+                       style="border-color:var(--t-border);color:var(--t-text-primary)">
+                  <span class="block truncate text-[10px] font-bold uppercase tracking-wider" style="color:var(--t-text-secondary)">{{ metric.label }}</span>
+                  <input
+                    type="number"
+                    class="input-field mt-2"
+                    [disabled]="baselineLocked()"
+                    [ngModel]="baselineMetricValue(metric.id)"
+                    (ngModelChange)="setBaselineMetricValue(metric.id, $event)"
+                    [attr.aria-label]="'Annual baseline value for ' + metric.label">
+                </label>
+              </div>
+            </section>
           </div>
         </div>
 
@@ -762,6 +801,8 @@ export class CreateInitiativeComponent {
   readonly gateCriteria = signal<any[]>([]);
   readonly financialSelectionsLocked = signal(false);
   readonly financialSelectionsLockReason = signal<string | null>(null);
+  readonly baselineLocked = signal(false);
+  readonly baselineLockReason = signal<string | null>(null);
   readonly setupStatus = signal<any>({ complete: false, completed: 0, total: 0, checks: [] });
   readonly setupStatusLoaded = signal(false);
   readonly selectedMetricKeys = signal<string[]>([
@@ -799,6 +840,8 @@ export class CreateInitiativeComponent {
     dependencies_text: '',
     planned_start: '',
     planned_end: '',
+    baseline_year: new Date().getFullYear(),
+    baseline_values: {} as Record<string, string>,
   };
 
   constructor() {
@@ -901,6 +944,8 @@ export class CreateInitiativeComponent {
           dependencies_text: item.dependencies_text ?? '',
           planned_start: item.planned_start ?? '',
           planned_end: item.planned_end ?? '',
+          baseline_year: new Date().getFullYear(),
+          baseline_values: {},
         };
       },
       error: err => this.error.set(this.errorText(err, 'Failed to load initiative for editing.')),
@@ -916,6 +961,19 @@ export class CreateInitiativeComponent {
         if (Array.isArray(selected.cost_category_keys) && selected.cost_category_keys.length) {
           this.selectedCostCategoryKeys.set(selected.cost_category_keys);
         }
+      },
+      error: () => {},
+    });
+    this.api.get<any>(`/initiatives/${id}/financials/baseline`).subscribe({
+      next: response => {
+        this.baselineLocked.set(Boolean(response?.locked));
+        this.baselineLockReason.set(response?.lock_reason || null);
+        if (response?.baseline_year) this.form.baseline_year = Number(response.baseline_year);
+        const values: Record<string, string> = {};
+        for (const row of response?.values || []) {
+          values[row.metric_definition_id] = row.value;
+        }
+        this.form.baseline_values = values;
       },
       error: () => {},
     });
@@ -973,6 +1031,27 @@ export class CreateInitiativeComponent {
 
   financialMetricOptions(): FinancialConfigItem[] {
     return this.sortedFinancialItems('metric');
+  }
+
+  baselineMetricOptions(): any[] {
+    const definitions = this.financialEngineConfiguration()?.definitions || [];
+    return definitions
+      .filter((metric: any) => metric?.is_active !== false && metric?.aggregation !== 'formula')
+      .sort((a: any, b: any) =>
+        Number(a.display_order || 0) - Number(b.display_order || 0)
+        || String(a.label || '').localeCompare(String(b.label || '')),
+      );
+  }
+
+  baselineMetricValue(metricDefinitionId: string): string {
+    return this.form.baseline_values[metricDefinitionId] || '';
+  }
+
+  setBaselineMetricValue(metricDefinitionId: string, value: string | number): void {
+    this.form.baseline_values = {
+      ...this.form.baseline_values,
+      [metricDefinitionId]: String(value ?? ''),
+    };
   }
 
   costCategoryOptions(): FinancialConfigItem[] {
@@ -1108,13 +1187,39 @@ export class CreateInitiativeComponent {
       metric_keys: this.selectedMetricKeys(),
       cost_category_keys: this.selectedCostCategoryKeys(),
     }).subscribe({
+      next: () => this.saveAnnualBaseline(initiativeId),
+      error: err => {
+        this.submitting.set(false);
+        this.error.set(this.errorText(err, 'Initiative saved, but financial selections could not be updated.'));
+      },
+    });
+  }
+
+  private saveAnnualBaseline(initiativeId: string): void {
+    const baselineYear = Number(this.form.baseline_year);
+    const values = Object.entries(this.form.baseline_values)
+      .map(([metric_definition_id, raw]) => ({
+        metric_definition_id,
+        baseline_year: baselineYear,
+        value: String(raw ?? '').trim(),
+      }))
+      .filter(row => row.value !== '');
+    if (!values.length || this.baselineLocked()) {
+      this.submitting.set(false);
+      this.router.navigate(['/initiatives', initiativeId]);
+      return;
+    }
+    this.api.put(`/initiatives/${initiativeId}/financials/baseline`, {
+      baseline_year: baselineYear,
+      values,
+    }).subscribe({
       next: () => {
         this.submitting.set(false);
         this.router.navigate(['/initiatives', initiativeId]);
       },
       error: err => {
         this.submitting.set(false);
-        this.error.set(this.errorText(err, 'Initiative saved, but financial selections could not be updated.'));
+        this.error.set(this.errorText(err, 'Initiative saved, but annual baseline values could not be updated.'));
       },
     });
   }
