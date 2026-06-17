@@ -46,6 +46,13 @@ FinancialAttributeEntityType = Literal["benefit_line", "cost_line"]
 FinancialAttributeValueType = Literal[
     "text", "number", "currency", "percent", "date", "select", "boolean"
 ]
+FinancialBenefitValidationStatus = Literal["draft", "submitted", "finance_validated", "rejected"]
+FinancialBenefitValidationEventType = Literal["submit", "validate", "reject", "handoff_update"]
+FinancialBenefitHandoffStatus = Literal[
+    "not_started", "owner_assigned", "handoff_ready", "handoff_complete"
+]
+FinancialBenefitRiskRating = Literal["low", "medium", "high"]
+PortfolioValueBridgeBasis = Literal["all_years", "in_year", "target_year_run_rate", "cumulative"]
 
 
 class FinancialModeDescriptor(BaseModel):
@@ -259,6 +266,13 @@ class FinancialBenefitLineBase(BaseModel):
     attributes: dict[str, object] = Field(default_factory=dict)
     show_in_summary: bool = True
     display_order: int = 0
+    evidence_url: str | None = Field(None, max_length=2000)
+    evidence_label: str | None = Field(None, max_length=300)
+    realization_owner_id: str | None = None
+    handoff_status: FinancialBenefitHandoffStatus = "not_started"
+    handoff_due_date: date | None = None
+    risk_rating: FinancialBenefitRiskRating = "medium"
+    risk_adjustment_pct: Decimal = Field(Decimal("100"), ge=0, le=100)
 
 
 class FinancialBenefitLineCreate(FinancialBenefitLineBase):
@@ -276,12 +290,54 @@ class FinancialBenefitLineUpdate(BaseModel):
     attributes: dict[str, object] | None = None
     show_in_summary: bool | None = None
     display_order: int | None = None
+    evidence_url: str | None = Field(None, max_length=2000)
+    evidence_label: str | None = Field(None, max_length=300)
+    realization_owner_id: str | None = None
+    handoff_status: FinancialBenefitHandoffStatus | None = None
+    handoff_due_date: date | None = None
+    risk_rating: FinancialBenefitRiskRating | None = None
+    risk_adjustment_pct: Decimal | None = Field(None, ge=0, le=100)
 
 
 class FinancialBenefitLine(FinancialBenefitLineBase):
     id: str
+    validation_status: FinancialBenefitValidationStatus = "draft"
+    submitted_at: str | None = None
+    submitted_by: str | None = None
+    validated_at: str | None = None
+    validated_by: str | None = None
+    validation_comment: str | None = None
+    rejection_reason: str | None = None
     created_by: str | None = None
     updated_by: str | None = None
+
+
+class FinancialBenefitLineValidationRequest(BaseModel):
+    comment: str | None = Field(None, max_length=2000)
+    evidence_url: str | None = Field(None, max_length=2000)
+    evidence_label: str | None = Field(None, max_length=300)
+
+
+class FinancialBenefitLineHandoffUpdate(BaseModel):
+    realization_owner_id: str | None = None
+    handoff_status: FinancialBenefitHandoffStatus | None = None
+    handoff_due_date: date | None = None
+    risk_rating: FinancialBenefitRiskRating | None = None
+    risk_adjustment_pct: Decimal | None = Field(None, ge=0, le=100)
+    comment: str | None = Field(None, max_length=2000)
+
+
+class FinancialBenefitLineValidationEvent(BaseModel):
+    id: str
+    initiative_id: str
+    benefit_line_id: str
+    event_type: FinancialBenefitValidationEventType
+    actor_user_id: str | None = None
+    comment: str | None = None
+    evidence_url: str | None = None
+    evidence_label: str | None = None
+    metadata: dict[str, object] = Field(default_factory=dict)
+    created_at: str
 
 
 class FinancialMetricValue(BaseModel):
@@ -622,6 +678,9 @@ class PortfolioFinancialBenefitLineContribution(BaseModel):
     plan: str = "0"
     actual: str = "0"
     variance: str = "0"
+    validation_status: FinancialBenefitValidationStatus = "draft"
+    evidence_url: str | None = None
+    evidence_label: str | None = None
 
 
 class PortfolioFinancialInitiativeContribution(BaseModel):
@@ -658,6 +717,54 @@ class PortfolioFinancialsResponse(BaseModel):
     cost_breakdown: list[PortfolioFinancialBreakdown]
     metric_breakdown: list[PortfolioFinancialBreakdown]
     financial_mode: FinancialModeDescriptor | None = None
+
+
+class PortfolioBenefitsRegisterItem(BaseModel):
+    initiative_id: str
+    initiative_code: str | None = None
+    initiative_name: str
+    stage: str | None = None
+    workstream_id: str | None = None
+    workstream_name: str | None = None
+    benefit_line_id: str
+    benefit_line_name: str
+    metric_key: str
+    metric_label: str
+    benefit_class: FinancialBenefitClass | None = None
+    validation_status: FinancialBenefitValidationStatus = "draft"
+    confidence: str | None = None
+    risk_rating: FinancialBenefitRiskRating = "medium"
+    risk_adjustment_pct: str = "100.0000"
+    plan: str = "0"
+    actual: str = "0"
+    variance: str = "0"
+    risk_adjusted_plan: str = "0"
+    evidence_url: str | None = None
+    evidence_label: str | None = None
+    submitted_at: str | None = None
+    validated_at: str | None = None
+    validation_comment: str | None = None
+    rejection_reason: str | None = None
+    realization_owner_id: str | None = None
+    handoff_status: FinancialBenefitHandoffStatus = "not_started"
+    handoff_due_date: date | None = None
+
+
+class PortfolioBenefitsRegisterTotals(BaseModel):
+    plan: str = "0"
+    actual: str = "0"
+    variance: str = "0"
+    risk_adjusted_plan: str = "0"
+    validated_plan: str = "0"
+    submitted_plan: str = "0"
+    rejected_plan: str = "0"
+
+
+class PortfolioBenefitsRegisterResponse(BaseModel):
+    year: int | None = None
+    validation_status: FinancialBenefitValidationStatus | None = None
+    totals: PortfolioBenefitsRegisterTotals
+    items: list[PortfolioBenefitsRegisterItem] = Field(default_factory=list)
 
 
 class CostLineListResponse(BaseModel):
@@ -935,6 +1042,9 @@ class ValueBridgeResponse(BaseModel):
     """Three-column Value Bridge: Benefits / Costs / Net."""
 
     initiative_id: str | None = None  # None for portfolio-level
+    basis: PortfolioValueBridgeBasis = "all_years"
+    basis_label: str = "All years"
+    year: int | None = None
     base_case: ValueBridgeCase
     high_case: ValueBridgeCase
     actual: ValueBridgeCase

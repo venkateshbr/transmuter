@@ -74,6 +74,11 @@ export const routes: Routes = [
               import('./features/financials/benefit-tracking.component').then(m => m.BenefitTrackingComponent),
           },
           {
+            path: 'benefits-register',
+            loadComponent: () =>
+              import('./features/financials/benefits-register.component').then(m => m.BenefitsRegisterComponent),
+          },
+          {
             path: 'waterline',
             loadComponent: () =>
               import('./features/financials/waterline.component').then(m => m.WaterlineComponent),

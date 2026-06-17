@@ -157,6 +157,21 @@ def test_audit_snapshot_masking_removes_pii() -> None:
     }
 
 
+def test_benefit_validation_event_insert_policy_checks_line_tenant() -> None:
+    migration = (
+        Path(__file__).resolve().parents[3]
+        / "supabase"
+        / "migrations"
+        / "20260617000004_harden_benefit_validation_event_rls.sql"
+    ).read_text()
+
+    assert 'DROP POLICY IF EXISTS "fblve_insert"' in migration
+    assert "line.tenant_id = current_tenant_id()" in migration
+    assert (
+        "line.initiative_id = financial_benefit_line_validation_events.initiative_id" in migration
+    )
+
+
 def test_auth_refresh_rotates_supabase_session(monkeypatch) -> None:
     user_id = str(uuid4())
     tenant_id = str(uuid4())

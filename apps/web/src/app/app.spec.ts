@@ -160,6 +160,7 @@ describe('App', () => {
       '/dashboard',
       '/financials',
       '/financials/bankable-plan',
+      '/financials/benefits-register',
       '/financials/benefit-tracking',
       '/financials/waterline',
       '/reports/control-tower',

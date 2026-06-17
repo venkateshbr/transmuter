@@ -10,6 +10,8 @@ from app.domain.financials import (
     CostLineCreate,
     CostLineUpdate,
     FinancialAttributeDefinition,
+    FinancialBenefitLineHandoffUpdate,
+    FinancialBenefitLineValidationRequest,
     FinancialCellAssumptionUpdate,
     FinancialConfigGroup,
     FinancialConfigItem,
@@ -1594,3 +1596,206 @@ def test_existing_out_of_window_costs_are_migrated_once_to_first_planned_month()
             "is_recurring": False,
         }
     ]
+
+
+class _BenefitRegisterRepo(_CleanContributorRepo):
+    def list_all_benefit_lines(self) -> list[dict]:
+        return [
+            {
+                "id": "bl1",
+                "initiative_id": "i1",
+                "metric_definition_id": "m_gm",
+                "name": "Pricing margin uplift",
+                "validation_status": "finance_validated",
+                "confidence": "85.00",
+                "risk_rating": "medium",
+                "risk_adjustment_pct": "80.00",
+                "evidence_url": "https://example.com/evidence",
+                "evidence_label": "Evidence",
+                "handoff_status": "handoff_complete",
+            },
+            {
+                "id": "bl2",
+                "initiative_id": "i1",
+                "metric_definition_id": "m_save",
+                "name": "Pricing operating savings",
+                "validation_status": "submitted",
+                "confidence": "90.00",
+                "risk_rating": "low",
+                "risk_adjustment_pct": "95.00",
+                "handoff_status": "owner_assigned",
+            },
+        ]
+
+
+def test_portfolio_benefits_register_rolls_up_validation_and_risk_adjusted_value() -> None:
+    service = FinancialService.__new__(FinancialService)
+    service._repo = _BenefitRegisterRepo()
+
+    response = service.get_portfolio_benefits_register(year=2028)
+
+    assert response.totals.plan == "150.0000"
+    assert response.totals.actual == "135.0000"
+    assert response.totals.risk_adjusted_plan == "127.5000"
+    assert response.totals.validated_plan == "100.0000"
+    assert response.totals.submitted_plan == "50.0000"
+    assert [item.validation_status for item in response.items] == [
+        "finance_validated",
+        "submitted",
+    ]
+
+
+class _BenefitValidationRepo:
+    def __init__(self) -> None:
+        self.line = {
+            "id": "bl1",
+            "initiative_id": "i1",
+            "metric_definition_id": "m1",
+            "name": "Run-rate value",
+            "confidence": "80.00",
+            "show_in_summary": True,
+            "display_order": 1,
+        }
+        self.events: list[dict] = []
+        self.patch: dict = {}
+        self.valid_users = {"user-1"}
+
+    def initiative_exists(self, _initiative_id: str) -> bool:
+        return True
+
+    def get_benefit_line(self, _initiative_id: str, _benefit_line_id: str) -> dict:
+        return self.line
+
+    def update_benefit_line(
+        self,
+        _initiative_id: str,
+        _benefit_line_id: str,
+        data: dict,
+        _user_id: str,
+    ) -> dict:
+        self.patch = data
+        self.line = {**self.line, **data}
+        return self.line
+
+    def tenant_user_exists(self, user_id: str) -> bool:
+        return user_id in self.valid_users
+
+    def create_benefit_line_validation_event(
+        self,
+        _initiative_id: str,
+        _benefit_line_id: str,
+        data: dict,
+    ) -> dict:
+        self.events.append(data)
+        return {**data, "id": "evt1", "created_at": "2026-06-17T00:00:00+00:00"}
+
+
+def test_benefit_line_validation_transition_records_audit_event() -> None:
+    repo = _BenefitValidationRepo()
+    service = FinancialService.__new__(FinancialService)
+    service._repo = repo
+
+    line = service.validate_benefit_line(
+        "i1",
+        "bl1",
+        FinancialBenefitLineValidationRequest(
+            comment="Tied to finance model",
+            evidence_url="https://example.com/model",
+            evidence_label="Finance model",
+        ),
+        "user-1",
+    )
+
+    assert line.validation_status == "finance_validated"
+    assert repo.patch["validated_by"] == "user-1"
+    assert repo.events[0]["event_type"] == "validate"
+    assert repo.events[0]["comment"] == "Tied to finance model"
+
+
+def test_benefit_line_handoff_rejects_owner_outside_current_tenant() -> None:
+    repo = _BenefitValidationRepo()
+    service = FinancialService.__new__(FinancialService)
+    service._repo = repo
+
+    with pytest.raises(HTTPException) as exc:
+        service.update_benefit_line_handoff(
+            "i1",
+            "bl1",
+            FinancialBenefitLineHandoffUpdate(
+                realization_owner_id="other-tenant-user",
+                handoff_status="owner_assigned",
+            ),
+            "user-1",
+        )
+
+    assert exc.value.status_code == 400
+    assert repo.patch == {}
+
+
+class _ValueBridgeBasisRepo:
+    def get_all_entries(self) -> list[dict]:
+        return []
+
+    def get_all_metric_values(self) -> list[dict]:
+        return [
+            {
+                "initiative_id": "i1",
+                "metric_definition_id": "m_gm",
+                "scenario_id": "s_plan",
+                "year": 2027,
+                "month": 1,
+                "value": "100.0000",
+            },
+            {
+                "initiative_id": "i1",
+                "metric_definition_id": "m_gm",
+                "scenario_id": "s_plan",
+                "year": 2028,
+                "month": 1,
+                "value": "200.0000",
+            },
+        ]
+
+    def list_all_initiative_annual_baselines(self) -> list[dict]:
+        return []
+
+    def get_all_cost_lines(self) -> list[dict]:
+        return [
+            {
+                "initiative_id": "i1",
+                "year": 2028,
+                "month": 1,
+                "amount_plan": "50.0000",
+                "is_recurring": True,
+            }
+        ]
+
+    def list_metric_definitions(self) -> list[dict]:
+        return [
+            {
+                "id": "m_gm",
+                "key": "gm_uplift",
+                "label": "Gross Margin Uplift",
+                "aggregation": "sum",
+                "is_benefit": True,
+                "benefit_class": "margin",
+            }
+        ]
+
+    def list_financial_scenarios(self) -> list[dict]:
+        return [{"id": "s_plan", "key": "plan_base"}]
+
+    def list_financial_bridge_rows(self) -> list[dict]:
+        return []
+
+
+def test_portfolio_value_bridge_basis_filters_selected_year() -> None:
+    service = FinancialService.__new__(FinancialService)
+    service._repo = _ValueBridgeBasisRepo()
+
+    in_year = service.get_portfolio_value_bridge(basis="in_year", year=2028)
+    cumulative = service.get_portfolio_value_bridge(basis="cumulative", year=2028)
+
+    assert in_year.base_case.benefits_total == "200.0000"
+    assert in_year.base_case.net == "150.0000"
+    assert cumulative.base_case.benefits_total == "300.0000"

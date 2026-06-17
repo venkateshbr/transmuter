@@ -151,6 +151,89 @@ class FinancialRepository:
     def list_all_benefit_lines(self) -> list[dict]:  # type: ignore[type-arg]
         return self._select_tenant_pages("financial_benefit_lines")
 
+    def get_benefit_line(self, initiative_id: str, benefit_line_id: str) -> dict | None:  # type: ignore[type-arg]
+        result = (
+            self._c.table("financial_benefit_lines")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
+            .eq("id", benefit_line_id)
+            .maybe_single()
+            .execute()
+        )
+        return result.data if result and result.data else None
+
+    def update_benefit_line(
+        self,
+        initiative_id: str,
+        benefit_line_id: str,
+        data: dict,  # type: ignore[type-arg]
+        user_id: str | None = None,
+    ) -> dict:  # type: ignore[type-arg]
+        payload = {
+            **data,
+            "updated_by": user_id,
+            "updated_at": datetime.now(UTC).isoformat(),
+        }
+        result = (
+            self._c.table("financial_benefit_lines")
+            .update(payload)
+            .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
+            .eq("id", benefit_line_id)
+            .execute()
+        )
+        return result.data[0] if result.data else {}
+
+    def tenant_user_exists(self, user_id: str) -> bool:
+        result = (
+            self._c.table("users")
+            .select("id")
+            .eq("tenant_id", self._tid)
+            .eq("id", user_id)
+            .maybe_single()
+            .execute()
+        )
+        return bool(result and result.data)
+
+    def create_benefit_line_validation_event(
+        self,
+        initiative_id: str,
+        benefit_line_id: str,
+        data: dict,  # type: ignore[type-arg]
+    ) -> dict:  # type: ignore[type-arg]
+        payload = {
+            **data,
+            "id": data.get("id") or str(uuid4()),
+            "tenant_id": self._tid,
+            "initiative_id": initiative_id,
+            "benefit_line_id": benefit_line_id,
+            "created_at": data.get("created_at") or datetime.now(UTC).isoformat(),
+        }
+        result = self._c.table("financial_benefit_line_validation_events").insert(payload).execute()
+        return result.data[0]
+
+    def list_benefit_line_validation_events(
+        self,
+        initiative_id: str,
+        benefit_line_id: str,
+    ) -> list[dict]:  # type: ignore[type-arg]
+        try:
+            result = (
+                self._c.table("financial_benefit_line_validation_events")
+                .select("*")
+                .eq("tenant_id", self._tid)
+                .eq("initiative_id", initiative_id)
+                .eq("benefit_line_id", benefit_line_id)
+                .order("created_at")
+                .execute()
+            )
+            return result.data or []
+        except Exception as exc:
+            if self._is_missing_table(exc, "financial_benefit_line_validation_events"):
+                return []
+            raise
+
     def list_configurable_metric_values(self, initiative_id: str) -> list[dict]:  # type: ignore[type-arg]
         result = (
             self._c.table("financial_metric_values")
