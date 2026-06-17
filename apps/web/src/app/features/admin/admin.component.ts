@@ -65,6 +65,12 @@ import { FormsModule } from '@angular/forms';
                          {{ check.complete ? 'Complete' : 'Open' }}
                        </p>
                        <p class="mt-1 text-xs font-black text-[var(--t-text-primary)]">{{ check.label }}</p>
+                       @if (check.key === 'gate_criteria' && check.details?.gates_missing_criteria > 0) {
+                         <p class="mt-2 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">
+                           Missing criteria for gate{{ check.details.gates_missing_criteria === 1 ? '' : 's' }}
+                           {{ check.details.missing_gate_numbers?.join(', ') }}
+                         </p>
+                       }
                      </div>
                    }
                  </div>

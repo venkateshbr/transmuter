@@ -238,6 +238,7 @@ class AdminService:
         }
 
     def get_setup_status(self) -> dict[str, Any]:
+        gate_criteria_status = self._gate_criteria_completeness()
         counts = {
             "business_units": self._count_tenant_rows("business_units"),
             "workstreams": self._count_tenant_rows("workstreams"),
@@ -248,6 +249,10 @@ class AdminService:
             "financial_metric_definitions": self._count_tenant_rows("financial_metric_definitions"),
             "financial_scenarios": self._count_tenant_rows("financial_scenarios"),
             "gate_criteria": self._count_tenant_rows("gate_criteria"),
+            "active_stage_gates": gate_criteria_status["active_stage_gates"],
+            "active_gate_criteria": gate_criteria_status["active_gate_criteria"],
+            "gates_with_criteria": gate_criteria_status["gates_with_criteria"],
+            "gates_missing_criteria": gate_criteria_status["gates_missing_criteria"],
             "initiatives": self._count_tenant_rows("initiatives"),
         }
         checks = [
@@ -286,7 +291,8 @@ class AdminService:
             {
                 "key": "gate_criteria",
                 "label": "Gate criteria",
-                "complete": counts["gate_criteria"] > 0,
+                "complete": gate_criteria_status["complete"],
+                "details": gate_criteria_status,
             },
             {
                 "key": "users",
@@ -301,6 +307,41 @@ class AdminService:
             "total": len(checks),
             "counts": counts,
             "checks": checks,
+        }
+
+    def _gate_criteria_completeness(self) -> dict[str, Any]:
+        gates_result = (
+            self._c.table("stage_gate_definitions")
+            .select("gate_number,is_active")
+            .eq("tenant_id", self._tid)
+            .eq("is_active", True)
+            .execute()
+        )
+        criteria_result = (
+            self._c.table("gate_criteria")
+            .select("gate_number,is_active")
+            .eq("tenant_id", self._tid)
+            .eq("is_active", True)
+            .execute()
+        )
+        active_gate_numbers = {
+            int(row["gate_number"])
+            for row in gates_result.data or []
+            if row.get("gate_number") is not None
+        }
+        criteria_gate_numbers = {
+            int(row["gate_number"])
+            for row in criteria_result.data or []
+            if row.get("gate_number") is not None
+        }
+        missing_gate_numbers = sorted(active_gate_numbers - criteria_gate_numbers)
+        return {
+            "complete": bool(active_gate_numbers) and not missing_gate_numbers,
+            "active_stage_gates": len(active_gate_numbers),
+            "active_gate_criteria": len(criteria_result.data or []),
+            "gates_with_criteria": len(active_gate_numbers & criteria_gate_numbers),
+            "gates_missing_criteria": len(missing_gate_numbers),
+            "missing_gate_numbers": missing_gate_numbers,
         }
 
     def update_settings(self, data: dict[str, Any]) -> dict[str, Any]:
