@@ -14,7 +14,6 @@ import {
   signal,
 } from '@angular/core';
 import { echarts, type ECElementEvent, type EChartsCoreOption, type EChartsType } from '../../shared/charts/echarts-runtime';
-import { financialModeUsesActuals, resolveFinancialMode, type FinancialModeDescriptor } from './financials-view.models';
 
 type FinancialTrendMetric = 'net_value' | 'total_costs' | 'benefits';
 
@@ -45,15 +44,15 @@ interface TrendMetricOption {
     <section class="card overflow-hidden p-0">
       <div class="grid gap-4 border-b border-[var(--t-border)] p-5 xl:grid-cols-[1fr_auto] xl:items-end">
         <div>
-          <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">Apache ECharts Pilot</p>
+          <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">Portfolio trend</p>
           <h2 class="mt-1 text-lg font-black text-[var(--t-text-primary)]">Financial Trend</h2>
           <p class="mt-2 max-w-2xl text-xs leading-5 text-[var(--t-text-secondary)]">
-            Plan and actual trajectory by period, using the same portfolio financials data as the reconciliation table.
+            Plan and actual trajectory by period, with the original gross-margin baseline shown as a reference line.
           </p>
         </div>
-        <div class="inline-flex flex-wrap items-center gap-2 border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-1 text-[10px] font-black uppercase tracking-widest">
-          <span class="px-3 py-2 text-[var(--t-text-tertiary)]">Mode</span>
-          <span class="px-3 py-2 text-[var(--t-accent)]">{{ activeMode().label }}</span>
+        <div class="inline-flex flex-wrap items-center gap-2 border border-[var(--t-border)] bg-[var(--t-surface-raised)] px-3 py-2 text-[10px] font-black uppercase tracking-widest">
+          <span class="text-[var(--t-text-tertiary)]">View</span>
+          <span class="text-[var(--t-accent)]">Plan · Actual · Baseline</span>
         </div>
         <div class="inline-flex border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-1" aria-label="Trend metric">
           @for (option of metricOptions; track option.id) {
@@ -99,6 +98,13 @@ interface TrendMetricOption {
               <p class="mt-1 text-xs font-bold text-[var(--t-accent)]">{{ latestActualLabel() }} actual</p>
             }
           </div>
+          @if (hasBaseline()) {
+            <div class="border-t border-[var(--t-border)] pt-4">
+              <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Baseline Reference</p>
+              <p class="mt-1 text-sm font-black text-[var(--t-text-primary)]">{{ baselineLabel }}</p>
+              <p class="mt-1 text-xs font-bold text-[var(--t-text-secondary)]">{{ formatMoney(baselineValue) }} per {{ baselinePeriodLabel() }}</p>
+            </div>
+          }
           <p class="border-t border-[var(--t-border)] pt-4 text-[10px] font-bold uppercase leading-5 tracking-widest text-[var(--t-text-tertiary)]">
             Select a point to inspect contributing initiatives.
           </p>
@@ -111,7 +117,8 @@ export class PortfolioFinancialTrendComponent implements AfterViewInit, OnChange
   @Input() rows: FinancialTrendRow[] = [];
   @Input() granularity: FinancialTrendGranularity = 'monthly';
   @Input() showActuals = false;
-  @Input() financialMode: FinancialModeDescriptor | null = null;
+  @Input() baselineValue: string | number | null = null;
+  @Input() baselineLabel = 'Gross margin baseline';
 
   @Output() readonly periodSelected = new EventEmitter<FinancialTrendRow>();
 
@@ -163,13 +170,10 @@ export class PortfolioFinancialTrendComponent implements AfterViewInit, OnChange
     return this.metricOptions.find(option => option.id === this.metric()) || this.metricOptions[0];
   }
 
-  activeMode(): FinancialModeDescriptor {
-    return resolveFinancialMode(this.financialMode, this.rows, { financial_mode: this.financialMode });
-  }
-
   chartAriaLabel(): string {
     const metric = this.activeMetric().label.toLowerCase();
-    return `${metric} trend chart across ${this.rows.length} ${this.granularity} periods`;
+    const baseline = this.hasBaseline() ? ` with ${this.baselineLabel} reference` : '';
+    return `${metric} trend chart across ${this.rows.length} ${this.granularity} periods${baseline}`;
   }
 
   latestPeriodLabel(): string {
@@ -197,10 +201,12 @@ export class PortfolioFinancialTrendComponent implements AfterViewInit, OnChange
     const surface = this.cssVar('--t-surface');
     const accent = this.cssVar('--t-accent');
     const accentSoft = this.cssVar('--t-accent-soft');
+    const blueLight = this.cssVar('--t-blue-light');
     const red = this.cssVar('--t-red');
 
     const planData = this.rows.map(row => this.parseMoney(row[metric.planKey]));
     const actualData = this.rows.map(row => this.parseMoney(row[metric.actualKey]));
+    const baseline = this.parseMoney(this.baselineValue);
     const series: Record<string, unknown>[] = [
       {
         name: 'Plan',
@@ -230,13 +236,26 @@ export class PortfolioFinancialTrendComponent implements AfterViewInit, OnChange
       });
     }
 
+    if (this.hasBaseline()) {
+      series.push({
+        name: this.baselineLabel,
+        type: 'line',
+        smooth: false,
+        symbol: 'none',
+        lineStyle: { width: 2, color: blueLight, type: 'dotted' },
+        itemStyle: { color: blueLight },
+        emphasis: { focus: 'series' },
+        data: this.rows.map(() => baseline),
+      });
+    }
+
     const option: EChartsCoreOption = {
       animationDuration: 320,
       aria: {
         enabled: true,
         decal: { show: true },
       },
-      color: [accent, red],
+      color: [accent, red, blueLight],
       tooltip: {
         trigger: 'axis',
         borderColor: border,
@@ -300,6 +319,16 @@ export class PortfolioFinancialTrendComponent implements AfterViewInit, OnChange
     return this.rows.length ? this.rows[this.rows.length - 1] : null;
   }
 
+  hasBaseline(): boolean {
+    return this.parseMoney(this.baselineValue) > 0;
+  }
+
+  baselinePeriodLabel(): string {
+    if (this.granularity === 'monthly') return 'month';
+    if (this.granularity === 'quarterly') return 'quarter';
+    return 'year';
+  }
+
   private cssVar(name: string): string {
     const value = this.document.defaultView
       ?.getComputedStyle(this.document.documentElement)
@@ -314,7 +343,7 @@ export class PortfolioFinancialTrendComponent implements AfterViewInit, OnChange
     return Number.isFinite(parsed) ? parsed : 0;
   }
 
-  private formatMoney(value: string | number | null | undefined): string {
+  formatMoney(value: string | number | null | undefined): string {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',

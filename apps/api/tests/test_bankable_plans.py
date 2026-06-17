@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from app.core.auth import CurrentUser, get_current_user
 from app.core.database import get_supabase_request_client
 from app.domain.financials import (
+    AnnualBaselineMetricValueRow,
     BankablePlanResponse,
     BankablePlanSnapshot,
     CostLineItem,
@@ -16,6 +17,7 @@ from app.domain.financials import (
     FinancialMetricValueRow,
     FinancialSummary,
     InitiativeFinancialSelections,
+    TenantAnnualBaselineResponse,
 )
 from app.domain.governance import GateDecisionPatch
 from app.main import app
@@ -368,5 +370,50 @@ def test_bankable_plan_routes_expose_current_history_and_rebaseline(
         assert current_after_resp.status_code == 200
         assert current_after_resp.json()["current"]["version"] == 2
         assert [row["version"] for row in current_after_resp.json()["history"]] == [1, 2]
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_readonly_annual_baseline_route_allows_portfolio_viewers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_user = CurrentUser(
+        id=USER_ID,
+        tenant_id=TENANT_ID,
+        role="viewer",
+        status="active",
+    )
+
+    class FakeBaselineService:
+        def get_tenant_annual_baselines(
+            self,
+            baseline_year: int | None = None,
+        ) -> TenantAnnualBaselineResponse:
+            assert baseline_year == 2026
+            return TenantAnnualBaselineResponse(
+                values=[
+                    AnnualBaselineMetricValueRow(
+                        id="baseline-revenue",
+                        metric_definition_id="metric-revenue",
+                        metric_key="annual_revenue_baseline",
+                        metric_label="Annual Revenue Baseline",
+                        baseline_year=2026,
+                        value="20000000.0000",
+                    )
+                ]
+            )
+
+    app.dependency_overrides.clear()
+    app.dependency_overrides[get_current_user] = lambda: tenant_user
+    app.dependency_overrides[financials_router._svc] = lambda: FakeBaselineService()
+    monkeypatch.setattr(
+        financials_router, "assert_can_view_portfolio", lambda *args, **kwargs: None
+    )
+
+    try:
+        response = client.get("/financial-engine/annual-baselines?baseline_year=2026")
+        assert response.status_code == 200
+        assert response.json()["values"][0]["metric_key"] == "annual_revenue_baseline"
+        assert response.json()["values"][0]["value"] == "20000000.0000"
     finally:
         app.dependency_overrides.clear()
