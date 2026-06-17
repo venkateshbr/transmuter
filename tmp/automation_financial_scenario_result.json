@@ -1,0 +1,353 @@
+{
+  "initiative": {
+    "id": "04b62a1a-4725-4e30-a214-fb5ede63ee03",
+    "code": "TRN-011",
+    "name": "Automation productivity uplift for delivery teams",
+    "planned_start": "2026-07-15",
+    "planned_end": "2028-06-15"
+  },
+  "configured_metric_keys": [
+    "auto_hours_saved",
+    "auto_gm_rate_per_hour",
+    "auto_gross_margin_gain",
+    "auto_realization_pct"
+  ],
+  "scenario_keys": [
+    "plan_base",
+    "plan_high",
+    "actual"
+  ],
+  "benefit_lines": [
+    {
+      "name": "Released delivery-team productivity hours",
+      "metric_definition_id": "cb2ca9ac-7ceb-4f03-a91d-140ae279561b",
+      "attributes": {
+        "auto_benefit_owner": "Automation Transformation Lead",
+        "auto_adoption_dependency": "Workflow adoption"
+      }
+    },
+    {
+      "name": "Gross margin value per released hour",
+      "metric_definition_id": "fedd1fd5-0711-457b-93e7-296f859464ea",
+      "attributes": {
+        "auto_benefit_owner": "Automation Transformation Lead",
+        "auto_adoption_dependency": "Process standardisation"
+      }
+    }
+  ],
+  "stored_value_count": 72,
+  "computed_formula_count": 108,
+  "computed_formula_samples": [
+    {
+      "metric_definition_id": "4cfeb05d-30ca-44af-82f4-b640554d6a0a",
+      "year": 2027,
+      "month": 10,
+      "value": "0.0000"
+    },
+    {
+      "metric_definition_id": "3797c58c-8e0b-49b1-aafa-5cdfad76781a",
+      "year": 2027,
+      "month": 10,
+      "value": "140000.0000"
+    },
+    {
+      "metric_definition_id": "5844403f-a81f-4bb8-935c-9809282a35cc",
+      "year": 2027,
+      "month": 10,
+      "value": "116.6667"
+    },
+    {
+      "metric_definition_id": "4cfeb05d-30ca-44af-82f4-b640554d6a0a",
+      "year": 2027,
+      "month": 11,
+      "value": "0.0000"
+    },
+    {
+      "metric_definition_id": "3797c58c-8e0b-49b1-aafa-5cdfad76781a",
+      "year": 2027,
+      "month": 11,
+      "value": "140000.0000"
+    },
+    {
+      "metric_definition_id": "5844403f-a81f-4bb8-935c-9809282a35cc",
+      "year": 2027,
+      "month": 11,
+      "value": "116.6667"
+    },
+    {
+      "metric_definition_id": "4cfeb05d-30ca-44af-82f4-b640554d6a0a",
+      "year": 2027,
+      "month": 12,
+      "value": "0.0000"
+    },
+    {
+      "metric_definition_id": "3797c58c-8e0b-49b1-aafa-5cdfad76781a",
+      "year": 2027,
+      "month": 12,
+      "value": "140000.0000"
+    }
+  ],
+  "cost_line_count": 30,
+  "initiative_value_bridge": {
+    "base_case": {
+      "revenue_uplift": "0.0000",
+      "gross_margin": "0.0000",
+      "gm_uplift": "1440000.0000",
+      "other_benefits": "0.0000",
+      "benefits_total": "1440000.0000",
+      "cogs": "0.0000",
+      "costs_recurring": "600000.0000",
+      "costs_one_off": "600000.0000",
+      "costs_total": "1200000.0000",
+      "net": "840000.0000"
+    },
+    "high_case": {
+      "revenue_uplift": "0.0000",
+      "gross_margin": "0.0000",
+      "gm_uplift": "1680000.0000",
+      "other_benefits": "0.0000",
+      "benefits_total": "1680000.0000",
+      "cogs": "0.0000",
+      "costs_recurring": "600000.0000",
+      "costs_one_off": "600000.0000",
+      "costs_total": "1200000.0000",
+      "net": "1080000.0000"
+    },
+    "actual": {
+      "revenue_uplift": "0.0000",
+      "gross_margin": "0.0000",
+      "gm_uplift": "1320000.0000",
+      "other_benefits": "0.0000",
+      "benefits_total": "1320000.0000",
+      "cogs": "0.0000",
+      "costs_recurring": "600000.0000",
+      "costs_one_off": "570000.0000",
+      "costs_total": "1170000.0000",
+      "net": "720000.0000"
+    },
+    "automation_rows": [
+      {
+        "key": "auto_bridge_hours_saved",
+        "label": "Automation Hours Released",
+        "row_kind": "metric_set",
+        "base_case": "28800.0000",
+        "high_case": "33600.0000",
+        "actual": "26400.0000",
+        "sign": 1,
+        "display_order": 2100
+      },
+      {
+        "key": "auto_bridge_gm_gain",
+        "label": "Automation Gross Margin Gain",
+        "row_kind": "metric_set",
+        "base_case": "1440000.0000",
+        "high_case": "1680000.0000",
+        "actual": "1320000.0000",
+        "sign": 1,
+        "display_order": 2110
+      },
+      {
+        "key": "auto_bridge_one_time_build",
+        "label": "Automation One-time Build Costs",
+        "row_kind": "cost_set",
+        "base_case": "-600000.0000",
+        "high_case": "-600000.0000",
+        "actual": "-570000.0000",
+        "sign": -1,
+        "display_order": 2120
+      },
+      {
+        "key": "auto_bridge_runtime_ops",
+        "label": "Automation Runtime / Operations Costs",
+        "row_kind": "cost_set",
+        "base_case": "-360000.0000",
+        "high_case": "-360000.0000",
+        "actual": "-336000.0000",
+        "sign": -1,
+        "display_order": 2130
+      },
+      {
+        "key": "auto_bridge_recurring_platform",
+        "label": "Automation Recurring Platform Costs",
+        "row_kind": "cost_set",
+        "base_case": "-240000.0000",
+        "high_case": "-240000.0000",
+        "actual": "-264000.0000",
+        "sign": -1,
+        "display_order": 2140
+      },
+      {
+        "key": "auto_bridge_net_run_rate",
+        "label": "Automation Net Run-rate Impact",
+        "row_kind": "net",
+        "base_case": "840000.0000",
+        "high_case": "1080000.0000",
+        "actual": "720000.0000",
+        "sign": 1,
+        "display_order": 2150
+      }
+    ]
+  },
+  "portfolio_monthly_periods_sample": [
+    {
+      "period": "2026-M07",
+      "year": 2026,
+      "quarter": null,
+      "month": 7,
+      "benefits_plan": "0.0000",
+      "benefits_actual": "0.0000",
+      "recurring_costs_plan": "0.0000",
+      "recurring_costs_actual": "0.0000",
+      "one_off_costs_plan": "100000.0000",
+      "one_off_costs_actual": "95000.0000",
+      "total_costs_plan": "100000.0000",
+      "total_costs_actual": "95000.0000",
+      "net_value_plan": "0.0000",
+      "net_value_actual": "0.0000"
+    },
+    {
+      "period": "2026-M09",
+      "year": 2026,
+      "quarter": null,
+      "month": 9,
+      "benefits_plan": "0.0000",
+      "benefits_actual": "0.0000",
+      "recurring_costs_plan": "0.0000",
+      "recurring_costs_actual": "0.0000",
+      "one_off_costs_plan": "100000.0000",
+      "one_off_costs_actual": "95000.0000",
+      "total_costs_plan": "100000.0000",
+      "total_costs_actual": "95000.0000",
+      "net_value_plan": "0.0000",
+      "net_value_actual": "0.0000"
+    },
+    {
+      "period": "2026-M11",
+      "year": 2026,
+      "quarter": null,
+      "month": 11,
+      "benefits_plan": "0.0000",
+      "benefits_actual": "0.0000",
+      "recurring_costs_plan": "0.0000",
+      "recurring_costs_actual": "0.0000",
+      "one_off_costs_plan": "100000.0000",
+      "one_off_costs_actual": "95000.0000",
+      "total_costs_plan": "100000.0000",
+      "total_costs_actual": "95000.0000",
+      "net_value_plan": "0.0000",
+      "net_value_actual": "0.0000"
+    },
+    {
+      "period": "2027-M01",
+      "year": 2027,
+      "quarter": null,
+      "month": 1,
+      "benefits_plan": "0.0000",
+      "benefits_actual": "0.0000",
+      "recurring_costs_plan": "0.0000",
+      "recurring_costs_actual": "0.0000",
+      "one_off_costs_plan": "100000.0000",
+      "one_off_costs_actual": "95000.0000",
+      "total_costs_plan": "100000.0000",
+      "total_costs_actual": "95000.0000",
+      "net_value_plan": "0.0000",
+      "net_value_actual": "0.0000"
+    }
+  ],
+  "portfolio_yearly_periods": [
+    {
+      "period": "2026",
+      "year": 2026,
+      "quarter": null,
+      "month": null,
+      "benefits_plan": "0.0000",
+      "benefits_actual": "0.0000",
+      "recurring_costs_plan": "0.0000",
+      "recurring_costs_actual": "0.0000",
+      "one_off_costs_plan": "300000.0000",
+      "one_off_costs_actual": "285000.0000",
+      "total_costs_plan": "300000.0000",
+      "total_costs_actual": "285000.0000",
+      "net_value_plan": "0.0000",
+      "net_value_actual": "0.0000"
+    },
+    {
+      "period": "2027",
+      "year": 2027,
+      "quarter": null,
+      "month": null,
+      "benefits_plan": "720000.0000",
+      "benefits_actual": "660000.0000",
+      "recurring_costs_plan": "300000.0000",
+      "recurring_costs_actual": "300000.0000",
+      "one_off_costs_plan": "300000.0000",
+      "one_off_costs_actual": "285000.0000",
+      "total_costs_plan": "600000.0000",
+      "total_costs_actual": "585000.0000",
+      "net_value_plan": "420000.0000",
+      "net_value_actual": "360000.0000"
+    },
+    {
+      "period": "2028",
+      "year": 2028,
+      "quarter": null,
+      "month": null,
+      "benefits_plan": "720000.0000",
+      "benefits_actual": "660000.0000",
+      "recurring_costs_plan": "300000.0000",
+      "recurring_costs_actual": "300000.0000",
+      "one_off_costs_plan": "0.0000",
+      "one_off_costs_actual": "0.0000",
+      "total_costs_plan": "300000.0000",
+      "total_costs_actual": "300000.0000",
+      "net_value_plan": "420000.0000",
+      "net_value_actual": "360000.0000"
+    }
+  ],
+  "portfolio_summary_filtered": [
+    {
+      "key": "benefits",
+      "label": "Benefits",
+      "plan": "1440000.0000",
+      "actual": "720000.0000",
+      "variance": "-120000.0000"
+    },
+    {
+      "key": "costs",
+      "label": "Costs",
+      "plan": "1200000.0000",
+      "actual": "1170000.0000",
+      "variance": "-30000.0000"
+    },
+    {
+      "key": "net_value",
+      "label": "Net Value",
+      "plan": "840000.0000",
+      "actual": "720000.0000",
+      "variance": "-120000.0000"
+    }
+  ],
+  "dashboard_value_bridge": {
+    "benefits_base": "0.0000",
+    "benefits_high": "0.0000",
+    "benefits_actual": "0.0000",
+    "costs_plan": "1350000.0000",
+    "costs_actual": "1316000.0000",
+    "net_base": "-1350000.0000",
+    "net_high": "-1350000.0000",
+    "net_actual": "-1316000.0000"
+  },
+  "executive_control_value_bridge": {
+    "benefits_plan": "0.0000",
+    "benefits_actual": "220000.0000",
+    "direct_costs_plan": "1350000.0000",
+    "direct_costs_actual": "1316000.0000",
+    "allocated_costs_plan": "0.0000",
+    "allocated_costs_actual": "0.0000",
+    "total_burdened_costs_plan": "1350000.0000",
+    "total_burdened_costs_actual": "1316000.0000",
+    "net_before_allocation_plan": "-1350000.0000",
+    "net_after_allocation_plan": "-1350000.0000",
+    "net_after_allocation_actual": "-1096000.0000"
+  }
+}
