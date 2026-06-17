@@ -82,6 +82,73 @@ This creates only platform/admin auth, one blank admin tenant, subscription
 shell data, financial configuration, and gate criteria. It does not seed
 operational tenant data.
 
+## Dev Environment
+
+The dev stack is isolated from production:
+
+- public hostname: `transmuter-dev.ishirock.tech`
+- bundle root: `/docker/transmuter-dev`
+- compose project: `transmuter-dev-hostinger`
+- web bind: `127.0.0.1:4302`
+- images: `transmuter-api:hostinger-dev`, `transmuter-web:hostinger-dev`
+- Supabase schema: `transmuter_dev`
+
+Create the dev env file from the template and fill in real secrets:
+
+```bash
+cp infra/hostinger/.env.dev.example infra/hostinger/.env.dev
+```
+
+The dev database URL must put `transmuter_dev` first in the search path:
+
+```text
+DATABASE_LOCAL_URL=postgresql://postgres:<password>@host.docker.internal:5432/postgres?options=-csearch_path%3Dtransmuter_dev,public,extensions
+SUPABASE_SCHEMA=transmuter_dev
+DB_SCHEMA=transmuter_dev
+```
+
+The self-hosted Supabase REST service must expose the dev schema before the
+production schema for dev API calls:
+
+```text
+PGRST_DB_SCHEMAS=transmuter_dev,transmuter,public,graphql_public
+PGRST_DB_EXTRA_SEARCH_PATH=transmuter_dev,transmuter,public,extensions
+```
+
+Clone the current production app schema/data into dev:
+
+```bash
+set -a
+. infra/hostinger/.env.dev
+set +a
+RESET_TARGET_SCHEMA=true CONFIRM_RESET_DEV_SCHEMA=1 \
+  ./infra/hostinger/clone_schema_to_dev.sh
+```
+
+On the Hostinger VPS, use `POSTGRES_DOCKER_NETWORK=supabase-aethos_default` if
+the clone URL uses Supabase's internal `db` hostname and local `pg_dump`/`psql`
+are not installed.
+
+Deploy the currently checked-out branch to dev:
+
+```bash
+./infra/hostinger/deploy-dev.sh
+```
+
+Validate:
+
+```bash
+curl -fsS https://transmuter-dev.ishirock.tech/health
+curl -fsS https://transmuter-dev.ishirock.tech/api/health
+```
+
+Promote to production only after the branch is reviewed, merged, and pulled to
+the approved production commit:
+
+```bash
+CONFIRM_PROMOTE=1 ./infra/hostinger/promote-dev-to-prod.sh
+```
+
 ## SRE handoff notes
 
 - Treat `/docker/transmuter` as the deployment bundle root, not a full repo

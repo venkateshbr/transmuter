@@ -6,7 +6,7 @@
 # The staged bundle intentionally contains only the repo subsets required to
 # build and run the Hostinger stack; it is not a full repository checkout.
 
-name: transmuter-hostinger
+name: ${TRANSMUTER_COMPOSE_PROJECT:-transmuter-hostinger}
 
 x-api-environment: &api-environment
   APP_NAME: ${APP_NAME:-Transmuter API}
@@ -24,9 +24,11 @@ x-api-environment: &api-environment
   SUPABASE_LOCAL_URL: ${SUPABASE_LOCAL_URL:-}
   SUPABASE_LOCAL_ANON_KEY: ${SUPABASE_LOCAL_ANON_KEY:-}
   SUPABASE_LOCAL_SERVICE_KEY: ${SUPABASE_LOCAL_SERVICE_KEY:-}
+  SUPABASE_SCHEMA: ${SUPABASE_SCHEMA:-}
   DATABASE_URL: ${DATABASE_URL:-}
   DATABASE_CLOUD_URL: ${DATABASE_CLOUD_URL:-}
   DATABASE_LOCAL_URL: ${DATABASE_LOCAL_URL:-}
+  DB_SCHEMA: ${DB_SCHEMA:-}
   JWT_SECRET: ${JWT_SECRET}
   JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
   JWT_EXPIRY_MINUTES: ${JWT_EXPIRY_MINUTES:-60}
@@ -64,7 +66,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile.prod
-    image: transmuter-api:hostinger
+    image: ${TRANSMUTER_API_IMAGE:-transmuter-api:hostinger}
     environment:
       <<: *api-environment
     extra_hosts:
@@ -84,7 +86,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile.prod
-    image: transmuter-api:hostinger
+    image: ${TRANSMUTER_API_IMAGE:-transmuter-api:hostinger}
     profiles:
       - worker
     environment:
@@ -110,7 +112,7 @@ services:
     build:
       context: ./apps/web
       dockerfile: Dockerfile
-    image: transmuter-web:hostinger
+    image: ${TRANSMUTER_WEB_IMAGE:-transmuter-web:hostinger}
     environment:
       TRANSMUTER_API_URL: ${TRANSMUTER_API_URL:-/api}
       TRANSMUTER_ENVIRONMENT: ${TRANSMUTER_ENVIRONMENT:-production}
@@ -121,11 +123,11 @@ services:
       - app
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.transmuter-web.rule=Host(`${TRAEFIK_HOSTNAME:-transmuter.ishirock.tech}`)"
-      - "traefik.http.routers.transmuter-web.entrypoints=${TRAEFIK_HTTPS_ENTRYPOINT:-websecure}"
-      - "traefik.http.routers.transmuter-web.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}"
-      - "traefik.http.routers.transmuter-web.service=transmuter-web"
-      - "traefik.http.services.transmuter-web.loadbalancer.server.port=80"
+      - "traefik.http.routers.${TRAEFIK_ROUTER_NAME:-transmuter-web}.rule=Host(`${TRAEFIK_HOSTNAME:-transmuter.ishirock.tech}`)"
+      - "traefik.http.routers.${TRAEFIK_ROUTER_NAME:-transmuter-web}.entrypoints=${TRAEFIK_HTTPS_ENTRYPOINT:-websecure}"
+      - "traefik.http.routers.${TRAEFIK_ROUTER_NAME:-transmuter-web}.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}"
+      - "traefik.http.routers.${TRAEFIK_ROUTER_NAME:-transmuter-web}.service=${TRAEFIK_SERVICE_NAME:-transmuter-web}"
+      - "traefik.http.services.${TRAEFIK_SERVICE_NAME:-transmuter-web}.loadbalancer.server.port=80"
     depends_on:
       api:
         condition: service_healthy

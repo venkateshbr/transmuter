@@ -10,10 +10,12 @@ Last updated: 2026-06-12
 - Public app hostname: `https://transmuter.ishirock.tech`
 - Supabase API domain: `https://supabase.ishirock.tech`
 - Deployment directory on VPS: `/docker/transmuter`
+- Dev deployment directory on VPS: `/docker/transmuter-dev`
 - Staged compose file on VPS: `/docker/transmuter/docker-compose.yml`
 - Source compose template in repo: `docker-compose.hostinger.yml`
 - Deployment script in repo: `infra/hostinger/deploy.sh`
 - Schema migration script in repo: `infra/hostinger/migrate_supabase_schema_to_transmuter.sh`
+- Dev schema clone script in repo: `infra/hostinger/clone_schema_to_dev.sh`
 
 ## Bundle Model
 
@@ -27,6 +29,9 @@ The Hostinger deployment is a *staged bundle*, not a full repository clone.
 - `infra/hostinger/`
 - `docker-compose.hostinger.yml` staged as `/docker/transmuter/docker-compose.yml`
 - `infra/hostinger/.env` staged as `/docker/transmuter/.env`
+
+The dev bundle uses the same model with `infra/hostinger/.env.dev` staged to
+`/docker/transmuter-dev/.env`.
 
 ## Traefik Routing
 
@@ -107,10 +112,88 @@ Transmuter stack. To return to Hostinger local Supabase, set
 ./infra/hostinger/deploy.sh
 ```
 
+Production wrapper:
+
+```bash
+./infra/hostinger/deploy-prod.sh
+```
+
 To run the schema migration on the VPS immediately before restarting containers:
 
 ```bash
 RUN_DB_SCHEMA_MIGRATION=1 ./infra/hostinger/deploy.sh
+```
+
+## Hostinger Dev Environment
+
+The dev environment is separate from production:
+
+- Public app hostname: `https://transmuter-dev.ishirock.tech`
+- Dev bundle root: `/docker/transmuter-dev`
+- Dev compose project: `transmuter-dev-hostinger`
+- Dev images: `transmuter-api:hostinger-dev`, `transmuter-web:hostinger-dev`
+- Dev web bind: `127.0.0.1:4302`
+- Dev Traefik router/service: `transmuter-dev-web`
+- Dev Supabase schema: `transmuter_dev`
+
+Create the dev env file:
+
+```bash
+cp infra/hostinger/.env.dev.example infra/hostinger/.env.dev
+```
+
+Required dev database/search-path settings:
+
+```text
+SUPABASE_TARGET=local
+SUPABASE_SCHEMA=transmuter_dev
+DB_SCHEMA=transmuter_dev
+DATABASE_LOCAL_URL=postgresql://postgres:<password>@host.docker.internal:5432/postgres?options=-csearch_path%3Dtransmuter_dev,public,extensions
+```
+
+The self-hosted Supabase REST service must expose `transmuter_dev` before the
+production schema for dev API calls:
+
+```text
+PGRST_DB_SCHEMAS=transmuter_dev,transmuter,public,graphql_public
+PGRST_DB_EXTRA_SEARCH_PATH=transmuter_dev,transmuter,public,extensions
+```
+
+Clone current production app schema/data into dev:
+
+```bash
+set -a
+. infra/hostinger/.env.dev
+set +a
+RESET_TARGET_SCHEMA=true CONFIRM_RESET_DEV_SCHEMA=1 \
+  ./infra/hostinger/clone_schema_to_dev.sh
+```
+
+On the Hostinger VPS, use `POSTGRES_DOCKER_NETWORK=supabase-aethos_default` if
+the clone URL uses Supabase's internal `db` hostname and local `pg_dump`/`psql`
+are not installed.
+
+Deploy current checkout to dev:
+
+```bash
+./infra/hostinger/deploy-dev.sh
+```
+
+Validate dev:
+
+```bash
+curl -fsS https://transmuter-dev.ishirock.tech/health
+curl -fsS https://transmuter-dev.ishirock.tech/api/health
+```
+
+Promotion rule:
+
+- Deploy branches and PRs to dev.
+- Promote to production only after review/merge and explicit approval.
+- Production promotion command:
+
+```bash
+CONFIRM_PROMOTE=1 ./infra/hostinger/promote-dev-to-prod.sh
 ```
 
 ## v0.4.0 Clean Financial Refactor Rollout
