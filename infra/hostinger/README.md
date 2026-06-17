@@ -115,31 +115,38 @@ PGRST_DB_SCHEMAS=transmuter_dev,transmuter,public,graphql_public
 PGRST_DB_EXTRA_SEARCH_PATH=transmuter_dev,transmuter,public,extensions
 ```
 
-Clone the current production app schema/data into dev:
+Refresh the dev schema from current production app schema/data:
 
 ```bash
-set -a
-. infra/hostinger/.env.dev
-set +a
-RESET_TARGET_SCHEMA=true CONFIRM_RESET_DEV_SCHEMA=1 \
-  ./infra/hostinger/clone_schema_to_dev.sh
+./infra/hostinger/deploy-change-to-dev.sh --refresh-schema
 ```
 
 On the Hostinger VPS, use `POSTGRES_DOCKER_NETWORK=supabase-aethos_default` if
 the clone URL uses Supabase's internal `db` hostname and local `pg_dump`/`psql`
 are not installed.
 
-Deploy the currently checked-out branch to dev:
+Deploy a code-only feature or fix to dev:
 
 ```bash
-./infra/hostinger/deploy-dev.sh
+./infra/hostinger/deploy-change-to-dev.sh
 ```
 
-Validate:
+Deploy a feature or fix with explicit schema SQL to dev:
 
 ```bash
-curl -fsS https://transmuter-dev.ishirock.tech/health
-curl -fsS https://transmuter-dev.ishirock.tech/api/health
+./infra/hostinger/deploy-change-to-dev.sh --schema path/to/change.sql
+```
+
+Apply only a schema SQL file to dev, without deploying containers:
+
+```bash
+./infra/hostinger/apply-schema-sql.sh dev path/to/change.sql
+```
+
+Validate dev:
+
+```bash
+./infra/hostinger/validate-dev.sh
 ```
 
 Promote to production only after the branch is reviewed, merged, and pulled to
@@ -147,6 +154,12 @@ the approved production commit:
 
 ```bash
 CONFIRM_PROMOTE=1 ./infra/hostinger/promote-dev-to-prod.sh
+```
+
+Promote with production schema SQL:
+
+```bash
+CONFIRM_PROMOTE=1 ./infra/hostinger/promote-dev-to-prod.sh --schema path/to/change.sql
 ```
 
 ## SRE handoff notes

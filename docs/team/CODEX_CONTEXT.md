@@ -37,6 +37,19 @@ replace them.
   - Hostinger staged compose file on the VPS: `/docker/transmuter/docker-compose.yml`.
   - Hostinger source compose template in the repo: `docker-compose.hostinger.yml`.
   - Hostinger deploy script: `infra/hostinger/deploy.sh`.
+  - Default dev deployment command for every feature/fix:
+    `infra/hostinger/deploy-change-to-dev.sh`.
+  - If a feature/fix includes database changes, apply explicit SQL to the dev
+    schema during dev deploy with
+    `infra/hostinger/deploy-change-to-dev.sh --schema path/to/change.sql`.
+  - Dev environment uses `https://transmuter-dev.ishirock.tech`, compose project
+    `transmuter-dev-hostinger`, images `transmuter-api:hostinger-dev` /
+    `transmuter-web:hostinger-dev`, host bind `127.0.0.1:4302`, and Supabase
+    schema `transmuter_dev`.
+  - Production promotion command is
+    `CONFIRM_PROMOTE=1 infra/hostinger/promote-dev-to-prod.sh`; if schema SQL is
+    required, pass `--schema path/to/change.sql` so it applies to production
+    schema `transmuter` before deployment.
   - Cloud-to-local Supabase schema migration script:
     `infra/hostinger/migrate_supabase_schema_to_transmuter.sh`.
   - When the user asks to build and test, deploy through

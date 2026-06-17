@@ -159,41 +159,57 @@ PGRST_DB_SCHEMAS=transmuter_dev,transmuter,public,graphql_public
 PGRST_DB_EXTRA_SEARCH_PATH=transmuter_dev,transmuter,public,extensions
 ```
 
-Clone current production app schema/data into dev:
+Refresh dev schema from current production app schema/data:
 
 ```bash
-set -a
-. infra/hostinger/.env.dev
-set +a
-RESET_TARGET_SCHEMA=true CONFIRM_RESET_DEV_SCHEMA=1 \
-  ./infra/hostinger/clone_schema_to_dev.sh
+./infra/hostinger/deploy-change-to-dev.sh --refresh-schema
 ```
 
 On the Hostinger VPS, use `POSTGRES_DOCKER_NETWORK=supabase-aethos_default` if
 the clone URL uses Supabase's internal `db` hostname and local `pg_dump`/`psql`
 are not installed.
 
-Deploy current checkout to dev:
+Deploy the current checkout to dev for every feature/fix:
 
 ```bash
-./infra/hostinger/deploy-dev.sh
+./infra/hostinger/deploy-change-to-dev.sh
+```
+
+If the feature/fix includes database changes, pass explicit SQL files. They are
+applied to `transmuter_dev` before the dev containers are rebuilt:
+
+```bash
+./infra/hostinger/deploy-change-to-dev.sh --schema path/to/change.sql
+```
+
+For schema-only dev updates:
+
+```bash
+./infra/hostinger/apply-schema-sql.sh dev path/to/change.sql
 ```
 
 Validate dev:
 
 ```bash
-curl -fsS https://transmuter-dev.ishirock.tech/health
-curl -fsS https://transmuter-dev.ishirock.tech/api/health
+./infra/hostinger/validate-dev.sh
 ```
 
 Promotion rule:
 
 - Deploy branches and PRs to dev.
-- Promote to production only after review/merge and explicit approval.
-- Production promotion command:
+- Promote to production only after review/merge and explicit approval. Promotion
+  applies any supplied schema SQL to production schema `transmuter`, deploys the
+  production containers, and validates production health checks.
+- Production promotion command for code-only changes:
 
 ```bash
 CONFIRM_PROMOTE=1 ./infra/hostinger/promote-dev-to-prod.sh
+```
+
+- Production promotion command with schema changes:
+
+```bash
+CONFIRM_PROMOTE=1 ./infra/hostinger/promote-dev-to-prod.sh --schema path/to/change.sql
 ```
 
 ## v0.4.0 Clean Financial Refactor Rollout
