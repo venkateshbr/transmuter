@@ -159,6 +159,7 @@ describe('App', () => {
     expect(dashboard.children?.map((child: any) => child.path)).toEqual([
       '/dashboard',
       '/financials',
+      '/financials/initiative-portfolio',
       '/financials/bankable-plan',
       '/financials/benefits-register',
       '/financials/benefit-tracking',

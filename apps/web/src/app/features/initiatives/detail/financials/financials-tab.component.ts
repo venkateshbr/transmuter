@@ -59,6 +59,7 @@ interface FinancialGrid {
   initiative_id: string;
   definitions?: FinancialMetricDefinition[];
   scenarios?: FinancialScenarioDefinition[];
+  baseline?: InitiativeAnnualBaseline | null;
   benefit_lines?: FinancialBenefitLine[];
   values?: ConfigurableMetricValue[];
   settings?: { fiscal_year_start_month: number; reporting_currency: string };
@@ -68,6 +69,23 @@ interface FinancialGrid {
   locked: boolean;
   lock_reason: string | null;
   summary: FinancialSummary;
+}
+
+interface AnnualBaselineMetricValue {
+  metric_definition_id: string;
+  metric_key: string;
+  metric_label: string;
+  baseline_year: number;
+  value: string;
+  note?: string | null;
+}
+
+interface InitiativeAnnualBaseline {
+  initiative_id: string;
+  baseline_year: number | null;
+  values: AnnualBaselineMetricValue[];
+  locked: boolean;
+  lock_reason?: string | null;
 }
 
 interface FinancialMetricValue {
@@ -88,6 +106,7 @@ interface FinancialMetricDefinition {
   value_type: 'currency' | 'percent' | 'number';
   aggregation: 'sum' | 'avg' | 'last' | 'formula';
   formula?: string | null;
+  formula_inputs?: string[];
   is_benefit: boolean;
   benefit_class?: string | null;
   is_active: boolean;
@@ -286,6 +305,35 @@ interface GridMetric {
           </div>
         }
       </div>
+
+      <section class="card p-5" data-testid="initiative-annual-baseline-panel">
+        <div class="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--t-border)] pb-4">
+          <div>
+            <p class="text-[10px] font-black uppercase tracking-widest" style="color:var(--t-accent)">Annual Baseline</p>
+            <h3 class="mt-1 text-base font-black" style="color:var(--t-text-primary)">
+              FY{{ grid()?.baseline?.baseline_year || 'n/a' }} original operating metrics
+            </h3>
+          </div>
+          @if (grid()?.baseline?.locked) {
+            <span class="border px-3 py-2 text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]" style="border-color:var(--t-border)">
+              Locked
+            </span>
+          }
+        </div>
+        <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          @for (item of annualBaselineRows(); track item.metric.key) {
+            <div class="border bg-[var(--t-surface-raised)] p-3" style="border-color:var(--t-border)">
+              <p class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-tertiary)">{{ item.metric.label }}</p>
+              <p class="mt-2 text-xl font-black" style="color:var(--t-text-primary)">{{ formatMetricValue(item.value, item.metric.value_type) }}</p>
+            </div>
+          }
+          @if (!annualBaselineRows().length) {
+            <div class="border bg-[var(--t-surface-raised)] p-3 text-sm font-bold" style="border-color:var(--t-border);color:var(--t-text-secondary)">
+              No annual baseline metrics are configured for this initiative.
+            </div>
+          }
+        </div>
+      </section>
 
       <div class="card p-6 mt-8">
         <div class="flex items-center justify-between mb-6">
@@ -615,7 +663,6 @@ export class FinancialsTabComponent implements OnInit {
   newCostLineStartMonth = signal('');
   newCostLineEndMonth = signal('');
   readonly scenarios: { id: FinancialScenario; label: string }[] = [
-    { id: 'baseline', label: 'Baseline' },
     { id: 'base', label: 'Base' },
     { id: 'high', label: 'High' },
     { id: 'actual', label: 'Actuals' },
@@ -676,8 +723,9 @@ export class FinancialsTabComponent implements OnInit {
     const cleanScenario = this.selectedScenarioDefinition();
     if (cleanDefinitions.length && cleanScenario) {
       const benefitLines = this.grid()?.benefit_lines || [];
+      const baselineMetricKeys = this.baselineMetricKeys(cleanDefinitions);
       const metricRows = cleanDefinitions
-        .filter(definition => definition.is_active !== false)
+        .filter(definition => definition.is_active !== false && !baselineMetricKeys.has(definition.key))
         .sort((a, b) => (a.group_key || '').localeCompare(b.group_key || '') || a.label.localeCompare(b.label))
         .flatMap((definition): GridMetric[] => {
           const matchingLines = benefitLines
@@ -883,6 +931,28 @@ export class FinancialsTabComponent implements OnInit {
     }
     cards.push({ label: 'Net Run-rate Impact', plan: this.formatMoney(s.net), actual: this.scenarioLabel(), highlight: true });
     return cards;
+  });
+
+  baselineMetricDefinitions = computed<FinancialMetricDefinition[]>(() => {
+    const definitions = this.grid()?.definitions || [];
+    const keys = this.baselineMetricKeys(definitions);
+    return definitions
+      .filter(metric =>
+        metric.is_active !== false
+        && metric.aggregation !== 'formula'
+        && keys.has(metric.key)
+      )
+      .sort((a, b) => a.label.localeCompare(b.label));
+  });
+
+  annualBaselineRows = computed(() => {
+    const values = new Map(
+      (this.grid()?.baseline?.values || []).map(value => [value.metric_definition_id, value.value]),
+    );
+    return this.baselineMetricDefinitions().map(metric => ({
+      metric,
+      value: values.get(metric.id) || '0',
+    }));
   });
 
   selectedScenarioCase = computed<ValueBridgeCase | null>(() => {
@@ -1578,10 +1648,48 @@ export class FinancialsTabComponent implements OnInit {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(num);
   }
 
+  formatMetricValue(val: string | number | null, valueType: FinancialMetricDefinition['value_type']): string {
+    const num = this.parseMoney(val);
+    if (valueType === 'percent') {
+      return new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(num) + '%';
+    }
+    if (valueType === 'number') {
+      return new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(num);
+    }
+    return this.formatMoney(num);
+  }
+
   parseMoney(val: string | number | null | undefined): number {
     if (val === null || val === undefined) return 0;
     const num = typeof val === 'string' ? parseFloat(val) : val;
     return Number.isFinite(num) ? num : 0;
+  }
+
+  private baselineMetricKeys(definitions: FinancialMetricDefinition[]): Set<string> {
+    const activeNonFormula = new Set(
+      definitions
+        .filter(metric => metric.is_active !== false && metric.aggregation !== 'formula')
+        .map(metric => metric.key)
+        .filter(Boolean),
+    );
+    const keys = new Set<string>();
+    for (const metric of definitions) {
+      if (activeNonFormula.has(metric.key) && (metric.group_key || '') === 'baseline') {
+        keys.add(metric.key);
+      }
+      if (metric.aggregation !== 'formula' || metric.is_active === false) continue;
+      const identifiers = new Set<string>(metric.formula_inputs || []);
+      (metric.formula || '').replace(/\b[A-Za-z_][A-Za-z0-9_]*\b/g, identifier => {
+        identifiers.add(identifier);
+        return identifier;
+      });
+      identifiers.forEach(identifier => {
+        if (!identifier.startsWith('baseline_')) return;
+        const baselineKey = identifier.replace(/^baseline_/, '');
+        if (activeNonFormula.has(baselineKey)) keys.add(baselineKey);
+      });
+    }
+    return keys;
   }
 
   numberValueOrNull(value: string | number | null): number | null {

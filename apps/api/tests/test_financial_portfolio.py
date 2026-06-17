@@ -1732,6 +1732,225 @@ def test_benefit_line_handoff_rejects_owner_outside_current_tenant() -> None:
     assert repo.patch == {}
 
 
+class _InitiativePortfolioRepo:
+    def get_portfolio_initiatives(self) -> list[dict]:
+        return [
+            {
+                "id": "i1",
+                "initiative_code": "ENT-001",
+                "name": "Pricing",
+                "stage": "in_progress",
+                "workstream_id": "w1",
+                "tag": "commercial",
+                "workstreams": {"name": "Commercial Growth"},
+                "initiative_business_units": [
+                    {
+                        "business_unit_id": "bu1",
+                        "business_units": {"id": "bu1", "name": "Commercial"},
+                    }
+                ],
+            },
+            {
+                "id": "i2",
+                "initiative_code": "ENT-002",
+                "name": "Procurement",
+                "stage": "in_progress",
+                "workstream_id": "w2",
+                "tag": "savings",
+                "workstreams": {"name": "Procurement"},
+                "initiative_business_units": [
+                    {
+                        "business_unit_id": "bu2",
+                        "business_units": {"id": "bu2", "name": "Operations"},
+                    }
+                ],
+            },
+        ]
+
+    def list_metric_definitions(self) -> list[dict]:
+        return [
+            {
+                "id": "m_rev_base",
+                "key": "annual_revenue_baseline",
+                "label": "Annual Revenue Baseline",
+                "group_key": "baseline",
+                "value_type": "currency",
+                "aggregation": "last",
+                "is_benefit": False,
+                "is_active": True,
+                "display_order": 1,
+            },
+            {
+                "id": "m_gm_base",
+                "key": "annual_gross_margin_baseline",
+                "label": "Annual Gross Margin Baseline",
+                "group_key": "baseline",
+                "value_type": "currency",
+                "aggregation": "last",
+                "is_benefit": False,
+                "is_active": True,
+                "display_order": 2,
+            },
+            {
+                "id": "m_rev",
+                "key": "revenue_uplift",
+                "label": "Revenue Uplift",
+                "group_key": "revenue",
+                "value_type": "currency",
+                "aggregation": "sum",
+                "is_benefit": True,
+                "benefit_class": "revenue",
+                "is_active": True,
+                "display_order": 3,
+            },
+            {
+                "id": "m_gm",
+                "key": "gm_uplift",
+                "label": "Gross Margin Uplift",
+                "group_key": "margin",
+                "value_type": "currency",
+                "aggregation": "sum",
+                "is_benefit": True,
+                "benefit_class": "margin",
+                "is_active": True,
+                "display_order": 4,
+            },
+            {
+                "id": "m_target",
+                "key": "target_revenue",
+                "label": "Target Revenue",
+                "group_key": "revenue",
+                "value_type": "currency",
+                "aggregation": "formula",
+                "formula": "baseline_annual_revenue_baseline + revenue_uplift",
+                "formula_inputs": ["baseline_annual_revenue_baseline", "revenue_uplift"],
+                "is_benefit": False,
+                "is_active": True,
+                "display_order": 5,
+            },
+        ]
+
+    def list_financial_scenarios(self) -> list[dict]:
+        return [{"id": "s_base", "key": "plan_base", "label": "Plan Base"}]
+
+    def list_all_initiative_annual_baselines(self) -> list[dict]:
+        return [
+            {
+                "initiative_id": "i1",
+                "metric_definition_id": "m_rev_base",
+                "baseline_year": 2026,
+                "value": "700.0000",
+            },
+            {
+                "initiative_id": "i1",
+                "metric_definition_id": "m_gm_base",
+                "baseline_year": 2026,
+                "value": "300.0000",
+            },
+            {
+                "initiative_id": "i2",
+                "metric_definition_id": "m_rev_base",
+                "baseline_year": 2026,
+                "value": "300.0000",
+            },
+            {
+                "initiative_id": "i2",
+                "metric_definition_id": "m_gm_base",
+                "baseline_year": 2026,
+                "value": "200.0000",
+            },
+        ]
+
+    def list_tenant_annual_baselines(self, baseline_year: int | None = None) -> list[dict]:
+        rows = [
+            {
+                "metric_definition_id": "m_rev_base",
+                "baseline_year": 2026,
+                "value": "1000.0000",
+            },
+            {
+                "metric_definition_id": "m_gm_base",
+                "baseline_year": 2026,
+                "value": "500.0000",
+            },
+        ]
+        return [
+            row for row in rows if baseline_year is None or row["baseline_year"] == baseline_year
+        ]
+
+    def get_all_metric_values(self) -> list[dict]:
+        return [
+            {
+                "initiative_id": "i1",
+                "metric_definition_id": "m_rev",
+                "scenario_id": "s_base",
+                "year": 2028,
+                "month": 1,
+                "value": "100.0000",
+            },
+            {
+                "initiative_id": "i1",
+                "metric_definition_id": "m_gm",
+                "scenario_id": "s_base",
+                "year": 2028,
+                "month": 1,
+                "value": "40.0000",
+            },
+            {
+                "initiative_id": "i2",
+                "metric_definition_id": "m_gm",
+                "scenario_id": "s_base",
+                "year": 2028,
+                "month": 1,
+                "value": "60.0000",
+            },
+        ]
+
+    def get_all_cost_lines(self) -> list[dict]:
+        return [
+            {
+                "initiative_id": "i1",
+                "year": 2028,
+                "amount_plan": "10.0000",
+                "amount_actual": None,
+                "is_recurring": True,
+            },
+            {
+                "initiative_id": "i2",
+                "year": 2028,
+                "amount_plan": "25.0000",
+                "amount_actual": None,
+                "is_recurring": False,
+            },
+        ]
+
+
+def test_initiative_portfolio_reconciles_baseline_and_value_year() -> None:
+    service = cast(Any, FinancialService.__new__(FinancialService))
+    service._repo = _InitiativePortfolioRepo()
+
+    response = service.get_portfolio_initiative_portfolio(
+        baseline_year=2026,
+        value_year=2028,
+        scenario="plan_base",
+    )
+
+    assert [metric.key for metric in response.baseline_metrics] == [
+        "annual_revenue_baseline",
+        "annual_gross_margin_baseline",
+    ]
+    assert [metric.key for metric in response.value_metrics] == ["revenue_uplift", "gm_uplift"]
+    assert len(response.rows) == 2
+    assert response.totals.baseline_values["annual_revenue_baseline"] == "1000.0000"
+    assert response.totals.baseline_values["annual_gross_margin_baseline"] == "500.0000"
+    assert response.totals.value_metric_values["gm_uplift"] == "100.0000"
+    assert response.totals.benefits_total == "100.0000"
+    assert response.totals.recurring_costs == "10.0000"
+    assert response.totals.one_off_costs == "25.0000"
+    assert response.totals.net_run_rate_value == "90.0000"
+    assert all(item.reconciled for item in response.baseline_reconciliation)
+
+
 class _ValueBridgeBasisRepo:
     def get_all_entries(self) -> list[dict]:
         return []

@@ -71,6 +71,7 @@ from app.domain.financials import (
     PortfolioFinancialContributorsResponse,
     PortfolioFinancialsResponse,
     PortfolioGranularity,
+    PortfolioInitiativePortfolioResponse,
     PortfolioValueBridgeBasis,
     PortfolioValueRampResponse,
     ScenarioFinancialSummary,
@@ -1008,6 +1009,32 @@ async def get_portfolio_financials(
         stage=stage,
         tag=tag,
         category_key=category_key,
+    )
+
+
+@router.get("/portfolio/initiative-portfolio", response_model=PortfolioInitiativePortfolioResponse)
+async def get_portfolio_initiative_portfolio(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+    baseline_year: int | None = Query(None, ge=2020, le=2060),
+    value_year: int | None = Query(None, ge=2020, le=2060),
+    scenario: str = Query("plan_base"),
+    initiative_id: str | None = Query(None),
+    workstream_id: str | None = Query(None),
+    business_unit_id: str | None = Query(None),
+    stage: str | None = Query(None),
+    tag: str | None = Query(None),
+) -> PortfolioInitiativePortfolioResponse:
+    assert_can_view_portfolio(current_user)
+    return svc.get_portfolio_initiative_portfolio(
+        baseline_year=baseline_year,
+        value_year=value_year,
+        scenario=scenario,
+        initiative_id=initiative_id,
+        workstream_id=workstream_id,
+        business_unit_id=business_unit_id,
+        stage=stage,
+        tag=tag,
     )
 
 

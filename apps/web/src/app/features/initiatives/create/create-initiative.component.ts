@@ -487,7 +487,7 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
               </div>
             </section>
 
-            <section class="lg:col-span-2 rounded-lg border p-4" style="border-color:var(--t-border);background:var(--t-bg)">
+            <section class="lg:col-span-2 rounded-lg border p-4" style="border-color:var(--t-border);background:var(--t-bg)" data-testid="initiative-edit-annual-baseline">
               <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
                 <div>
                   <p class="text-[10px] font-bold uppercase tracking-wider" style="color:var(--t-text-secondary)">Annual Baseline</p>
@@ -1035,12 +1035,45 @@ export class CreateInitiativeComponent {
 
   baselineMetricOptions(): any[] {
     const definitions = this.financialEngineConfiguration()?.definitions || [];
+    const eligibleKeys = this.baselineMetricKeys(definitions);
     return definitions
-      .filter((metric: any) => metric?.is_active !== false && metric?.aggregation !== 'formula')
+      .filter((metric: any) =>
+        metric?.is_active !== false
+        && metric?.aggregation !== 'formula'
+        && eligibleKeys.has(String(metric?.key || ''))
+      )
       .sort((a: any, b: any) =>
         Number(a.display_order || 0) - Number(b.display_order || 0)
         || String(a.label || '').localeCompare(String(b.label || '')),
       );
+  }
+
+  private baselineMetricKeys(definitions: any[]): Set<string> {
+    const activeNonFormula = new Set(
+      definitions
+        .filter((metric: any) => metric?.is_active !== false && metric?.aggregation !== 'formula')
+        .map((metric: any) => String(metric?.key || ''))
+        .filter(Boolean),
+    );
+    const keys = new Set<string>();
+    for (const metric of definitions) {
+      const key = String(metric?.key || '');
+      if (activeNonFormula.has(key) && String(metric?.group_key || '') === 'baseline') {
+        keys.add(key);
+      }
+      if (metric?.aggregation !== 'formula' || metric?.is_active === false) continue;
+      const identifiers = new Set<string>(Array.isArray(metric?.formula_inputs) ? metric.formula_inputs.map(String) : []);
+      String(metric?.formula || '').replace(/\b[A-Za-z_][A-Za-z0-9_]*\b/g, identifier => {
+        identifiers.add(identifier);
+        return identifier;
+      });
+      identifiers.forEach(identifier => {
+        if (!identifier.startsWith('baseline_')) return;
+        const baselineKey = identifier.replace(/^baseline_/, '');
+        if (activeNonFormula.has(baselineKey)) keys.add(baselineKey);
+      });
+    }
+    return keys;
   }
 
   baselineMetricValue(metricDefinitionId: string): string {
