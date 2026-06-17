@@ -182,10 +182,15 @@ async function runApiChecks(authHeaders) {
   const contributorRecurring = (contributors.contributors ?? []).reduce((sum, item) => sum + decimal(item.recurring_costs_plan), 0);
   const contributorNet = (contributors.contributors ?? []).reduce((sum, item) => sum + decimal(item.net_value_plan), 0);
   const benefitLineCount = (contributors.contributors ?? []).reduce((sum, item) => sum + (item.benefit_lines ?? []).length, 0);
+  const validatedBenefitLineCount = (contributors.contributors ?? []).reduce(
+    (sum, item) => sum + (item.benefit_lines ?? []).filter(line => line.validation_status === 'finance_validated').length,
+    0,
+  );
   approx(contributorBenefits, decimal(summaryByKey.get('benefits')?.plan), 1, 'FY28 contributor benefit reconciliation');
   approx(contributorRecurring, decimal(summaryByKey.get('costs')?.plan), 1, 'FY28 contributor recurring cost reconciliation');
   approx(contributorNet, decimal(summaryByKey.get('net_value')?.plan), 1, 'FY28 contributor net value reconciliation');
   assert(benefitLineCount >= 10, 'Contributor drawer should include benefit-line detail');
+  assert(validatedBenefitLineCount >= 10, 'Contributor drawer should expose Finance validation status');
 
   const benefitLedger = await requestJson(`${apiBaseUrl}/benefit-ledger/summary?granularity=yearly`, {
     headers: authHeaders,
@@ -198,6 +203,19 @@ async function runApiChecks(authHeaders) {
   ['Revenue Uplift', 'Gross Margin Uplift', 'Cost Savings', 'Recurring Costs', 'One-off Costs'].forEach(label => {
     assert(bridgeLabels.includes(label), `Portfolio value bridge missing ${label}`);
   });
+  const fy28Bridge = await requestJson(`${apiBaseUrl}/portfolio/value-bridge?basis=target_year_run_rate&year=2028`, { headers: authHeaders });
+  assert(fy28Bridge.basis === 'target_year_run_rate', 'Value bridge should echo target-year basis');
+  assert(decimal(fy28Bridge.base_case?.net) > 8_000_000, 'FY28 value bridge target-year net should be positive');
+
+  const benefitsRegister = await requestJson(`${apiBaseUrl}/portfolio/benefits-register?year=2028`, { headers: authHeaders });
+  assert((benefitsRegister.items ?? []).length >= 20, 'Benefits Register should expose portfolio benefit lines');
+  assert(decimal(benefitsRegister.totals?.validated_plan) > 0, 'Benefits Register should include validated plan value');
+  assert(decimal(benefitsRegister.totals?.risk_adjusted_plan) > 0, 'Benefits Register should include risk-adjusted plan value');
+
+  const boardPack = await fetch(`${apiBaseUrl}/portfolio/board-pack.xlsx?basis=target_year_run_rate&year=2028`, { headers: authHeaders });
+  assert(boardPack.ok, `Board pack export failed: ${boardPack.status}`);
+  const boardPackBytes = await boardPack.arrayBuffer();
+  assert(boardPackBytes.byteLength > 1000, 'Board pack export should return a non-empty XLSX');
 
   const financialInitiative = initiatives.items.find(item => item.initiative_code === 'ENT-006') ?? initiatives.items[0];
   const grid = await requestJson(`${apiBaseUrl}/initiatives/${financialInitiative.id}/financials`, {
@@ -352,6 +370,20 @@ async function runBrowserChecks(auth, initiative) {
         || document.body.innerText.includes('Run-rate')
       `,
       'portfolio financials dashboard',
+    );
+
+    await assertPage(
+      page,
+      `${uiBaseUrl}/financials/benefits-register`,
+      `
+        (() => {
+          const text = document.body.innerText.toLowerCase();
+          return text.includes('benefits register')
+            && text.includes('finance validated')
+            && text.includes('risk adjusted');
+        })()
+      `,
+      'portfolio benefits register',
     );
   } finally {
     if (page) page.close();

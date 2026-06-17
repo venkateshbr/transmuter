@@ -122,6 +122,15 @@ interface FinancialBenefitLine {
   impact_type?: 'recurring' | 'one_time' | null;
   timing?: string | null;
   confidence?: string | number | null;
+  validation_status?: 'draft' | 'submitted' | 'finance_validated' | 'rejected';
+  evidence_url?: string | null;
+  evidence_label?: string | null;
+  validation_comment?: string | null;
+  rejection_reason?: string | null;
+  handoff_status?: 'not_started' | 'owner_assigned' | 'handoff_ready' | 'handoff_complete';
+  handoff_due_date?: string | null;
+  risk_rating?: 'low' | 'medium' | 'high';
+  risk_adjustment_pct?: string | number | null;
   show_in_summary: boolean;
   display_order: number;
 }
@@ -378,6 +387,48 @@ interface GridMetric {
             </label>
             <div class="flex items-end">
               <button type="button" class="btn-primary px-4 py-2 text-[10px]" [disabled]="!canAddBenefitLine()" (click)="addBenefitLine()" aria-label="Add benefit line">Add Line</button>
+            </div>
+          </div>
+        }
+
+        @if ((grid()?.benefit_lines || []).length) {
+          <div class="mb-4 border bg-[var(--t-surface-raised)] p-4" style="border-color:var(--t-border)">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p class="text-[10px] font-black uppercase tracking-widest" style="color:var(--t-accent)">Finance Validation</p>
+                <h3 class="mt-1 text-sm font-black" style="color:var(--t-text-primary)">Benefit lines</h3>
+              </div>
+              <a routerLink="/financials/benefits-register" class="btn-ghost px-3 py-2 text-[10px]">Open Register</a>
+            </div>
+            <div class="mt-4 grid gap-3">
+              @for (line of grid()?.benefit_lines || []; track line.id) {
+                <div class="grid gap-3 border border-[var(--t-border)] bg-[var(--t-surface)] p-3 lg:grid-cols-[1fr_auto] lg:items-center">
+                  <div>
+                    <p class="text-sm font-black" style="color:var(--t-text-primary)">{{ line.name }}</p>
+                    <p class="mt-1 text-[9px] font-black uppercase tracking-widest" [class.text-emerald-600]="line.validation_status === 'finance_validated'" [class.text-red-500]="line.validation_status === 'rejected'" [class.text-[var(--t-accent)]]="line.validation_status === 'submitted'" [class.text-[var(--t-text-tertiary)]]="!line.validation_status || line.validation_status === 'draft'">
+                      {{ benefitValidationLabel(line.validation_status) }}
+                      @if (line.risk_rating) {
+                        <span> · {{ line.risk_rating }} risk</span>
+                      }
+                      @if (line.risk_adjustment_pct) {
+                        <span> · {{ line.risk_adjustment_pct }}% risk adjusted</span>
+                      }
+                    </p>
+                    @if (line.validation_comment || line.rejection_reason) {
+                      <p class="mt-1 text-xs font-bold" style="color:var(--t-text-secondary)">{{ line.rejection_reason || line.validation_comment }}</p>
+                    }
+                    @if (line.evidence_url) {
+                      <a [href]="line.evidence_url" target="_blank" rel="noopener" class="mt-1 inline-block text-xs font-bold underline" style="color:var(--t-accent)">{{ line.evidence_label || 'Evidence' }}</a>
+                    }
+                  </div>
+                  <div class="flex flex-wrap justify-start gap-2 lg:justify-end">
+                    <button type="button" class="btn-ghost px-3 py-2 text-[10px]" [disabled]="isLocked() || saving()" (click)="submitBenefitLine(line)" aria-label="Submit benefit line to Finance">Submit</button>
+                    <button type="button" class="btn-secondary px-3 py-2 text-[10px]" [disabled]="isLocked() || saving()" (click)="validateBenefitLine(line)" aria-label="Validate benefit line">Validate</button>
+                    <button type="button" class="btn-ghost px-3 py-2 text-[10px]" [disabled]="isLocked() || saving()" (click)="rejectBenefitLine(line)" aria-label="Reject benefit line">Reject</button>
+                    <button type="button" class="btn-ghost px-3 py-2 text-[10px]" [disabled]="isLocked() || saving()" (click)="updateBenefitLineRisk(line)" aria-label="Update benefit line risk">Risk</button>
+                  </div>
+                </div>
+              }
             </div>
           </div>
         }
@@ -1696,6 +1747,83 @@ export class FinancialsTabComponent implements OnInit {
     this.newBenefitLineEndMonth.set('');
     this.saving.set(false);
     this._loadData();
+  }
+
+  benefitValidationLabel(status?: FinancialBenefitLine['validation_status']): string {
+    if (status === 'finance_validated') return 'Finance validated';
+    if (status === 'submitted') return 'Submitted to Finance';
+    if (status === 'rejected') return 'Rejected';
+    return 'Draft';
+  }
+
+  submitBenefitLine(line: FinancialBenefitLine): void {
+    this.transitionBenefitLine(line, 'submit');
+  }
+
+  validateBenefitLine(line: FinancialBenefitLine): void {
+    this.transitionBenefitLine(line, 'validate');
+  }
+
+  rejectBenefitLine(line: FinancialBenefitLine): void {
+    this.transitionBenefitLine(line, 'reject');
+  }
+
+  updateBenefitLineRisk(line: FinancialBenefitLine): void {
+    if (this.isLocked()) return;
+    const risk = window.prompt('Risk rating: low, medium, or high', line.risk_rating || 'medium');
+    if (risk === null) return;
+    const normalizedRisk = risk.trim().toLowerCase();
+    if (!['low', 'medium', 'high'].includes(normalizedRisk)) {
+      alert('Risk rating must be low, medium, or high.');
+      return;
+    }
+    const adjustment = window.prompt('Risk adjustment percent', String(line.risk_adjustment_pct || '100'));
+    if (adjustment === null) return;
+    const pct = Number(adjustment);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+      alert('Risk adjustment percent must be between 0 and 100.');
+      return;
+    }
+    this.saving.set(true);
+    this.api.put<FinancialBenefitLine>(`/initiatives/${this.initiativeId}/financials/benefit-lines/${line.id}/handoff`, {
+      risk_rating: normalizedRisk,
+      risk_adjustment_pct: pct,
+      handoff_status: line.handoff_status || 'owner_assigned',
+      comment: 'Updated benefit risk and handoff metadata.',
+    }).subscribe({
+      next: () => this._loadData(),
+      error: () => {
+        this.saving.set(false);
+        alert('Failed to update benefit risk.');
+      },
+    });
+  }
+
+  private transitionBenefitLine(line: FinancialBenefitLine, action: 'submit' | 'validate' | 'reject'): void {
+    if (this.isLocked()) return;
+    const comment = window.prompt(
+      action === 'reject' ? 'Rejection reason' : 'Finance comment',
+      line.validation_comment || '',
+    );
+    if (comment === null) return;
+    const evidenceUrl = window.prompt('Evidence URL', line.evidence_url || '');
+    if (evidenceUrl === null) return;
+    const evidenceLabel = evidenceUrl
+      ? window.prompt('Evidence label', line.evidence_label || 'Finance evidence')
+      : '';
+    if (evidenceLabel === null) return;
+    this.saving.set(true);
+    this.api.post<FinancialBenefitLine>(`/initiatives/${this.initiativeId}/financials/benefit-lines/${line.id}/${action}`, {
+      comment: comment || null,
+      evidence_url: evidenceUrl || null,
+      evidence_label: evidenceLabel || null,
+    }).subscribe({
+      next: () => this._loadData(),
+      error: () => {
+        this.saving.set(false);
+        alert('Failed to update benefit validation status.');
+      },
+    });
   }
 
   private generatedBenefitLineValues(benefitLineId: string): any[] {

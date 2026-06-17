@@ -444,6 +444,7 @@ export class App {
           { label: 'Executive Dashboard', path: '/dashboard', icon: 'grid' },
           { label: 'Financial Overview', path: '/financials', icon: 'payments' },
           { label: 'Bankable Plan', path: '/financials/bankable-plan', icon: 'account_balance' },
+          { label: 'Benefits Register', path: '/financials/benefits-register', icon: 'fact_check' },
           { label: 'Benefit Tracking', path: '/financials/benefit-tracking', icon: 'trending_up' },
           { label: 'Waterline', path: '/financials/waterline', icon: 'water_drop' },
           { label: 'Control Tower', path: '/reports/control-tower', icon: 'summarize' },

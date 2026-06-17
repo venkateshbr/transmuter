@@ -40,6 +40,10 @@ from app.domain.financials import (
     CostLineUpdate,
     FinancialAttributeDefinition,
     FinancialBenefitLine,
+    FinancialBenefitLineHandoffUpdate,
+    FinancialBenefitLineValidationEvent,
+    FinancialBenefitLineValidationRequest,
+    FinancialBenefitValidationStatus,
     FinancialBridgeRow,
     FinancialCategoryDeleteRequest,
     FinancialCellAssumption,
@@ -78,6 +82,9 @@ from app.domain.financials import (
     InitiativeAnnualBaselineUpdate,
     InitiativeFinancialSelections,
     InitiativeFinancialSelectionsResponse,
+    PortfolioBenefitsRegisterItem,
+    PortfolioBenefitsRegisterResponse,
+    PortfolioBenefitsRegisterTotals,
     PortfolioFinancialBenefitLineContribution,
     PortfolioFinancialBreakdown,
     PortfolioFinancialContributorsResponse,
@@ -88,6 +95,7 @@ from app.domain.financials import (
     PortfolioFinancialSummaryCard,
     PortfolioGranularity,
     PortfolioInYearValueCard,
+    PortfolioValueBridgeBasis,
     PortfolioValueRampPeriod,
     PortfolioValueRampResponse,
     ScenarioFinancialSummary,
@@ -104,7 +112,11 @@ from app.domain.financials import (
     WorkstreamTargetSnapshot,
 )
 from app.repositories.financial import FinancialRepository
-from app.services.financial_workbook import build_financial_workbook, parse_financial_workbook
+from app.services.financial_workbook import (
+    build_board_pack_workbook,
+    build_financial_workbook,
+    parse_financial_workbook,
+)
 
 
 def _dec(val: object) -> Decimal:
@@ -697,6 +709,108 @@ class FinancialService:
     def delete_cost_line(self, initiative_id: str, cost_line_id: str) -> None:
         self._ensure_tenant_initiative(initiative_id)
         self._repo.delete_cost_line(initiative_id, cost_line_id)
+
+    # -- Benefit-line validation ---------------------------------------------
+
+    def submit_benefit_line_for_validation(
+        self,
+        initiative_id: str,
+        benefit_line_id: str,
+        data: FinancialBenefitLineValidationRequest,
+        user_id: str,
+    ) -> FinancialBenefitLine:
+        return self._transition_benefit_line_validation(
+            initiative_id,
+            benefit_line_id,
+            status_value="submitted",
+            event_type="submit",
+            data=data,
+            user_id=user_id,
+        )
+
+    def validate_benefit_line(
+        self,
+        initiative_id: str,
+        benefit_line_id: str,
+        data: FinancialBenefitLineValidationRequest,
+        user_id: str,
+    ) -> FinancialBenefitLine:
+        return self._transition_benefit_line_validation(
+            initiative_id,
+            benefit_line_id,
+            status_value="finance_validated",
+            event_type="validate",
+            data=data,
+            user_id=user_id,
+        )
+
+    def reject_benefit_line(
+        self,
+        initiative_id: str,
+        benefit_line_id: str,
+        data: FinancialBenefitLineValidationRequest,
+        user_id: str,
+    ) -> FinancialBenefitLine:
+        return self._transition_benefit_line_validation(
+            initiative_id,
+            benefit_line_id,
+            status_value="rejected",
+            event_type="reject",
+            data=data,
+            user_id=user_id,
+        )
+
+    def update_benefit_line_handoff(
+        self,
+        initiative_id: str,
+        benefit_line_id: str,
+        data: FinancialBenefitLineHandoffUpdate,
+        user_id: str,
+    ) -> FinancialBenefitLine:
+        self._ensure_tenant_initiative(initiative_id)
+        existing = self._repo.get_benefit_line(initiative_id, benefit_line_id)
+        if not existing:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Benefit line not found",
+            )
+        patch: dict[str, object] = {}
+        for field in ("realization_owner_id", "handoff_status", "risk_rating"):
+            value = getattr(data, field)
+            if value is not None:
+                patch[field] = value
+        if data.handoff_due_date is not None:
+            patch["handoff_due_date"] = data.handoff_due_date.isoformat()
+        if data.risk_adjustment_pct is not None:
+            patch["risk_adjustment_pct"] = _money(data.risk_adjustment_pct)
+        row = self._repo.update_benefit_line(initiative_id, benefit_line_id, patch, user_id)
+        self._record_benefit_line_event(
+            initiative_id,
+            benefit_line_id,
+            event_type="handoff_update",
+            user_id=user_id,
+            comment=data.comment,
+            metadata=patch,
+        )
+        return self._to_benefit_line(row)
+
+    def list_benefit_line_validation_events(
+        self,
+        initiative_id: str,
+        benefit_line_id: str,
+    ) -> list[FinancialBenefitLineValidationEvent]:
+        self._ensure_tenant_initiative(initiative_id)
+        if not self._repo.get_benefit_line(initiative_id, benefit_line_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Benefit line not found",
+            )
+        return [
+            self._to_benefit_line_validation_event(row)
+            for row in self._repo.list_benefit_line_validation_events(
+                initiative_id, benefit_line_id
+            )
+        ]
 
     # ── Tenant financial configuration ───────────────────────────────────────
 
@@ -2008,6 +2122,9 @@ class FinancialService:
                     "metric_key": definition["key"],
                     "metric_label": definition["label"],
                     "benefit_class": definition.get("benefit_class"),
+                    "validation_status": (benefit_line or {}).get("validation_status") or "draft",
+                    "evidence_url": (benefit_line or {}).get("evidence_url"),
+                    "evidence_label": (benefit_line or {}).get("evidence_label"),
                     "plan": Decimal("0"),
                     "actual": Decimal("0"),
                 },
@@ -2066,6 +2183,9 @@ class FinancialService:
                         plan=_money(plan_amount),
                         actual=_money(actual_amount),
                         variance=_money(actual_amount - plan_amount),
+                        validation_status=item.get("validation_status") or "draft",
+                        evidence_url=item.get("evidence_url"),
+                        evidence_label=item.get("evidence_label"),
                     )
                 )
             benefit_line_records.sort(key=lambda item: (item.metric_label, item.name))
@@ -2258,6 +2378,31 @@ class FinancialService:
             return date(row.year, ((row.quarter - 1) * 3) + 1, 1)
         return date(row.year, 1, 1)
 
+    @staticmethod
+    def _filter_value_bridge_rows(
+        rows: list[dict],  # type: ignore[type-arg]
+        basis: PortfolioValueBridgeBasis,
+        year: int | None,
+    ) -> list[dict]:  # type: ignore[type-arg]
+        if basis == "all_years" or year is None:
+            return rows
+        if basis == "cumulative":
+            return [row for row in rows if int(row.get("year") or 0) <= year]
+        return [row for row in rows if int(row.get("year") or 0) == year]
+
+    @staticmethod
+    def _value_bridge_basis_label(
+        basis: PortfolioValueBridgeBasis,
+        year: int | None,
+    ) -> str:
+        if basis == "in_year":
+            return f"FY{year} in-year" if year else "Selected year in-year"
+        if basis == "target_year_run_rate":
+            return f"FY{year} target-year run-rate" if year else "Target-year run-rate"
+        if basis == "cumulative":
+            return f"Cumulative through FY{year}" if year else "Cumulative"
+        return "All years"
+
     # ── Value Bridge ──────────────────────────────────────────────────────────
 
     def get_value_bridge(self, initiative_id: str) -> ValueBridgeResponse:
@@ -2425,27 +2570,209 @@ class FinancialService:
             ),
         )
 
-    def get_portfolio_value_bridge(self) -> ValueBridgeResponse:
+    def get_portfolio_value_bridge(
+        self,
+        basis: PortfolioValueBridgeBasis = "all_years",
+        year: int | None = None,
+    ) -> ValueBridgeResponse:
         """Portfolio-level Value Bridge across all initiatives."""
         raw_entries = self._repo.get_all_entries()
         if not raw_entries:
+            values = self._filter_value_bridge_rows(self._repo.get_all_metric_values(), basis, year)
+            costs = self._filter_value_bridge_rows(self._repo.get_all_cost_lines(), basis, year)
             return self._compute_clean_value_bridge(
                 self._values_with_formula_metrics(
-                    self._repo.get_all_metric_values(),
+                    values,
                     self._repo.list_all_initiative_annual_baselines(),
                 ),
-                self._repo.get_all_cost_lines(),
+                costs,
                 initiative_id=None,
+                basis=basis,
+                year=year,
             )
-        entries = self._reporting_rows(raw_entries)
-        cost_lines = self._reporting_cost_lines(self._repo.get_all_cost_lines())
-        metric_values = self._reporting_metric_values(self._repo.get_all_metric_values())
+        entries = self._filter_value_bridge_rows(self._reporting_rows(raw_entries), basis, year)
+        cost_lines = self._filter_value_bridge_rows(
+            self._reporting_cost_lines(self._repo.get_all_cost_lines()),
+            basis,
+            year,
+        )
+        metric_values = self._filter_value_bridge_rows(
+            self._reporting_metric_values(self._repo.get_all_metric_values()),
+            basis,
+            year,
+        )
         return self._compute_value_bridge(
             entries,
             cost_lines,
             initiative_id=None,
             metric_values=metric_values,
             config=self.get_configuration(),
+            basis=basis,
+            year=year,
+        )
+
+    def get_portfolio_benefits_register(
+        self,
+        year: int | None = None,
+        validation_status: FinancialBenefitValidationStatus | None = None,
+        initiative_id: str | None = None,
+        workstream_id: str | None = None,
+        business_unit_id: str | None = None,
+        stage: str | None = None,
+        tag: str | None = None,
+    ) -> PortfolioBenefitsRegisterResponse:
+        business_unit_ids = self._split_filter_values(business_unit_id)
+        workstream_ids = self._split_filter_values(workstream_id)
+        stages = self._split_filter_values(stage)
+        tags = self._split_filter_values(tag)
+        initiatives = {
+            str(row["id"]): row
+            for row in self._repo.get_portfolio_initiatives()
+            if self._portfolio_initiative_matches(
+                row,
+                initiative_id=initiative_id,
+                workstream_ids=workstream_ids,
+                business_unit_ids=business_unit_ids,
+                stages=stages,
+                tags=tags,
+            )
+        }
+        definitions = {row["id"]: row for row in self._repo.list_metric_definitions()}
+        scenarios = {row["id"]: row for row in self._repo.list_financial_scenarios()}
+        benefit_lines = [
+            row
+            for row in self._repo.list_all_benefit_lines()
+            if str(row.get("initiative_id")) in initiatives
+            and (
+                validation_status is None
+                or (row.get("validation_status") or "draft") == validation_status
+            )
+        ]
+        totals_by_line: dict[str, dict[str, Decimal]] = {
+            str(row["id"]): {"plan": Decimal("0"), "actual": Decimal("0")} for row in benefit_lines
+        }
+        values = self._values_with_formula_metrics(
+            [
+                row
+                for row in self._repo.get_all_metric_values()
+                if str(row.get("initiative_id")) in initiatives
+                and row.get("benefit_line_id") in totals_by_line
+                and (year is None or row.get("year") == year)
+            ],
+            [
+                row
+                for row in self._repo.list_all_initiative_annual_baselines()
+                if str(row.get("initiative_id")) in initiatives
+            ],
+        )
+        for row in values:
+            scenario = scenarios.get(row.get("scenario_id"))
+            if not scenario:
+                continue
+            bucket = totals_by_line.get(str(row.get("benefit_line_id")))
+            if not bucket:
+                continue
+            if scenario.get("key") == "actual":
+                bucket["actual"] += _dec(row.get("value"))
+            elif scenario.get("key") == "plan_base":
+                bucket["plan"] += _dec(row.get("value"))
+
+        items: list[PortfolioBenefitsRegisterItem] = []
+        totals = {
+            "plan": Decimal("0"),
+            "actual": Decimal("0"),
+            "risk_adjusted_plan": Decimal("0"),
+            "validated_plan": Decimal("0"),
+            "submitted_plan": Decimal("0"),
+            "rejected_plan": Decimal("0"),
+        }
+        for line in benefit_lines:
+            initiative = initiatives.get(str(line["initiative_id"]), {})
+            definition = definitions.get(line.get("metric_definition_id"), {})
+            amounts = totals_by_line.get(str(line["id"]), {})
+            plan = _dec(amounts.get("plan"))
+            actual = _dec(amounts.get("actual"))
+            risk_pct = _dec(line.get("risk_adjustment_pct") or line.get("confidence") or 100)
+            risk_adjusted = plan * risk_pct / Decimal("100")
+            status_value = line.get("validation_status") or "draft"
+            totals["plan"] += plan
+            totals["actual"] += actual
+            totals["risk_adjusted_plan"] += risk_adjusted
+            if status_value == "finance_validated":
+                totals["validated_plan"] += plan
+            elif status_value == "submitted":
+                totals["submitted_plan"] += plan
+            elif status_value == "rejected":
+                totals["rejected_plan"] += plan
+            workstream = initiative.get("workstreams") or {}
+            items.append(
+                PortfolioBenefitsRegisterItem(
+                    initiative_id=str(line["initiative_id"]),
+                    initiative_code=initiative.get("initiative_code"),
+                    initiative_name=initiative.get("name") or "Untitled initiative",
+                    stage=initiative.get("stage"),
+                    workstream_id=initiative.get("workstream_id"),
+                    workstream_name=workstream.get("name"),
+                    benefit_line_id=str(line["id"]),
+                    benefit_line_name=line.get("name") or "Untitled benefit",
+                    metric_key=str(definition.get("key") or ""),
+                    metric_label=str(definition.get("label") or "Benefit"),
+                    benefit_class=definition.get("benefit_class"),
+                    validation_status=status_value,
+                    confidence=_money(line.get("confidence"))
+                    if line.get("confidence") is not None
+                    else None,
+                    risk_rating=line.get("risk_rating") or "medium",
+                    risk_adjustment_pct=_money(risk_pct),
+                    plan=_money(plan),
+                    actual=_money(actual),
+                    variance=_money(actual - plan),
+                    risk_adjusted_plan=_money(risk_adjusted),
+                    evidence_url=line.get("evidence_url"),
+                    evidence_label=line.get("evidence_label"),
+                    submitted_at=line.get("submitted_at"),
+                    validated_at=line.get("validated_at"),
+                    validation_comment=line.get("validation_comment"),
+                    rejection_reason=line.get("rejection_reason"),
+                    realization_owner_id=line.get("realization_owner_id"),
+                    handoff_status=line.get("handoff_status") or "not_started",
+                    handoff_due_date=self._as_date(line["handoff_due_date"])
+                    if line.get("handoff_due_date")
+                    else None,
+                )
+            )
+        items.sort(
+            key=lambda item: (-abs(_dec(item.plan)), item.initiative_name, item.benefit_line_name)
+        )
+        return PortfolioBenefitsRegisterResponse(
+            year=year,
+            validation_status=validation_status,
+            totals=PortfolioBenefitsRegisterTotals(
+                plan=_money(totals["plan"]),
+                actual=_money(totals["actual"]),
+                variance=_money(totals["actual"] - totals["plan"]),
+                risk_adjusted_plan=_money(totals["risk_adjusted_plan"]),
+                validated_plan=_money(totals["validated_plan"]),
+                submitted_plan=_money(totals["submitted_plan"]),
+                rejected_plan=_money(totals["rejected_plan"]),
+            ),
+            items=items,
+        )
+
+    def export_portfolio_board_pack(
+        self,
+        year: int | None = None,
+        basis: PortfolioValueBridgeBasis = "all_years",
+    ) -> bytes:
+        financials = self.get_portfolio_financials("yearly", year=year)
+        value_bridge = self.get_portfolio_value_bridge(basis=basis, year=year)
+        benefits_register = self.get_portfolio_benefits_register(year=year)
+        ledger = self.get_benefit_ledger_rollup_summary("monthly")
+        return build_board_pack_workbook(
+            financials=financials,
+            value_bridge=value_bridge,
+            benefits_register=benefits_register,
+            benefit_ledger=ledger,
         )
 
     def list_cell_assumptions(self, initiative_id: str) -> FinancialCellAssumptionListResponse:
@@ -2489,6 +2816,97 @@ class FinancialService:
         self._repo.delete_cell_assumption(initiative_id, assumption_id)
 
     # ── Private helpers ───────────────────────────────────────────────────────
+
+    def _transition_benefit_line_validation(
+        self,
+        initiative_id: str,
+        benefit_line_id: str,
+        *,
+        status_value: FinancialBenefitValidationStatus,
+        event_type: str,
+        data: FinancialBenefitLineValidationRequest,
+        user_id: str,
+    ) -> FinancialBenefitLine:
+        self._ensure_tenant_initiative(initiative_id)
+        if not self._repo.get_benefit_line(initiative_id, benefit_line_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Benefit line not found",
+            )
+        now = datetime.now(UTC).isoformat()
+        patch: dict[str, object | None] = {
+            "validation_status": status_value,
+            "evidence_url": data.evidence_url,
+            "evidence_label": data.evidence_label,
+        }
+        if status_value == "submitted":
+            patch.update(
+                {
+                    "submitted_at": now,
+                    "submitted_by": user_id,
+                    "validation_comment": data.comment,
+                    "rejection_reason": None,
+                }
+            )
+        elif status_value == "finance_validated":
+            patch.update(
+                {
+                    "validated_at": now,
+                    "validated_by": user_id,
+                    "validation_comment": data.comment,
+                    "rejection_reason": None,
+                }
+            )
+        elif status_value == "rejected":
+            patch.update(
+                {
+                    "validated_at": now,
+                    "validated_by": user_id,
+                    "validation_comment": data.comment,
+                    "rejection_reason": data.comment,
+                }
+            )
+        row = self._repo.update_benefit_line(
+            initiative_id,
+            benefit_line_id,
+            patch,
+            user_id,
+        )
+        self._record_benefit_line_event(
+            initiative_id,
+            benefit_line_id,
+            event_type=event_type,
+            user_id=user_id,
+            comment=data.comment,
+            evidence_url=data.evidence_url,
+            evidence_label=data.evidence_label,
+        )
+        return self._to_benefit_line(row)
+
+    def _record_benefit_line_event(
+        self,
+        initiative_id: str,
+        benefit_line_id: str,
+        *,
+        event_type: str,
+        user_id: str,
+        comment: str | None = None,
+        evidence_url: str | None = None,
+        evidence_label: str | None = None,
+        metadata: dict[str, object] | None = None,
+    ) -> None:
+        self._repo.create_benefit_line_validation_event(
+            initiative_id,
+            benefit_line_id,
+            {
+                "event_type": event_type,
+                "actor_user_id": user_id,
+                "comment": comment,
+                "evidence_url": evidence_url,
+                "evidence_label": evidence_label,
+                "metadata": metadata or {},
+            },
+        )
 
     def _assert_no_formula_metric_values(self, values: list[object]) -> None:
         formula_definition_ids = {
@@ -3687,6 +4105,8 @@ class FinancialService:
         initiative_id: str | None,
         metric_values: list[dict] | None = None,  # type: ignore[type-arg]
         config: FinancialConfigurationResponse | None = None,
+        basis: PortfolioValueBridgeBasis = "all_years",
+        year: int | None = None,
     ) -> ValueBridgeResponse:
         """Compute the three-row Value Bridge (Base/High/Actual)."""
         rev_base = Decimal("0")
@@ -3744,6 +4164,9 @@ class FinancialService:
 
         return ValueBridgeResponse(
             initiative_id=initiative_id,
+            basis=basis,
+            basis_label=self._value_bridge_basis_label(basis, year),
+            year=year,
             base_case=ValueBridgeCase(
                 revenue_uplift=_money(rev_base),
                 gross_margin=_money(gm_base),
@@ -3837,6 +4260,8 @@ class FinancialService:
         values: list[dict],  # type: ignore[type-arg]
         cost_lines: list[dict],  # type: ignore[type-arg]
         initiative_id: str | None,
+        basis: PortfolioValueBridgeBasis = "all_years",
+        year: int | None = None,
     ) -> ValueBridgeResponse:
         base = self._clean_value_case(values, "plan_base")
         high = self._clean_value_case(values, "plan_high")
@@ -3845,6 +4270,9 @@ class FinancialService:
         actual_costs = self._clean_cost_totals(cost_lines, actual=True)
         return ValueBridgeResponse(
             initiative_id=initiative_id,
+            basis=basis,
+            basis_label=self._value_bridge_basis_label(basis, year),
+            year=year,
             base_case=self._clean_bridge_case(base, plan_costs),
             high_case=self._clean_bridge_case(high, plan_costs),
             actual=self._clean_bridge_case(actual, actual_costs),
@@ -4478,8 +4906,41 @@ class FinancialService:
             attributes=row.get("attributes") or {},
             show_in_summary=row.get("show_in_summary", True),
             display_order=row.get("display_order") or 0,
+            evidence_url=row.get("evidence_url"),
+            evidence_label=row.get("evidence_label"),
+            realization_owner_id=row.get("realization_owner_id"),
+            handoff_status=row.get("handoff_status") or "not_started",
+            handoff_due_date=FinancialService._as_date(row["handoff_due_date"])
+            if row.get("handoff_due_date")
+            else None,
+            risk_rating=row.get("risk_rating") or "medium",
+            risk_adjustment_pct=_dec(row.get("risk_adjustment_pct") or "100"),
+            validation_status=row.get("validation_status") or "draft",
+            submitted_at=row.get("submitted_at"),
+            submitted_by=row.get("submitted_by"),
+            validated_at=row.get("validated_at"),
+            validated_by=row.get("validated_by"),
+            validation_comment=row.get("validation_comment"),
+            rejection_reason=row.get("rejection_reason"),
             created_by=row.get("created_by"),
             updated_by=row.get("updated_by"),
+        )
+
+    @staticmethod
+    def _to_benefit_line_validation_event(
+        row: dict,  # type: ignore[type-arg]
+    ) -> FinancialBenefitLineValidationEvent:
+        return FinancialBenefitLineValidationEvent(
+            id=row["id"],
+            initiative_id=row["initiative_id"],
+            benefit_line_id=row["benefit_line_id"],
+            event_type=row["event_type"],
+            actor_user_id=row.get("actor_user_id"),
+            comment=row.get("comment"),
+            evidence_url=row.get("evidence_url"),
+            evidence_label=row.get("evidence_label"),
+            metadata=row.get("metadata") or {},
+            created_at=str(row.get("created_at") or ""),
         )
 
     @staticmethod

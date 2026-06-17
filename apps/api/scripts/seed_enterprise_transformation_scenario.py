@@ -136,6 +136,7 @@ def delete_tenant_rows(client: Client, tenant_id: str) -> None:
     tables = [
         "financial_initiative_annual_baselines",
         "financial_tenant_annual_baselines",
+        "financial_benefit_line_validation_events",
         "benefit_realization_ledger",
         "bankable_plans",
         "gate_submissions",
@@ -913,6 +914,7 @@ def insert_initiatives(
     }
     initiative_ids: dict[str, str] = {}
     benefit_line_rows = []
+    benefit_line_validation_event_rows = []
     metric_value_rows = []
     cost_rows = []
     baseline_rows = []
@@ -960,6 +962,29 @@ def insert_initiatives(
         ]:
             benefit_line_id = str(uuid4())
             benefit_line_ids[metric_key] = benefit_line_id
+            validation_status = "finance_validated"
+            validation_comment = (
+                "Finance validated against ACME benefit model and source assumptions."
+            )
+            rejection_reason = None
+            if index in {5, 8} and metric_key == "revenue_uplift":
+                validation_status = "submitted"
+                validation_comment = "Submitted for Finance review with commercial owner evidence."
+            elif index == 9 and metric_key == "cost_savings":
+                validation_status = "rejected"
+                validation_comment = "Rejected pending updated vendor baseline evidence."
+                rejection_reason = validation_comment
+            elif index == 10 and metric_key == "revenue_uplift":
+                validation_status = "draft"
+                validation_comment = None
+            risk_adjustment = "90.00"
+            risk_rating = "medium"
+            if benefit_class == "revenue":
+                risk_adjustment = "80.00"
+                risk_rating = "high" if index in {5, 8, 10} else "medium"
+            elif benefit_class == "savings":
+                risk_adjustment = "95.00"
+                risk_rating = "low" if index not in {9} else "high"
             benefit_line_rows.append(
                 {
                     "id": benefit_line_id,
@@ -976,6 +1001,26 @@ def insert_initiatives(
                         "benefit_class": benefit_class,
                         "evidence": "Seeded board-demo assumption pack",
                     },
+                    "validation_status": validation_status,
+                    "submitted_at": now(),
+                    "submitted_by": user_id,
+                    "validated_at": now()
+                    if validation_status in {"finance_validated", "rejected"}
+                    else None,
+                    "validated_by": user_id
+                    if validation_status in {"finance_validated", "rejected"}
+                    else None,
+                    "validation_comment": validation_comment,
+                    "evidence_url": f"https://example.com/acme/{code.lower()}-{metric_key}-evidence",
+                    "evidence_label": "ACME assumption pack",
+                    "rejection_reason": rejection_reason,
+                    "realization_owner_id": user_id,
+                    "handoff_status": "handoff_complete"
+                    if validation_status == "finance_validated"
+                    else "owner_assigned",
+                    "handoff_due_date": "2028-03-31",
+                    "risk_rating": risk_rating,
+                    "risk_adjustment_pct": risk_adjustment,
                     "show_in_summary": True,
                     "display_order": len(benefit_line_rows) + 10,
                     "created_by": user_id,
@@ -984,6 +1029,39 @@ def insert_initiatives(
                     "updated_at": now(),
                 }
             )
+            benefit_line_validation_event_rows.append(
+                {
+                    "id": str(uuid4()),
+                    "tenant_id": tenant_id,
+                    "initiative_id": initiative_id,
+                    "benefit_line_id": benefit_line_id,
+                    "event_type": "submit",
+                    "actor_user_id": user_id,
+                    "comment": "Submitted seeded benefit line for Finance validation.",
+                    "evidence_url": f"https://example.com/acme/{code.lower()}-{metric_key}-evidence",
+                    "evidence_label": "ACME assumption pack",
+                    "metadata": {"source": "acme_seed"},
+                    "created_at": now(),
+                }
+            )
+            if validation_status in {"finance_validated", "rejected"}:
+                benefit_line_validation_event_rows.append(
+                    {
+                        "id": str(uuid4()),
+                        "tenant_id": tenant_id,
+                        "initiative_id": initiative_id,
+                        "benefit_line_id": benefit_line_id,
+                        "event_type": "validate"
+                        if validation_status == "finance_validated"
+                        else "reject",
+                        "actor_user_id": user_id,
+                        "comment": validation_comment,
+                        "evidence_url": f"https://example.com/acme/{code.lower()}-{metric_key}-evidence",
+                        "evidence_label": "ACME assumption pack",
+                        "metadata": {"source": "acme_seed"},
+                        "created_at": now(),
+                    }
+                )
         client.table("initiatives").insert(
             {
                 "id": initiative_id,
@@ -1194,6 +1272,9 @@ def insert_initiatives(
         ).execute()
     client.table("financial_initiative_annual_baselines").insert(baseline_rows).execute()
     client.table("financial_benefit_lines").insert(benefit_line_rows).execute()
+    client.table("financial_benefit_line_validation_events").insert(
+        benefit_line_validation_event_rows
+    ).execute()
     for start in range(0, len(metric_value_rows), 500):
         client.table("financial_metric_values").insert(
             metric_value_rows[start : start + 500]

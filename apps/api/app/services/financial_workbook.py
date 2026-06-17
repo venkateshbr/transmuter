@@ -85,6 +85,103 @@ def build_financial_workbook(
     return output.getvalue()
 
 
+def build_board_pack_workbook(
+    *,
+    financials: Any,
+    value_bridge: Any,
+    benefits_register: Any,
+    benefit_ledger: Any,
+) -> bytes:
+    """Build a portfolio board-pack XLSX from service response models."""
+    summary_rows = [["metric", "plan", "actual", "variance"]]
+    summary_rows.extend(
+        [
+            item.key,
+            _cell_value(item.plan),
+            _cell_value(item.actual),
+            _cell_value(item.variance),
+        ]
+        for item in financials.summary
+    )
+    bridge_rows = [
+        ["basis", value_bridge.basis_label],
+        [],
+        ["row", "base_case", "high_case", "actual"],
+        [
+            "benefits_total",
+            value_bridge.base_case.benefits_total,
+            value_bridge.high_case.benefits_total,
+            value_bridge.actual.benefits_total,
+        ],
+        [
+            "recurring_costs",
+            value_bridge.base_case.costs_recurring,
+            value_bridge.high_case.costs_recurring,
+            value_bridge.actual.costs_recurring,
+        ],
+        [
+            "one_off_costs",
+            value_bridge.base_case.costs_one_off,
+            value_bridge.high_case.costs_one_off,
+            value_bridge.actual.costs_one_off,
+        ],
+        ["net", value_bridge.base_case.net, value_bridge.high_case.net, value_bridge.actual.net],
+    ]
+    benefit_rows = [
+        [
+            "initiative_code",
+            "initiative_name",
+            "workstream",
+            "benefit_line",
+            "metric",
+            "validation_status",
+            "plan",
+            "actual",
+            "variance",
+            "risk_adjusted_plan",
+            "risk_rating",
+            "handoff_status",
+            "evidence",
+        ]
+    ]
+    benefit_rows.extend(
+        [
+            item.initiative_code or "",
+            item.initiative_name,
+            item.workstream_name or "",
+            item.benefit_line_name,
+            item.metric_label,
+            item.validation_status,
+            item.plan,
+            item.actual,
+            item.variance,
+            item.risk_adjusted_plan,
+            item.risk_rating,
+            item.handoff_status,
+            item.evidence_label or item.evidence_url or "",
+        ]
+        for item in benefits_register.items
+    )
+    ledger_rows = [["period", "bankable_plan_amount", "actual_amount", "variance"]]
+    ledger_rows.extend(
+        [
+            item.period,
+            item.bankable_plan_amount,
+            item.actual_amount,
+            item.variance,
+        ]
+        for item in benefit_ledger.periods
+    )
+    return _build_named_workbook(
+        {
+            "summary": summary_rows,
+            "value_bridge": bridge_rows,
+            "benefits_register": benefit_rows,
+            "benefit_ledger": ledger_rows,
+        }
+    )
+
+
 def parse_financial_workbook(data: bytes) -> FinancialGridUpdate:
     """Parse financial workbook bytes into the existing grid update contract."""
     try:
@@ -379,3 +476,57 @@ def _styles() -> str:
   <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
   <cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>
 </styleSheet>"""
+
+
+def _build_named_workbook(sheets: dict[str, list[list[str]]]) -> bytes:
+    output = BytesIO()
+    names = list(sheets)
+    with ZipFile(output, "w", compression=ZIP_DEFLATED) as zf:
+        zf.writestr("[Content_Types].xml", _named_content_types(len(names)))
+        zf.writestr("_rels/.rels", _root_rels())
+        zf.writestr("xl/workbook.xml", _named_workbook(names))
+        zf.writestr("xl/_rels/workbook.xml.rels", _named_workbook_rels(len(names)))
+        zf.writestr("xl/styles.xml", _styles())
+        for index, rows in enumerate(sheets.values(), start=1):
+            zf.writestr(f"xl/worksheets/sheet{index}.xml", _sheet(rows))
+    return output.getvalue()
+
+
+def _named_content_types(sheet_count: int) -> str:
+    sheets = "\n".join(
+        f'  <Override PartName="/xl/worksheets/sheet{index}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        for index in range(1, sheet_count + 1)
+    )
+    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+{sheets}
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>"""
+
+
+def _named_workbook(sheet_names: list[str]) -> str:
+    sheets = "\n".join(
+        f'    <sheet name="{_xml(name)}" sheetId="{index}" r:id="rId{index}"/>'
+        for index, name in enumerate(sheet_names, start=1)
+    )
+    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+{sheets}
+  </sheets>
+</workbook>"""
+
+
+def _named_workbook_rels(sheet_count: int) -> str:
+    sheets = "\n".join(
+        f'  <Relationship Id="rId{index}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet{index}.xml"/>'
+        for index in range(1, sheet_count + 1)
+    )
+    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+{sheets}
+  <Relationship Id="rId{sheet_count + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>"""

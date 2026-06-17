@@ -71,6 +71,9 @@ interface BenefitLineContribution {
   plan: string;
   actual: string;
   variance: string;
+  validation_status?: BenefitValidationStatus;
+  evidence_url?: string | null;
+  evidence_label?: string | null;
 }
 
 interface InitiativeContribution {
@@ -133,6 +136,35 @@ interface AnnualBaselineValue {
 
 interface TenantAnnualBaselineResponse {
   values: AnnualBaselineValue[];
+}
+
+type ValueBridgeBasis = 'all_years' | 'in_year' | 'target_year_run_rate' | 'cumulative';
+type BenefitValidationStatus = 'draft' | 'submitted' | 'finance_validated' | 'rejected';
+
+interface ValueBridgeCase {
+  benefits_total: string;
+  costs_recurring: string;
+  costs_one_off: string;
+  costs_total: string;
+  net: string;
+}
+
+interface ValueBridgeRow {
+  key: string;
+  label: string;
+  base_case: string;
+  high_case: string;
+  actual: string;
+}
+
+interface ValueBridgeResponse {
+  basis: ValueBridgeBasis;
+  basis_label: string;
+  year?: number | null;
+  base_case: ValueBridgeCase;
+  high_case: ValueBridgeCase;
+  actual: ValueBridgeCase;
+  rows: ValueBridgeRow[];
 }
 
 @Component({
@@ -209,6 +241,16 @@ interface TenantAnnualBaselineResponse {
               <option [value]="category.key">{{ category.label }}</option>
             }
           </select>
+          <select class="input-field w-56 py-2 text-xs" [ngModel]="valueBridgeBasis()" (ngModelChange)="setValueBridgeBasis($event)" aria-label="Select value bridge basis">
+            @for (option of valueBridgeBasisOptions; track option.id) {
+              <option [value]="option.id">{{ option.label }}</option>
+            }
+          </select>
+          <a routerLink="/financials/benefits-register" class="btn-ghost px-3 py-2 text-[10px] font-black uppercase tracking-widest">Benefits Register</a>
+          <button type="button" class="btn-secondary px-3 py-2 text-[10px]" [disabled]="exportingBoardPack()" (click)="exportBoardPack()" aria-label="Export board pack">
+            <span class="material-icons text-sm">download</span>
+            Board Pack
+          </button>
         </div>
       </header>
 
@@ -336,6 +378,32 @@ interface TenantAnnualBaselineResponse {
                 }
               </tbody>
             </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="card overflow-hidden">
+        <div class="flex flex-wrap items-start justify-between gap-3 border-b border-[var(--t-border)] p-5">
+          <div>
+            <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">Value Bridge</p>
+            <h2 class="mt-1 text-lg font-black text-[var(--t-text-primary)]">{{ valueBridge()?.basis_label || 'All years' }}</h2>
+          </div>
+          <span class="border border-[var(--t-border)] px-2 py-1 text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">
+            Plan base · high · actual
+          </span>
+        </div>
+        <div class="grid gap-4 p-5 md:grid-cols-3">
+          <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4">
+            <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Base Net</p>
+            <p class="mt-2 text-xl font-black text-[var(--t-text-primary)]">{{ formatMoney(valueBridge()?.base_case?.net) }}</p>
+          </div>
+          <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4">
+            <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">High Net</p>
+            <p class="mt-2 text-xl font-black text-[var(--t-text-primary)]">{{ formatMoney(valueBridge()?.high_case?.net) }}</p>
+          </div>
+          <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4">
+            <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Actual Net</p>
+            <p class="mt-2 text-xl font-black text-[var(--t-text-primary)]">{{ formatMoney(valueBridge()?.actual?.net) }}</p>
           </div>
         </div>
       </section>
@@ -551,6 +619,12 @@ interface TenantAnnualBaselineResponse {
                             <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">
                               {{ line.metric_label }} @if (line.benefit_class) { <span>· {{ line.benefit_class }}</span> }
                             </p>
+                            <p class="mt-1 text-[9px] font-black uppercase tracking-widest" [class.text-emerald-600]="line.validation_status === 'finance_validated'" [class.text-red-500]="line.validation_status === 'rejected'" [class.text-[var(--t-accent)]]="line.validation_status === 'submitted'" [class.text-[var(--t-text-tertiary)]]="!line.validation_status || line.validation_status === 'draft'">
+                              {{ validationStatusLabel(line.validation_status) }}
+                              @if (line.evidence_url) {
+                                <a [href]="line.evidence_url" target="_blank" rel="noopener" class="ml-2 underline">{{ line.evidence_label || 'Evidence' }}</a>
+                              }
+                            </p>
                           </div>
                           <p class="font-bold text-[var(--t-text-secondary)]">
                             {{ formatMoney(line.plan) }} plan
@@ -597,6 +671,7 @@ export class PortfolioFinancialsComponent implements OnInit {
 
   response = signal<PortfolioFinancialsResponse | null>(null);
   valueRamp = signal<ValueRampResponse | null>(null);
+  valueBridge = signal<ValueBridgeResponse | null>(null);
   contributors = signal<ContributorsResponse | null>(null);
   selectedPeriod = signal<PeriodRow | null>(null);
   contributorsLoading = signal(false);
@@ -608,8 +683,10 @@ export class PortfolioFinancialsComponent implements OnInit {
   categoryKey = signal('');
   stage = signal('');
   asOfDate = signal('');
+  valueBridgeBasis = signal<ValueBridgeBasis>('all_years');
   showBenefits = signal(false);
   showActuals = signal(false);
+  exportingBoardPack = signal(false);
   financialMode = computed(() => resolveFinancialMode(this.response()?.financial_mode, this.response(), this.configuration()));
   actualsAvailable = computed(() => financialModeUsesActuals(this.financialMode()) || (this.response()?.periods || []).some(row => this.parseMoney(row.benefits_actual) !== 0 || this.parseMoney(row.total_costs_actual) !== 0 || this.parseMoney(row.net_value_actual) !== 0));
 
@@ -617,6 +694,12 @@ export class PortfolioFinancialsComponent implements OnInit {
     { id: 'monthly', label: 'Monthly' },
     { id: 'quarterly', label: 'Quarterly' },
     { id: 'yearly', label: 'Yearly' },
+  ];
+  readonly valueBridgeBasisOptions: { id: ValueBridgeBasis; label: string }[] = [
+    { id: 'all_years', label: 'All years' },
+    { id: 'in_year', label: 'In-year' },
+    { id: 'target_year_run_rate', label: 'Target-year run-rate' },
+    { id: 'cumulative', label: 'Cumulative through year' },
   ];
 
   costCategories = computed(() => (this.configuration()?.items || [])
@@ -686,6 +769,11 @@ export class PortfolioFinancialsComponent implements OnInit {
     this.loadValueRamp();
   }
 
+  setValueBridgeBasis(value: ValueBridgeBasis): void {
+    this.valueBridgeBasis.set(value || 'all_years');
+    this.loadValueBridge();
+  }
+
   load(): void {
     const params = new URLSearchParams({ granularity: this.granularity() });
     if (this.year()) params.set('year', String(this.year()));
@@ -694,6 +782,7 @@ export class PortfolioFinancialsComponent implements OnInit {
     this.api.get<PortfolioFinancialsResponse>(`/portfolio/financials?${params.toString()}`)
       .subscribe(res => this.response.set(res));
     this.loadValueRamp();
+    this.loadValueBridge();
   }
 
   loadValueRamp(): void {
@@ -706,6 +795,16 @@ export class PortfolioFinancialsComponent implements OnInit {
       .subscribe({
         next: res => this.valueRamp.set(res),
         error: () => this.valueRamp.set(null),
+      });
+  }
+
+  loadValueBridge(): void {
+    const params = new URLSearchParams({ basis: this.valueBridgeBasis() });
+    if (this.year()) params.set('year', String(this.year()));
+    this.api.get<ValueBridgeResponse>(`/portfolio/value-bridge?${params.toString()}`)
+      .subscribe({
+        next: res => this.valueBridge.set(res),
+        error: () => this.valueBridge.set(null),
       });
   }
 
@@ -761,6 +860,31 @@ export class PortfolioFinancialsComponent implements OnInit {
     if (value === null || value === undefined) return 0;
     const parsed = typeof value === 'string' ? Number(value) : value;
     return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  validationStatusLabel(value?: BenefitValidationStatus): string {
+    if (value === 'finance_validated') return 'Finance validated';
+    if (value === 'submitted') return 'Submitted to Finance';
+    if (value === 'rejected') return 'Rejected';
+    return 'Draft';
+  }
+
+  exportBoardPack(): void {
+    this.exportingBoardPack.set(true);
+    const params = new URLSearchParams({ basis: this.valueBridgeBasis() });
+    if (this.year()) params.set('year', String(this.year()));
+    this.api.getBlob(`/portfolio/board-pack.xlsx?${params.toString()}`).subscribe({
+      next: blob => {
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = 'transmuter-board-pack.xlsx';
+        anchor.click();
+        URL.revokeObjectURL(url);
+        this.exportingBoardPack.set(false);
+      },
+      error: () => this.exportingBoardPack.set(false),
+    });
   }
 
   portfolioBaselineYear(): number | null {

@@ -34,6 +34,11 @@ from app.domain.financials import (
     CostLineListResponse,
     CostLineUpdate,
     FinancialAttributeDefinition,
+    FinancialBenefitLine,
+    FinancialBenefitLineHandoffUpdate,
+    FinancialBenefitLineValidationEvent,
+    FinancialBenefitLineValidationRequest,
+    FinancialBenefitValidationStatus,
     FinancialBridgeRow,
     FinancialCategoryDeleteRequest,
     FinancialCellAssumption,
@@ -62,9 +67,11 @@ from app.domain.financials import (
     InitiativeAnnualBaselineUpdate,
     InitiativeFinancialSelections,
     InitiativeFinancialSelectionsResponse,
+    PortfolioBenefitsRegisterResponse,
     PortfolioFinancialContributorsResponse,
     PortfolioFinancialsResponse,
     PortfolioGranularity,
+    PortfolioValueBridgeBasis,
     PortfolioValueRampResponse,
     ScenarioFinancialSummary,
     TenantAnnualBaselineResponse,
@@ -122,6 +129,85 @@ async def update_financials(
     """Upsert the configurable monthly financial grid for an initiative."""
     assert_can_manage_initiatives(current_user)
     return svc.update_configurable_financial_grid(initiative_id, body, str(current_user.id))
+
+
+@router.post(
+    "/initiatives/{initiative_id}/financials/benefit-lines/{benefit_line_id}/submit",
+    response_model=FinancialBenefitLine,
+)
+async def submit_benefit_line_for_validation(
+    initiative_id: str,
+    benefit_line_id: str,
+    body: FinancialBenefitLineValidationRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> FinancialBenefitLine:
+    assert_can_manage_initiatives(current_user)
+    return svc.submit_benefit_line_for_validation(
+        initiative_id, benefit_line_id, body, str(current_user.id)
+    )
+
+
+@router.post(
+    "/initiatives/{initiative_id}/financials/benefit-lines/{benefit_line_id}/validate",
+    response_model=FinancialBenefitLine,
+)
+async def validate_benefit_line(
+    initiative_id: str,
+    benefit_line_id: str,
+    body: FinancialBenefitLineValidationRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> FinancialBenefitLine:
+    assert_can_manage_initiatives(current_user)
+    return svc.validate_benefit_line(initiative_id, benefit_line_id, body, str(current_user.id))
+
+
+@router.post(
+    "/initiatives/{initiative_id}/financials/benefit-lines/{benefit_line_id}/reject",
+    response_model=FinancialBenefitLine,
+)
+async def reject_benefit_line(
+    initiative_id: str,
+    benefit_line_id: str,
+    body: FinancialBenefitLineValidationRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> FinancialBenefitLine:
+    assert_can_manage_initiatives(current_user)
+    return svc.reject_benefit_line(initiative_id, benefit_line_id, body, str(current_user.id))
+
+
+@router.put(
+    "/initiatives/{initiative_id}/financials/benefit-lines/{benefit_line_id}/handoff",
+    response_model=FinancialBenefitLine,
+)
+async def update_benefit_line_handoff(
+    initiative_id: str,
+    benefit_line_id: str,
+    body: FinancialBenefitLineHandoffUpdate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> FinancialBenefitLine:
+    assert_can_manage_initiatives(current_user)
+    return svc.update_benefit_line_handoff(
+        initiative_id, benefit_line_id, body, str(current_user.id)
+    )
+
+
+@router.get(
+    "/initiatives/{initiative_id}/financials/benefit-lines/{benefit_line_id}/validation-events",
+    response_model=list[FinancialBenefitLineValidationEvent],
+)
+async def list_benefit_line_validation_events(
+    initiative_id: str,
+    benefit_line_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
+) -> list[FinancialBenefitLineValidationEvent]:
+    assert_can_view_initiative(client, current_user, initiative_id)
+    return svc.list_benefit_line_validation_events(initiative_id, benefit_line_id)
 
 
 @router.get(
@@ -851,10 +937,52 @@ async def delete_cell_assumption(
 async def get_portfolio_value_bridge(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    basis: PortfolioValueBridgeBasis = Query("all_years"),
+    year: int | None = Query(None, ge=2020, le=2060),
 ) -> ValueBridgeResponse:
     """Portfolio-level Value Bridge across all initiatives."""
     assert_can_view_portfolio(current_user)
-    return svc.get_portfolio_value_bridge()
+    return svc.get_portfolio_value_bridge(basis=basis, year=year)
+
+
+@router.get("/portfolio/benefits-register", response_model=PortfolioBenefitsRegisterResponse)
+async def get_portfolio_benefits_register(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+    year: int | None = Query(None, ge=2020, le=2060),
+    validation_status: FinancialBenefitValidationStatus | None = Query(None),
+    initiative_id: str | None = Query(None),
+    workstream_id: str | None = Query(None),
+    business_unit_id: str | None = Query(None),
+    stage: str | None = Query(None),
+    tag: str | None = Query(None),
+) -> PortfolioBenefitsRegisterResponse:
+    assert_can_view_portfolio(current_user)
+    return svc.get_portfolio_benefits_register(
+        year=year,
+        validation_status=validation_status,
+        initiative_id=initiative_id,
+        workstream_id=workstream_id,
+        business_unit_id=business_unit_id,
+        stage=stage,
+        tag=tag,
+    )
+
+
+@router.get("/portfolio/board-pack.xlsx")
+async def export_portfolio_board_pack(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+    year: int | None = Query(None, ge=2020, le=2060),
+    basis: PortfolioValueBridgeBasis = Query("all_years"),
+) -> Response:
+    assert_can_view_portfolio(current_user)
+    content = svc.export_portfolio_board_pack(year=year, basis=basis)
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="transmuter-board-pack.xlsx"'},
+    )
 
 
 @router.get("/portfolio/financials", response_model=PortfolioFinancialsResponse)
