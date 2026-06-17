@@ -774,6 +774,13 @@ class FinancialService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Benefit line not found",
             )
+        if data.realization_owner_id and not self._repo.tenant_user_exists(
+            data.realization_owner_id
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Realization owner must belong to the current tenant",
+            )
         patch: dict[str, object] = {}
         for field in ("realization_owner_id", "handoff_status", "risk_rating"):
             value = getattr(data, field)

@@ -185,6 +185,17 @@ class FinancialRepository:
         )
         return result.data[0] if result.data else {}
 
+    def tenant_user_exists(self, user_id: str) -> bool:
+        result = (
+            self._c.table("users")
+            .select("id")
+            .eq("tenant_id", self._tid)
+            .eq("id", user_id)
+            .maybe_single()
+            .execute()
+        )
+        return bool(result and result.data)
+
     def create_benefit_line_validation_event(
         self,
         initiative_id: str,

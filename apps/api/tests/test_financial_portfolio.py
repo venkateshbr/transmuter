@@ -10,6 +10,7 @@ from app.domain.financials import (
     CostLineCreate,
     CostLineUpdate,
     FinancialAttributeDefinition,
+    FinancialBenefitLineHandoffUpdate,
     FinancialBenefitLineValidationRequest,
     FinancialCellAssumptionUpdate,
     FinancialConfigGroup,
@@ -1657,6 +1658,7 @@ class _BenefitValidationRepo:
         }
         self.events: list[dict] = []
         self.patch: dict = {}
+        self.valid_users = {"user-1"}
 
     def initiative_exists(self, _initiative_id: str) -> bool:
         return True
@@ -1674,6 +1676,9 @@ class _BenefitValidationRepo:
         self.patch = data
         self.line = {**self.line, **data}
         return self.line
+
+    def tenant_user_exists(self, user_id: str) -> bool:
+        return user_id in self.valid_users
 
     def create_benefit_line_validation_event(
         self,
@@ -1705,6 +1710,26 @@ def test_benefit_line_validation_transition_records_audit_event() -> None:
     assert repo.patch["validated_by"] == "user-1"
     assert repo.events[0]["event_type"] == "validate"
     assert repo.events[0]["comment"] == "Tied to finance model"
+
+
+def test_benefit_line_handoff_rejects_owner_outside_current_tenant() -> None:
+    repo = _BenefitValidationRepo()
+    service = FinancialService.__new__(FinancialService)
+    service._repo = repo
+
+    with pytest.raises(HTTPException) as exc:
+        service.update_benefit_line_handoff(
+            "i1",
+            "bl1",
+            FinancialBenefitLineHandoffUpdate(
+                realization_owner_id="other-tenant-user",
+                handoff_status="owner_assigned",
+            ),
+            "user-1",
+        )
+
+    assert exc.value.status_code == 400
+    assert repo.patch == {}
 
 
 class _ValueBridgeBasisRepo:
