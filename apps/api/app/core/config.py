@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     supabase_local_url: str = ""
     supabase_local_anon_key: str = ""
     supabase_local_service_key: str = ""
+    supabase_schema: str = ""
 
     # Auth
     jwt_secret: str

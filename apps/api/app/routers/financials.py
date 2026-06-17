@@ -545,6 +545,19 @@ async def get_financial_engine_configuration(
 
 
 @router.get(
+    "/financial-engine/annual-baselines",
+    response_model=TenantAnnualBaselineResponse,
+)
+async def get_readonly_tenant_annual_baselines(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+    baseline_year: int | None = Query(None, ge=2020, le=2060),
+) -> TenantAnnualBaselineResponse:
+    assert_can_view_portfolio(current_user)
+    return svc.get_tenant_annual_baselines(baseline_year)
+
+
+@router.get(
     "/admin/financial-engine/annual-baselines",
     response_model=TenantAnnualBaselineResponse,
 )

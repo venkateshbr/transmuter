@@ -7,8 +7,10 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 ENV_FILE="${ENV_FILE:-${SCRIPT_DIR}/.env}"
 HOSTINGER_COMPOSE_TEMPLATE="${HOSTINGER_COMPOSE_TEMPLATE:-${REPO_ROOT}/docker-compose.hostinger.yml}"
 DEPLOY_DIR="${HOSTINGER_DEPLOY_DIR:-/docker/transmuter}"
-REMOTE_ENV_FILE="${REMOTE_ENV_FILE:-${DEPLOY_DIR}/.env}"
-REMOTE_COMPOSE_FILE="${REMOTE_COMPOSE_FILE:-${DEPLOY_DIR}/docker-compose.yml}"
+REMOTE_ENV_FILE_OVERRIDE="${REMOTE_ENV_FILE:-}"
+REMOTE_COMPOSE_FILE_OVERRIDE="${REMOTE_COMPOSE_FILE:-}"
+REMOTE_ENV_FILE="${REMOTE_ENV_FILE_OVERRIDE:-${DEPLOY_DIR}/.env}"
+REMOTE_COMPOSE_FILE="${REMOTE_COMPOSE_FILE_OVERRIDE:-${DEPLOY_DIR}/docker-compose.yml}"
 RUN_DB_SCHEMA_MIGRATION="${RUN_DB_SCHEMA_MIGRATION:-0}"
 DOCKER_BIN="${DOCKER_BIN:-docker}"
 
@@ -35,6 +37,8 @@ Useful environment overrides:
   ENV_FILE=/path/to/hostinger.env
   HOSTINGER_DEPLOY_DIR=/docker/transmuter
   HOSTINGER_COMPOSE_TEMPLATE=/path/to/docker-compose.hostinger.yml
+  TRANSMUTER_COMPOSE_PROJECT=transmuter-hostinger
+  HOSTINGER_STOP_PROJECTS="transmuter transmuter-hostinger"
   RUN_DB_SCHEMA_MIGRATION=1
   DOCKER_BIN=docker
 
@@ -72,6 +76,18 @@ set -a
 # shellcheck source=/dev/null
 . "${ENV_FILE}"
 set +a
+
+DEPLOY_DIR="${HOSTINGER_DEPLOY_DIR:-${DEPLOY_DIR}}"
+REMOTE_ENV_FILE="${REMOTE_ENV_FILE_OVERRIDE:-${DEPLOY_DIR}/.env}"
+REMOTE_COMPOSE_FILE="${REMOTE_COMPOSE_FILE_OVERRIDE:-${DEPLOY_DIR}/docker-compose.yml}"
+COMPOSE_PROJECT="${TRANSMUTER_COMPOSE_PROJECT:-${COMPOSE_PROJECT_NAME:-transmuter-hostinger}}"
+if [[ -z "${HOSTINGER_STOP_PROJECTS:-}" ]]; then
+  if [[ "${COMPOSE_PROJECT}" == "transmuter-hostinger" ]]; then
+    HOSTINGER_STOP_PROJECTS="transmuter transmuter-hostinger"
+  else
+    HOSTINGER_STOP_PROJECTS="${COMPOSE_PROJECT}"
+  fi
+fi
 
 APP_EXCLUDES=(
   --exclude ".git/"
@@ -120,7 +136,7 @@ cp "${HOSTINGER_COMPOSE_TEMPLATE}" "${REMOTE_COMPOSE_FILE}"
 cp "${ENV_FILE}" "${REMOTE_ENV_FILE}"
 chmod 600 "${REMOTE_ENV_FILE}"
 
-for project in transmuter transmuter-hostinger; do
+for project in ${HOSTINGER_STOP_PROJECTS}; do
   "${DOCKER_BIN}" compose -p "${project}" -f "${REMOTE_COMPOSE_FILE}" --env-file "${REMOTE_ENV_FILE}" down --remove-orphans >/dev/null 2>&1 || true
  done
 
@@ -144,12 +160,14 @@ fi
   # shellcheck source=/dev/null
   . "${REMOTE_ENV_FILE}"
   set +a
-  "${DOCKER_BIN}" compose -f "${REMOTE_COMPOSE_FILE}" --env-file "${REMOTE_ENV_FILE}" build
-  "${DOCKER_BIN}" compose -f "${REMOTE_COMPOSE_FILE}" --env-file "${REMOTE_ENV_FILE}" up -d --remove-orphans
-  "${DOCKER_BIN}" compose -f "${REMOTE_COMPOSE_FILE}" --env-file "${REMOTE_ENV_FILE}" ps
+  "${DOCKER_BIN}" compose -p "${COMPOSE_PROJECT}" -f "${REMOTE_COMPOSE_FILE}" --env-file "${REMOTE_ENV_FILE}" build
+  "${DOCKER_BIN}" compose -p "${COMPOSE_PROJECT}" -f "${REMOTE_COMPOSE_FILE}" --env-file "${REMOTE_ENV_FILE}" up -d --remove-orphans
+  "${DOCKER_BIN}" compose -p "${COMPOSE_PROJECT}" -f "${REMOTE_COMPOSE_FILE}" --env-file "${REMOTE_ENV_FILE}" ps
 )
 
 echo "Deployment command completed locally."
 echo "Validate locally:"
-echo "  curl -fsS http://127.0.0.1:4301/health"
-echo "  curl -fsS http://127.0.0.1:4301/api/health"
+LOCAL_WEB_BIND="${TRANSMUTER_WEB_BIND:-127.0.0.1:4301}"
+LOCAL_WEB_BASE_URL="http://${LOCAL_WEB_BIND}"
+echo "  curl -fsS ${LOCAL_WEB_BASE_URL}/health"
+echo "  curl -fsS ${LOCAL_WEB_BASE_URL}/api/health"

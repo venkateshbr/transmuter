@@ -111,6 +111,18 @@ interface ValueRampResponse {
   financial_mode?: unknown;
 }
 
+interface AnnualBaselineValue {
+  metric_definition_id: string;
+  metric_key?: string | null;
+  metric_label?: string | null;
+  baseline_year: number;
+  value: string;
+}
+
+interface TenantAnnualBaselineResponse {
+  values: AnnualBaselineValue[];
+}
+
 @Component({
   selector: 'app-portfolio-financials',
   standalone: true,
@@ -125,11 +137,8 @@ interface ValueRampResponse {
             Tenant-wide planned costs, optional benefits, and actual performance drilldowns by period.
           </p>
           <div class="mt-3 inline-flex items-center gap-2 border border-[var(--t-border)] bg-[var(--t-surface-raised)] px-3 py-2">
-            <span class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Mode</span>
-            <span class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">{{ financialMode().label }}</span>
-            @if (financialMode().description) {
-              <span class="text-[10px] font-semibold text-[var(--t-text-secondary)]">{{ financialMode().description }}</span>
-            }
+            <span class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Data Basis</span>
+            <span class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">Plan · Actuals · Original Baseline</span>
           </div>
         </div>
         <div class="flex flex-wrap items-center justify-end gap-3">
@@ -191,6 +200,26 @@ interface ValueRampResponse {
         </div>
       </header>
 
+      @if (hasPortfolioBaseline()) {
+        <section class="grid gap-4 md:grid-cols-3">
+          <div class="border border-[var(--t-border)] bg-[var(--t-primary)] p-5 text-white shadow-sm">
+            <p class="text-[9px] font-black uppercase tracking-widest text-white/70">FY{{ portfolioBaselineYear() }} Portfolio Baseline</p>
+            <p class="mt-4 text-2xl font-black">{{ formatMoney(annualRevenueBaseline()) }}</p>
+            <p class="mt-1 text-[9px] font-black uppercase tracking-widest text-white/70">Annual revenue</p>
+          </div>
+          <div class="border border-[var(--t-border)] bg-[var(--t-surface)] p-5 shadow-sm">
+            <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">FY{{ portfolioBaselineYear() }} Portfolio Baseline</p>
+            <p class="mt-4 text-2xl font-black text-[var(--t-text-primary)]">{{ formatMoney(annualGrossMarginBaseline()) }}</p>
+            <p class="mt-1 text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Annual gross margin</p>
+          </div>
+          <div class="border border-[var(--t-border)] bg-[var(--t-surface)] p-5 shadow-sm">
+            <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Baseline Margin Rate</p>
+            <p class="mt-4 text-2xl font-black text-[var(--t-text-primary)]">{{ baselineGrossMarginRateLabel() }}</p>
+            <p class="mt-1 text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Gross margin / revenue</p>
+          </div>
+        </section>
+      }
+
       <section class="grid gap-4" [class.md:grid-cols-5]="showBenefits()" [class.md:grid-cols-3]="!showBenefits()">
         @for (card of visibleSummaryCards(); track card.key) {
           <div class="border border-[var(--t-border)] bg-[var(--t-surface)] p-5 shadow-sm">
@@ -217,7 +246,8 @@ interface ValueRampResponse {
         [rows]="response()?.periods || []"
         [granularity]="granularity()"
         [showActuals]="showActuals()"
-        [financialMode]="financialMode()"
+        [baselineValue]="grossMarginBaselinePerPeriod()"
+        [baselineLabel]="trendBaselineLabel()"
         (periodSelected)="openTrendPeriod($event)" />
 
       <section class="grid gap-6 xl:grid-cols-[1fr_1.4fr]">
@@ -538,6 +568,7 @@ export class PortfolioFinancialsComponent implements OnInit {
   selectedPeriod = signal<PeriodRow | null>(null);
   contributorsLoading = signal(false);
   configuration = signal<FinancialConfiguration | null>(null);
+  tenantAnnualBaselines = signal<AnnualBaselineValue[]>([]);
   stageGateDefinitions = signal<StageGateDefinition[]>([]);
   granularity = signal<Granularity>('monthly');
   year = signal<number | null>(new Date().getFullYear());
@@ -584,6 +615,10 @@ export class PortfolioFinancialsComponent implements OnInit {
     this.api.get<StageGateDefinition[]>('/governance/stage-gates').subscribe({
       next: gates => this.stageGateDefinitions.set(Array.isArray(gates) ? gates : []),
       error: () => this.stageGateDefinitions.set([]),
+    });
+    this.api.get<TenantAnnualBaselineResponse>('/financial-engine/annual-baselines').subscribe({
+      next: res => this.tenantAnnualBaselines.set(Array.isArray(res.values) ? res.values : []),
+      error: () => this.tenantAnnualBaselines.set([]),
     });
     this.load();
   }
@@ -695,6 +730,49 @@ export class PortfolioFinancialsComponent implements OnInit {
     return Number.isFinite(parsed) ? parsed : 0;
   }
 
+  portfolioBaselineYear(): number | null {
+    const years = this.baselineCandidateYears();
+    if (!years.length) return null;
+    const selectedYear = this.year();
+    const eligibleYears = selectedYear ? years.filter(year => year <= selectedYear) : years;
+    return Math.max(...(eligibleYears.length ? eligibleYears : years));
+  }
+
+  annualRevenueBaseline(): string | null {
+    return this.baselineValue('annual_revenue_baseline');
+  }
+
+  annualGrossMarginBaseline(): string | null {
+    return this.baselineValue('annual_gross_margin_baseline');
+  }
+
+  hasPortfolioBaseline(): boolean {
+    return this.parseMoney(this.annualRevenueBaseline()) > 0 || this.parseMoney(this.annualGrossMarginBaseline()) > 0;
+  }
+
+  baselineGrossMarginRateLabel(): string {
+    const revenue = this.parseMoney(this.annualRevenueBaseline());
+    const margin = this.parseMoney(this.annualGrossMarginBaseline());
+    if (revenue <= 0 || margin <= 0) return 'n/a';
+    return new Intl.NumberFormat('en-US', {
+      style: 'percent',
+      maximumFractionDigits: 1,
+    }).format(margin / revenue);
+  }
+
+  grossMarginBaselinePerPeriod(): number | null {
+    const margin = this.parseMoney(this.annualGrossMarginBaseline());
+    if (margin <= 0) return null;
+    if (this.granularity() === 'monthly') return margin / 12;
+    if (this.granularity() === 'quarterly') return margin / 4;
+    return margin;
+  }
+
+  trendBaselineLabel(): string {
+    const year = this.portfolioBaselineYear();
+    return year ? `FY${year} GM baseline` : 'GM baseline';
+  }
+
   selectedStageLabel(): string {
     const stage = this.stage();
     if (!stage) return 'All stages';
@@ -703,5 +781,23 @@ export class PortfolioFinancialsComponent implements OnInit {
 
   private stageLabel(value: string): string {
     return value.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
+  }
+
+  private baselineCandidateYears(): number[] {
+    const years = new Set<number>();
+    for (const row of this.tenantAnnualBaselines()) {
+      if (!['annual_revenue_baseline', 'annual_gross_margin_baseline'].includes(row.metric_key || '')) continue;
+      const year = Number(row.baseline_year);
+      if (Number.isFinite(year)) years.add(year);
+    }
+    return Array.from(years).sort((a, b) => a - b);
+  }
+
+  private baselineValue(metricKey: 'annual_revenue_baseline' | 'annual_gross_margin_baseline'): string | null {
+    const year = this.portfolioBaselineYear();
+    if (!year) return null;
+    return this.tenantAnnualBaselines()
+      .find(row => row.metric_key === metricKey && Number(row.baseline_year) === year)
+      ?.value || null;
   }
 }

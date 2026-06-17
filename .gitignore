@@ -17,6 +17,7 @@ htmlcov/
 .env
 .env.hostinger
 infra/hostinger/.env
+infra/hostinger/.env.dev
 .env.local
 .env.*.local
 

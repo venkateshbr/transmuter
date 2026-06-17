@@ -11,6 +11,9 @@ bearer = HTTPBearer()
 
 
 def get_supabase_schema() -> str:
+    configured_schema = settings.supabase_schema.strip()
+    if configured_schema:
+        return configured_schema
     return "transmuter" if settings.supabase_target == "local" else "public"
 
 
