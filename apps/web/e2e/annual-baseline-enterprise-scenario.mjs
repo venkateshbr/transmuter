@@ -158,7 +158,7 @@ async function runApiChecks(authHeaders) {
       `${apiBaseUrl}/initiatives/${initiative.id}/financials/baseline?baseline_year=${baselineYear}`,
       { headers: authHeaders },
     );
-    assert(baseline.locked === false, `${initiative.name} baseline should remain editable before gate approval`);
+    assert(baseline.locked === true, `${initiative.name} baseline should be locked after seeded Gate 2 approval`);
     const values = new Map(baseline.values.map(item => [item.metric_key, item]));
     initiativeRevenueBaseline += decimal(values.get('annual_revenue_baseline')?.value);
     initiativeGrossMarginBaseline += decimal(values.get('annual_gross_margin_baseline')?.value);
@@ -173,6 +173,25 @@ async function runApiChecks(authHeaders) {
   assert(decimal(summaryByKey.get('benefits')?.plan) > 9_000_000, 'FY28 plan benefits should include margin and savings');
   assert(decimal(summaryByKey.get('costs')?.plan) > 700_000, 'FY28 recurring costs should be present');
   assert(decimal(summaryByKey.get('net_value')?.plan) > 8_000_000, 'FY28 net run-rate value should be steering-positive');
+
+  const contributors = await requestJson(
+    `${apiBaseUrl}/portfolio/financials/contributors?granularity=yearly&period=2028&year=2028`,
+    { headers: authHeaders },
+  );
+  const contributorBenefits = (contributors.contributors ?? []).reduce((sum, item) => sum + decimal(item.benefits_plan), 0);
+  const contributorRecurring = (contributors.contributors ?? []).reduce((sum, item) => sum + decimal(item.recurring_costs_plan), 0);
+  const contributorNet = (contributors.contributors ?? []).reduce((sum, item) => sum + decimal(item.net_value_plan), 0);
+  const benefitLineCount = (contributors.contributors ?? []).reduce((sum, item) => sum + (item.benefit_lines ?? []).length, 0);
+  approx(contributorBenefits, decimal(summaryByKey.get('benefits')?.plan), 1, 'FY28 contributor benefit reconciliation');
+  approx(contributorRecurring, decimal(summaryByKey.get('costs')?.plan), 1, 'FY28 contributor recurring cost reconciliation');
+  approx(contributorNet, decimal(summaryByKey.get('net_value')?.plan), 1, 'FY28 contributor net value reconciliation');
+  assert(benefitLineCount >= 10, 'Contributor drawer should include benefit-line detail');
+
+  const benefitLedger = await requestJson(`${apiBaseUrl}/benefit-ledger/summary?granularity=yearly`, {
+    headers: authHeaders,
+  });
+  assert(decimal(benefitLedger.bankable_plan_amount) > 0, 'Benefit ledger should include seeded locked baseline');
+  assert(decimal(benefitLedger.actual_amount) > 0, 'Benefit ledger should include seeded actuals');
 
   const bridge = await requestJson(`${apiBaseUrl}/portfolio/value-bridge`, { headers: authHeaders });
   const bridgeLabels = (bridge.rows ?? []).map(row => row.label);
@@ -193,6 +212,15 @@ async function runApiChecks(authHeaders) {
     { headers: authHeaders },
   );
   assert(decimal(scenarioSummary.revenue_uplift) > 1_000_000, 'Commercial scenario should carry revenue uplift');
+
+  const rebaselineInitiative = initiatives.items.find(item => item.initiative_code === 'ENT-005');
+  assert(rebaselineInitiative, 'ENT-005 should exist for rebaseline validation');
+  const rebaselinePlan = await requestJson(
+    `${apiBaseUrl}/initiatives/${rebaselineInitiative.id}/bankable-plan`,
+    { headers: authHeaders },
+  );
+  assert((rebaselinePlan.history ?? []).length >= 2, 'ENT-005 should include a seeded rebaseline history');
+  assert(rebaselinePlan.current?.version === 2, 'ENT-005 current bankable plan should be version 2');
 
   return { initiatives, financialInitiative };
 }

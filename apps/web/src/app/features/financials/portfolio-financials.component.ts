@@ -62,6 +62,17 @@ interface CostLineContribution {
   actual: string;
 }
 
+interface BenefitLineContribution {
+  id: string;
+  name: string;
+  metric_key: string;
+  metric_label: string;
+  benefit_class?: string | null;
+  plan: string;
+  actual: string;
+  variance: string;
+}
+
 interface InitiativeContribution {
   initiative_id: string;
   initiative_name: string;
@@ -75,6 +86,7 @@ interface InitiativeContribution {
   total_costs_actual: string;
   net_value_plan: string;
   net_value_actual: string;
+  benefit_lines: BenefitLineContribution[];
   cost_lines: CostLineContribution[];
 }
 
@@ -527,6 +539,27 @@ interface TenantAnnualBaselineResponse {
                         <p class="text-[9px] font-black uppercase text-[var(--t-text-tertiary)]">One-time Actual</p>
                         <p class="font-bold">{{ formatMoney(item.one_off_costs_actual) }}</p>
                       </div>
+                    </div>
+                  }
+
+                  @if (item.benefit_lines.length && showBenefits()) {
+                    <div class="mt-5 divide-y divide-[var(--t-border)] border-t border-[var(--t-border)] pt-2">
+                      @for (line of item.benefit_lines; track line.id + line.metric_key) {
+                        <div class="grid gap-2 py-3 text-xs sm:grid-cols-[1fr_auto] sm:items-center">
+                          <div>
+                            <p class="font-black text-[var(--t-text-primary)]">{{ line.name }}</p>
+                            <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">
+                              {{ line.metric_label }} @if (line.benefit_class) { <span>· {{ line.benefit_class }}</span> }
+                            </p>
+                          </div>
+                          <p class="font-bold text-[var(--t-text-secondary)]">
+                            {{ formatMoney(line.plan) }} plan
+                            @if (showActuals()) {
+                              <span> / {{ formatMoney(line.actual) }} actual</span>
+                            }
+                          </p>
+                        </div>
+                      }
                     </div>
                   }
 

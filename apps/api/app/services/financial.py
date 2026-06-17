@@ -78,6 +78,7 @@ from app.domain.financials import (
     InitiativeAnnualBaselineUpdate,
     InitiativeFinancialSelections,
     InitiativeFinancialSelectionsResponse,
+    PortfolioFinancialBenefitLineContribution,
     PortfolioFinancialBreakdown,
     PortfolioFinancialContributorsResponse,
     PortfolioFinancialCostLineContribution,
@@ -1868,9 +1869,19 @@ class FinancialService:
                 tags=tags,
             )
         }
+        raw_entries = self._repo.get_all_entries()
+        if not raw_entries:
+            return self._get_clean_portfolio_financial_contributors(
+                granularity=granularity,
+                period=period,
+                period_key=period_key,
+                effective_year=effective_year,
+                initiatives=initiatives,
+                category_key=category_key,
+            )
         entries = [
             row
-            for row in self._reporting_rows(self._repo.get_all_entries())
+            for row in self._reporting_rows(raw_entries)
             if row.get("initiative_id") in initiatives
             and row.get("year") == effective_year
             and self._portfolio_row_period_label(row, granularity) == period
@@ -1900,6 +1911,196 @@ class FinancialService:
             granularity,
             period,
             period_key,
+        )
+
+    def _get_clean_portfolio_financial_contributors(
+        self,
+        granularity: PortfolioGranularity,
+        period: str,
+        period_key: tuple[str, int, int | None, int | None],
+        effective_year: int,
+        initiatives: dict[str, dict],  # type: ignore[type-arg]
+        category_key: str | None = None,
+    ) -> PortfolioFinancialContributorsResponse:
+        values = self._values_with_formula_metrics(
+            [
+                row
+                for row in self._repo.get_all_metric_values()
+                if row.get("initiative_id") in initiatives
+                and row.get("year") == effective_year
+                and self._clean_portfolio_period_key(row, granularity)[0] == period
+            ],
+            [
+                row
+                for row in self._repo.list_all_initiative_annual_baselines()
+                if row.get("initiative_id") in initiatives
+            ],
+        )
+        costs = [
+            row
+            for row in self._repo.get_all_cost_lines()
+            if row.get("initiative_id") in initiatives
+            and row.get("year") == effective_year
+            and self._clean_portfolio_period_key(row, granularity)[0] == period
+            and (not category_key or row.get("category_key", "other") == category_key)
+        ]
+        definitions = {row["id"]: row for row in self._repo.list_metric_definitions()}
+        scenarios = {row["id"]: row for row in self._repo.list_financial_scenarios()}
+        benefit_lines = {row["id"]: row for row in self._repo.list_all_benefit_lines()}
+        config = self.get_configuration()
+        cost_categories = {
+            item.key: item for item in config.items if item.item_type == "cost_category"
+        }
+        contributors: dict[str, dict[str, object]] = {}
+
+        def record_for(initiative_id: str) -> dict[str, object]:
+            initiative = initiatives.get(initiative_id, {})
+            return contributors.setdefault(
+                initiative_id,
+                {
+                    "initiative_id": initiative_id,
+                    "initiative_name": initiative.get("name") or "Untitled initiative",
+                    "benefits_plan": Decimal("0"),
+                    "benefits_actual": Decimal("0"),
+                    "recurring_costs_plan": Decimal("0"),
+                    "recurring_costs_actual": Decimal("0"),
+                    "one_off_costs_plan": Decimal("0"),
+                    "one_off_costs_actual": Decimal("0"),
+                    "benefit_lines": {},
+                    "cost_lines": [],
+                },
+            )
+
+        for initiative_id in initiatives:
+            initiative_values = [
+                row for row in values if str(row.get("initiative_id")) == str(initiative_id)
+            ]
+            if not initiative_values:
+                continue
+            record = record_for(str(initiative_id))
+            plan = self._clean_value_case(initiative_values, "plan_base")
+            actual = self._clean_value_case(initiative_values, "actual")
+            record["benefits_plan"] = _dec(record["benefits_plan"]) + _dec(plan["benefits_total"])
+            record["benefits_actual"] = _dec(record["benefits_actual"]) + _dec(
+                actual["benefits_total"]
+            )
+
+        for row in values:
+            scenario = scenarios.get(row.get("scenario_id"))
+            if not scenario or scenario.get("key") not in {"plan_base", "actual"}:
+                continue
+            definition = definitions.get(row.get("metric_definition_id"))
+            if not definition or not definition.get("is_benefit"):
+                continue
+            if definition.get("aggregation") == "formula":
+                continue
+            record = record_for(str(row["initiative_id"]))
+            benefit_line_id = row.get("benefit_line_id")
+            benefit_line = benefit_lines.get(benefit_line_id) if benefit_line_id else None
+            contribution_id = str(benefit_line_id or f"metric:{definition['id']}")
+            contribution_key = (contribution_id, str(definition["id"]))
+            benefit_records = record["benefit_lines"]  # type: ignore[assignment]
+            contribution = benefit_records.setdefault(  # type: ignore[union-attr]
+                contribution_key,
+                {
+                    "id": contribution_id,
+                    "name": benefit_line.get("name") if benefit_line else definition["label"],
+                    "metric_key": definition["key"],
+                    "metric_label": definition["label"],
+                    "benefit_class": definition.get("benefit_class"),
+                    "plan": Decimal("0"),
+                    "actual": Decimal("0"),
+                },
+            )
+            amount = _dec(row.get("value"))
+            if scenario.get("key") == "actual":
+                contribution["actual"] += amount
+            else:
+                contribution["plan"] += amount
+
+        for row in costs:
+            record = record_for(str(row["initiative_id"]))
+            plan = _dec(row.get("amount_plan"))
+            actual = _dec(row.get("amount_actual"))
+            category_key_value = row.get("category_key") or "other"
+            category = cost_categories.get(category_key_value)
+            if row.get("is_recurring", False):
+                record["recurring_costs_plan"] = _dec(record["recurring_costs_plan"]) + plan
+                record["recurring_costs_actual"] = _dec(record["recurring_costs_actual"]) + actual
+            else:
+                record["one_off_costs_plan"] = _dec(record["one_off_costs_plan"]) + plan
+                record["one_off_costs_actual"] = _dec(record["one_off_costs_actual"]) + actual
+            record["cost_lines"].append(  # type: ignore[union-attr]
+                PortfolioFinancialCostLineContribution(
+                    id=row["id"],
+                    name=row["name"],
+                    category_key=category_key_value,
+                    category_label=category.label if category else None,
+                    is_recurring=row.get("is_recurring", False),
+                    plan=_money(plan),
+                    actual=_money(actual),
+                )
+            )
+
+        contribution_items: list[PortfolioFinancialInitiativeContribution] = []
+        for record in contributors.values():
+            benefits_plan = _dec(record["benefits_plan"])
+            benefits_actual = _dec(record["benefits_actual"])
+            recurring_plan = _dec(record["recurring_costs_plan"])
+            recurring_actual = _dec(record["recurring_costs_actual"])
+            one_off_plan = _dec(record["one_off_costs_plan"])
+            one_off_actual = _dec(record["one_off_costs_actual"])
+            total_plan = recurring_plan + one_off_plan
+            total_actual = recurring_actual + one_off_actual
+            benefit_line_records: list[PortfolioFinancialBenefitLineContribution] = []
+            for item in record["benefit_lines"].values():  # type: ignore[union-attr]
+                plan_amount = _dec(item["plan"])
+                actual_amount = _dec(item["actual"])
+                benefit_line_records.append(
+                    PortfolioFinancialBenefitLineContribution(
+                        id=str(item["id"]),
+                        name=str(item["name"]),
+                        metric_key=str(item["metric_key"]),
+                        metric_label=str(item["metric_label"]),
+                        benefit_class=item.get("benefit_class"),
+                        plan=_money(plan_amount),
+                        actual=_money(actual_amount),
+                        variance=_money(actual_amount - plan_amount),
+                    )
+                )
+            benefit_line_records.sort(key=lambda item: (item.metric_label, item.name))
+            contribution_items.append(
+                PortfolioFinancialInitiativeContribution(
+                    initiative_id=str(record["initiative_id"]),
+                    initiative_name=str(record["initiative_name"]),
+                    benefits_plan=_money(benefits_plan),
+                    benefits_actual=_money(benefits_actual),
+                    recurring_costs_plan=_money(recurring_plan),
+                    recurring_costs_actual=_money(recurring_actual),
+                    one_off_costs_plan=_money(one_off_plan),
+                    one_off_costs_actual=_money(one_off_actual),
+                    total_costs_plan=_money(total_plan),
+                    total_costs_actual=_money(total_actual),
+                    net_value_plan=_money(benefits_plan - recurring_plan),
+                    net_value_actual=_money(benefits_actual - recurring_actual),
+                    benefit_lines=benefit_line_records,
+                    cost_lines=record["cost_lines"],  # type: ignore[arg-type]
+                )
+            )
+
+        contribution_items.sort(
+            key=lambda item: (
+                -abs(_dec(item.benefits_plan)) - abs(_dec(item.total_costs_plan)),
+                item.initiative_name,
+            )
+        )
+        return PortfolioFinancialContributorsResponse(
+            granularity=granularity,
+            period=period,
+            year=period_key[1],
+            quarter=period_key[2],
+            month=period_key[3],
+            contributors=contribution_items,
         )
 
     def get_portfolio_value_ramp(

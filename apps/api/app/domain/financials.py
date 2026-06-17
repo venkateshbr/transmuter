@@ -613,6 +613,17 @@ class PortfolioFinancialCostLineContribution(BaseModel):
     actual: str = "0"
 
 
+class PortfolioFinancialBenefitLineContribution(BaseModel):
+    id: str
+    name: str
+    metric_key: str
+    metric_label: str
+    benefit_class: FinancialBenefitClass | None = None
+    plan: str = "0"
+    actual: str = "0"
+    variance: str = "0"
+
+
 class PortfolioFinancialInitiativeContribution(BaseModel):
     initiative_id: str
     initiative_name: str
@@ -626,6 +637,7 @@ class PortfolioFinancialInitiativeContribution(BaseModel):
     total_costs_actual: str = "0"
     net_value_plan: str = "0"
     net_value_actual: str = "0"
+    benefit_lines: list[PortfolioFinancialBenefitLineContribution] = Field(default_factory=list)
     cost_lines: list[PortfolioFinancialCostLineContribution] = Field(default_factory=list)
 
 

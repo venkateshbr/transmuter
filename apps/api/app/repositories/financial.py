@@ -148,6 +148,9 @@ class FinancialRepository:
         )
         return result.data or []
 
+    def list_all_benefit_lines(self) -> list[dict]:  # type: ignore[type-arg]
+        return self._select_tenant_pages("financial_benefit_lines")
+
     def list_configurable_metric_values(self, initiative_id: str) -> list[dict]:  # type: ignore[type-arg]
         result = (
             self._c.table("financial_metric_values")

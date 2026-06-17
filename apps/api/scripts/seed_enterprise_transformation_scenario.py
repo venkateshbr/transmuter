@@ -8,6 +8,7 @@ Usage:
 
 from __future__ import annotations
 
+from calendar import monthrange
 from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
@@ -19,6 +20,7 @@ from supabase import Client
 load_dotenv(dotenv_path=Path(__file__).resolve().parents[3] / ".env")
 
 from app.core.database import get_supabase_admin  # noqa: E402
+from app.services.financial import FinancialService  # noqa: E402
 
 ORG_NAME = "Acme Global Manufacturing"
 ORG_SLUG = "acme-transformation-lab"
@@ -134,6 +136,7 @@ def delete_tenant_rows(client: Client, tenant_id: str) -> None:
     tables = [
         "financial_initiative_annual_baselines",
         "financial_tenant_annual_baselines",
+        "benefit_realization_ledger",
         "bankable_plans",
         "gate_submissions",
         "financial_metric_values",
@@ -153,6 +156,7 @@ def delete_tenant_rows(client: Client, tenant_id: str) -> None:
         "risks",
         "milestones",
         "initiatives",
+        "gate_criteria",
         "stage_gate_definitions",
         "workstreams",
         "business_units",
@@ -233,6 +237,86 @@ def insert_stage_gates(client: Client, tenant_id: str) -> None:
             for gate, key, label, from_stage, to_stage in rows
         ]
     ).execute()
+
+
+def insert_gate_criteria(client: Client, tenant_id: str) -> list[dict[str, str | int]]:
+    rows: list[tuple[int, str, str, str]] = [
+        (
+            1,
+            "g1-strategic-fit",
+            "Strategic fit confirmed",
+            "Initiative supports the enterprise transformation thesis and target operating model.",
+        ),
+        (
+            1,
+            "g1-value-hypothesis",
+            "Value hypothesis documented",
+            "Initial benefit type, value driver, and owner are documented.",
+        ),
+        (
+            2,
+            "g2-baseline-approved",
+            "Baseline approved",
+            "FY26 baseline allocation and measurement method are agreed.",
+        ),
+        (
+            2,
+            "g2-assumptions-documented",
+            "Benefit assumptions documented",
+            "Revenue, margin, savings, cost, and timing assumptions are captured.",
+        ),
+        (
+            2,
+            "g2-finance-validation",
+            "Finance validation completed",
+            "Finance has validated the benefit logic before bankable plan lock.",
+        ),
+        (
+            3,
+            "g3-delivery-plan",
+            "Delivery plan approved",
+            "Milestones, dependencies, budget, and owner accountability are approved.",
+        ),
+        (
+            3,
+            "g3-owner-sponsor",
+            "Owner and sponsor assigned",
+            "Business owner, sponsor, and transformation office owner are assigned.",
+        ),
+        (
+            4,
+            "g4-implementation-evidence",
+            "Implementation evidence submitted",
+            "Execution evidence confirms the initiative is live or materially complete.",
+        ),
+        (
+            4,
+            "g4-actuals-started",
+            "Actuals collection started",
+            "Benefit realization actuals are being captured in the ledger.",
+        ),
+        (
+            5,
+            "g5-benefits-accepted",
+            "Benefits realized and accepted",
+            "Realized value is accepted by the transformation office and business owner.",
+        ),
+    ]
+    payload = [
+        {
+            "id": str(uuid4()),
+            "tenant_id": tenant_id,
+            "gate_number": gate_number,
+            "criterion_id": criterion_id,
+            "label": label,
+            "guidance": guidance,
+            "sort_order": index * 10,
+            "is_active": True,
+        }
+        for index, (gate_number, criterion_id, label, guidance) in enumerate(rows, start=1)
+    ]
+    client.table("gate_criteria").insert(payload).execute()
+    return payload
 
 
 def insert_financial_config(client: Client, tenant_id: str) -> None:
@@ -819,7 +903,7 @@ def insert_initiatives(
     workstreams: dict[str, str],
     metric_ids: dict[str, str],
     scenario_ids: dict[str, str],
-) -> list[str]:
+) -> dict[str, str]:
     bu_by_name = {
         "Corporate": business_units["CORP"],
         "Commercial": business_units["COM"],
@@ -827,7 +911,8 @@ def insert_initiatives(
         "Technology": business_units["TECH"],
         "Shared Services": business_units["SHR"],
     }
-    initiative_ids: list[str] = []
+    initiative_ids: dict[str, str] = {}
+    benefit_line_rows = []
     metric_value_rows = []
     cost_rows = []
     baseline_rows = []
@@ -851,7 +936,54 @@ def insert_initiatives(
             recurring_2028,
         ) = row
         initiative_id = str(uuid4())
-        initiative_ids.append(initiative_id)
+        initiative_ids[code] = initiative_id
+        benefit_line_ids: dict[str, str] = {}
+        for metric_key, label, description, benefit_class in [
+            (
+                "revenue_uplift",
+                f"{code} revenue uplift",
+                "Incremental revenue created by the initiative.",
+                "revenue",
+            ),
+            (
+                "gm_uplift",
+                f"{code} gross margin uplift",
+                "Gross margin improvement created by the initiative.",
+                "margin",
+            ),
+            (
+                "cost_savings",
+                f"{code} cost savings",
+                "Run-rate savings created by the initiative.",
+                "savings",
+            ),
+        ]:
+            benefit_line_id = str(uuid4())
+            benefit_line_ids[metric_key] = benefit_line_id
+            benefit_line_rows.append(
+                {
+                    "id": benefit_line_id,
+                    "tenant_id": tenant_id,
+                    "initiative_id": initiative_id,
+                    "metric_definition_id": metric_ids[metric_key],
+                    "name": label,
+                    "description": description,
+                    "impact_type": "recurring",
+                    "timing": "FY27-FY28 ramp to run-rate",
+                    "confidence": "85.00" if benefit_class != "revenue" else "80.00",
+                    "phasing": {"method": "monthly_even", "source": "acme_seed"},
+                    "attributes": {
+                        "benefit_class": benefit_class,
+                        "evidence": "Seeded board-demo assumption pack",
+                    },
+                    "show_in_summary": True,
+                    "display_order": len(benefit_line_rows) + 10,
+                    "created_by": user_id,
+                    "updated_by": user_id,
+                    "created_at": now(),
+                    "updated_at": now(),
+                }
+            )
         client.table("initiatives").insert(
             {
                 "id": initiative_id,
@@ -969,6 +1101,7 @@ def insert_initiatives(
                                 "tenant_id": tenant_id,
                                 "initiative_id": initiative_id,
                                 "metric_definition_id": metric_ids[metric_key],
+                                "benefit_line_id": benefit_line_ids.get(metric_key),
                                 "scenario_id": scenario_ids[scenario_key],
                                 "year": year,
                                 "month": month,
@@ -1060,12 +1193,113 @@ def insert_initiatives(
             ]
         ).execute()
     client.table("financial_initiative_annual_baselines").insert(baseline_rows).execute()
+    client.table("financial_benefit_lines").insert(benefit_line_rows).execute()
     for start in range(0, len(metric_value_rows), 500):
         client.table("financial_metric_values").insert(
             metric_value_rows[start : start + 500]
         ).execute()
     client.table("financial_cost_lines").insert(cost_rows).execute()
     return initiative_ids
+
+
+def insert_bankable_plan_and_realization_demo(
+    client: Client,
+    tenant_id: str,
+    user_id: str,
+    initiative_ids: dict[str, str],
+    gate_criteria: list[dict[str, str | int]],
+) -> None:
+    service = FinancialService(client, tenant_id)  # type: ignore[arg-type]
+    criteria_snapshot = [
+        {
+            "criterion_id": row["criterion_id"],
+            "label": row["label"],
+            "ticked": True,
+            "ticked_by": user_id,
+            "ticked_at": now(),
+        }
+        for row in gate_criteria
+        if row["gate_number"] == 2
+    ]
+    submission_rows = []
+    submission_ids: dict[str, str] = {}
+    for code, initiative_id in initiative_ids.items():
+        submission_id = str(uuid4())
+        submission_ids[code] = submission_id
+        submission_rows.append(
+            {
+                "id": submission_id,
+                "tenant_id": tenant_id,
+                "initiative_id": initiative_id,
+                "gate_number": 2,
+                "submitted_by_id": user_id,
+                "submitted_at": now(),
+                "decision": "approved",
+                "decided_by_id": user_id,
+                "decided_at": now(),
+                "commentary": "Seeded ACME Gate 2 approval for bankable plan lock.",
+                "criteria_snapshot": criteria_snapshot,
+            }
+        )
+    client.table("gate_submissions").insert(submission_rows).execute()
+
+    for code, initiative_id in initiative_ids.items():
+        service.lock_bankable_plan_from_approval(
+            initiative_id,
+            submission_ids[code],
+            user_id,
+            locked_reason="Seeded Gate 2 approval for ACME board-demo bankable plan.",
+        )
+    service.rebaseline_bankable_plan(
+        initiative_ids["ENT-005"],
+        user_id,
+        reason=(
+            "Seeded rebaseline example for Enterprise Data Platform after delivery "
+            "timing and tooling assumptions were refreshed."
+        ),
+    )
+
+    rows = []
+    initiative_seed_by_code = {row[0]: row for row in INITIATIVES}
+    for code, initiative_id in initiative_ids.items():
+        seed = initiative_seed_by_code[code]
+        gm_2027 = seed[10]
+        gm_2028 = seed[11]
+        savings_2027 = seed[12]
+        savings_2028 = seed[13]
+        yearly = {
+            2027: {
+                "plan": gm_2027 + savings_2027,
+                "actual": (gm_2027 * Decimal("0.86")) + (savings_2027 * Decimal("0.82")),
+            },
+            2028: {
+                "plan": gm_2028 + savings_2028,
+                "actual": (gm_2028 * Decimal("0.90")) + (savings_2028 * Decimal("0.88")),
+            },
+        }
+        for year, amounts in yearly.items():
+            plan_monthly = per_month(amounts["plan"])
+            actual_monthly = per_month(amounts["actual"])
+            for month in range(1, 13):
+                last_day = monthrange(year, month)[1]
+                rows.append(
+                    {
+                        "id": str(uuid4()),
+                        "tenant_id": tenant_id,
+                        "initiative_id": initiative_id,
+                        "period_granularity": "monthly",
+                        "period_start": f"{year}-{month:02d}-01",
+                        "period_end": f"{year}-{month:02d}-{last_day:02d}",
+                        "bankable_plan_amount": money(plan_monthly),
+                        "actual_amount": money(actual_monthly),
+                        "description": (
+                            f"Seeded ACME {year} monthly realization for {code}; "
+                            "actuals mirror financial-engine actual scenario."
+                        ),
+                    }
+                )
+    for start in range(0, len(rows), 500):
+        client.table("benefit_realization_ledger").insert(rows[start : start + 500]).execute()
 
 
 def main() -> None:
@@ -1076,6 +1310,7 @@ def main() -> None:
     business_units = insert_business_units(client, tenant_id)
     workstreams = insert_workstreams(client, tenant_id, business_units)
     insert_stage_gates(client, tenant_id)
+    gate_criteria = insert_gate_criteria(client, tenant_id)
     insert_financial_config(client, tenant_id)
     metric_ids, scenario_ids = insert_engine_config(client, tenant_id, user_id)
     insert_tenant_baselines(client, tenant_id, metric_ids, user_id)
@@ -1088,10 +1323,20 @@ def main() -> None:
         metric_ids,
         scenario_ids,
     )
+    insert_bankable_plan_and_realization_demo(
+        client,
+        tenant_id,
+        user_id,
+        initiative_ids,
+        gate_criteria,
+    )
     print("Seeded enterprise transformation scenario")
     print(f"  tenant_id: {tenant_id}")
     print(f"  login: {ADMIN_EMAIL}")
     print(f"  initiatives: {len(initiative_ids)}")
+    print("  gate criteria: seeded")
+    print("  bankable plans: seeded")
+    print("  benefit ledger: seeded")
     print(f"  FY26 revenue baseline: {money(BASELINE_REVENUE)}")
     print(f"  FY26 gross margin baseline: {money(BASELINE_GROSS_MARGIN)}")
     print("  FY28 plan target revenue uplift: 4000000.0000")

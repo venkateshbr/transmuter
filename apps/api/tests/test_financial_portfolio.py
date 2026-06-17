@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any, cast
 
 import pytest
@@ -91,6 +92,169 @@ def _config() -> FinancialConfigurationResponse:
 class _SummaryRepo:
     def list_cost_lines(self, _initiative_id: str) -> list[dict]:
         return []
+
+
+class _CleanContributorRepo:
+    def get_portfolio_initiatives(self) -> list[dict]:
+        return [
+            {
+                "id": "i1",
+                "name": "Pricing optimization",
+                "stage": "in_progress",
+                "workstream_id": "w1",
+                "tag": "commercial",
+                "initiative_business_units": [{"business_unit_id": "bu1"}],
+            },
+            {
+                "id": "i2",
+                "name": "Procurement savings",
+                "stage": "in_progress",
+                "workstream_id": "w2",
+                "tag": "procurement",
+                "initiative_business_units": [{"business_unit_id": "bu2"}],
+            },
+        ]
+
+    def get_all_entries(self) -> list[dict]:
+        return []
+
+    def get_all_metric_values(self) -> list[dict]:
+        return [
+            {
+                "id": "v1",
+                "tenant_id": "t1",
+                "initiative_id": "i1",
+                "metric_definition_id": "m_gm",
+                "benefit_line_id": "bl1",
+                "scenario_id": "s_plan",
+                "year": 2028,
+                "month": 1,
+                "value": "100.0000",
+            },
+            {
+                "id": "v2",
+                "tenant_id": "t1",
+                "initiative_id": "i1",
+                "metric_definition_id": "m_save",
+                "benefit_line_id": "bl2",
+                "scenario_id": "s_plan",
+                "year": 2028,
+                "month": 1,
+                "value": "50.0000",
+            },
+            {
+                "id": "v3",
+                "tenant_id": "t1",
+                "initiative_id": "i1",
+                "metric_definition_id": "m_gm",
+                "benefit_line_id": "bl1",
+                "scenario_id": "s_actual",
+                "year": 2028,
+                "month": 1,
+                "value": "90.0000",
+            },
+            {
+                "id": "v4",
+                "tenant_id": "t1",
+                "initiative_id": "i1",
+                "metric_definition_id": "m_save",
+                "benefit_line_id": "bl2",
+                "scenario_id": "s_actual",
+                "year": 2028,
+                "month": 1,
+                "value": "45.0000",
+            },
+            {
+                "id": "v5",
+                "tenant_id": "t1",
+                "initiative_id": "i2",
+                "metric_definition_id": "m_save",
+                "benefit_line_id": "bl3",
+                "scenario_id": "s_plan",
+                "year": 2028,
+                "month": 1,
+                "value": "75.0000",
+            },
+        ]
+
+    def list_all_initiative_annual_baselines(self) -> list[dict]:
+        return []
+
+    def get_all_cost_lines(self) -> list[dict]:
+        return [
+            {
+                "id": "c1",
+                "initiative_id": "i1",
+                "year": 2028,
+                "month": 1,
+                "name": "Run support",
+                "category_key": "software",
+                "is_recurring": True,
+                "amount_plan": "25.0000",
+                "amount_actual": "20.0000",
+            }
+        ]
+
+    def list_metric_definitions(self) -> list[dict]:
+        return [
+            {
+                "id": "m_gm",
+                "key": "gm_uplift",
+                "label": "Gross Margin Uplift",
+                "aggregation": "sum",
+                "is_benefit": True,
+                "benefit_class": "margin",
+            },
+            {
+                "id": "m_save",
+                "key": "cost_savings",
+                "label": "Cost Savings",
+                "aggregation": "sum",
+                "is_benefit": True,
+                "benefit_class": "savings",
+            },
+        ]
+
+    def list_financial_scenarios(self) -> list[dict]:
+        return [
+            {"id": "s_plan", "key": "plan_base"},
+            {"id": "s_actual", "key": "actual"},
+        ]
+
+    def list_all_benefit_lines(self) -> list[dict]:
+        return [
+            {"id": "bl1", "name": "Pricing margin uplift"},
+            {"id": "bl2", "name": "Pricing operating savings"},
+            {"id": "bl3", "name": "Vendor savings"},
+        ]
+
+    def list_config_groups(self) -> list[dict]:
+        return [
+            {
+                "id": "g_cost",
+                "key": "operating",
+                "label": "Operating Costs",
+                "kind": "cost_category",
+                "display_order": 1,
+                "is_system": True,
+                "is_active": True,
+            }
+        ]
+
+    def list_config_items(self) -> list[dict]:
+        return [
+            {
+                "id": "ci_software",
+                "group_id": "g_cost",
+                "key": "software",
+                "label": "Software",
+                "item_type": "cost_category",
+                "rollup_type": "recurring_cost",
+                "display_order": 1,
+                "is_system": True,
+                "is_active": True,
+            }
+        ]
 
 
 def test_default_financial_scope_includes_all_system_cost_categories() -> None:
@@ -214,6 +378,38 @@ def test_financial_summary_zero_month_rows_do_not_hide_quarter_values() -> None:
 
     assert summary.revenue_uplift_plan_base == "125000.0000"
     assert summary.gm_uplift_plan_base == "125000.0000"
+
+
+def test_clean_portfolio_contributors_include_configurable_metric_benefits() -> None:
+    service = FinancialService.__new__(FinancialService)
+    service._repo = _CleanContributorRepo()
+
+    response = service.get_portfolio_financial_contributors(
+        granularity="yearly",
+        period="2028",
+        year=2028,
+    )
+
+    assert response.period == "2028"
+    totals = {
+        "benefits_plan": sum(Decimal(row.benefits_plan) for row in response.contributors),
+        "benefits_actual": sum(Decimal(row.benefits_actual) for row in response.contributors),
+        "recurring_costs_plan": sum(
+            Decimal(row.recurring_costs_plan) for row in response.contributors
+        ),
+    }
+    assert totals == {
+        "benefits_plan": Decimal("225.0000"),
+        "benefits_actual": Decimal("135.0000"),
+        "recurring_costs_plan": Decimal("25.0000"),
+    }
+    pricing = next(row for row in response.contributors if row.initiative_id == "i1")
+    assert pricing.net_value_plan == "125.0000"
+    assert [line.name for line in pricing.benefit_lines] == [
+        "Pricing operating savings",
+        "Pricing margin uplift",
+    ]
+    assert pricing.cost_lines[0].category_label == "Software"
 
 
 def test_reporting_cost_lines_do_not_double_count_quarter_with_monthly_lines() -> None:
