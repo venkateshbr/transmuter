@@ -1140,7 +1140,7 @@ class FinancialRepository:
             self._c.table("initiatives")
             .select(
                 "id,initiative_code,name,stage,workstream_id,tag,"
-                "workstreams(name),initiative_business_units(business_unit_id)"
+                "workstreams(name),initiative_business_units(business_unit_id, business_units(id, name))"
             )
             .eq("tenant_id", self._tid)
             .is_("archived_at", "null")

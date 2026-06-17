@@ -212,6 +212,33 @@ async function runApiChecks(authHeaders) {
   assert(decimal(benefitsRegister.totals?.validated_plan) > 0, 'Benefits Register should include validated plan value');
   assert(decimal(benefitsRegister.totals?.risk_adjusted_plan) > 0, 'Benefits Register should include risk-adjusted plan value');
 
+  const initiativePortfolio = await requestJson(
+    `${apiBaseUrl}/portfolio/initiative-portfolio?baseline_year=${baselineYear}&value_year=2028&scenario=plan_base`,
+    { headers: authHeaders },
+  );
+  assert((initiativePortfolio.rows ?? []).length === 10, 'Initiative Portfolio should expose all 10 initiatives');
+  assert(
+    (initiativePortfolio.baseline_metrics ?? []).some(item => item.key === 'annual_revenue_baseline')
+      && (initiativePortfolio.baseline_metrics ?? []).some(item => item.key === 'annual_gross_margin_baseline'),
+    'Initiative Portfolio should expose configured annual baseline metrics',
+  );
+  assert(
+    (initiativePortfolio.value_metrics ?? []).some(item => item.key === 'revenue_uplift')
+      && (initiativePortfolio.value_metrics ?? []).some(item => item.key === 'gm_uplift')
+      && (initiativePortfolio.value_metrics ?? []).some(item => item.key === 'cost_savings'),
+    'Initiative Portfolio should expose configured value-year benefit metrics',
+  );
+  const baselineReconciliation = new Map((initiativePortfolio.baseline_reconciliation ?? []).map(item => [item.metric_key, item]));
+  assert(baselineReconciliation.get('annual_revenue_baseline')?.reconciled === true, 'Initiative Portfolio revenue baseline should reconcile');
+  assert(baselineReconciliation.get('annual_gross_margin_baseline')?.reconciled === true, 'Initiative Portfolio gross margin baseline should reconcile');
+  approx(decimal(initiativePortfolio.totals?.baseline_values?.annual_revenue_baseline), 20_000_000, 1, 'Initiative Portfolio revenue baseline total');
+  approx(decimal(initiativePortfolio.totals?.baseline_values?.annual_gross_margin_baseline), 9_000_000, 1, 'Initiative Portfolio gross margin baseline total');
+  approx(decimal(initiativePortfolio.totals?.net_run_rate_value), decimal(summaryByKey.get('net_value')?.plan), 1, 'Initiative Portfolio net run-rate reconciliation');
+  const pricingRow = (initiativePortfolio.rows ?? []).find(item => item.initiative_code === 'ENT-006');
+  assert(pricingRow, 'Initiative Portfolio should include ENT-006');
+  approx(decimal(pricingRow.baseline_values?.annual_revenue_baseline), 3_000_000, 1, 'ENT-006 revenue baseline');
+  approx(decimal(pricingRow.baseline_values?.annual_gross_margin_baseline), 1_350_000, 1, 'ENT-006 gross margin baseline');
+
   const boardPack = await fetch(`${apiBaseUrl}/portfolio/board-pack.xlsx?basis=target_year_run_rate&year=2028`, { headers: authHeaders });
   assert(boardPack.ok, `Board pack export failed: ${boardPack.status}`);
   const boardPackBytes = await boardPack.arrayBuffer();
@@ -352,13 +379,114 @@ async function runBrowserChecks(auth, initiative) {
         return true;
       })()
     `);
+    try {
+      await waitFor(
+        () => evalJs(page, `
+          (() => {
+            const text = document.body.innerText;
+            const lower = text.toLowerCase();
+            return lower.includes('annual baseline')
+              && lower.includes('fy${baselineYear} original operating metrics')
+              && text.includes('$3,000,000')
+              && text.includes('$1,350,000')
+              && lower.includes('base')
+              && lower.includes('revenue uplift')
+              && !text.includes('Annual Revenue Baseline (Plan Base)');
+          })()
+        `),
+        'initiative financials tab with annual baseline panel',
+      );
+    } catch (error) {
+      const state = await evalJs(page, `
+        ({
+          href: location.href,
+          text: document.body?.innerText?.slice(0, 2000) ?? ''
+        })
+      `);
+      throw new Error(`${error.message}; page=${JSON.stringify(state)}`);
+    }
+
+    await assertPage(
+      page,
+      `${uiBaseUrl}/initiatives/${initiative.id}/edit`,
+      `
+        document.body.innerText.includes('Edit Initiative')
+      `,
+      'initiative edit shell',
+    );
     await waitFor(
       () => evalJs(page, `
-        document.body.innerText.includes('Baseline')
-        && document.body.innerText.includes('Plan Base')
-        && document.body.innerText.includes('Revenue Uplift')
+        [...document.querySelectorAll('input')].some(input => input.value === ${JSON.stringify(initiative.name)})
       `),
-      'initiative financials tab with baseline scenario',
+      'initiative edit form loaded',
+    );
+    await evalJs(page, `
+      (() => {
+        const button = [...document.querySelectorAll('button')]
+          .find(node => node.textContent.toLowerCase().includes('next'));
+        if (!button) throw new Error('Next button not found on initiative edit wizard');
+        button.click();
+        return true;
+      })()
+    `);
+    await waitFor(
+      () => evalJs(page, `document.body.innerText.includes('Step 2 of 3')`),
+      'initiative edit step 2',
+    );
+    await evalJs(page, `
+      (() => {
+        const button = [...document.querySelectorAll('button')]
+          .find(node => node.textContent.toLowerCase().includes('next'));
+        if (!button) throw new Error('Next button not found on initiative edit wizard step 2');
+        button.click();
+        return true;
+      })()
+    `);
+    await waitFor(
+      () => evalJs(page, `document.body.innerText.includes('Step 3 of 3')`),
+      'initiative edit step 3',
+    );
+    try {
+      await waitFor(
+        () => evalJs(page, `
+          (() => {
+            const section = document.querySelector('[data-testid="initiative-edit-annual-baseline"]');
+            const text = section?.innerText || '';
+          const lower = text.toLowerCase();
+          return lower.includes('annual baseline')
+            && lower.includes('annual revenue baseline')
+            && lower.includes('annual gross margin baseline')
+            && !lower.includes('revenue uplift')
+            && !lower.includes('cost savings');
+          })()
+        `),
+        'initiative edit annual baseline fields',
+      );
+    } catch (error) {
+      const state = await evalJs(page, `
+        ({
+          href: location.href,
+          text: document.body?.innerText?.slice(0, 2000) ?? ''
+        })
+      `);
+      throw new Error(`${error.message}; page=${JSON.stringify(state)}`);
+    }
+
+    await assertPage(
+      page,
+      `${uiBaseUrl}/financials/initiative-portfolio`,
+      `
+        (() => {
+          const text = document.body.innerText;
+          const lower = text.toLowerCase();
+          return lower.includes('initiative portfolio')
+            && lower.includes('annual revenue baseline')
+            && lower.includes('annual gross margin baseline')
+            && lower.includes('reconciles')
+            && text.includes('$8,350,000');
+        })()
+      `,
+      'initiative portfolio dashboard table',
     );
 
     await assertPage(

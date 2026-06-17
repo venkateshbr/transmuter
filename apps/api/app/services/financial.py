@@ -94,6 +94,11 @@ from app.domain.financials import (
     PortfolioFinancialsResponse,
     PortfolioFinancialSummaryCard,
     PortfolioGranularity,
+    PortfolioInitiativeBaselineReconciliation,
+    PortfolioInitiativeMetricColumn,
+    PortfolioInitiativePortfolioResponse,
+    PortfolioInitiativePortfolioRow,
+    PortfolioInitiativePortfolioTotals,
     PortfolioInYearValueCard,
     PortfolioValueBridgeBasis,
     PortfolioValueRampPeriod,
@@ -1891,6 +1896,268 @@ class FinancialService:
 
     # ── Portfolio financials ─────────────────────────────────────────────────
 
+    def get_portfolio_initiative_portfolio(
+        self,
+        baseline_year: int | None = None,
+        value_year: int | None = None,
+        scenario: str = "plan_base",
+        initiative_id: str | None = None,
+        workstream_id: str | None = None,
+        business_unit_id: str | None = None,
+        stage: str | None = None,
+        tag: str | None = None,
+    ) -> PortfolioInitiativePortfolioResponse:
+        scenario_key = scenario or "plan_base"
+        if scenario_key not in {"plan_base", "plan_high", "actual"}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Scenario must be one of plan_base, plan_high, or actual",
+            )
+
+        business_unit_ids = self._split_filter_values(business_unit_id)
+        workstream_ids = self._split_filter_values(workstream_id)
+        stages = self._split_filter_values(stage)
+        tags = self._split_filter_values(tag)
+        initiatives = {
+            str(row["id"]): row
+            for row in self._repo.get_portfolio_initiatives()
+            if self._portfolio_initiative_matches(
+                row,
+                initiative_id=initiative_id,
+                workstream_ids=workstream_ids,
+                business_unit_ids=business_unit_ids,
+                stages=stages,
+                tags=tags,
+            )
+        }
+
+        definitions = [
+            row for row in self._repo.list_metric_definitions() if row.get("is_active", True)
+        ]
+        definitions_by_id = {str(row["id"]): row for row in definitions}
+        baseline_definitions = self._baseline_metric_definitions(definitions)
+        value_definitions = [
+            row
+            for row in definitions
+            if row.get("is_benefit") and row.get("aggregation") != "formula"
+        ]
+        value_definition_by_key = {str(row["key"]): row for row in value_definitions}
+        scenarios = {str(row["id"]): row for row in self._repo.list_financial_scenarios()}
+
+        all_baselines = [
+            row
+            for row in self._repo.list_all_initiative_annual_baselines()
+            if str(row.get("initiative_id")) in initiatives
+        ]
+        tenant_baselines_all = self._repo.list_tenant_annual_baselines()
+        available_baseline_years = sorted(
+            {
+                int(row["baseline_year"])
+                for row in [*all_baselines, *tenant_baselines_all]
+                if row.get("baseline_year") is not None
+            }
+        )
+        effective_baseline_year = baseline_year
+        if effective_baseline_year is None and available_baseline_years:
+            effective_baseline_year = available_baseline_years[-1]
+
+        all_values = [
+            row
+            for row in self._repo.get_all_metric_values()
+            if str(row.get("initiative_id")) in initiatives
+        ]
+        all_costs = [
+            row
+            for row in self._repo.get_all_cost_lines()
+            if str(row.get("initiative_id")) in initiatives
+        ]
+        available_value_years = sorted(
+            {int(row["year"]) for row in [*all_values, *all_costs] if row.get("year") is not None}
+        )
+        effective_value_year = value_year
+        if effective_value_year is None and available_value_years:
+            effective_value_year = available_value_years[-1]
+
+        tenant_baseline_values: dict[str, Decimal] = {}
+        for row in tenant_baselines_all:
+            if (
+                effective_baseline_year is not None
+                and int(row["baseline_year"]) != effective_baseline_year
+            ):
+                continue
+            definition = definitions_by_id.get(str(row.get("metric_definition_id")))
+            if not definition:
+                continue
+            tenant_baseline_values[str(definition["key"])] = _dec(row.get("value"))
+
+        baseline_values_by_initiative: dict[str, dict[str, Decimal]] = {}
+        for row in all_baselines:
+            if (
+                effective_baseline_year is not None
+                and int(row["baseline_year"]) != effective_baseline_year
+            ):
+                continue
+            definition = definitions_by_id.get(str(row.get("metric_definition_id")))
+            if not definition:
+                continue
+            initiative_key = str(row.get("initiative_id"))
+            values = baseline_values_by_initiative.setdefault(initiative_key, {})
+            values[str(definition["key"])] = values.get(
+                str(definition["key"]), Decimal("0")
+            ) + _dec(row.get("value"))
+
+        scenario_ids = {
+            str(scenario_id)
+            for scenario_id, row in scenarios.items()
+            if row.get("key") == scenario_key
+        }
+        value_metric_values_by_initiative: dict[str, dict[str, Decimal]] = {}
+        for row in all_values:
+            if effective_value_year is not None and int(row["year"]) != effective_value_year:
+                continue
+            if str(row.get("scenario_id")) not in scenario_ids:
+                continue
+            definition = definitions_by_id.get(str(row.get("metric_definition_id")))
+            if (
+                not definition
+                or not definition.get("is_benefit")
+                or definition.get("aggregation") == "formula"
+            ):
+                continue
+            initiative_key = str(row.get("initiative_id"))
+            metric_key = str(definition["key"])
+            values = value_metric_values_by_initiative.setdefault(initiative_key, {})
+            values[metric_key] = values.get(metric_key, Decimal("0")) + _dec(row.get("value"))
+
+        costs_by_initiative: dict[str, dict[str, Decimal]] = {}
+        for row in all_costs:
+            if effective_value_year is not None and int(row["year"]) != effective_value_year:
+                continue
+            initiative_key = str(row.get("initiative_id"))
+            costs = costs_by_initiative.setdefault(
+                initiative_key,
+                {"recurring": Decimal("0"), "one_off": Decimal("0")},
+            )
+            raw_amount = (
+                row.get("amount_actual") if scenario_key == "actual" else row.get("amount_plan")
+            )
+            bucket = "recurring" if row.get("is_recurring", False) else "one_off"
+            costs[bucket] = costs[bucket] + _dec(raw_amount)
+
+        rows: list[PortfolioInitiativePortfolioRow] = []
+        totals_baseline = {str(row["key"]): Decimal("0") for row in baseline_definitions}
+        totals_values = {str(row["key"]): Decimal("0") for row in value_definitions}
+        total_benefits = Decimal("0")
+        total_recurring = Decimal("0")
+        total_one_off = Decimal("0")
+        for initiative in sorted(
+            initiatives.values(),
+            key=lambda item: str(item.get("initiative_code") or item.get("name") or ""),
+        ):
+            initiative_key = str(initiative["id"])
+            baseline_values = baseline_values_by_initiative.get(initiative_key, {})
+            value_values = value_metric_values_by_initiative.get(initiative_key, {})
+            costs = costs_by_initiative.get(
+                initiative_key,
+                {"recurring": Decimal("0"), "one_off": Decimal("0")},
+            )
+            benefits_total = sum(
+                amount
+                for key, amount in value_values.items()
+                if value_definition_by_key.get(key, {}).get("benefit_class") != "revenue"
+            )
+            recurring = _dec(costs["recurring"])
+            one_off = _dec(costs["one_off"])
+            for key, amount in baseline_values.items():
+                if key in totals_baseline:
+                    totals_baseline[key] += amount
+            for key, amount in value_values.items():
+                if key in totals_values:
+                    totals_values[key] += amount
+            total_benefits += benefits_total
+            total_recurring += recurring
+            total_one_off += one_off
+            business_units = self._initiative_business_units(initiative)
+            rows.append(
+                PortfolioInitiativePortfolioRow(
+                    initiative_id=initiative_key,
+                    initiative_code=initiative.get("initiative_code"),
+                    initiative_name=initiative.get("name") or "Untitled initiative",
+                    stage=initiative.get("stage"),
+                    tag=initiative.get("tag"),
+                    workstream_id=(
+                        str(initiative.get("workstream_id"))
+                        if initiative.get("workstream_id")
+                        else None
+                    ),
+                    workstream_name=self._initiative_workstream_name(initiative),
+                    business_unit_ids=[item[0] for item in business_units],
+                    business_unit_names=[item[1] for item in business_units if item[1]],
+                    baseline_values={
+                        str(definition["key"]): _money(
+                            baseline_values.get(str(definition["key"]), Decimal("0"))
+                        )
+                        for definition in baseline_definitions
+                    },
+                    baseline_complete=all(
+                        str(definition["key"]) in baseline_values
+                        for definition in baseline_definitions
+                    ),
+                    value_metric_values={
+                        str(definition["key"]): _money(
+                            value_values.get(str(definition["key"]), Decimal("0"))
+                        )
+                        for definition in value_definitions
+                    },
+                    benefits_total=_money(benefits_total),
+                    recurring_costs=_money(recurring),
+                    one_off_costs=_money(one_off),
+                    net_run_rate_value=_money(benefits_total - recurring),
+                )
+            )
+
+        reconciliation = []
+        for definition in baseline_definitions:
+            key = str(definition["key"])
+            tenant_value = tenant_baseline_values.get(key, Decimal("0"))
+            initiative_total = totals_baseline.get(key, Decimal("0"))
+            variance = initiative_total - tenant_value
+            reconciliation.append(
+                PortfolioInitiativeBaselineReconciliation(
+                    metric_key=key,
+                    metric_label=str(definition["label"]),
+                    tenant_value=_money(tenant_value),
+                    initiative_total=_money(initiative_total),
+                    variance=_money(variance),
+                    reconciled=abs(variance) <= Decimal("0.01"),
+                )
+            )
+
+        return PortfolioInitiativePortfolioResponse(
+            baseline_year=effective_baseline_year,
+            value_year=effective_value_year,
+            scenario=scenario_key,
+            available_baseline_years=available_baseline_years,
+            available_value_years=available_value_years,
+            baseline_metrics=[
+                self._to_portfolio_metric_column(row) for row in baseline_definitions
+            ],
+            value_metrics=[self._to_portfolio_metric_column(row) for row in value_definitions],
+            tenant_baseline_values={
+                key: _money(value) for key, value in tenant_baseline_values.items()
+            },
+            baseline_reconciliation=reconciliation,
+            rows=rows,
+            totals=PortfolioInitiativePortfolioTotals(
+                baseline_values={key: _money(value) for key, value in totals_baseline.items()},
+                value_metric_values={key: _money(value) for key, value in totals_values.items()},
+                benefits_total=_money(total_benefits),
+                recurring_costs=_money(total_recurring),
+                one_off_costs=_money(total_one_off),
+                net_run_rate_value=_money(total_benefits - total_recurring),
+            ),
+        )
+
     def get_portfolio_financials(
         self,
         granularity: PortfolioGranularity,
@@ -2283,6 +2550,28 @@ class FinancialService:
             if link.get("business_unit_id")
         }
 
+    @staticmethod
+    def _initiative_business_units(row: dict) -> list[tuple[str, str]]:  # type: ignore[type-arg]
+        units: list[tuple[str, str]] = []
+        for link in row.get("initiative_business_units") or []:
+            business_unit_id = str(link.get("business_unit_id") or "")
+            business_unit = link.get("business_units") if isinstance(link, dict) else None
+            name = ""
+            if isinstance(business_unit, dict):
+                business_unit_id = str(business_unit.get("id") or business_unit_id)
+                name = str(business_unit.get("name") or "")
+            if business_unit_id:
+                units.append((business_unit_id, name))
+        return units
+
+    @staticmethod
+    def _initiative_workstream_name(row: dict) -> str | None:  # type: ignore[type-arg]
+        workstream = row.get("workstreams")
+        if isinstance(workstream, dict):
+            name = workstream.get("name")
+            return str(name) if name else None
+        return None
+
     @classmethod
     def _portfolio_initiative_matches(
         cls,
@@ -2303,6 +2592,50 @@ class FinancialService:
         if stages and str(row.get("stage") or "") not in stages:
             return False
         return not (tags and str(row.get("tag") or "") not in tags)
+
+    def _baseline_metric_definitions(
+        self,
+        definitions: list[dict],  # type: ignore[type-arg]
+    ) -> list[dict]:  # type: ignore[type-arg]
+        active_by_key = {
+            str(row["key"]): row
+            for row in definitions
+            if row.get("is_active", True) and row.get("aggregation") != "formula"
+        }
+        baseline_keys = {
+            str(row["key"])
+            for row in active_by_key.values()
+            if str(row.get("group_key") or "") == "baseline"
+        }
+        for row in definitions:
+            if not row.get("is_active", True) or row.get("aggregation") != "formula":
+                continue
+            identifiers = set(str(item) for item in row.get("formula_inputs") or [])
+            formula = str(row.get("formula") or "").strip()
+            if formula:
+                identifiers |= self._formula_identifiers(formula)
+            for identifier in identifiers:
+                if identifier.startswith("baseline_"):
+                    metric_key = identifier.removeprefix("baseline_")
+                    if metric_key in active_by_key:
+                        baseline_keys.add(metric_key)
+        return sorted(
+            [row for key, row in active_by_key.items() if key in baseline_keys],
+            key=lambda item: (
+                int(item.get("display_order") or 0),
+                str(item.get("label") or ""),
+            ),
+        )
+
+    @staticmethod
+    def _to_portfolio_metric_column(row: dict) -> PortfolioInitiativeMetricColumn:  # type: ignore[type-arg]
+        return PortfolioInitiativeMetricColumn(
+            metric_definition_id=str(row["id"]),
+            key=str(row["key"]),
+            label=str(row["label"]),
+            value_type=row.get("value_type") or "currency",
+            unit=row.get("unit"),
+        )
 
     @classmethod
     def _portfolio_value_ramp_periods(

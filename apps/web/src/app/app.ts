@@ -443,6 +443,7 @@ export class App {
         children: [
           { label: 'Executive Dashboard', path: '/dashboard', icon: 'grid' },
           { label: 'Financial Overview', path: '/financials', icon: 'payments' },
+          { label: 'Initiative Portfolio', path: '/financials/initiative-portfolio', icon: 'table_chart' },
           { label: 'Bankable Plan', path: '/financials/bankable-plan', icon: 'account_balance' },
           { label: 'Benefits Register', path: '/financials/benefits-register', icon: 'fact_check' },
           { label: 'Benefit Tracking', path: '/financials/benefit-tracking', icon: 'trending_up' },

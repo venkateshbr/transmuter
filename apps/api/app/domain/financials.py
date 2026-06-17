@@ -719,6 +719,69 @@ class PortfolioFinancialsResponse(BaseModel):
     financial_mode: FinancialModeDescriptor | None = None
 
 
+class PortfolioInitiativeMetricColumn(BaseModel):
+    metric_definition_id: str
+    key: str
+    label: str
+    value_type: FinancialMetricValueType
+    unit: str | None = None
+
+
+class PortfolioInitiativeBaselineReconciliation(BaseModel):
+    metric_key: str
+    metric_label: str
+    tenant_value: str = "0"
+    initiative_total: str = "0"
+    variance: str = "0"
+    reconciled: bool = False
+
+
+class PortfolioInitiativePortfolioRow(BaseModel):
+    initiative_id: str
+    initiative_code: str | None = None
+    initiative_name: str
+    stage: str | None = None
+    tag: str | None = None
+    workstream_id: str | None = None
+    workstream_name: str | None = None
+    business_unit_ids: list[str] = Field(default_factory=list)
+    business_unit_names: list[str] = Field(default_factory=list)
+    baseline_values: dict[str, str] = Field(default_factory=dict)
+    baseline_complete: bool = False
+    value_metric_values: dict[str, str] = Field(default_factory=dict)
+    benefits_total: str = "0"
+    recurring_costs: str = "0"
+    one_off_costs: str = "0"
+    net_run_rate_value: str = "0"
+
+
+class PortfolioInitiativePortfolioTotals(BaseModel):
+    baseline_values: dict[str, str] = Field(default_factory=dict)
+    value_metric_values: dict[str, str] = Field(default_factory=dict)
+    benefits_total: str = "0"
+    recurring_costs: str = "0"
+    one_off_costs: str = "0"
+    net_run_rate_value: str = "0"
+
+
+class PortfolioInitiativePortfolioResponse(BaseModel):
+    baseline_year: int | None = None
+    value_year: int | None = None
+    scenario: str = "plan_base"
+    available_baseline_years: list[int] = Field(default_factory=list)
+    available_value_years: list[int] = Field(default_factory=list)
+    baseline_metrics: list[PortfolioInitiativeMetricColumn] = Field(default_factory=list)
+    value_metrics: list[PortfolioInitiativeMetricColumn] = Field(default_factory=list)
+    tenant_baseline_values: dict[str, str] = Field(default_factory=dict)
+    baseline_reconciliation: list[PortfolioInitiativeBaselineReconciliation] = Field(
+        default_factory=list
+    )
+    rows: list[PortfolioInitiativePortfolioRow] = Field(default_factory=list)
+    totals: PortfolioInitiativePortfolioTotals = Field(
+        default_factory=PortfolioInitiativePortfolioTotals
+    )
+
+
 class PortfolioBenefitsRegisterItem(BaseModel):
     initiative_id: str
     initiative_code: str | None = None
