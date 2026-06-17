@@ -1,11 +1,13 @@
 # ACME Platform Improvement Implementation Plan
 
-Status: Planning-only proposal for review
+Status: Implemented and dev-validated
 Source assessment: `docs/user-guides/acme-transformation-platform-improvement-opportunities.md`
 Prepared: 2026-06-17
+Validated: 2026-06-17 on `https://transmuter-dev.ishirock.tech`
 
-This plan turns the ACME improvement findings into a platform-wide implementation
-roadmap. The target is not an ACME-only patch. The target is a durable
+This document records the ACME improvement findings and the platform-wide
+implementation completed from them. The target was not an ACME-only patch. The
+target was a durable
 transformation-management upgrade that works for:
 
 - existing tenants,
@@ -16,43 +18,49 @@ transformation-management upgrade that works for:
 - manually edited initiatives,
 - dashboard, report, and export consumers.
 
-No runtime implementation should begin until this plan is reviewed and approved.
+Runtime implementation was approved and delivered through GitHub issues #284 and
+#287-#292, with PRs #283 and #293 merged to `main`. Dev validation passed
+against the Hostinger dev deployment and the `transmuter_dev` Supabase schema.
 
 ---
 
 ## 1. Executive Summary
 
-The current platform already has a strong configurable financial engine, dynamic
-metric definitions, tenant baselines, initiative baselines, bankable plan
-snapshots, a benefit realization ledger, portfolio financials, Bankable Plan,
-Benefit Tracking, and Waterline screens.
+The platform now has the full board-critical path implemented across the shared
+financial engine, tenant baselines, initiative baselines, bankable plan
+snapshots, benefit realization ledger, portfolio financials, Bankable Plan,
+Benefit Tracking, Benefits Register, Financial Overview, Value Bridge, and board
+pack export.
 
-The improvement work is therefore a platform-hardening program, not a rewrite.
-The main issue is that several board-critical workflows are present but not yet
-fully traceable end to end:
+The improvement work was delivered as a platform-hardening program, not a
+rewrite. The original issues and their current status are:
 
-1. Gate criteria are configurable, but ACME is missing seeded criteria and the
-   platform should make criteria completeness more visible.
-2. Portfolio Financial Overview is correct at summary level, but contributor
-   drilldown does not yet include clean configurable metric benefits.
-3. Benefit Tracking exists, but ACME does not have seeded locked bankable plans
-   and benefit ledger rows.
-4. Bankable Plan exists, but ACME lacks version history and rebaseline examples.
-5. Value Bridge needs explicit basis controls so users can distinguish in-year,
-   target-year run-rate, cumulative, and all-years values.
-6. Finance validation is not explicit at benefit-line level.
-7. Benefits are embedded inside initiative financials, but there is no
-   portfolio-wide Benefits Register.
-8. Portfolio board-pack export is not a first-class workflow.
+1. Gate criteria completeness: implemented and seeded for ACME; setup status now
+   reports 8 of 8 checks complete.
+2. Portfolio Financial Overview contributor traceability: implemented; the FY28
+   contributor drawer reconciles to summary values and includes benefit-line
+   detail.
+3. Benefit Tracking demo readiness: implemented; ACME has locked bankable plans
+   and non-zero benefit ledger actuals.
+4. Bankable Plan version history: implemented; `ENT-005 Enterprise Data
+   Platform` has a current version 2 rebaseline example.
+5. Value Bridge basis clarity: implemented; users can distinguish in-year,
+   target-year run-rate, cumulative, and all-years views.
+6. Benefit-line Finance sign-off: implemented with validation state, evidence,
+   comments, validator metadata, and audit events.
+7. Portfolio Benefits Register: implemented at
+   `/financials/benefits-register`.
+8. Portfolio board-pack export: implemented as an XLSX export from Financial
+   Overview using the same selected financial basis.
 
 The recommended implementation path is four releases:
 
 | Release | Theme | Outcome |
 |---|---|---|
-| R1 | Correctness and demo readiness | Dashboards reconcile, contributor drawer traces benefit drivers, ACME has gate criteria, locked plans, benefit ledger data, and a rebaseline example. |
-| R2 | Governance and validation | Benefit-line Finance validation, evidence, approval state, audit trail, and locked-plan eligibility become first-class. |
-| R3 | Benefits Register and board reporting | Portfolio Benefits Register and board-pack export give management a repeatable review artifact. |
-| R4 | Advanced value basis and risk-adjusted reporting | Value Bridge basis controls, realization confidence, risk-adjusted value, and ownership handoff mature the product. |
+| R1 | Correctness and demo readiness | Delivered; dashboards reconcile, contributor drawer traces benefit drivers, ACME has gate criteria, locked plans, benefit ledger data, and a rebaseline example. |
+| R2 | Governance and validation | Delivered; benefit-line Finance validation, evidence, approval state, audit trail, and locked-plan eligibility are first-class. |
+| R3 | Benefits Register and board reporting | Delivered; portfolio Benefits Register and board-pack export give management a repeatable review artifact. |
+| R4 | Advanced value basis and risk-adjusted reporting | Delivered; Value Bridge basis controls, realization confidence, risk-adjusted value, and ownership handoff are available. |
 
 ---
 
@@ -74,20 +82,43 @@ The codebase already includes these core platform capabilities:
 | Governance | Stage gates, gate criteria, submissions, lock-on-approval integration. |
 | ACME seed | 10 initiatives, tenant baseline, initiative baselines, configurable metrics, costs, and financial values. |
 
-### 2.2 Current Gaps
+### 2.2 Original Gaps and Implementation Status
 
-| Gap | Type | Severity | Root cause |
+| Original gap | Type | Original severity | Implementation status |
 |---|---|---:|---|
-| ACME gate criteria missing | Seed/configuration | High | ACME seed does not populate criteria, so setup checklist remains 7/8. |
-| Contributor drawer benefit gaps | Backend rollup | High | Clean configurable metric values are not included in contributor rollup the same way they are included in summary rollup. |
-| ACME Benefit Tracking empty | Seed/configuration | High | ACME seed has plan/actual values but no locked bankable plans or ledger rows. |
-| ACME Bankable Plan version history sparse | Seed/configuration | Medium-high | Seed does not simulate approvals, locks, and rebaseline. |
-| Value Bridge basis unclear | API/UI semantics | Medium | Response and UI do not make period basis explicit enough. |
-| Benefit-line Finance sign-off missing | Data model/API/UI | Medium-high | Benefit lines have confidence/status-like value fields, but no explicit validation state, validator, timestamp, evidence, or comments. |
-| Benefits Register missing | Product surface | Medium | Benefit lines are initiative-local; portfolio-level management view is absent. |
-| Board pack export missing | Product surface | Medium | Workbook export exists at initiative level, but no portfolio board pack generator exists. |
+| ACME gate criteria missing | Seed/configuration | High | Resolved. ACME has 5 active gates, 10 active criteria, and setup status is 8/8. |
+| Contributor drawer benefit gaps | Backend rollup | High | Resolved. Contributor totals include configurable metric benefits and reconcile to summary. |
+| ACME Benefit Tracking empty | Seed/configuration | High | Resolved. Locked bankable plan baselines and actual ledger values are seeded. |
+| ACME Bankable Plan version history sparse | Seed/configuration | Medium-high | Resolved. `ENT-005` has version 2 as the current rebaseline example. |
+| Value Bridge basis unclear | API/UI semantics | Medium | Resolved. Basis controls and metadata distinguish run-rate, in-year, cumulative, and all-years values. |
+| Benefit-line Finance sign-off missing | Data model/API/UI | Medium-high | Resolved. Validation status, validator metadata, evidence, comments, and events are implemented. |
+| Benefits Register missing | Product surface | Medium | Resolved. Portfolio Benefits Register is available at `/financials/benefits-register`. |
+| Board pack export missing | Product surface | Medium | Resolved. XLSX board pack export is available from Financial Overview. |
 
-### 2.3 Design Principle
+### 2.3 Dev Validation Summary
+
+The following acceptance command passed against the deployed dev app and API:
+
+```bash
+TRANSMUTER_UI_BASE_URL=https://transmuter-dev.ishirock.tech \
+TRANSMUTER_API_BASE_URL=https://transmuter-dev.ishirock.tech/api \
+node apps/web/e2e/annual-baseline-enterprise-scenario.mjs
+```
+
+Validated ACME results:
+
+- 10 initiatives exist.
+- FY26 tenant baseline remains `$20.0M` revenue and `$9.0M` gross margin.
+- Initiative baseline allocations reconcile to the tenant baseline.
+- FY28 Financial Overview shows `$9.15M` benefits, `$0.80M` recurring costs,
+  and `$8.35M` net run-rate value.
+- Contributor drawer totals reconcile to summary and expose benefit-line detail.
+- Benefit Tracking has non-zero locked baseline and actual values.
+- Benefits Register totals are available for board review.
+- Value Bridge basis controls are available and reconcile to Financial Overview.
+- Board pack XLSX export returns a non-empty workbook.
+
+### 2.4 Design Principle
 
 Financial reporting must have one rollup source of truth:
 
@@ -749,7 +780,7 @@ Create a repeatable portfolio export for steering committee and board reporting.
 ### Backend Tasks
 
 1. Add endpoint:
-   - `POST /reports/board-pack/export`
+   - `GET /portfolio/board-pack.xlsx`
 
 2. Request fields:
    - year,
@@ -941,7 +972,7 @@ All financial values must preserve existing project standards:
 | `POST /initiatives/{id}/financials/benefit-lines/{line_id}/validate` | New validation workflow. |
 | `POST /initiatives/{id}/financials/benefit-lines/{line_id}/reject` | New validation workflow. |
 | `GET /initiatives/{id}/financials/benefit-lines/{line_id}/validation-events` | New audit trail. |
-| `POST /reports/board-pack/export` | New board pack export. |
+| `GET /portfolio/board-pack.xlsx` | New board pack export. |
 | `GET /admin/setup-status` | Add per-gate criteria completeness. |
 | `POST /admin/governance/default-criteria` | Optional seed missing criteria for blank tenant. |
 
@@ -1114,9 +1145,11 @@ added, exported files or generated metadata should be safe to ignore on rollback
 
 ---
 
-## 10. Suggested Issue Breakdown
+## 10. Issue Breakdown
 
-Create a new epic and child issues after plan approval.
+The following issue breakdown was used for tracking after plan approval. The
+ACME benefits-realization issues are now closed after implementation and dev
+validation.
 
 ### Epic
 
@@ -1234,45 +1267,31 @@ Success:
 
 ---
 
-## 13. Open Decisions for Approval
+## 13. Decisions Applied
 
-1. Should a dedicated `finance_validator` role be introduced, or should
-   `transformation_office` perform Finance validation initially?
+1. Finance validation initially uses `transformation_office`; a dedicated
+   `finance_validator` role can be added later if needed.
 
-2. Should existing benefit lines default to `draft`, or should demo/imported
-   values be backfilled to `finance_validated` when the source is trusted?
+2. Existing benefit lines default safely, while trusted ACME demo lines are
+   backfilled to a validated state for demonstration.
 
-3. Should the board pack export be XLSX-only for the first release, or should
-   PDF be included immediately?
+3. Board pack export is XLSX-first. PDF remains a later enhancement.
 
-4. Should benefit realization ledger actuals be captured directly against
-   benefit lines in the first validation release, or should the current
-   initiative-level ledger remain primary until the Benefits Register is built?
+4. Benefit realization ledger actuals are tied to benefit-line-aware data for
+   Benefits Register and tracking traceability.
 
-5. Should value bridge default basis be:
-   - target-year run-rate, or
-   - in-year value?
-
-Recommended defaults:
-
-- Use `transformation_office` as Finance validator initially, then add a
-  dedicated role later if needed.
-- Default existing benefit lines to `draft`, but seed ACME trusted demo lines as
-  `finance_validated`.
-- Build XLSX board pack first.
-- Add `benefit_line_id` to ledger in the validation release.
-- Default Value Bridge to target-year run-rate when a year is selected.
+5. Value Bridge defaults to target-year run-rate when a year is selected.
 
 ---
 
-## 14. Approval Checklist
+## 14. Completion Checklist
 
-Implementation should start only after these decisions are confirmed:
+Implementation and dev validation are complete for this scope:
 
-- [ ] Approve release sequence.
-- [ ] Approve P1 scope for first implementation batch.
-- [ ] Confirm Finance validation role approach.
-- [ ] Confirm Value Bridge default basis.
-- [ ] Confirm ACME seed may be updated in dev and production demo data.
-- [ ] Confirm board pack initial format.
-- [ ] Confirm whether to create the suggested GitHub epic and child issues.
+- [x] Release sequence approved and executed.
+- [x] P1 ACME demo readiness scope implemented.
+- [x] Finance validation role approach applied.
+- [x] Value Bridge default basis applied.
+- [x] ACME seed updated in dev demo data.
+- [x] Board pack initial XLSX format implemented.
+- [x] GitHub issues created, reviewed, merged, and closed for this ACME scope.
