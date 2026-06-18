@@ -258,7 +258,11 @@ const FILTER_STATE_KEY = 'transmuter.filters.initiatives.pipeline';
         @for (stage of stageOptions(); track stage.id) {
           @let stageItems = grouped()[stage.id];
           @if (stageItems.length > 0) {
-            <div class="rounded-xl overflow-hidden border" style="border-color:var(--t-border)">
+            <div
+              class="rounded-xl overflow-hidden border"
+              style="border-color:var(--t-border)"
+              data-testid="pipeline-stage-group"
+              [attr.data-stage-id]="stage.id">
 
               <!-- Stage header -->
               <div class="flex items-center justify-between px-4 py-2.5 border-b"
@@ -481,9 +485,10 @@ export class PipelineComponent {
   readonly skeletons = Array.from({ length: 7 }, (_, i) => i);
   readonly stageOptions = computed(() => {
     const configured = this.configuredStageOptions();
-    const initiativeStages = this.initiatives().map(item => item.stage).filter(Boolean);
+    const configuredIds = new Set(configured.map(option => option.id));
+    const initiativeStages = Array.from(new Set(this.initiatives().map(item => item.stage).filter(Boolean)));
     const extras = initiativeStages
-      .filter(stage => !configured.some(option => option.id === stage))
+      .filter(stage => !configuredIds.has(stage))
       .map(stage => ({ id: stage, name: this.labelize(stage) }));
     const options = configured.length ? configured : FALLBACK_STAGES;
     return [...options, ...extras];

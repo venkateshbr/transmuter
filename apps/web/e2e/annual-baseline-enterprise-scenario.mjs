@@ -354,9 +354,16 @@ async function runBrowserChecks(auth, initiative) {
       page,
       `${uiBaseUrl}/initiatives/pipeline`,
       `
-        document.body.innerText.includes('Transformation PMO & Benefits Office')
-        && document.body.innerText.includes('Pricing & Discount Optimization')
-        && document.body.innerText.includes('AI Service Desk Automation')
+        (() => {
+          const text = document.body.innerText;
+          const stageGroups = [...document.querySelectorAll('[data-testid="pipeline-stage-group"]')];
+          return text.includes('Transformation PMO & Benefits Office')
+            && text.includes('Pricing & Discount Optimization')
+            && text.includes('AI Service Desk Automation')
+            && text.includes('10 initiatives across 1 stage')
+            && stageGroups.length === 1
+            && stageGroups[0]?.getAttribute('data-stage-id') === 'executing';
+        })()
       `,
       'enterprise initiative pipeline',
     );
