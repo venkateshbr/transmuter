@@ -28,12 +28,14 @@ status.
 
 ### 2026-06-18 - Benefit Ledger Editor and CSV Import
 
-Status: dev deployment pending
+Status: dev validated; production promotion pending review and explicit approval
 
 GitHub tracking:
 - Issue: `#306`
 - PR: `#307`
-- Commit: `8fae6e7 feat: add benefit ledger editor import`
+- Commits:
+  - `8fae6e7 feat: add benefit ledger editor import`
+  - `06a2b89 docs: track benefit ledger import release`
 
 Runtime changes:
 - Added Benefit Tracking tabs for summary, ledger row editing, and CSV import.
@@ -44,14 +46,22 @@ Runtime changes:
 
 Local validation:
 - `uv run --extra dev pytest tests/test_bankable_plans.py tests/test_benefit_realization_ledger.py -q`
-- `uv run ruff check app/services/financial.py app/routers/financials.py app/domain/financials.py app/repositories/financial.py tests/test_bankable_plans.py`
-- `uv run ruff format --check app/services/financial.py app/routers/financials.py app/domain/financials.py app/repositories/financial.py tests/test_bankable_plans.py`
-- `npm --prefix apps/web run build`
+- `uv run --extra dev ruff check app/domain/financials.py app/repositories/financial.py app/routers/financials.py app/services/financial.py tests/test_bankable_plans.py tests/test_benefit_realization_ledger.py`
+- `npm run build -- --configuration development` from `apps/web`
 
 Dev deployment:
 - Environment: `https://transmuter-dev.ishirock.tech`
 - Schema: `transmuter_dev`
-- Pending validation.
+- Deployed with `infra/hostinger/deploy-change-to-dev.sh`.
+- First validation hit a transient public/local readiness race after container
+  recreation; the dev compose stack was brought back up and then validated.
+- `infra/hostinger/validate-dev.sh` passed for `/health` and `/api/health`.
+- Real API import acceptance passed with
+  `docs/user-guides/acme-benefit-ledger-import.csv`: `0 created`,
+  `240 updated`, `0 errors`.
+- Real browser acceptance passed on
+  `https://transmuter-dev.ishirock.tech/financials/benefit-tracking` for
+  `Summary`, `Ledger Entries`, and `Import` tabs.
 
 Schema/data SQL applied to dev:
 - None. Existing `benefit_realization_ledger` schema is reused.
