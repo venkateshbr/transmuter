@@ -28,7 +28,7 @@ status.
 
 ### 2026-06-18 - Pipeline Stage Normalization and Dynamic Stage Dashboard
 
-Status: dev validated, pending production promotion
+Status: promoted to production
 
 GitHub tracking:
 - Issue: `#299`
@@ -69,7 +69,31 @@ Schema/data SQL required for production:
 - `supabase/migrations/20260618000001_normalize_legacy_in_progress_stage.sql`
 
 Production validation:
-- Pending production promotion.
+- Environment: `https://transmuter.ishirock.tech`
+- Schema: `transmuter`
+- Promotion commit: `9e6a8e8 docs: update release manifest for stage promotion (#303)`
+- Schema/data SQL applied to production:
+  `supabase/migrations/20260618000001_normalize_legacy_in_progress_stage.sql`
+- Validated health: `/health`, `/api/health`
+- Validated ACME API state: 10 initiatives, all with `stage=executing`
+- Validated dashboard API state: `pipeline_by_stage` contains the configured
+  ACME order `identified`, `validated`, `planned`, `committed`, `executing`,
+  `realized`, with 10 initiatives in `executing`.
+- Validated browser state: `/initiatives/pipeline` renders one
+  `data-testid=pipeline-stage-group` with `data-stage-id=executing` and the
+  subtitle `10 initiatives across 1 stage`.
+
+Operational notes:
+- The first promotion attempt with `--schema` failed before deployment because
+  host-side `psql` could not resolve the Docker service hostname `db`.
+- The SQL was applied through the self-hosted Supabase DB container as
+  `supabase_admin`, with `search_path=transmuter,public,extensions`; it updated
+  10 production initiatives.
+- The subsequent production deploy rebuilt/restarted the API and web containers.
+  The script exited on the known public validation 404 path after containers were
+  healthy; manual health/API/browser validation passed.
+- The broad annual-baseline production E2E surfaced an unrelated seeded baseline
+  lock mismatch, tracked separately as `#304`.
 
 ### 2026-06-18 - ACME Platform Improvements and Initiative Portfolio
 
