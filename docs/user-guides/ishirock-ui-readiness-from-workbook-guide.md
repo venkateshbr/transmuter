@@ -7,6 +7,11 @@ to an ACME-style transformation-office demo readiness state using
 Use this guide when the goal is to test the UI workflows manually instead of
 loading or correcting all data through scripts.
 
+Related guides:
+
+- `docs/user-guides/ishirock-transformation-value-demonstration-guide.md`
+- `docs/user-guides/ishirock-transformation-office-detailed-setup-and-demo-guide.md`
+
 No credentials are included in this guide.
 
 ---
@@ -78,19 +83,35 @@ Workbook FY25 baseline totals from `Initiative Summary`:
 
 | FY25 baseline field | Total, USD m | Total, platform entry |
 |---|---:|---:|
-| Revenue FY25 Base | `134.932` | `134932000` |
-| Gross Margin FY25 Base | `175.920` | `175920000` |
-| Cost Plan FY25 Base | `26.530` | `26530000` |
-| Net Value FY25 Base | `149.390` | `149390000` |
+| Revenue FY25 Base | `67.466` | `67466000` |
+| Gross Margin FY25 Base | `87.960` | `87960000` |
+| Cost Plan FY25 Base | `13.265` | `13265000` |
+| Net Value FY25 Base | `74.695` | `74695000` |
+
+Validation note:
+
+- The workbook `Gross Margin FY25 Base` total is higher than `Revenue FY25
+  Base`. This is because the cost-reduction initiatives carry `$50.250M` of
+  FY25 margin/value baseline with `$0.000M` FY25 revenue baseline.
+- Do not treat `Gross Margin FY25 Base` as conventional accounting gross margin
+  until Finance confirms the workbook definition.
+- Recommended setup: enter `Revenue FY25 Base` as baseline revenue. Track the
+  workbook `Gross Margin FY25 Base` only as a separately named neutral baseline
+  such as `baseline_margin_value` or `baseline_addressable_value`, or leave it
+  out of annual baseline entry until Finance confirms the intended definition.
 
 Workbook FY28 run-rate summary from `Initiative Summary`:
 
 | FY28 field | Total, USD m | Expected platform value |
 |---|---:|---:|
-| Revenue | `30.008` | `$30.008M` |
-| Gross Margin | `43.266` | `$43.266M` |
-| Cost Plan | `7.120` | `$7.120M` |
-| Net Value | `36.146` | `$36.146M` |
+| Revenue | `15.004` | `$15.004M` |
+| Gross Margin | `21.633` | `$21.633M` |
+| Cost Plan | `3.560` | `$3.560M` |
+| Net Value | `18.073` | `$18.073M` |
+
+The `Initiative Summary` sheet contains a `PORTFOLIO TOTAL` row. Do not add
+that row to the 21 initiative rows when calculating portfolio totals; doing so
+double-counts the workbook.
 
 Current platform Financial Overview for FY28 may show a different benefits/net
 definition because it sums configurable benefit metrics according to platform
@@ -218,12 +239,15 @@ Recommended baseline correction:
   editing. This makes it eligible for initiative and tenant annual baseline
   views.
 
-If gross margin baseline should appear as a first-class baseline metric, create
-or enable:
+Do not create a conventional gross-margin baseline metric from this workbook
+without Finance confirmation. The workbook `Gross Margin FY25 Base` field is
+higher than FY25 revenue because cost-reduction initiatives have value baseline
+but no revenue baseline. If Finance wants this workbook field tracked, create a
+neutral baseline metric instead:
 
 | Metric key | Label | Aggregation | Benefit class | Purpose |
 |---|---|---|---|---|
-| `baseline_gross_margin` | Baseline Gross Margin | Last | None | FY25 gross margin baseline. |
+| `baseline_margin_value` | Baseline Margin / Value | Last | None | Workbook FY25 margin/value baseline. |
 
 Validation:
 
@@ -244,8 +268,9 @@ Actions:
 
 1. Set fiscal year to `2025`.
 2. Enter tenant baseline values in whole dollars:
-   - Baseline Revenue: `134932000`
-   - Baseline Gross Margin, if configured: `175920000`
+   - Baseline Revenue: `67466000`
+   - Baseline Margin / Value, only if Finance confirms the neutral baseline
+     metric: `87960000`
 3. Click **Save**.
 
 Validation:
@@ -272,8 +297,9 @@ Actions for each workbook initiative:
 
 1. Set fiscal year to `2025`.
 2. Enter `Revenue FY25 Base` from `Initiative Summary` into Baseline Revenue.
-3. Enter `Gross Margin FY25 Base` from `Initiative Summary` into Baseline Gross
-   Margin if that metric is configured.
+3. Enter `Gross Margin FY25 Base` only into a Finance-approved neutral
+   margin/value baseline metric. Do not enter it as conventional gross margin
+   without Finance confirmation.
 4. Save the initiative.
 5. Return to the initiative detail **Financials** tab.
 6. Confirm the Annual Baseline panel shows FY25 values.

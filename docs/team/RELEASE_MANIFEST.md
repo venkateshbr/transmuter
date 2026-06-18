@@ -26,6 +26,66 @@ status.
 
 ## Current Release Entries
 
+### 2026-06-18 - Initiative Baseline-to-Target P&L Bridge
+
+Status: promoted to production
+
+GitHub tracking:
+- Issue: `#312`
+- PR: `#313`
+- Commit:
+  - `1811684 Merge pull request #313 from venkateshbr/feature/312-initiative-pnl-bridge`
+
+Runtime changes:
+- Replaced the initiative overview EBITDA bridge with a baseline-to-target
+  initiative P&L bridge backed by annual baselines and configurable financial
+  values.
+- Added `pnl_bridge` to initiative value-bridge responses, including baseline
+  year, baseline revenue, baseline gross margin, scenario target values,
+  recurring opex, one-off costs, and incremental net run-rate impact.
+- Updated the overview bridge rendering to use the new management P&L bridge
+  payload and avoid misleading zero-value revenue bars.
+
+Local validation:
+- `uv run --extra dev pytest tests/test_initiative_pnl_bridge.py -q`
+- `uv run --extra dev ruff check app/domain/financials.py app/services/financial.py tests/test_initiative_pnl_bridge.py`
+- `npm run build -- --configuration development` from `apps/web`
+
+Dev deployment:
+- Environment: `https://transmuter-dev.ishirock.tech`
+- Schema: `transmuter_dev`
+- Deployed with `infra/hostinger/deploy-change-to-dev.sh`.
+- Initial scripted public validation hit the known transient `/health` 404
+  readiness race immediately after container recreation.
+- Manual validation passed for local and public `/health` and `/api/health`.
+- Real dev API validation passed for ACME `ENT-001`: initiative value bridge
+  returned `pnl_bridge`, `baseline_year=2026`, and the expected seven base-case
+  bridge steps.
+- Real dev browser validation passed on `/initiatives/{ENT-001 id}`: the
+  `initiative-pnl-bridge` component rendered FY2026, target revenue, target
+  run-rate value, incremental net impact, and a nonblank ECharts canvas.
+
+Schema/data SQL applied to dev:
+- None.
+
+Schema/data SQL required for production:
+- None.
+
+Production validation:
+- Environment: `https://transmuter.ishirock.tech`
+- Schema: `transmuter`
+- Promotion commit: `1811684 Merge pull request #313 from venkateshbr/feature/312-initiative-pnl-bridge`
+- Schema/data SQL applied to production: none.
+- Initial scripted public validation hit the known transient `/health` 404
+  readiness race immediately after container recreation.
+- Manual validation passed for local and public `/health` and `/api/health`.
+- Real production API validation passed for ACME `ENT-001`: initiative value
+  bridge returned `pnl_bridge`, `baseline_year=2026`, and the expected seven
+  base-case bridge steps.
+- Real production browser validation passed on `/initiatives/{ENT-001 id}`:
+  the `initiative-pnl-bridge` component rendered FY2026, target revenue, target
+  run-rate value, incremental net impact, and a nonblank ECharts canvas.
+
 ### 2026-06-18 - Benefit Ledger Editor and CSV Import
 
 Status: promoted to production
