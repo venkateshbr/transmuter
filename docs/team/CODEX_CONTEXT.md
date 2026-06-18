@@ -50,6 +50,9 @@ replace them.
     `CONFIRM_PROMOTE=1 infra/hostinger/promote-dev-to-prod.sh`; if schema SQL is
     required, pass `--schema path/to/change.sql` so it applies to production
     schema `transmuter` before deployment.
+  - Dev-to-production release tracking lives in
+    `docs/team/RELEASE_MANIFEST.md`. Update it before promotion with the PR,
+    commit, dev validation, schema SQL, and production validation result.
   - Cloud-to-local Supabase schema migration script:
     `infra/hostinger/migrate_supabase_schema_to_transmuter.sh`.
   - When the user asks to build and test, deploy through
