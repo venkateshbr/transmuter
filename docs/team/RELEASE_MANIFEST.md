@@ -26,14 +26,18 @@ status.
 
 ## Current Release Entries
 
-### 2026-06-18 - Pipeline Stage Normalization
+### 2026-06-18 - Pipeline Stage Normalization and Dynamic Stage Dashboard
 
 Status: dev validated, pending production promotion
 
 GitHub tracking:
 - Issue: `#299`
 - PR: `#300`
-- Commit: pending merge commit
+- Issue: `#301`
+- PR: `#302`
+- Commits:
+  - `bcfb079 fix: normalize initiative pipeline stages (#300)`
+  - `0d71979 fix: make dashboard stages tenant-configured (#302)`
 
 Runtime changes:
 - Deduplicate Initiative Pipeline stage options so one stored stage renders one
@@ -42,12 +46,19 @@ Runtime changes:
   configured governance stage `executing`.
 - Update ACME seed defaults so future seeded enterprise initiatives use
   `executing`.
+- Build dashboard stage filters and `pipeline_by_stage` from the full configured
+  gate order, including the initial `from_stage`.
+- Treat tenant-configured terminal stages such as ACME `realized` as terminal
+  for stage-gate waterline grouping.
 
 Dev deployment:
 - Environment: `https://transmuter-dev.ishirock.tech`
 - Schema: `transmuter_dev`
 - Validated health: `/health`, `/api/health`
 - Validated ACME API state: 10 initiatives, all with `stage=executing`
+- Validated dashboard API state: ACME stages appear as `identified`,
+  `validated`, `planned`, `committed`, `executing`, `realized`, with 10
+  initiatives in `executing`.
 - Validated browser scenario: annual baseline / Initiative Portfolio acceptance
   scenario now asserts one pipeline stage group with `data-stage-id=executing`.
 
