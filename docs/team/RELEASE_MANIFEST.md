@@ -26,6 +26,40 @@ status.
 
 ## Current Release Entries
 
+### 2026-06-18 - Pipeline Stage Normalization
+
+Status: dev validated, pending production promotion
+
+GitHub tracking:
+- Issue: `#299`
+- PR: `#300`
+- Commit: pending merge commit
+
+Runtime changes:
+- Deduplicate Initiative Pipeline stage options so one stored stage renders one
+  stage group.
+- Normalize the ACME/demo active portfolio from legacy `in_progress` to the
+  configured governance stage `executing`.
+- Update ACME seed defaults so future seeded enterprise initiatives use
+  `executing`.
+
+Dev deployment:
+- Environment: `https://transmuter-dev.ishirock.tech`
+- Schema: `transmuter_dev`
+- Validated health: `/health`, `/api/health`
+- Validated ACME API state: 10 initiatives, all with `stage=executing`
+- Validated browser scenario: annual baseline / Initiative Portfolio acceptance
+  scenario now asserts one pipeline stage group with `data-stage-id=executing`.
+
+Schema/data SQL applied to dev:
+- `supabase/migrations/20260618000001_normalize_legacy_in_progress_stage.sql`
+
+Schema/data SQL required for production:
+- `supabase/migrations/20260618000001_normalize_legacy_in_progress_stage.sql`
+
+Production validation:
+- Pending production promotion.
+
 ### 2026-06-18 - ACME Platform Improvements and Initiative Portfolio
 
 Status: promoted to production

@@ -1078,7 +1078,7 @@ def insert_initiatives(
                 "tag": tag,
                 "priority": "high" if index in {4, 6, 7} else "medium",
                 "rag_status": "amber" if index in {5, 9} else "green",
-                "stage": "in_progress",
+                "stage": "executing",
                 "summary": (
                     "Two-year enterprise initiative contributing to FY28 revenue growth, "
                     "gross margin expansion, and bankable run-rate value."

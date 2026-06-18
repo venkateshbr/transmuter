@@ -783,7 +783,7 @@ Default demo settings:
 | Actuals | On |
 | Year | 2028 |
 | Plan as-of date | Blank unless demonstrating historical cutoff. |
-| Stage | All stages for total portfolio; In-Progress when showing active portfolio. |
+| Stage | All stages for total portfolio; Executing when showing active portfolio. |
 | Cost category | All categories for total value; Software, Maintenance, Labor for recurring-cost drilldown. |
 
 Expected FY28 values:
