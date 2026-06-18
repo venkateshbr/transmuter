@@ -13,6 +13,7 @@ from calendar import monthrange
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from io import StringIO
+from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -87,6 +88,9 @@ from app.domain.financials import (
     InitiativeAnnualBaselineUpdate,
     InitiativeFinancialSelections,
     InitiativeFinancialSelectionsResponse,
+    InitiativePnlBridge,
+    PnlBridgeCase,
+    PnlBridgeStep,
     PortfolioBenefitsRegisterItem,
     PortfolioBenefitsRegisterResponse,
     PortfolioBenefitsRegisterTotals,
@@ -3031,14 +3035,16 @@ class FinancialService:
         raw_entries = self._repo.get_entries(initiative_id)
         raw_cost_lines = self._repo.list_cost_lines(initiative_id)
         clean_values = self._repo.list_configurable_metric_values(initiative_id)
+        baseline_values = self._repo.list_initiative_annual_baselines(initiative_id)
         if clean_values or not raw_entries:
             return self._compute_clean_value_bridge(
                 self._values_with_formula_metrics(
                     clean_values,
-                    self._repo.list_initiative_annual_baselines(initiative_id),
+                    baseline_values,
                 ),
                 raw_cost_lines,
                 initiative_id=initiative_id,
+                baseline_values=baseline_values,
             )
         metric_values = self._repo.list_metric_values(initiative_id)
         config = self.get_configuration()
@@ -3057,6 +3063,7 @@ class FinancialService:
             initiative_id,
             scoped_metric_values,
             config,
+            baseline_values=self._repo.list_initiative_annual_baselines(initiative_id),
         )
 
     def get_scenario_summary(
@@ -4728,6 +4735,7 @@ class FinancialService:
         config: FinancialConfigurationResponse | None = None,
         basis: PortfolioValueBridgeBasis = "all_years",
         year: int | None = None,
+        baseline_values: list[dict] | None = None,  # type: ignore[type-arg]
     ) -> ValueBridgeResponse:
         """Compute the three-row Value Bridge (Base/High/Actual)."""
         rev_base = Decimal("0")
@@ -4782,48 +4790,59 @@ class FinancialService:
         benefits_base = gm_up_base + other_base
         benefits_high = gm_up_high + other_high
         benefits_actual = gm_up_actual + other_actual
+        base_case = ValueBridgeCase(
+            revenue_uplift=_money(rev_base),
+            gross_margin=_money(gm_base),
+            gm_uplift=_money(gm_up_base),
+            other_benefits=_money(other_base),
+            benefits_total=_money(benefits_base),
+            cogs=_money(cogs_base),
+            costs_recurring=_money(costs_recurring_plan),
+            costs_one_off=_money(costs_one_off_plan),
+            costs_total=_money(total_costs_plan),
+            net=_money(benefits_base - costs_recurring_plan),
+        )
+        high_case = ValueBridgeCase(
+            revenue_uplift=_money(rev_high),
+            gross_margin=_money(gm_high),
+            gm_uplift=_money(gm_up_high),
+            other_benefits=_money(other_high),
+            benefits_total=_money(benefits_high),
+            cogs=_money(cogs_high),
+            costs_recurring=_money(costs_recurring_plan),
+            costs_one_off=_money(costs_one_off_plan),
+            costs_total=_money(total_costs_plan),
+            net=_money(benefits_high - costs_recurring_plan),
+        )
+        actual_case = ValueBridgeCase(
+            revenue_uplift=_money(rev_actual),
+            gross_margin=_money(gm_actual),
+            gm_uplift=_money(gm_up_actual),
+            other_benefits=_money(other_actual),
+            benefits_total=_money(benefits_actual),
+            cogs=_money(cogs_actual),
+            costs_recurring=_money(costs_recurring_actual),
+            costs_one_off=_money(costs_one_off_actual),
+            costs_total=_money(total_costs_actual),
+            net=_money(benefits_actual - costs_recurring_actual),
+        )
 
         return ValueBridgeResponse(
             initiative_id=initiative_id,
             basis=basis,
             basis_label=self._value_bridge_basis_label(basis, year),
             year=year,
-            base_case=ValueBridgeCase(
-                revenue_uplift=_money(rev_base),
-                gross_margin=_money(gm_base),
-                gm_uplift=_money(gm_up_base),
-                other_benefits=_money(other_base),
-                benefits_total=_money(benefits_base),
-                cogs=_money(cogs_base),
-                costs_recurring=_money(costs_recurring_plan),
-                costs_one_off=_money(costs_one_off_plan),
-                costs_total=_money(total_costs_plan),
-                net=_money(benefits_base - costs_recurring_plan),
-            ),
-            high_case=ValueBridgeCase(
-                revenue_uplift=_money(rev_high),
-                gross_margin=_money(gm_high),
-                gm_uplift=_money(gm_up_high),
-                other_benefits=_money(other_high),
-                benefits_total=_money(benefits_high),
-                cogs=_money(cogs_high),
-                costs_recurring=_money(costs_recurring_plan),
-                costs_one_off=_money(costs_one_off_plan),
-                costs_total=_money(total_costs_plan),
-                net=_money(benefits_high - costs_recurring_plan),
-            ),
-            actual=ValueBridgeCase(
-                revenue_uplift=_money(rev_actual),
-                gross_margin=_money(gm_actual),
-                gm_uplift=_money(gm_up_actual),
-                other_benefits=_money(other_actual),
-                benefits_total=_money(benefits_actual),
-                cogs=_money(cogs_actual),
-                costs_recurring=_money(costs_recurring_actual),
-                costs_one_off=_money(costs_one_off_actual),
-                costs_total=_money(total_costs_actual),
-                net=_money(benefits_actual - costs_recurring_actual),
-            ),
+            base_case=base_case,
+            high_case=high_case,
+            actual=actual_case,
+            pnl_bridge=self._initiative_pnl_bridge(
+                baseline_values or [],
+                base_case,
+                high_case,
+                actual_case,
+            )
+            if initiative_id
+            else None,
             financial_mode=self._financial_mode_descriptor(
                 initiative_id or "",
                 entries,
@@ -4883,21 +4902,33 @@ class FinancialService:
         initiative_id: str | None,
         basis: PortfolioValueBridgeBasis = "all_years",
         year: int | None = None,
+        baseline_values: list[dict] | None = None,  # type: ignore[type-arg]
     ) -> ValueBridgeResponse:
         base = self._clean_value_case(values, "plan_base")
         high = self._clean_value_case(values, "plan_high")
         actual = self._clean_value_case(values, "actual")
         plan_costs = self._clean_cost_totals(cost_lines, actual=False)
         actual_costs = self._clean_cost_totals(cost_lines, actual=True)
+        base_case = self._clean_bridge_case(base, plan_costs)
+        high_case = self._clean_bridge_case(high, plan_costs)
+        actual_case = self._clean_bridge_case(actual, actual_costs)
         return ValueBridgeResponse(
             initiative_id=initiative_id,
             basis=basis,
             basis_label=self._value_bridge_basis_label(basis, year),
             year=year,
-            base_case=self._clean_bridge_case(base, plan_costs),
-            high_case=self._clean_bridge_case(high, plan_costs),
-            actual=self._clean_bridge_case(actual, actual_costs),
+            base_case=base_case,
+            high_case=high_case,
+            actual=actual_case,
             rows=self._clean_dynamic_bridge_rows(values, cost_lines),
+            pnl_bridge=self._initiative_pnl_bridge(
+                baseline_values or [],
+                base_case,
+                high_case,
+                actual_case,
+            )
+            if initiative_id
+            else None,
             financial_mode=FinancialModeDescriptor(
                 key="multi_scenario",
                 label="Configurable metric engine",
@@ -5210,6 +5241,179 @@ class FinancialService:
             costs_one_off=_money(one_off),
             costs_total=_money(recurring + one_off),
             net=_money(benefits_total - recurring),
+        )
+
+    def _initiative_pnl_bridge(
+        self,
+        baseline_values: list[dict],  # type: ignore[type-arg]
+        base_case: ValueBridgeCase,
+        high_case: ValueBridgeCase,
+        actual_case: ValueBridgeCase,
+    ) -> InitiativePnlBridge:
+        definitions_by_id = self._metric_definitions_by_id()
+        baseline_year = self._latest_baseline_year(baseline_values)
+        baseline_revenue = self._baseline_amount(
+            baseline_values,
+            definitions_by_id,
+            exact_keys={
+                "annual_revenue_baseline",
+                "baseline_revenue",
+                "revenue_baseline",
+            },
+            required_tokens={"revenue", "baseline"},
+        )
+        baseline_gross_margin = self._baseline_amount(
+            baseline_values,
+            definitions_by_id,
+            exact_keys={
+                "annual_gross_margin_baseline",
+                "baseline_gross_margin",
+                "gross_margin_baseline",
+            },
+            required_tokens={"gross", "margin", "baseline"},
+        )
+
+        return InitiativePnlBridge(
+            baseline_year=baseline_year,
+            base_case=self._initiative_pnl_bridge_case(
+                "base",
+                "Plan Base",
+                baseline_revenue,
+                baseline_gross_margin,
+                base_case,
+            ),
+            high_case=self._initiative_pnl_bridge_case(
+                "high",
+                "Plan High",
+                baseline_revenue,
+                baseline_gross_margin,
+                high_case,
+            ),
+            actual=self._initiative_pnl_bridge_case(
+                "actual",
+                "Actual",
+                baseline_revenue,
+                baseline_gross_margin,
+                actual_case,
+            ),
+        )
+
+    @staticmethod
+    def _latest_baseline_year(baseline_values: list[dict]) -> int | None:  # type: ignore[type-arg]
+        years = [
+            int(row["baseline_year"])
+            for row in baseline_values
+            if row.get("baseline_year") is not None
+        ]
+        return max(years) if years else None
+
+    def _metric_definitions_by_id(self) -> dict[str, dict[str, Any]]:
+        repo = getattr(self, "_repo", None)
+        if repo is None:
+            return {}
+        return {str(row["id"]): row for row in repo.list_metric_definitions()}
+
+    @staticmethod
+    def _baseline_amount(
+        baseline_values: list[dict],  # type: ignore[type-arg]
+        definitions_by_id: dict[str, dict[str, Any]],
+        exact_keys: set[str],
+        required_tokens: set[str],
+    ) -> Decimal:
+        for row in baseline_values:
+            key = FinancialService._baseline_metric_key(row, definitions_by_id)
+            if key in exact_keys:
+                return _dec(row.get("value"))
+        for row in baseline_values:
+            key = FinancialService._baseline_metric_key(row, definitions_by_id)
+            if key and required_tokens.issubset(set(key.replace("-", "_").split("_"))):
+                return _dec(row.get("value"))
+        return Decimal("0")
+
+    @staticmethod
+    def _baseline_metric_key(
+        row: dict,  # type: ignore[type-arg]
+        definitions_by_id: dict[str, dict[str, Any]],
+    ) -> str:
+        if row.get("metric_key"):
+            return str(row["metric_key"]).lower()
+        definition = definitions_by_id.get(str(row.get("metric_definition_id")))
+        return str(definition.get("key") or "").lower() if definition else ""
+
+    def _initiative_pnl_bridge_case(
+        self,
+        scenario: Literal["base", "high", "actual"],
+        label: str,
+        baseline_revenue: Decimal,
+        baseline_gross_margin: Decimal,
+        case: ValueBridgeCase,
+    ) -> PnlBridgeCase:
+        revenue_uplift = _dec(case.revenue_uplift)
+        margin_and_benefit_uplift = (
+            _dec(case.gross_margin) + _dec(case.gm_uplift) + _dec(case.other_benefits)
+        )
+        recurring_opex = _dec(case.costs_recurring)
+        one_off_costs = _dec(case.costs_one_off)
+        target_revenue = baseline_revenue + revenue_uplift
+        target_run_rate_value = baseline_gross_margin + margin_and_benefit_uplift - recurring_opex
+        incremental_net = margin_and_benefit_uplift - recurring_opex
+
+        step_specs: list[tuple[str, str, Decimal, str]] = [
+            ("baseline_revenue", "Baseline Revenue", baseline_revenue, "baseline"),
+            ("revenue_uplift", "Revenue Uplift", revenue_uplift, "increase"),
+            ("target_revenue", "Target Revenue", target_revenue, "target"),
+            (
+                "baseline_gross_margin",
+                "Baseline Gross Margin",
+                baseline_gross_margin,
+                "baseline",
+            ),
+            (
+                "margin_and_benefit_uplift",
+                "Margin & Benefit Uplift",
+                margin_and_benefit_uplift,
+                "increase",
+            ),
+            ("recurring_opex", "Recurring Opex", -recurring_opex, "decrease"),
+            (
+                "target_run_rate_value",
+                "Target Run-rate Value",
+                target_run_rate_value,
+                "target",
+            ),
+        ]
+
+        cumulative = Decimal("0")
+        steps: list[PnlBridgeStep] = []
+        for display_order, (key, step_label, value, kind) in enumerate(step_specs, start=1):
+            if kind == "baseline" or kind == "target":
+                cumulative = value
+            else:
+                cumulative += value
+            steps.append(
+                PnlBridgeStep(
+                    key=key,
+                    label=step_label,
+                    value=_money(value),
+                    cumulative_value=_money(cumulative),
+                    step_kind=kind,  # type: ignore[arg-type]
+                    display_order=display_order * 10,
+                )
+            )
+
+        return PnlBridgeCase(
+            scenario=scenario,
+            label=label,
+            baseline_revenue=_money(baseline_revenue),
+            revenue_uplift=_money(revenue_uplift),
+            target_revenue=_money(target_revenue),
+            baseline_gross_margin=_money(baseline_gross_margin),
+            margin_and_benefit_uplift=_money(margin_and_benefit_uplift),
+            recurring_opex=_money(recurring_opex),
+            target_run_rate_value=_money(target_run_rate_value),
+            incremental_net_run_rate=_money(incremental_net),
+            one_off_costs=_money(one_off_costs),
+            steps=steps,
         )
 
     def _clean_dynamic_bridge_rows(

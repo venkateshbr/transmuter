@@ -1113,6 +1113,39 @@ class ValueBridgeRow(BaseModel):
     display_order: int = 0
 
 
+class PnlBridgeStep(BaseModel):
+    key: str
+    label: str
+    value: str = "0"
+    cumulative_value: str = "0"
+    step_kind: Literal["baseline", "increase", "decrease", "subtotal", "target"]
+    display_order: int = 0
+
+
+class PnlBridgeCase(BaseModel):
+    scenario: Literal["base", "high", "actual"]
+    label: str
+    baseline_revenue: str = "0"
+    revenue_uplift: str = "0"
+    target_revenue: str = "0"
+    baseline_gross_margin: str = "0"
+    margin_and_benefit_uplift: str = "0"
+    recurring_opex: str = "0"
+    target_run_rate_value: str = "0"
+    incremental_net_run_rate: str = "0"
+    one_off_costs: str = "0"
+    steps: list[PnlBridgeStep] = Field(default_factory=list)
+
+
+class InitiativePnlBridge(BaseModel):
+    baseline_year: int | None = None
+    baseline_revenue_label: str = "Baseline Revenue"
+    baseline_gross_margin_label: str = "Baseline Gross Margin"
+    base_case: PnlBridgeCase
+    high_case: PnlBridgeCase
+    actual: PnlBridgeCase
+
+
 class ValueBridgeResponse(BaseModel):
     """Three-column Value Bridge: Benefits / Costs / Net."""
 
@@ -1124,6 +1157,7 @@ class ValueBridgeResponse(BaseModel):
     high_case: ValueBridgeCase
     actual: ValueBridgeCase
     rows: list[ValueBridgeRow] = Field(default_factory=list)
+    pnl_bridge: InitiativePnlBridge | None = None
     financial_mode: FinancialModeDescriptor | None = None
 
 
