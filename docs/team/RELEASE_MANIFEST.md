@@ -28,7 +28,7 @@ status.
 
 ### 2026-06-18 - Benefit Ledger Editor and CSV Import
 
-Status: dev validated; production promotion pending review and explicit approval
+Status: promoted to production
 
 GitHub tracking:
 - Issue: `#306`
@@ -70,7 +70,16 @@ Schema/data SQL required for production:
 - None. Existing `benefit_realization_ledger` schema is reused.
 
 Production validation:
-- Pending promotion.
+- Environment: `https://transmuter.ishirock.tech`
+- Schema: `transmuter`
+- Promotion commit: `39ec56c feat: add benefit ledger editor import`
+- Schema/data SQL applied to production: none.
+- `infra/hostinger/validate-prod.sh` passed for `/health` and `/api/health`.
+- Real production browser validation passed for
+  `/financials/benefit-tracking`, including `Summary`, `Ledger Entries`, and
+  `Import` tabs.
+- Production browser validation intentionally did not create, edit, delete, or
+  import ledger rows; founder manual/import testing remains the next step.
 
 ### 2026-06-18 - Pipeline Stage Normalization and Dynamic Stage Dashboard
 
