@@ -891,7 +891,7 @@ class BenefitLedgerEntryCreate(BaseModel):
     period_granularity: BenefitLedgerGranularity
     period_start: date
     period_end: date | None = None
-    bankable_plan_amount: Decimal = Decimal("0")
+    bankable_plan_amount: Decimal | None = None
     actual_amount: Decimal = Decimal("0")
     description: str | None = Field(None, max_length=2000)
 
@@ -917,6 +917,18 @@ class BenefitLedgerEntry(BaseModel):
     description: str | None = None
     created_at: str
     updated_at: str
+
+
+class BenefitLedgerImportError(BaseModel):
+    row: int
+    initiative_code: str | None = None
+    message: str
+
+
+class BenefitLedgerImportResult(BaseModel):
+    created: int = 0
+    updated: int = 0
+    errors: list[BenefitLedgerImportError] = Field(default_factory=list)
 
 
 class BenefitLedgerPeriodSummary(BaseModel):

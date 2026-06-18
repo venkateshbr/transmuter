@@ -24,6 +24,7 @@ from app.domain.financials import (
     BenefitLedgerEntryCreate,
     BenefitLedgerEntryUpdate,
     BenefitLedgerGranularity,
+    BenefitLedgerImportResult,
     BenefitLedgerRollupSummaryResponse,
     BenefitLedgerSummaryResponse,
     BreakEvenResponse,
@@ -344,6 +345,19 @@ async def delete_benefit_ledger_entry(
 ) -> None:
     assert_can_manage_initiatives(current_user)
     svc.delete_benefit_ledger_entry(initiative_id, entry_id)
+
+
+@router.post(
+    "/benefit-ledger/import",
+    response_model=BenefitLedgerImportResult,
+)
+async def import_benefit_ledger(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+    file: UploadFile = File(...),
+) -> BenefitLedgerImportResult:
+    assert_can_manage_initiatives(current_user)
+    return svc.import_benefit_ledger_csv(await file.read())
 
 
 @router.get(

@@ -12,6 +12,7 @@ from app.domain.financials import (
     AnnualBaselineMetricValueRow,
     BankablePlanResponse,
     BankablePlanSnapshot,
+    BenefitLedgerEntryCreate,
     CostLineItem,
     FinancialEntryRow,
     FinancialMetricValueRow,
@@ -36,6 +37,7 @@ SUBMISSION_ID = "submission-1"
 class FakePlanRepo:
     def __init__(self) -> None:
         self.plans: list[dict[str, object]] = []
+        self.ledger_rows: list[dict[str, object]] = []
         self.initiative_ids = {INITIATIVE_ID}
 
     def initiative_exists(self, initiative_id: str) -> bool:
@@ -55,6 +57,49 @@ class FakePlanRepo:
         row = {**data, "id": data.get("id", f"plan-{len(self.plans) + 1}")}
         self.plans.append(row)
         return row
+
+    def initiatives_by_code(self) -> dict[str, dict]:
+        return {
+            "ENT-001": {
+                "id": INITIATIVE_ID,
+                "initiative_code": "ENT-001",
+                "name": "Test initiative",
+            }
+        }
+
+    def list_benefit_ledger_entries(self, initiative_id: str) -> list[dict]:
+        return [row for row in self.ledger_rows if row.get("initiative_id") == initiative_id]
+
+    def create_benefit_ledger_entry(self, initiative_id: str, data: dict) -> dict:
+        row = {
+            **data,
+            "id": data.get("id") or f"ledger-{len(self.ledger_rows) + 1}",
+            "initiative_id": initiative_id,
+            "created_at": data.get("created_at") or "2026-06-18T00:00:00Z",
+            "updated_at": data.get("updated_at") or "2026-06-18T00:00:00Z",
+        }
+        self.ledger_rows.append(row)
+        return row
+
+    def update_benefit_ledger_entry(self, initiative_id: str, entry_id: str, data: dict) -> dict:
+        for row in self.ledger_rows:
+            if row.get("initiative_id") == initiative_id and row.get("id") == entry_id:
+                row.update(data)
+                row["updated_at"] = "2026-06-18T00:00:00Z"
+                return row
+        return {}
+
+    def upsert_benefit_ledger_entry(self, initiative_id: str, data: dict) -> tuple[dict, bool]:
+        for row in self.ledger_rows:
+            if (
+                row.get("initiative_id") == initiative_id
+                and row.get("period_granularity") == data.get("period_granularity")
+                and row.get("period_start") == data.get("period_start")
+            ):
+                row.update(data)
+                row["updated_at"] = "2026-06-18T00:00:00Z"
+                return row, False
+        return self.create_benefit_ledger_entry(initiative_id, data), True
 
     # Unused by the tests, but present so FinancialService helpers can be attached safely.
     def get_entries(self, _initiative_id: str) -> list[dict]:
@@ -311,6 +356,63 @@ def test_governance_approval_creates_bankable_plan_lock(
             "tenant_id": TENANT_ID,
         }
     ]
+
+
+def test_benefit_ledger_create_derives_bankable_amount(
+    bankable_service: FinancialService,
+) -> None:
+    bankable_service.lock_bankable_plan_from_approval(
+        INITIATIVE_ID,
+        SUBMISSION_ID,
+        str(USER_ID),
+        locked_reason="Approved",
+    )
+
+    row = bankable_service.create_benefit_ledger_entry(
+        INITIATIVE_ID,
+        BenefitLedgerEntryCreate(
+            period_granularity="yearly",
+            period_start="2026-01-01",
+            period_end="2026-12-31",
+            actual_amount="40.0000",
+            description="Actual benefit",
+        ),
+    )
+
+    assert row.bankable_plan_amount == "68.0000"
+    assert row.actual_amount == "40.0000"
+    assert row.variance == "-28.0000"
+
+
+def test_benefit_ledger_csv_import_maps_code_and_upserts(
+    bankable_service: FinancialService,
+) -> None:
+    bankable_service.lock_bankable_plan_from_approval(
+        INITIATIVE_ID,
+        SUBMISSION_ID,
+        str(USER_ID),
+        locked_reason="Approved",
+    )
+
+    first = bankable_service.import_benefit_ledger_csv(
+        b"initiative_code,period_granularity,period_start,period_end,actual_amount,description\n"
+        b"ENT-001,monthly,2026-01-01,2026-01-31,3.0000,January actual\n"
+    )
+    second = bankable_service.import_benefit_ledger_csv(
+        b"initiative_code,period_granularity,period_start,period_end,actual_amount,description\n"
+        b"ENT-001,monthly,2026-01-01,2026-01-31,4.0000,January revised\n"
+    )
+
+    rows = cast(Any, bankable_service._repo).ledger_rows
+    assert first.created == 1
+    assert first.updated == 0
+    assert second.created == 0
+    assert second.updated == 1
+    assert second.errors == []
+    assert len(rows) == 1
+    assert rows[0]["bankable_plan_amount"] == "3.5000"
+    assert rows[0]["actual_amount"] == "4.0000"
+    assert rows[0]["description"] == "January revised"
 
 
 def test_bankable_plan_routes_expose_current_history_and_rebaseline(
