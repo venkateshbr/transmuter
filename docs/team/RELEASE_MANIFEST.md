@@ -26,6 +26,42 @@ status.
 
 ## Current Release Entries
 
+### 2026-06-18 - Benefit Ledger Editor and CSV Import
+
+Status: dev deployment pending
+
+GitHub tracking:
+- Issue: `#306`
+- PR: `#307`
+- Commit: `8fae6e7 feat: add benefit ledger editor import`
+
+Runtime changes:
+- Added Benefit Tracking tabs for summary, ledger row editing, and CSV import.
+- CSV imports use `initiative_code`, period fields, and `actual_amount`; the
+  locked plan amount is derived server-side from the current bankable plan.
+- Added ACME production remediation guide and a 240-row monthly import CSV for
+  the 2027-2028 benefit realization ledger.
+
+Local validation:
+- `uv run --extra dev pytest tests/test_bankable_plans.py tests/test_benefit_realization_ledger.py -q`
+- `uv run ruff check app/services/financial.py app/routers/financials.py app/domain/financials.py app/repositories/financial.py tests/test_bankable_plans.py`
+- `uv run ruff format --check app/services/financial.py app/routers/financials.py app/domain/financials.py app/repositories/financial.py tests/test_bankable_plans.py`
+- `npm --prefix apps/web run build`
+
+Dev deployment:
+- Environment: `https://transmuter-dev.ishirock.tech`
+- Schema: `transmuter_dev`
+- Pending validation.
+
+Schema/data SQL applied to dev:
+- None. Existing `benefit_realization_ledger` schema is reused.
+
+Schema/data SQL required for production:
+- None. Existing `benefit_realization_ledger` schema is reused.
+
+Production validation:
+- Pending promotion.
+
 ### 2026-06-18 - Pipeline Stage Normalization and Dynamic Stage Dashboard
 
 Status: promoted to production
