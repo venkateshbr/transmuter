@@ -74,9 +74,19 @@ class DashboardService:
         kpi_pulse = self._calculate_kpi_pulse(kpis, entries, initiative_ids)
 
         # 6. Financials
-        fin_entries, costs = self.repo.get_financial_summary_data()
-        value_bridge = self._calculate_value_bridge(fin_entries, costs, initiative_ids)
+        metric_values, costs, metric_definitions, scenarios = self.repo.get_financial_summary_data()
+        fin_entries = self._configurable_financial_entries(
+            metric_values,
+            metric_definitions,
+            scenarios,
+        )
         value_matrix = self._calculate_value_matrix(filtered_inits, fin_entries, costs, target_year)
+        value_bridge = self._calculate_value_bridge(
+            fin_entries,
+            costs,
+            initiative_ids,
+            value_matrix.get("selected_year"),
+        )
 
         # 7. Other data
         my_milestones = self.repo.get_my_milestones(user_id)
@@ -587,6 +597,7 @@ class DashboardService:
         entries: list[dict[str, Any]],
         costs: list[dict[str, Any]],
         initiative_ids: set[str],
+        target_year: int | None = None,
     ) -> dict[str, str]:
         def _dec(value: object) -> Decimal:
             return Decimal(str(value)) if value is not None else Decimal("0")
@@ -595,10 +606,16 @@ class DashboardService:
             return str(value.quantize(Decimal("0.0001")))
 
         scoped_entries = [
-            e for e in entries if not initiative_ids or e.get("initiative_id") in initiative_ids
+            e
+            for e in entries
+            if (not initiative_ids or e.get("initiative_id") in initiative_ids)
+            and (target_year is None or e.get("year") == target_year)
         ]
         scoped_costs = [
-            c for c in costs if not initiative_ids or c.get("initiative_id") in initiative_ids
+            c
+            for c in costs
+            if (not initiative_ids or c.get("initiative_id") in initiative_ids)
+            and (target_year is None or c.get("year") == target_year)
         ]
 
         benefits_base = sum((_dec(e.get("gm_uplift_base")) for e in scoped_entries), Decimal("0"))
@@ -619,6 +636,77 @@ class DashboardService:
             "net_high": _money(benefits_high - costs_plan),
             "net_actual": _money(benefits_actual - costs_actual),
         }
+
+    def _configurable_financial_entries(
+        self,
+        metric_values: list[dict[str, Any]],
+        metric_definitions: list[dict[str, Any]],
+        scenarios: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        def _dec(value: object) -> Decimal:
+            return Decimal(str(value)) if value is not None else Decimal("0")
+
+        suffix_by_key = {"plan_base": "base", "plan_high": "high", "actual": "actual"}
+        scenario_suffix_by_id: dict[str, str] = {}
+        for row in scenarios:
+            if not row.get("is_active", True):
+                continue
+            suffix = suffix_by_key.get(str(row.get("key")))
+            if suffix and row.get("id"):
+                scenario_suffix_by_id[str(row["id"])] = suffix
+
+        definitions_by_id = {
+            str(row["id"]): row
+            for row in metric_definitions
+            if row.get("is_active", True) and row.get("aggregation") != "formula"
+        }
+        grouped: dict[tuple[str, int, int | None, int | None], dict[str, Any]] = {}
+
+        for row in metric_values:
+            definition = definitions_by_id.get(str(row.get("metric_definition_id")))
+            suffix = scenario_suffix_by_id.get(str(row.get("scenario_id")))
+            if not definition or not suffix or not definition.get("is_benefit"):
+                continue
+            initiative_id = row.get("initiative_id")
+            year = row.get("year")
+            if not initiative_id or year is None:
+                continue
+            month = int(row["month"]) if row.get("month") is not None else None
+            quarter = (
+                int(row["quarter"])
+                if row.get("quarter") is not None
+                else (((month - 1) // 3) + 1 if month is not None else None)
+            )
+            key = (
+                str(initiative_id),
+                int(year),
+                quarter,
+                month,
+            )
+            entry = grouped.setdefault(
+                key,
+                {
+                    "initiative_id": str(initiative_id),
+                    "year": int(year),
+                    "quarter": quarter,
+                    "month": month,
+                    "revenue_uplift_base": Decimal("0"),
+                    "revenue_uplift_high": Decimal("0"),
+                    "revenue_uplift_actual": Decimal("0"),
+                    "gm_uplift_base": Decimal("0"),
+                    "gm_uplift_high": Decimal("0"),
+                    "gm_uplift_actual": Decimal("0"),
+                },
+            )
+            amount = _dec(row.get("value"))
+            benefit_class = str(definition.get("benefit_class") or "").lower()
+            metric_key = str(definition.get("key") or "")
+            if benefit_class == "revenue" or metric_key == "revenue_uplift":
+                entry[f"revenue_uplift_{suffix}"] += amount
+            else:
+                entry[f"gm_uplift_{suffix}"] += amount
+
+        return list(grouped.values())
 
     def _calculate_value_matrix(
         self,

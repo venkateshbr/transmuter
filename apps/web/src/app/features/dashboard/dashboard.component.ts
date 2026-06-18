@@ -275,11 +275,11 @@ const DASHBOARD_FILTER_STATE_KEY = 'transmuter.filters.dashboard';
           <div>
             <div class="mb-3 flex items-center gap-2">
               <span class="h-2 w-8 bg-[var(--t-blue-light)]"></span>
-              <span class="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Gross Margin Uplift</span>
+              <span class="text-[10px] font-black uppercase tracking-[0.2em] text-white/70">Configurable Benefits</span>
             </div>
             <h2 class="text-2xl font-black tracking-tight">Workstreams x Value Tags</h2>
             <p class="mt-2 max-w-2xl text-xs font-medium leading-relaxed text-white/70">
-              Planned gross margin uplift ranges by operating workstream and initiative tag. Select a year and open any cell to inspect the initiatives behind the number.
+              Tenant-configured benefit ranges by operating workstream and initiative tag. Select a year and open any cell to inspect the initiatives behind the number.
             </p>
           </div>
           <label class="min-w-40 text-[10px] font-black uppercase tracking-widest text-white/70">
@@ -592,15 +592,15 @@ const DASHBOARD_FILTER_STATE_KEY = 'transmuter.filters.dashboard';
                 </div>
                 <div class="mt-4 grid grid-cols-3 gap-2 text-center">
                   <div class="bg-[var(--t-surface)] p-2">
-                    <p class="text-[9px] font-black uppercase text-[var(--t-text-tertiary)]">GM Base</p>
+                    <p class="text-[9px] font-black uppercase text-[var(--t-text-tertiary)]">Benefit Base</p>
                     <p class="text-xs font-black text-[var(--t-text-primary)]">{{ formatMoney(initiative.base) }}</p>
                   </div>
                   <div class="bg-[var(--t-surface)] p-2">
-                    <p class="text-[9px] font-black uppercase text-[var(--t-text-tertiary)]">GM High</p>
+                    <p class="text-[9px] font-black uppercase text-[var(--t-text-tertiary)]">Benefit High</p>
                     <p class="text-xs font-black text-[var(--t-text-primary)]">{{ formatMoney(initiative.high) }}</p>
                   </div>
                   <div class="bg-[var(--t-surface)] p-2">
-                    <p class="text-[9px] font-black uppercase text-[var(--t-text-tertiary)]">GM Actual</p>
+                    <p class="text-[9px] font-black uppercase text-[var(--t-text-tertiary)]">Benefit Actual</p>
                     <p class="text-xs font-black text-[var(--t-accent)]">{{ formatMoney(initiative.actual) }}</p>
                   </div>
                 </div>
