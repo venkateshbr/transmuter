@@ -7,9 +7,12 @@ from __future__ import annotations
 
 # ruff: noqa: F401
 import ast
+import csv
 import operator
+from calendar import monthrange
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from io import StringIO
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -24,6 +27,8 @@ from app.domain.financials import (
     BenefitLedgerEntryCreate,
     BenefitLedgerEntryUpdate,
     BenefitLedgerGranularity,
+    BenefitLedgerImportError,
+    BenefitLedgerImportResult,
     BenefitLedgerInitiativeRollup,
     BenefitLedgerPeriodSummary,
     BenefitLedgerRollupSummaryResponse,
@@ -1251,11 +1256,70 @@ class FinancialService:
         data: BenefitLedgerEntryCreate,
     ) -> BenefitLedgerEntry:
         self._ensure_tenant_initiative(initiative_id)
+        try:
+            payload = self._benefit_entry_payload(initiative_id, data)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
         row = self._repo.create_benefit_ledger_entry(
             initiative_id,
-            self._benefit_entry_payload(data),
+            payload,
         )
         return self._to_benefit_ledger_entry(row)
+
+    def import_benefit_ledger_csv(self, data: bytes) -> BenefitLedgerImportResult:
+        try:
+            text = data.decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Benefit ledger import must be a UTF-8 CSV file.",
+            ) from exc
+
+        reader = csv.DictReader(StringIO(text))
+        required = {
+            "initiative_code",
+            "period_granularity",
+            "period_start",
+            "period_end",
+            "actual_amount",
+            "description",
+        }
+        headers = {str(field or "").strip() for field in reader.fieldnames or []}
+        missing = sorted(required - headers)
+        if missing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Benefit ledger CSV is missing required column(s): {', '.join(missing)}",
+            )
+
+        initiatives = self._repo.initiatives_by_code()
+        created = 0
+        updated = 0
+        errors: list[BenefitLedgerImportError] = []
+        for index, row in enumerate(reader, start=2):
+            initiative_code = str(row.get("initiative_code") or "").strip().upper()
+            try:
+                initiative = initiatives.get(initiative_code)
+                if not initiative:
+                    raise ValueError(f"Initiative code '{initiative_code}' was not found.")
+                payload = self._benefit_import_payload(str(initiative["id"]), row)
+                _, was_created = self._repo.upsert_benefit_ledger_entry(
+                    str(initiative["id"]),
+                    payload,
+                )
+                if was_created:
+                    created += 1
+                else:
+                    updated += 1
+            except ValueError as exc:
+                errors.append(
+                    BenefitLedgerImportError(
+                        row=index,
+                        initiative_code=initiative_code or None,
+                        message=str(exc),
+                    )
+                )
+        return BenefitLedgerImportResult(created=created, updated=updated, errors=errors)
 
     def update_benefit_ledger_entry(
         self,
@@ -1271,6 +1335,29 @@ class FinancialService:
                 patch[field] = val.isoformat() if isinstance(val, date) else val
         if data.bankable_plan_amount is not None:
             patch["bankable_plan_amount"] = _money(data.bankable_plan_amount)
+        elif any(field in patch for field in ("period_granularity", "period_start", "period_end")):
+            current = self._repo.list_benefit_ledger_entries(initiative_id)
+            existing = next((row for row in current if row.get("id") == entry_id), None)
+            if existing:
+                granularity = str(patch.get("period_granularity") or existing["period_granularity"])
+                period_start = self._as_date(patch.get("period_start") or existing["period_start"])
+                period_end = self._as_date(
+                    patch.get("period_end") or existing.get("period_end") or period_start
+                )
+                try:
+                    patch["bankable_plan_amount"] = _money(
+                        self._derived_bankable_plan_amount(
+                            initiative_id,
+                            granularity,  # type: ignore[arg-type]
+                            period_start,
+                            period_end,
+                        )
+                    )
+                except ValueError as exc:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=str(exc),
+                    ) from exc
         if data.actual_amount is not None:
             patch["actual_amount"] = _money(data.actual_amount)
         row = self._repo.update_benefit_ledger_entry(initiative_id, entry_id, patch)
@@ -1653,16 +1740,210 @@ class FinancialService:
             row.get("month"),
         )
 
-    def _benefit_entry_payload(self, data: BenefitLedgerEntryCreate) -> dict[str, object]:
+    def _benefit_entry_payload(
+        self,
+        initiative_id: str,
+        data: BenefitLedgerEntryCreate,
+    ) -> dict[str, object]:
         period_end = data.period_end or data.period_start
+        bankable_plan_amount = data.bankable_plan_amount
+        if bankable_plan_amount is None:
+            bankable_plan_amount = self._derived_bankable_plan_amount(
+                initiative_id,
+                data.period_granularity,
+                data.period_start,
+                period_end,
+            )
         return {
             "period_granularity": data.period_granularity,
             "period_start": data.period_start.isoformat(),
             "period_end": period_end.isoformat(),
-            "bankable_plan_amount": _money(data.bankable_plan_amount),
+            "bankable_plan_amount": _money(bankable_plan_amount),
             "actual_amount": _money(data.actual_amount),
             "description": data.description,
         }
+
+    def _benefit_import_payload(
+        self,
+        initiative_id: str,
+        row: dict[str, str | None],
+    ) -> dict[str, object]:
+        granularity = str(row.get("period_granularity") or "").strip().lower()
+        if granularity not in {"weekly", "monthly", "yearly"}:
+            raise ValueError("period_granularity must be weekly, monthly, or yearly.")
+        period_start = self._parse_import_date(row.get("period_start"), "period_start")
+        period_end = self._parse_import_date(row.get("period_end"), "period_end")
+        if period_end < period_start:
+            raise ValueError("period_end must be on or after period_start.")
+        actual_amount = self._parse_import_decimal(row.get("actual_amount"), "actual_amount")
+        return {
+            "period_granularity": granularity,
+            "period_start": period_start.isoformat(),
+            "period_end": period_end.isoformat(),
+            "bankable_plan_amount": _money(
+                self._derived_bankable_plan_amount(
+                    initiative_id,
+                    granularity,  # type: ignore[arg-type]
+                    period_start,
+                    period_end,
+                )
+            ),
+            "actual_amount": _money(actual_amount),
+            "description": (row.get("description") or "").strip() or None,
+        }
+
+    def _derived_bankable_plan_amount(
+        self,
+        initiative_id: str,
+        granularity: BenefitLedgerGranularity,
+        period_start: date,
+        period_end: date,
+    ) -> Decimal:
+        plan = self.get_current_bankable_plan(initiative_id) if initiative_id else None
+        if not plan:
+            raise ValueError(
+                "A locked bankable plan is required before ledger rows can be created."
+            )
+        period_plan = self._bankable_plan_amount_for_period(
+            plan,
+            granularity,
+            period_start,
+            period_end,
+        )
+        if period_plan is not None:
+            return period_plan
+        locked_total = _dec(plan.snapshot.summary.net_value_plan)
+        if granularity == "yearly":
+            return locked_total
+        if granularity == "monthly":
+            return locked_total / Decimal("12")
+        days = Decimal(str(max((period_end - period_start).days + 1, 1)))
+        return locked_total * days / Decimal("365")
+
+    def _bankable_plan_amount_for_period(
+        self,
+        plan: BankablePlanVersion,
+        granularity: BenefitLedgerGranularity,
+        period_start: date,
+        period_end: date,
+    ) -> Decimal | None:
+        snapshot = plan.snapshot
+        values = [row.model_dump(mode="json") for row in snapshot.configurable_values]
+        if values:
+            values = self._values_with_formula_metrics(values)
+            costs = [row.model_dump(mode="json") for row in snapshot.cost_lines]
+            amount = self._period_net_value_from_clean_snapshot(
+                values,
+                costs,
+                granularity,
+                period_start,
+            )
+            return self._prorate_weekly_month_amount(amount, granularity, period_start, period_end)
+        if snapshot.entries:
+            entries = [row.model_dump(mode="json") for row in snapshot.entries]
+            costs = [row.model_dump(mode="json") for row in snapshot.cost_lines]
+            amount = self._period_net_value_from_legacy_snapshot(
+                entries,
+                costs,
+                granularity,
+                period_start,
+            )
+            return self._prorate_weekly_month_amount(amount, granularity, period_start, period_end)
+        return None
+
+    @staticmethod
+    def _prorate_weekly_month_amount(
+        amount: Decimal | None,
+        granularity: BenefitLedgerGranularity,
+        period_start: date,
+        period_end: date,
+    ) -> Decimal | None:
+        if amount is None or granularity != "weekly":
+            return amount
+        days_in_period = Decimal(str(max((period_end - period_start).days + 1, 1)))
+        days_in_month = Decimal(str(monthrange(period_start.year, period_start.month)[1]))
+        return amount * days_in_period / days_in_month
+
+    def _period_net_value_from_clean_snapshot(
+        self,
+        values: list[dict],  # type: ignore[type-arg]
+        costs: list[dict],  # type: ignore[type-arg]
+        granularity: BenefitLedgerGranularity,
+        period_start: date,
+    ) -> Decimal | None:
+        period_values = [
+            row for row in values if self._ledger_row_matches_period(row, granularity, period_start)
+        ]
+        period_costs = [
+            row for row in costs if self._ledger_row_matches_period(row, granularity, period_start)
+        ]
+        if not period_values and not period_costs:
+            return None
+        base = self._clean_value_case(period_values, "plan_base")
+        costs_total = self._clean_cost_totals(period_costs, actual=False)
+        return _dec(base["benefits_total"]) - _dec(costs_total["recurring"])
+
+    def _period_net_value_from_legacy_snapshot(
+        self,
+        entries: list[dict],  # type: ignore[type-arg]
+        costs: list[dict],  # type: ignore[type-arg]
+        granularity: BenefitLedgerGranularity,
+        period_start: date,
+    ) -> Decimal | None:
+        period_entries = [
+            row
+            for row in entries
+            if self._ledger_row_matches_period(row, granularity, period_start)
+        ]
+        period_costs = [
+            row for row in costs if self._ledger_row_matches_period(row, granularity, period_start)
+        ]
+        if not period_entries and not period_costs:
+            return None
+        benefits = sum(
+            (_dec(row.get("gm_uplift_base")) for row in period_entries),
+            Decimal("0"),
+        )
+        recurring_costs = sum(
+            (_dec(row.get("amount_plan")) for row in period_costs if row.get("is_recurring")),
+            Decimal("0"),
+        )
+        return benefits - recurring_costs
+
+    @staticmethod
+    def _ledger_row_matches_period(
+        row: dict,  # type: ignore[type-arg]
+        granularity: BenefitLedgerGranularity,
+        period_start: date,
+    ) -> bool:
+        year = int(row.get("year") or 0)
+        if year != period_start.year:
+            return False
+        month = row.get("month")
+        if granularity == "monthly":
+            return int(month or 0) == period_start.month
+        if granularity == "weekly":
+            if not month:
+                return False
+            return int(month) == period_start.month
+        return True
+
+    @staticmethod
+    def _parse_import_date(value: object, field: str) -> date:
+        try:
+            return date.fromisoformat(str(value or "").strip())
+        except ValueError as exc:
+            raise ValueError(f"{field} must be an ISO date in YYYY-MM-DD format.") from exc
+
+    @staticmethod
+    def _parse_import_decimal(value: object, field: str) -> Decimal:
+        try:
+            result = Decimal(str(value or "").strip())
+        except Exception as exc:
+            raise ValueError(f"{field} must be a decimal number.") from exc
+        if not result.is_finite():
+            raise ValueError(f"{field} must be a finite decimal number.")
+        return result
 
     @staticmethod
     def _to_benefit_ledger_entry(row: dict) -> BenefitLedgerEntry:  # type: ignore[type-arg]

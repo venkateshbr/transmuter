@@ -401,6 +401,20 @@ class FinancialRepository:
         plans = self.list_bankable_plans(initiative_id)
         return plans[-1] if plans else None
 
+    def initiatives_by_code(self) -> dict[str, dict]:  # type: ignore[type-arg]
+        result = (
+            self._c.table("initiatives")
+            .select("id,initiative_code,name,stage,workstream_id")
+            .eq("tenant_id", self._tid)
+            .is_("archived_at", "null")
+            .execute()
+        )
+        return {
+            str(row.get("initiative_code") or "").strip().upper(): row
+            for row in result.data or []
+            if row.get("initiative_code")
+        }
+
     def get_organization_settings(self) -> dict:  # type: ignore[type-arg]
         result = (
             self._c.table("organizations")
@@ -600,6 +614,26 @@ class FinancialRepository:
         }
         result = self._c.table("benefit_realization_ledger").insert(payload).execute()
         return result.data[0]
+
+    def upsert_benefit_ledger_entry(self, initiative_id: str, data: dict) -> tuple[dict, bool]:  # type: ignore[type-arg]
+        existing = (
+            self._c.table("benefit_realization_ledger")
+            .select("id")
+            .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
+            .eq("period_granularity", data["period_granularity"])
+            .eq("period_start", data["period_start"])
+            .maybe_single()
+            .execute()
+        )
+        if existing.data:
+            row = self.update_benefit_ledger_entry(
+                initiative_id,
+                existing.data["id"],
+                data,
+            )
+            return row, False
+        return self.create_benefit_ledger_entry(initiative_id, data), True
 
     def update_benefit_ledger_entry(
         self,
