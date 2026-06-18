@@ -110,6 +110,7 @@ class DashboardService:
         stage_gate_waterline = self._calculate_stage_gate_waterline(
             workstream_targets,
             value_matrix,
+            stage_definitions,
         )
         rag_values = sorted({i.get("rag_status") for i in all_inits if i.get("rag_status")})
         priority_values = self._ordered_values(
@@ -343,6 +344,7 @@ class DashboardService:
         self,
         workstream_targets: dict[str, Any],
         value_matrix: dict[str, Any],
+        stage_definitions: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         def _dec(value: object) -> Decimal:
             return Decimal(str(value)) if value is not None else Decimal("0")
@@ -355,6 +357,7 @@ class DashboardService:
             for row in workstream_targets.get("items", [])
             if row.get("workstream_id")
         }
+        stage_order = self._stage_order(stage_definitions or [])
         items: list[dict[str, Any]] = []
         totals = {
             "l1": Decimal("0"),
@@ -375,20 +378,20 @@ class DashboardService:
             locked_ids = {
                 str(item.get("id"))
                 for item in (row.get("total") or {}).get("initiatives", [])
-                if target and locked_plan > Decimal("0") and item.get("stage") == "complete"
+                if target
+                and locked_plan > Decimal("0")
+                and self._is_terminal_stage(str(item.get("stage") or ""), stage_order)
             }
 
             for initiative in (row.get("total") or {}).get("initiatives", []):
                 initiative_value = max(_dec(initiative.get("net_value_base")), Decimal("0"))
                 if str(initiative.get("id")) in locked_ids:
                     continue
-                stage = initiative.get("stage")
-                if stage == "scoping":
-                    below["l1"] += initiative_value
-                elif stage == "complete":
-                    below["l2"] += initiative_value
-                else:
-                    below["l3"] += initiative_value
+                bucket = self._stage_waterline_bucket(
+                    str(initiative.get("stage") or ""),
+                    stage_order,
+                )
+                below[bucket] += initiative_value
 
             item = {
                 "label": row.get("workstream_name") or "Workstream",
@@ -442,16 +445,8 @@ class DashboardService:
         options: list[dict[str, str]] = []
         seen: set[str] = set()
 
-        for row in stage_definitions:
-            stage_id = str(row.get("to_stage") or "").strip()
-            if not stage_id or stage_id in seen:
-                continue
-            options.append(
-                {
-                    "id": stage_id,
-                    "name": str(row.get("label") or self._label(stage_id)),
-                }
-            )
+        for stage_id in self._stage_order(stage_definitions):
+            options.append({"id": stage_id, "name": self._label(stage_id)})
             seen.add(stage_id)
 
         for stage_id in self._ordered_values(
@@ -471,6 +466,49 @@ class DashboardService:
             ]
 
         return options
+
+    @staticmethod
+    def _stage_order(stage_definitions: list[dict[str, Any]]) -> list[str]:
+        stages: list[str] = []
+        ordered = sorted(
+            stage_definitions,
+            key=lambda row: (int(row.get("gate_number") or 0), str(row.get("label") or "")),
+        )
+        for row in ordered:
+            for key in ("from_stage", "to_stage"):
+                stage_id = str(row.get(key) or "").strip()
+                if stage_id and stage_id not in stages:
+                    stages.append(stage_id)
+        return stages
+
+    @staticmethod
+    def _is_terminal_stage(stage: str, stage_order: list[str]) -> bool:
+        normalized = stage.strip().lower()
+        terminal_names = {"complete", "completed", "realized", "realised", "done", "closed"}
+        if normalized in terminal_names:
+            return True
+        return bool(stage_order and stage == stage_order[-1])
+
+    def _stage_waterline_bucket(self, stage: str, stage_order: list[str]) -> str:
+        normalized = stage.strip().lower()
+        if not stage_order:
+            if normalized in {"scoping", "identified", "idea", "ideation"}:
+                return "l1"
+            if self._is_terminal_stage(stage, stage_order):
+                return "l2"
+            return "l3"
+        if stage not in stage_order:
+            return "l3"
+        if self._is_terminal_stage(stage, stage_order):
+            return "l2"
+        if len(stage_order) <= 2:
+            return "l1"
+        ratio = Decimal(stage_order.index(stage)) / Decimal(len(stage_order) - 1)
+        if ratio < Decimal("0.34"):
+            return "l1"
+        if ratio < Decimal("0.67"):
+            return "l2"
+        return "l3"
 
     @staticmethod
     def _label(value: str) -> str:

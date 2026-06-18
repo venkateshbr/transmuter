@@ -172,6 +172,102 @@ def test_value_matrix_uses_latest_available_year_when_target_missing() -> None:
     assert matrix["totals"]["total"]["base"] == "100.0000"
 
 
+def test_stage_options_include_full_configured_gate_order_and_extra_actual_stage() -> None:
+    service = DashboardService(_Repo())  # type: ignore[arg-type]
+
+    options = service._stage_options(
+        [
+            {
+                "gate_number": 2,
+                "from_stage": "validated",
+                "to_stage": "planned",
+                "label": "Gate 2",
+            },
+            {
+                "gate_number": 1,
+                "from_stage": "identified",
+                "to_stage": "validated",
+                "label": "Gate 1",
+            },
+            {
+                "gate_number": 3,
+                "from_stage": "planned",
+                "to_stage": "realized",
+                "label": "Gate 3",
+            },
+        ],
+        [
+            {"stage": "identified"},
+            {"stage": "custom_exception"},
+        ],
+    )
+
+    assert [option["id"] for option in options] == [
+        "identified",
+        "validated",
+        "planned",
+        "realized",
+        "custom_exception",
+    ]
+    assert options[0]["name"] == "Identified"
+
+
+def test_stage_gate_waterline_uses_configured_terminal_stage() -> None:
+    service = DashboardService(_Repo())  # type: ignore[arg-type]
+
+    waterline = service._calculate_stage_gate_waterline(
+        workstream_targets={
+            "items": [
+                {
+                    "workstream_id": "ws-1",
+                    "locked_run_rate_value": "100.0000",
+                    "actual_total": "25.0000",
+                }
+            ]
+        },
+        value_matrix={
+            "rows": [
+                {
+                    "workstream_id": "ws-1",
+                    "workstream_name": "Operations",
+                    "total": {
+                        "initiatives": [
+                            {
+                                "id": "init-1",
+                                "stage": "identified",
+                                "net_value_base": "10.0000",
+                            },
+                            {
+                                "id": "init-2",
+                                "stage": "executing",
+                                "net_value_base": "20.0000",
+                            },
+                            {
+                                "id": "init-3",
+                                "stage": "realized",
+                                "net_value_base": "30.0000",
+                            },
+                        ]
+                    },
+                }
+            ]
+        },
+        stage_definitions=[
+            {"gate_number": 1, "from_stage": "identified", "to_stage": "validated"},
+            {"gate_number": 2, "from_stage": "validated", "to_stage": "planned"},
+            {"gate_number": 3, "from_stage": "planned", "to_stage": "committed"},
+            {"gate_number": 4, "from_stage": "committed", "to_stage": "executing"},
+            {"gate_number": 5, "from_stage": "executing", "to_stage": "realized"},
+        ],
+    )
+
+    item = waterline["items"][0]
+    assert item["l1"] == "10.0000"
+    assert item["l3"] == "20.0000"
+    assert item["below_waterline"] == "30.0000"
+    assert item["above_waterline"] == "100.0000"
+
+
 def test_executive_summary_pdf_uses_dashboard_context() -> None:
     service = DashboardService(_Repo())  # type: ignore[arg-type]
 
