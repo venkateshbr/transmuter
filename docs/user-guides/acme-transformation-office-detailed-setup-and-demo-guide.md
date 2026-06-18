@@ -95,7 +95,118 @@ demo.
 
 ---
 
-## 4. New Tenant Setup Sequence
+## 4. Transformation Office Operating Model
+
+The transformation office is the control layer that turns a collection of
+initiatives into a managed program of value. In Transmuter, that operating
+model is implemented through role-based ownership, stage gates, financial
+validation, bankable plans, actual realization entries, dashboards, and meeting
+cadence.
+
+### Core roles
+
+| Role | Primary accountability | Main screens | Data owned |
+|---|---|---|---|
+| Executive Sponsor / CEO / CFO | Approves portfolio ambition, funding, and major tradeoffs. Reviews value, risk, and decisions. | `/dashboard`, `/financials`, `/reports/control-tower`, board pack export | Decision outcomes, escalations, target changes approved outside the system. |
+| Transformation Office Director | Owns the portfolio operating cadence and confirms that the program is governed end to end. | `/dashboard`, `/initiatives/pipeline`, `/financials`, `/financials/benefit-tracking`, `/reports/control-tower` | Portfolio priorities, stage movement, meeting cadence, executive narrative. |
+| PMO Lead / Governance Manager | Maintains stage gates, milestones, risks, dependencies, actions, and meeting follow-up. | `/admin`, `/pmo/governance`, `/progress`, `/meetings`, initiative **Governance**, **Milestones**, **Risks**, **Dependencies** tabs | Gate criteria, submissions, milestones, RAID data, actions, meeting minutes. |
+| Finance Lead / Benefits Controller | Owns financial definitions, baseline integrity, benefit validation, cost validation, actuals governance, and board value reconciliation. | `/admin`, `/financials`, `/financials/benefits-register`, `/financials/bankable-plan`, `/financials/benefit-tracking`, initiative **Financials** tab | Metric definitions, scenarios, baselines, benefit validation status, cost categories, actual values, benefit ledger approval evidence. |
+| Workstream Lead | Runs a slice of the portfolio and escalates blockers across initiatives. | `/initiatives/pipeline`, `/initiatives/matrix`, `/financials/benefit-tracking`, `/progress/roadmap`, `/reports/control-tower` | Workstream prioritization, progress narrative, cross-initiative blockers, workstream realization commentary. |
+| Initiative Owner | Owns delivery, status, milestones, risks, KPIs, assumptions, and source evidence for benefits. | `/initiatives/:id`, initiative **Overview**, **Financials**, **Milestones**, **KPIs**, **Risks**, **Status**, **Team** tabs | Initiative description, owners, dates, delivery status, risks, KPIs, benefit-line assumptions, realization evidence. |
+| Business Benefit Owner | Confirms that value has moved into business-as-usual operations and can be sustained. | `/financials/benefit-tracking`, `/financials/benefits-register`, initiative **Financials** and **Summary** tabs | Realization evidence, benefit ownership, sustainment notes, realized-value acceptance. |
+| Tenant Administrator | Configures tenant setup, users, dimensions, fiscal settings, governance rules, and access. | `/admin`, `/people` | Tenant settings, users, roles, master data, first-run checklist. |
+| Management Viewer | Reviews dashboards and reports without changing data. | `/dashboard`, `/financials`, `/financials/benefit-tracking`, `/reports/control-tower`, `/initiatives/pipeline` | No owned data; read-only consumption and challenge questions. |
+
+### Screen ownership
+
+| Screen | Accountable role | Supporting roles | How it is used |
+|---|---|---|---|
+| `/admin` General, Strategic Parameters, Financial Configuration, Governance Engine | Tenant Administrator / Finance Lead / PMO Lead | Transformation Office Director | Sets tenant identity, business units, workstreams, metrics, scenarios, cost categories, bridge rows, baselines, and gate rules. |
+| `/people` | Tenant Administrator | Transformation Office Director | Creates users, assigns tenant roles, and confirms who can manage all initiatives versus assigned initiatives only. |
+| `/dashboard` | Transformation Office Director | Executive Sponsor, Workstream Leads | Gives the first executive read on portfolio scale, health, and attention areas. |
+| `/initiatives/pipeline` | Transformation Office Director | Workstream Leads, Initiative Owners | Source list for all initiatives; used to filter by BU, workstream, tag, priority, owner, stage, and RAG. |
+| `/initiatives/matrix` | Transformation Office Director / Workstream Leads | Finance Lead | Shows portfolio value and initiative distribution by workstream and tag so management can see where value is concentrated. |
+| `/initiatives/new` and `/initiatives/:id/edit` | Transformation Office Director | Initiative Owner, Workstream Lead | Creates and maintains initiative master data, ownership, stage, dates, dimensions, and initial value case. |
+| `/initiatives/:id/financial-scope` | Finance Lead | Initiative Owner | Controls which metrics and cost categories are tracked for the initiative. |
+| Initiative **Financials** tab | Finance Lead | Initiative Owner, Business Benefit Owner | Maintains benefit lines, cost lines, plan/high/actual scenario values, validation status, and assumptions. |
+| Initiative **Milestones**, **KPIs**, **Risks**, **Dependencies**, **Status**, **Team** tabs | Initiative Owner / PMO Lead | Workstream Lead | Maintains execution evidence that explains whether the value case is credible. |
+| `/financials` | Finance Lead | Transformation Office Director | Reconciles portfolio baseline, planned benefits, actuals, recurring costs, one-off investment, net run-rate value, and contributor detail. |
+| `/financials/benefits-register` | Finance Lead / Benefits Controller | Initiative Owners, Business Benefit Owners | Shows each benefit line with plan, actual, validated amount, risk adjustment, evidence, owner, and validation status. |
+| `/financials/bankable-plan` | Finance Lead / PMO Lead | Transformation Office Director | Shows locked approved plans and rebaseline history before actual realization is tracked against them. |
+| `/financials/benefit-tracking` | Benefits Controller | Finance Lead, Business Benefit Owners | Records and imports realized benefit ledger rows, compares actuals to locked bankable plan, and exposes variances. |
+| `/financials/waterline` | Transformation Office Director / Finance Lead | Workstream Leads | Freezes workstream targets after approval so future delivery is compared against a stable target. |
+| `/shared-costs` | Finance Lead | Transformation Office Director | Captures shared or cross-portfolio costs that are not naturally owned by a single initiative. |
+| `/progress`, `/progress/roadmap`, `/progress/action-items`, `/progress/status-updates` | PMO Lead | Initiative Owners, Workstream Leads | Runs the weekly operating cadence across milestones, actions, status reporting, and roadmap risks. |
+| `/meetings` and `/meetings/sessions/:id` | PMO Lead | Transformation Office Director, Workstream Leads | Runs steering committees and workstream reviews, captures agenda, attendees, minutes, decisions, and actions. |
+| `/pmo/governance`, `/pmo/risks`, `/pmo/kpis`, `/pmo/ai-insights` | PMO Lead | Finance Lead, Workstream Leads | Provides governance, risk, KPI, and AI-assisted portfolio views for program control. |
+| `/reports/control-tower` | Transformation Office Director | Executive Sponsor, Finance Lead, PMO Lead | Management meeting view combining value, progress, risk, blockers, and decision support. |
+
+### Data ownership rules
+
+| Data | Entered by | Reviewed by | System control |
+|---|---|---|---|
+| Tenant dimensions, workstreams, BUs, markets, themes, tags | Tenant Administrator | Transformation Office Director | Used as filters and rollup dimensions across dashboards and reports. |
+| Financial metric definitions, scenarios, cost categories, value bridge rows | Finance Lead | Transformation Office Director | Defines what can be tracked and how values reconcile. |
+| Initiative master data and ownership | Transformation Office / Initiative Owner | Workstream Lead | Must be assigned to dimensions before it can be governed as part of the portfolio. |
+| Initiative baseline allocation | Finance Lead | Initiative Owner | Must reconcile to tenant FY26 baseline for ACME. |
+| Plan Base and Plan High benefit values | Initiative Owner / Finance Lead | Finance Lead | Maintained in the initiative financial grid by metric, scenario, benefit line, year, and month. |
+| Actual financial metric values | Finance Lead / Initiative Owner, depending on control model | Finance Lead | Entered in the **Actuals** scenario and compared against plan. |
+| Actual recurring and one-off costs | Finance Lead | Transformation Office Director | Entered as actual cost lines or actual cost values; recurring actuals affect net run-rate actuals. |
+| Benefit-line validation status | Finance Lead | Benefits Controller | Draft -> Submitted -> Finance validated or Rejected. |
+| Bankable plan lock / rebaseline | Finance Lead / PMO Lead | Transformation Office Director | Freezes approved plan snapshots so realization is compared against a stable baseline. |
+| Benefit ledger actual realization | Benefits Controller / Business Benefit Owner | Finance Lead | Entered manually or imported by CSV in `/financials/benefit-tracking`; variance is calculated against locked plan. |
+| Milestones, risks, KPIs, actions, status updates | Initiative Owner / PMO Lead | Workstream Lead | Explains delivery confidence and blockers behind the financial variance. |
+
+### Operating lifecycle
+
+1. **Setup**: Tenant admin and Finance configure dimensions, users, metric
+   definitions, scenarios, cost categories, fiscal calendar, annual baselines,
+   and stage gates.
+2. **Intake**: Transformation office creates initiatives with owners,
+   workstreams, business units, tags, dates, and value hypotheses.
+3. **Plan**: Finance and initiative owners configure financial scope, annual
+   baselines, benefit lines, cost lines, Plan Base, Plan High, and assumptions.
+4. **Validate**: Finance reviews benefit lines in the initiative financial tab
+   and `/financials/benefits-register`; PMO confirms gate criteria.
+5. **Commit**: Approved initiatives are locked into bankable plans. Rebaseline
+   is versioned rather than overwriting the prior approved plan.
+6. **Run**: Initiative owners update status, milestones, risks, KPIs, actions,
+   and actual financial values. PMO runs meetings and escalates blockers.
+7. **Realize**: Benefits controller or business benefit owner enters realized
+   benefit ledger rows in `/financials/benefit-tracking`, with actual amounts
+   and evidence descriptions.
+8. **Report**: Finance uses `/financials`, `/financials/benefits-register`,
+   `/financials/benefit-tracking`, and board exports to reconcile value.
+   Management uses `/dashboard` and `/reports/control-tower` to run decisions.
+9. **Sustain**: Business benefit owner accepts the realized value into BAU,
+   unresolved variance remains visible, and lessons learned are recorded in the
+   initiative summary.
+
+### Actuals and realization control
+
+There are two related but different actuals concepts:
+
+| Actual type | Where entered | Purpose |
+|---|---|---|
+| Actual financial scenario values | Initiative **Financials** tab, scenario **Actuals** | Captures actual revenue uplift, gross margin uplift, savings, and actual cost values in the same grid structure as plan. These values drive financial plan-vs-actual reporting. |
+| Benefit ledger realization rows | `/financials/benefit-tracking` | Captures realized benefit evidence against the locked bankable plan. These rows are the realization record used for locked baseline versus realized benefit tracking. |
+
+Recommended control:
+
+1. Initiative owner provides the operating evidence and source files.
+2. Business benefit owner confirms the value is embedded in operations.
+3. Finance lead confirms the calculation and enters or approves actual values.
+4. Benefits controller enters or imports benefit ledger rows.
+5. Transformation office reviews variance and escalates leakage through the
+   steering cadence.
+
+For ACME, use `/financials/benefit-tracking` to show realized actuals against
+locked bankable plan values, and use `/financials` to show portfolio financial
+plan, actual, cost, and net value reporting.
+
+---
+
+## 5. New Tenant Setup Sequence
 
 Follow this sequence for a new tenant before creating initiatives.
 
@@ -488,7 +599,7 @@ Speaker notes:
 
 ---
 
-## 5. Initiative Setup Sequence
+## 6. Initiative Setup Sequence
 
 Repeat this sequence for each initiative.
 
@@ -727,7 +838,7 @@ Speaker notes:
 
 ---
 
-## 6. Where to Demonstrate Value
+## 7. Where to Demonstrate Value
 
 ### Screen 1: Executive Dashboard
 
@@ -735,22 +846,34 @@ Screen:
 
 - `/dashboard`
 
+Accountable role:
+
+- Transformation Office Director
+
 Use it for:
 
 - first executive landing view,
 - portfolio status,
-- high-level transformation posture.
+- high-level transformation posture,
+- deciding which value, risk, or delivery area needs deeper review.
 
 Speaker notes:
 
 > This is the executive landing page. It gives management a first read on the
-> transformation portfolio before we move into financial proof.
+> transformation portfolio before we move into financial proof. It is the
+> starting point for the weekly or monthly management cadence: what is healthy,
+> what is off track, and what needs an executive decision?
 
 ### Screen 2: Initiative Pipeline
 
 Screen:
 
 - `/initiatives/pipeline`
+
+Accountable role:
+
+- Transformation Office Director
+- Workstream Leads for their own filtered views
 
 Filters to apply:
 
@@ -768,11 +891,22 @@ Speaker notes:
 > back to an initiative with an owner, stage, workstream, RAG status, and value
 > case.
 
+Management use:
+
+- Confirms that all value claims are attached to named initiatives.
+- Lets the transformation office challenge orphan initiatives with weak
+  ownership, stale status, or unclear business-unit accountability.
+- Gives workstream leads a filtered backlog for weekly execution review.
+
 ### Screen 3: Financial Overview
 
 Screen:
 
 - `/financials`
+
+Accountable role:
+
+- Finance Lead / Benefits Controller
 
 Default demo settings:
 
@@ -833,11 +967,24 @@ Important current product note:
   select target-year run-rate for the FY28 management story, and switch basis
   only when you want to discuss in-year, cumulative, or all-years values.
 
+Management use:
+
+- CFO view of plan, actual, variance, recurring costs, one-off investment, and
+  net value.
+- Board view of the baseline-to-value bridge.
+- Drilldown view for which initiatives contribute to a selected year, value
+  basis, cost category, or stage.
+- Export source for the board pack, using the selected year and value basis.
+
 ### Screen 4: Financial Overview cost-category drilldown
 
 Screen:
 
 - `/financials`
+
+Accountable role:
+
+- Finance Lead
 
 Filters:
 
@@ -859,6 +1006,13 @@ Speaker notes:
 > This is how we isolate recurring run cost. Management can see whether net
 > value leakage comes from software, maintenance, or people support.
 
+Management use:
+
+- Separates recurring EBITDA drag from one-off investment.
+- Identifies whether technology, maintenance, or labor support costs are
+  eroding value.
+- Supports budget decisions when run costs need owner action.
+
 ### Screen 5: Initiative detail financials
 
 Screen:
@@ -866,6 +1020,11 @@ Screen:
 - `/initiatives/pipeline`
 - Open an initiative, for example **ENT-006 Pricing & Discount Optimization**
 - Tab: **Financials**
+
+Accountable role:
+
+- Initiative Owner for assumptions and evidence
+- Finance Lead for validation and actuals control
 
 Demo settings:
 
@@ -892,11 +1051,22 @@ Speaker notes:
 > uplift in FY28, with only `$0.05M` recurring run cost. That creates `$1.00M`
 > EBITDA-effective net run-rate value.
 
+Management use:
+
+- Audits the story behind a portfolio number.
+- Confirms benefit lines, costs, scenario values, actuals, and assumptions.
+- Shows whether Finance has validated the benefit before it is treated as
+  bankable.
+
 ### Screen 6: Initiative financial scope
 
 Screen:
 
 - `/initiatives/:id/financial-scope`
+
+Accountable role:
+
+- Finance Lead
 
 Use it for:
 
@@ -918,6 +1088,10 @@ Screen:
 - `/initiatives/:id`
 - Button: **Export Excel**
 
+Accountable role:
+
+- Finance Lead
+
 Use it for:
 
 - offline finance review,
@@ -935,6 +1109,10 @@ Speaker notes:
 Screen:
 
 - `/financials/bankable-plan`
+
+Accountable role:
+
+- Finance Lead / PMO Lead
 
 Use it for:
 
@@ -957,11 +1135,62 @@ Speaker notes:
 > for realization tracking. ACME now has locked bankable plans, so we can show
 > both the current approved plan and a controlled rebaseline example.
 
-### Screen 9: Benefit Tracking
+Management use:
+
+- Proves that realization is being compared against an approved version, not a
+  moving target.
+- Shows when a value case was locked and whether later rebaseline versions were
+  controlled.
+- Helps the steering committee distinguish approved commitment from working
+  forecast.
+
+### Screen 9: Benefits Register
+
+Screen:
+
+- `/financials/benefits-register`
+
+Accountable role:
+
+- Finance Lead / Benefits Controller
+
+Controls:
+
+| Control | Demo use |
+|---|---|
+| Year | Select `2028` for ACME run-rate view. |
+| Validation status | Show all, then filter to Finance validated. |
+| Search | Search a benefit line or initiative code when asked for proof. |
+
+Use it for:
+
+- portfolio-wide list of benefit lines,
+- Finance validation status,
+- evidence and owner metadata,
+- plan, actual, validated, risk-adjusted, bankable, and realized values.
+
+Speaker notes:
+
+> The Benefits Register is the finance control sheet for benefits. It is where
+> management can see whether a value line is still a draft, has been submitted,
+> has been Finance validated, or was rejected. This prevents unvalidated value
+> from being presented as bankable.
+
+Management use:
+
+- Separates gross plan from Finance-validated and risk-adjusted value.
+- Shows which benefit owner and evidence support each value claim.
+- Provides the handoff point from planned benefit to realization tracking.
+
+### Screen 10: Benefit Tracking
 
 Screen:
 
 - `/financials/benefit-tracking`
+
+Accountable role:
+
+- Benefits Controller / Business Benefit Owner
 
 Controls:
 
@@ -989,11 +1218,22 @@ Speaker notes:
 > baseline, ledger rows provide actuals, and variance shows where realization is
 > ahead of or behind the approved case.
 
-### Screen 10: Waterline
+Management use:
+
+- Shows actual realized benefits against the locked plan baseline.
+- Lets the benefits controller enter or import actual realization rows.
+- Exposes realization gaps by portfolio, workstream, initiative, and period.
+- Gives executives one place to ask whether value is real, not just planned.
+
+### Screen 11: Waterline
 
 Screen:
 
 - `/financials/waterline`
+
+Accountable role:
+
+- Transformation Office Director / Finance Lead
 
 Use it for:
 
@@ -1015,11 +1255,101 @@ Speaker notes:
 > shifting goalposts after approval and creates a basis for actual realization
 > comparison.
 
-### Screen 11: Control Tower
+Management use:
+
+- Locks a workstream target once the steering committee has approved scope.
+- Shows which initiatives are above or below the cutoff.
+- Helps management decide whether adding initiatives changes the committed
+  value target or remains below the line.
+
+### Screen 12: Initiative Portfolio Financial View
+
+Screen:
+
+- `/financials/initiative-portfolio`
+
+Accountable role:
+
+- Finance Lead / Transformation Office Director
+
+Use it for:
+
+- comparing initiatives by value, cost, stage, and contribution,
+- identifying concentration risk,
+- prioritizing leadership attention across the portfolio.
+
+Speaker notes:
+
+> This view is the financial ranking table. It helps management see which
+> initiatives carry the most value, which ones have cost leakage, and which
+> ones need executive attention because their financial contribution is material.
+
+### Screen 13: Shared Costs
+
+Screen:
+
+- `/shared-costs`
+
+Accountable role:
+
+- Finance Lead
+
+Use it for:
+
+- costs that support multiple initiatives,
+- platform, PMO, licensing, or shared delivery costs,
+- preventing shared costs from being hidden inside a single initiative.
+
+Speaker notes:
+
+> Shared costs keep the portfolio economics honest. If a license, platform, or
+> central support cost benefits multiple initiatives, Finance should track it
+> centrally instead of distorting one initiative's value case.
+
+### Screen 14: Progress, PMO, and Meetings
+
+Screens:
+
+- `/progress`
+- `/progress/roadmap`
+- `/progress/action-items`
+- `/progress/status-updates`
+- `/pmo/governance`
+- `/pmo/risks`
+- `/pmo/kpis`
+- `/meetings`
+- `/meetings/sessions/:id`
+
+Accountable role:
+
+- PMO Lead / Governance Manager
+
+Use them for:
+
+- milestone progress,
+- cross-workstream roadmap review,
+- action-item ownership,
+- recurring status updates,
+- stage gate submissions and approvals,
+- risks and blockers,
+- KPI actuals,
+- steering committee agendas, minutes, and decisions.
+
+Speaker notes:
+
+> These screens explain why value is on track or off track. Financial variance
+> is rarely self-explanatory; the PMO views connect the value story to delivery
+> evidence, blockers, actions, risks, and decisions.
+
+### Screen 15: Control Tower
 
 Screen:
 
 - `/reports/control-tower`
+
+Accountable role:
+
+- Transformation Office Director
 
 Use it for:
 
@@ -1029,12 +1359,19 @@ Use it for:
 
 Speaker notes:
 
-> The control tower is the management meeting view. It combines the portfolio,
-> financials, risks, and progress signals into one operating cadence.
+> The control tower is the management meeting view. It combines portfolio,
+> financials, risks, progress, blockers, and decision support into one operating
+> cadence.
+
+Management use:
+
+- Runs steering committee reviews from a single page.
+- Connects value leakage to execution blockers and decisions.
+- Helps executives focus on the few decisions that protect value realization.
 
 ---
 
-## 7. Full Management Demo Script
+## 8. Full Management Demo Script
 
 ### Opening
 
@@ -1160,22 +1497,27 @@ Speaker notes:
 Screens:
 
 - `/financials/bankable-plan`
+- `/financials/benefits-register`
 - `/financials/benefit-tracking`
 - `/financials/waterline`
 
 Actions:
 
-1. Show the screens briefly.
-2. Explain intended workflow.
-3. Be transparent that ACME needs locked bankable plans and benefit ledger rows
-   for a full realization demo.
+1. Open **Bankable Plan** and show that ACME initiatives have locked approved
+   plan snapshots.
+2. Open **Benefits Register** and show validation status, evidence metadata,
+   risk-adjusted value, and owner metadata.
+3. Open **Benefit Tracking** and show locked baseline versus realized actuals.
+4. Show yearly rollup first, then drill to workstream or initiative if asked.
+5. Open **Waterline** to explain frozen workstream targets.
 
 Speaker notes:
 
 > The next level of maturity is to lock bankable plans at approval gates and
-> then track realized benefits against that locked plan. The platform supports
-> those screens, but the current ACME demo data needs locked plans and ledger
-> values populated before these become the main board evidence.
+> then track realized benefits against that locked plan. ACME has locked
+> bankable plan snapshots and benefit ledger rows, so this is now the main
+> board evidence for realized value. The Benefits Register controls validation;
+> Benefit Tracking shows actual realization against the locked baseline.
 
 ### Close
 
@@ -1197,7 +1539,7 @@ Speaker notes:
 
 ---
 
-## 8. Recommended Board Questions and Answers
+## 9. Recommended Board Questions and Answers
 
 | Board question | Where to answer | Answer pattern |
 |---|---|---|
@@ -1207,28 +1549,36 @@ Speaker notes:
 | What costs are recurring? | `/financials`, cost category filter | FY28 recurring run cost `$0.80M`. |
 | What investment is needed? | `/financials`, Year = 2027; cost breakdown | One-off investment `$2.5M`. |
 | Who owns the value? | `/initiatives/pipeline`; initiative detail | Owner, group owner, BU, and workstream per initiative. |
-| Is the plan locked? | `/financials/bankable-plan` | Current ACME seed needs locked plan snapshots populated. |
-| Is value realized or just planned? | `/financials/benefit-tracking` | Current ACME seed needs benefit ledger rows populated for realized-value demo. |
+| Is the plan locked? | `/financials/bankable-plan` | ACME has locked bankable plan snapshots; use `ENT-005` to show version 2 and rebaseline history. |
+| Which benefit lines are Finance validated? | `/financials/benefits-register` | Filter by Finance validated and show owner, evidence, plan, actual, validated, risk-adjusted, bankable, and realized values. |
+| Is value realized or just planned? | `/financials/benefit-tracking` | ACME has realized actuals in the benefit ledger; compare actuals to locked bankable plan by portfolio, workstream, initiative, and period. |
 | Where are risks and blockers? | Initiative **Risks**, **Status**, `/pmo/risks`, `/progress/status-updates` | Show RAG status, risk list, and overdue updates. |
 
 ---
 
-## 9. Operating Cadence for a Transformation Office
+## 10. Operating Cadence for a Transformation Office
 
 Weekly:
 
 - Initiative owners update status, risks, dependencies, and action items.
 - Transformation office reviews overdue updates and blockers.
+- PMO lead prepares workstream or steering committee agendas in `/meetings`.
 
 Bi-weekly:
 
 - Workstream owners review initiative pipeline and milestone progress.
 - Finance reviews material changes to benefit and cost assumptions.
+- Benefits controller reviews submitted benefit lines and rejects or validates
+  them before they are presented as bankable.
 
 Monthly:
 
 - Transformation office reviews `/financials` with Year and Actuals filters.
 - Benefits and recurring costs are reconciled by initiative.
+- Finance and business benefit owners enter or import realized benefit ledger
+  rows in `/financials/benefit-tracking`.
+- Benefits Register validation status is reviewed for new or changed value
+  claims.
 - Steering committee reviews risks, delays, and value leakage.
 
 Quarterly:
@@ -1237,10 +1587,12 @@ Quarterly:
 - Review waterline target locks by workstream.
 - Present board pack with baseline, run-rate value, actuals, variance, risks,
   and decisions required.
+- Move realized initiatives through Gate 5 only after actual evidence and BAU
+  ownership are confirmed.
 
 ---
 
-## 10. Practical Demo Warnings
+## 11. Practical Demo Warnings
 
 1. Do not call revenue uplift EBITDA. Revenue becomes EBITDA-effective only
    through margin conversion.
