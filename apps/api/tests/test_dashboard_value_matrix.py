@@ -172,6 +172,156 @@ def test_value_matrix_uses_latest_available_year_when_target_missing() -> None:
     assert matrix["totals"]["total"]["base"] == "100.0000"
 
 
+def test_configurable_financial_values_feed_dashboard_bridge_and_matrix() -> None:
+    service = DashboardService(_Repo())  # type: ignore[arg-type]
+    initiatives = [
+        {
+            "id": "init-1",
+            "name": "Manufacturing Throughput",
+            "initiative_code": "OPS-001",
+            "stage": "realized",
+            "rag_status": "green",
+            "workstream_id": "ws-1",
+            "tag": "automation",
+            "workstreams": {"name": "Operations"},
+            "initiative_business_units": [],
+        }
+    ]
+    metric_definitions = [
+        {
+            "id": "metric-revenue",
+            "key": "revenue_uplift",
+            "aggregation": "sum",
+            "is_active": True,
+            "is_benefit": True,
+            "benefit_class": "revenue",
+        },
+        {
+            "id": "metric-gm",
+            "key": "gm_uplift",
+            "aggregation": "sum",
+            "is_active": True,
+            "is_benefit": True,
+            "benefit_class": "margin",
+        },
+        {
+            "id": "metric-savings",
+            "key": "opex_savings",
+            "aggregation": "sum",
+            "is_active": True,
+            "is_benefit": True,
+            "benefit_class": "savings",
+        },
+        {
+            "id": "metric-formula",
+            "key": "gm_pct",
+            "aggregation": "formula",
+            "is_active": True,
+            "is_benefit": True,
+            "benefit_class": "margin",
+        },
+    ]
+    scenarios = [
+        {"id": "scenario-base", "key": "plan_base", "is_active": True},
+        {"id": "scenario-high", "key": "plan_high", "is_active": True},
+        {"id": "scenario-actual", "key": "actual", "is_active": True},
+        {"id": "scenario-archived", "key": "plan_base", "is_active": False},
+    ]
+    metric_values = [
+        {
+            "initiative_id": "init-1",
+            "metric_definition_id": "metric-revenue",
+            "scenario_id": "scenario-base",
+            "year": 2028,
+            "quarter": 1,
+            "month": None,
+            "value": "100.0000",
+        },
+        {
+            "initiative_id": "init-1",
+            "metric_definition_id": "metric-gm",
+            "scenario_id": "scenario-base",
+            "year": 2028,
+            "quarter": 1,
+            "month": None,
+            "value": "40.0000",
+        },
+        {
+            "initiative_id": "init-1",
+            "metric_definition_id": "metric-savings",
+            "scenario_id": "scenario-base",
+            "year": 2028,
+            "quarter": 1,
+            "month": None,
+            "value": "10.0000",
+        },
+        {
+            "initiative_id": "init-1",
+            "metric_definition_id": "metric-gm",
+            "scenario_id": "scenario-high",
+            "year": 2028,
+            "quarter": 1,
+            "month": None,
+            "value": "60.0000",
+        },
+        {
+            "initiative_id": "init-1",
+            "metric_definition_id": "metric-savings",
+            "scenario_id": "scenario-actual",
+            "year": 2028,
+            "quarter": 1,
+            "month": None,
+            "value": "8.0000",
+        },
+        {
+            "initiative_id": "init-1",
+            "metric_definition_id": "metric-formula",
+            "scenario_id": "scenario-base",
+            "year": 2028,
+            "quarter": 1,
+            "month": None,
+            "value": "999.0000",
+        },
+        {
+            "initiative_id": "init-1",
+            "metric_definition_id": "metric-savings",
+            "scenario_id": "scenario-archived",
+            "year": 2028,
+            "quarter": 1,
+            "month": None,
+            "value": "999.0000",
+        },
+    ]
+    costs = [
+        {
+            "initiative_id": "init-1",
+            "year": 2028,
+            "quarter": 1,
+            "month": None,
+            "amount_plan": "5.0000",
+            "amount_actual": "2.0000",
+            "is_recurring": True,
+        }
+    ]
+
+    entries = service._configurable_financial_entries(
+        metric_values,
+        metric_definitions,
+        scenarios,
+    )
+    bridge = service._calculate_value_bridge(entries, costs, {"init-1"}, 2028)
+    matrix = service._calculate_value_matrix(initiatives, entries, costs, 2028)
+
+    assert bridge["benefits_base"] == "50.0000"
+    assert bridge["benefits_high"] == "60.0000"
+    assert bridge["benefits_actual"] == "8.0000"
+    assert bridge["net_base"] == "45.0000"
+    assert bridge["net_actual"] == "6.0000"
+    assert matrix["totals"]["total"]["base"] == "50.0000"
+    assert matrix["totals"]["total"]["high"] == "60.0000"
+    assert matrix["totals"]["total"]["actual"] == "8.0000"
+
+
 def test_stage_options_include_full_configured_gate_order_and_extra_actual_stage() -> None:
     service = DashboardService(_Repo())  # type: ignore[arg-type]
 

@@ -106,37 +106,42 @@ class DashboardRepository:
 
         return kpis, entries
 
-    def get_financial_summary_data(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        try:
-            entry_select = (
-                "initiative_id, year, quarter, revenue_uplift_base, revenue_uplift_high, revenue_uplift_actual, "
-                "gm_uplift_base, gm_uplift_high, gm_uplift_actual"
+    def get_financial_summary_data(
+        self,
+    ) -> tuple[
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+    ]:
+        values = (
+            self.client.table("financial_metric_values")
+            .select("initiative_id, year, month, value, metric_definition_id, scenario_id")
+            .eq("tenant_id", self.tenant_id)
+            .execute()
+        ).data or []
+        definitions = (
+            self.client.table("financial_metric_definitions")
+            .select(
+                "id, key, label, aggregation, is_active, is_benefit, benefit_class, display_order"
             )
-            entries = (
-                self.client.table("financial_entries")
-                .select(entry_select)
-                .eq("tenant_id", self.tenant_id)
-                .execute()
-            ).data or []
-        except Exception as exc:
-            text = str(exc)
-            if "financial_entries" in text and (
-                "Could not find the table" in text
-                or "does not exist" in text
-                or "schema cache" in text
-            ):
-                entries = []
-            else:
-                raise
-
+            .eq("tenant_id", self.tenant_id)
+            .execute()
+        ).data or []
+        scenarios = (
+            self.client.table("financial_scenarios")
+            .select("id, key, label, kind, is_active")
+            .eq("tenant_id", self.tenant_id)
+            .execute()
+        ).data or []
         costs = (
             self.client.table("financial_cost_lines")
-            .select("initiative_id, year, quarter, amount_plan, amount_actual, is_recurring")
+            .select("initiative_id, year, quarter, month, amount_plan, amount_actual, is_recurring")
             .eq("tenant_id", self.tenant_id)
             .execute()
         ).data or []
 
-        return entries, costs
+        return values, costs, definitions, scenarios
 
     def get_recent_activity(self) -> list[dict[str, Any]]:
         select = (
