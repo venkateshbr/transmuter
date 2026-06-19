@@ -34,6 +34,7 @@ PORTFOLIO_CLEANUP_TABLES = [
     "financial_forecasts",
     "benefit_realization_ledger",
     "bankable_plans",
+    "financial_initiative_annual_baselines",
     "financial_cost_lines",
     "financial_metric_values",
     "financial_benefit_lines",
@@ -244,10 +245,9 @@ class AdminService:
             "workstreams": self._count_tenant_rows("workstreams"),
             "users": self._count_users(),
             "stage_gate_definitions": self._count_tenant_rows("stage_gate_definitions"),
-            "financial_config_groups": self._count_tenant_rows("financial_config_groups"),
-            "financial_config_items": self._count_tenant_rows("financial_config_items"),
             "financial_metric_definitions": self._count_tenant_rows("financial_metric_definitions"),
             "financial_scenarios": self._count_tenant_rows("financial_scenarios"),
+            "financial_cost_categories": self._count_tenant_rows("financial_cost_categories"),
             "gate_criteria": self._count_tenant_rows("gate_criteria"),
             "active_stage_gates": gate_criteria_status["active_stage_gates"],
             "active_gate_criteria": gate_criteria_status["active_gate_criteria"],
@@ -274,14 +274,9 @@ class AdminService:
             {
                 "key": "financial_config",
                 "label": "Financial configuration",
-                "complete": counts["financial_config_groups"] > 0
-                and counts["financial_config_items"] > 0,
-            },
-            {
-                "key": "financial_engine",
-                "label": "Financial engine",
                 "complete": counts["financial_metric_definitions"] > 0
-                and counts["financial_scenarios"] > 0,
+                and counts["financial_scenarios"] > 0
+                and counts["financial_cost_categories"] > 0,
             },
             {
                 "key": "stage_gates",
@@ -598,9 +593,17 @@ class AdminService:
         return {table: self._count_tenant_rows(table) for table in PORTFOLIO_CLEANUP_TABLES}
 
     def _count_tenant_rows(self, table: str) -> int:
-        response = (
-            self._c.table(table).select("id", count="exact").eq("tenant_id", self._tid).execute()
-        )
+        try:
+            response = (
+                self._c.table(table)
+                .select("id", count="exact")
+                .eq("tenant_id", self._tid)
+                .execute()
+            )
+        except Exception as exc:
+            if self._is_missing_table(exc, table):
+                return 0
+            raise
         return response.count or 0
 
     def _count_users(self) -> int:
@@ -617,8 +620,20 @@ class AdminService:
         count = self._count_tenant_rows(table)
         if count == 0:
             return 0
-        self._c.table(table).delete().eq("tenant_id", self._tid).execute()
+        try:
+            self._c.table(table).delete().eq("tenant_id", self._tid).execute()
+        except Exception as exc:
+            if self._is_missing_table(exc, table):
+                return 0
+            raise
         return count
+
+    @staticmethod
+    def _is_missing_table(exc: Exception, table_name: str) -> bool:
+        text = str(exc)
+        return table_name in text and (
+            "Could not find the table" in text or "does not exist" in text or "schema cache" in text
+        )
 
     @staticmethod
     def _portfolio_cleanup_object_counts(table_counts: dict[str, int]) -> dict[str, int]:

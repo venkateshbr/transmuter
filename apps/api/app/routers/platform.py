@@ -40,11 +40,15 @@ TENANT_DELETE_TABLES = [
     "benefit_realization_ledger",
     "bankable_plans",
     "workstream_target_locks",
+    "financial_initiative_annual_baselines",
+    "financial_tenant_annual_baselines",
+    "initiative_financial_scope",
     "financial_cost_lines",
     "financial_metric_values",
     "financial_benefit_lines",
     "financial_cell_assumptions",
     "financial_bridge_rows",
+    "financial_cost_categories",
     "financial_metric_definitions",
     "financial_scenarios",
     "financial_config_items",
@@ -289,7 +293,14 @@ def _get_tenant_or_404(client: Any, tenant_id: UUID) -> dict[str, Any]:
 
 
 def _count_tenant_rows(client: Any, table: str, tenant_id: str) -> int:
-    response = client.table(table).select("id", count="exact").eq("tenant_id", tenant_id).execute()
+    try:
+        response = (
+            client.table(table).select("id", count="exact").eq("tenant_id", tenant_id).execute()
+        )
+    except Exception as exc:
+        if _is_missing_table(exc, table):
+            return 0
+        raise
     return response.count or 0
 
 
@@ -297,8 +308,20 @@ def _delete_tenant_rows(client: Any, table: str, tenant_id: str) -> int:
     count = _count_tenant_rows(client, table, tenant_id)
     if count == 0:
         return 0
-    client.table(table).delete().eq("tenant_id", tenant_id).execute()
+    try:
+        client.table(table).delete().eq("tenant_id", tenant_id).execute()
+    except Exception as exc:
+        if _is_missing_table(exc, table):
+            return 0
+        raise
     return count
+
+
+def _is_missing_table(exc: Exception, table_name: str) -> bool:
+    text = str(exc)
+    return table_name in text and (
+        "Could not find the table" in text or "does not exist" in text or "schema cache" in text
+    )
 
 
 def _object_counts(table_counts: dict[str, int]) -> dict[str, int]:
@@ -311,10 +334,12 @@ def _object_counts(table_counts: dict[str, int]) -> dict[str, int]:
             "bankable_plans",
             "workstream_target_locks",
             "financial_cost_lines",
+            "initiative_financial_scope",
             "financial_cell_assumptions",
             "financial_metric_values",
             "financial_benefit_lines",
             "financial_bridge_rows",
+            "financial_cost_categories",
             "financial_metric_definitions",
             "financial_scenarios",
             "financial_config_items",

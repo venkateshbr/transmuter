@@ -298,7 +298,7 @@ Screen:
 
 - `/admin`
 - Admin tab: **Financial Configuration**
-- Section: **Financial Metric Engine**
+- Section: **Financial Configuration Engine**
 
 Configure:
 

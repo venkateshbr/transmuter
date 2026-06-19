@@ -262,6 +262,7 @@ class PortfolioWorkbookReloadService:
             "financial_metric_values",
             "financial_benefit_lines",
             "financial_cost_lines",
+            "initiative_financial_scope",
             "initiative_financial_selections",
             "initiative_business_units",
             "initiative_team",
@@ -515,6 +516,7 @@ class PortfolioWorkbookReloadService:
 
     def _create_cost_lines(self, initiative_id: str, item: WorkbookInitiative) -> int:
         rows: list[dict[str, Any]] = []
+        category_ids = self._cost_categories()
         for cost in item.costs:
             lane = _clean_text(cost.get("Lane")).lower()
             if lane not in {"plan", "actual"}:
@@ -526,13 +528,15 @@ class PortfolioWorkbookReloadService:
                 amount = _workbook_money(raw_value)
                 if amount is None:
                     continue
+                category_key = _category_key(cost.get("Cost Category"))
                 rows.append(
                     {
                         "id": str(uuid4()),
                         "tenant_id": self._tenant_id,
                         "initiative_id": initiative_id,
                         "name": _clean_text(cost.get("Name")) or "Imported cost",
-                        "category_key": _category_key(cost.get("Cost Category")),
+                        "category_key": category_key,
+                        "category_id": category_ids.get(category_key),
                         "year": year,
                         "quarter": None,
                         "month": month,
@@ -798,6 +802,17 @@ class PortfolioWorkbookReloadService:
     def _financial_scenarios(self) -> dict[str, str]:
         rows = (
             self._client.table("financial_scenarios")
+            .select("id,key")
+            .eq("tenant_id", self._tenant_id)
+            .execute()
+            .data
+            or []
+        )
+        return {row["key"]: row["id"] for row in rows}
+
+    def _cost_categories(self) -> dict[str, str]:
+        rows = (
+            self._client.table("financial_cost_categories")
             .select("id,key")
             .eq("tenant_id", self._tenant_id)
             .execute()
