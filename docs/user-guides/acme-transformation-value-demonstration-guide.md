@@ -12,6 +12,12 @@ No credentials are included in this guide.
 
 ---
 
+Validation note: the full ACME3 shared-cost demo state is validated in dev at
+`https://transmuter-dev.ishirock.tech`. Production at
+`https://transmuter.ishirock.tech` has the Shared Costs schema, API, and UI
+promoted, but production ACME seeded data is not yet at dev ACME3 parity; that
+demo-data drift is tracked in issue `#304`.
+
 ## 1. Executive storyline
 
 ACME is modeled as a two-year enterprise transformation that starts from an FY26
@@ -357,20 +363,24 @@ Use shared cost pools for:
 - change/adoption support teams,
 - central advisory or vendor support.
 
-Current dev proof:
+Current ACME3 dev proof:
 
 | Pool | Year | Plan | Actual | Allocation basis | Report impact |
 |---|---:|---:|---:|---|---|
-| Group technology platform allocation | 2026 | `$600K` | `$540K` | Benefit weighted | Executive Control Tower allocated costs and net after allocation. |
+| Group technology and data platform | 2028 | `$650K` | `$585K` | Benefit weighted | Metric-backed burden for technology and automation initiatives. |
+| Transformation PMO and benefits office | 2028 | `$400K` | `$360K` | Equal split | Governance burden across all 10 ACME initiatives. |
+| Shared change and training support | 2028 | `$220K` | `$198K` | Manual amount | Adoption and training burden for process-heavy initiatives. |
+| Central advisory and vendor support | 2028 | `$180K` | `$162K` | Fixed percentage | Vendor support burden for selected ERP/data and supply-chain initiatives. |
 
-Recommended canonical ACME pools for future demo refresh:
+Seeded shared-cost totals:
 
-| Pool | Candidate initiatives | Basis |
-|---|---|---|
-| Group technology and data platform | ENT-002, ENT-005, ENT-006, ENT-009, ENT-010 | Gross Margin Uplift or technology-tag weighted. |
-| Transformation PMO and benefits office | All 10 active or bankable initiatives | Equal split or value weighted. |
-| Shared change and training support | ENT-002, ENT-004, ENT-005, ENT-010 | Manual amount or impacted-headcount weighted. |
-| Central advisory/vendor support | ENT-005, ENT-008, ENT-009 | Fixed percentage by workstream. |
+| Measure | Value |
+|---|---:|
+| Shared-cost plan | `$1.45M` |
+| Shared-cost actual | `$1.305M` |
+| Control Tower allocated plan | `$1.45M` |
+| Control Tower net after allocation | `$1,400,000.0004` |
+| Bankable Plan shared-cost inclusion | `false` by default |
 
 Default policy:
 
@@ -546,7 +556,7 @@ Shared-cost interpretation:
 - **Allocated Costs** are shared-cost allocations from completed or locked runs.
 - **Burdened Costs** are direct costs plus allocated shared costs.
 - **Net After Allocation** is the fully loaded executive value view.
-- Use target year `2026` for the current seeded group technology platform proof.
+- Use target year `2028` for the current ACME3 shared-cost proof.
 - Keep `/financials` as the direct portfolio financial view unless Finance has
   enabled generated cost-line posting.
 

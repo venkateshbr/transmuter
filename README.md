@@ -154,11 +154,12 @@ curl -fsS http://127.0.0.1:8001/health
 curl -fsS http://127.0.0.1:4301/health
 ```
 
-If the Cloudflare tunnel is configured, public health checks should also pass:
+For the current Hostinger production deployment, public health checks should
+also pass:
 
 ```bash
-curl -fsS https://transmuter.ishirock.com/health
-curl -fsS https://transmuter.ishirock.com/api/health
+curl -fsS https://transmuter.ishirock.tech/health
+curl -fsS https://transmuter.ishirock.tech/api/health
 ```
 
 ### Stop Production Stack
@@ -176,7 +177,7 @@ Equivalent convenience script:
 ## 🛠 Technology Stack
 
 - **Backend**: FastAPI 0.115+ / Python 3.12+ / PydanticAI / Procrastinate
-- **Frontend**: Angular 18 standalone / Tailwind CSS / CSS variables
+- **Frontend**: Angular 21 standalone / Tailwind CSS / CSS variables
 - **Database**: Supabase PostgreSQL 15+ / RLS enforced
 - **LLM**: OpenRouter gateway / PydanticAI agents
 - **Observability**: Langfuse (traces + evals)
@@ -200,7 +201,7 @@ For detailed coding rules and standards, refer to:
 ## 📂 Project Structure
 
 - `apps/api/`: FastAPI backend (Router → Service → Repository pattern).
-- `apps/web/`: Angular 18 frontend (Standalone components).
+- `apps/web/`: Angular 21 frontend (Standalone components).
 - `supabase/`: Database migrations and configuration.
 - `domain_packs/`: Domain-specific configuration and rules.
 - `team/`: Architecture, Design System, and Project Requirements.

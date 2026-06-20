@@ -1,6 +1,6 @@
 # Environment Configuration
 
-Last updated: 2026-06-09
+Last updated: 2026-06-20
 
 Copy `.env.example` to `.env` before running Transmuter:
 
@@ -118,10 +118,10 @@ Current product catalog direction:
 - Business: 51-100 users.
 - Enterprise: 101+ users, contact sales rather than self-service checkout.
 
-Stripe webhook endpoint for the current Cloudflare deployment:
+Stripe webhook endpoint for the current Hostinger production deployment:
 
 ```text
-https://transmuter.ishirock.com/api/billing/webhook
+https://transmuter.ishirock.tech/api/billing/webhook
 ```
 
 At minimum, configure these events:
@@ -162,7 +162,7 @@ The production frontend image writes runtime API configuration from
 | --- | --- | --- | --- |
 | `TRANSMUTER_API_URL` | Optional | `/api` | API base URL used by the Angular app at runtime. In the production web container, nginx proxies `/api` to `http://api:8001` on the Docker network. |
 
-For the current Cloudflare deployment:
+For the current Hostinger production deployment:
 
 ```bash
 docker compose -f infra/docker-compose.prod.yml --env-file .env up -d

@@ -1,6 +1,6 @@
 # Codex Context - Transmuter
 
-Last updated: 2026-06-09
+Last updated: 2026-06-20
 
 This file captures durable working context for future Codex sessions. It supplements
 `AGENTS.md`, `docs/team/SDLC_PROTOCOL.md`, and `team/DESIGN_SYSTEM.md`; it does not
@@ -13,14 +13,14 @@ replace them.
 - Current release snapshot is committed as `e9b670f` and tagged `v0.3.1`.
 - `v0.3.1` includes the Alchemist workbook/dashboard acceptance test updates and
   the CI/CD pipeline gates from issue #77.
+- Shared Costs configurable allocation engine is promoted to production from
+  app commit `31c8805`, with the docs-only release-manifest update at
+  `b7c32e3`.
 - Running production Docker stack uses:
   - API image `transmuter-api:prod` on host port `8001`.
   - Frontend image `transmuter-web:prod` on host port `4301`.
   - Compose file `infra/docker-compose.prod.yml`.
 - Docker CLI path on this machine is `/usr/local/bin/docker`.
-- Cloudflare tunnel hostnames:
-  - Frontend: `https://transmuter.ishirock.com`
-  - Optional direct API: `https://transmuter-api.ishirock.com`
 - Hostinger VPS / domain context:
   - Primary domain owned for the VPS: `ishirock.tech`.
   - VPS hostname: `srv1695814.hstgr.cloud`.
@@ -68,6 +68,9 @@ replace them.
     pooler/direct URL is configured.
 - Frontend runtime config should point to `/api`; the web nginx container proxies
   that path to the Docker Compose API service at `http://api:8001`.
+- Current public app and Stripe webhook traffic use the same-origin Hostinger
+  hostname `https://transmuter.ishirock.tech`; no separate public API hostname
+  is required for normal operation.
 
 ## Product Direction
 
@@ -95,8 +98,9 @@ replace them.
 
 ## Stripe And Webhooks
 
-- Stripe checkout and webhook flow has been tested through Cloudflare.
-- Webhook endpoint is `https://transmuter.ishirock.com/api/billing/webhook`.
+- Stripe checkout and webhook flow has been tested through the public Hostinger
+  hostname.
+- Webhook endpoint is `https://transmuter.ishirock.tech/api/billing/webhook`.
 - Stripe events handled include checkout completion and subscription updates/deletes.
 - Use test card `4242 4242 4242 4242` only in sandbox regression runs.
 - Payment, auth, webhook, tenant provisioning, and RBAC changes require Prahari review.
@@ -134,5 +138,10 @@ replace them.
   - #125: platform tenant deletion modal overflow at smaller viewports.
   - #126: tighten RBAC UI affordances and forbidden initiative detail state.
   - #127: dashboard workstream by tag value matrix.
+- Known production demo-data drift:
+  - #304: production ACME is not yet at dev ACME3 parity. Shared Costs schema,
+    API, and UI are live in production, but the full 4-pool FY2028 ACME3 shared
+    cost acceptance scenario is dev-only until production demo data is
+    backfilled.
 - `scratch/` contains local helper scripts and should not be included in release
   commits unless explicitly requested.
