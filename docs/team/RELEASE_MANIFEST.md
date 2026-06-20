@@ -26,6 +26,72 @@ status.
 
 ## Current Release Entries
 
+### 2026-06-20 - Financial Configuration Engine Consolidation
+
+Status: dev validated; pending production promotion
+
+GitHub tracking:
+- Issue: `#316`
+- PR: `#317`
+- Commit:
+  - `cd3ba40 feat: consolidate financial configuration engine`
+
+Runtime changes:
+- Consolidated cost categories into the tenant-scoped Financial Configuration
+  Engine while retaining compatibility facades for legacy financial
+  configuration routes.
+- Added engine-owned `financial_cost_categories`, `category_id` on
+  `financial_cost_lines`, `cost_category_ids` on `financial_bridge_rows`, and
+  `initiative_financial_scope`.
+- Added tenant-scoped foreign keys, RLS policies, and trigger validation for
+  financial metric/category references.
+- Updated admin setup, portfolio financial filters, initiative financial scope,
+  workbook reload, tenant cleanup, failed-registration cleanup, and ACME
+  Bankable Plan documentation.
+- Bumped `pydantic-settings` to `2.14.2` to satisfy the dependency audit gate.
+
+Local validation:
+- `uv run python -m compileall app/core/auth.py app/routers/platform.py app/services/admin.py app/domain/financials.py app/services/financial.py app/repositories/financial.py app/routers/financials.py app/routers/auth.py app/services/initiative.py app/services/portfolio_workbook.py scripts/seed_enterprise_transformation_scenario.py`
+- `uvx pip-audit --strict -r /tmp/transmuter-api-requirements.txt`
+- `uv run ruff check app tests`
+- `uv run ruff format --check app tests`
+- `uv run mypy app`
+- `uv run pytest tests/test_financial_dynamic_value_bridge.py tests/test_financial_formula_metrics.py tests/test_financial_portfolio.py tests/test_admin_setup_status.py tests/test_initiative_setup_gate.py tests/test_platform_billing_routes.py tests/test_security_controls.py tests/test_bankable_plans.py -q`
+- `npm run build` from `apps/web`
+- `git diff --check`
+
+Dev deployment:
+- Environment: `https://transmuter-dev.ishirock.tech`
+- Schema: `transmuter_dev`
+- Deployed with:
+  `infra/hostinger/deploy-change-to-dev.sh --schema supabase/migrations/20260619000001_financial_engine_cost_category_consolidation.sql`
+- Initial scripted public validation hit the known transient `/health` 404
+  readiness race immediately after container recreation.
+- `infra/hostinger/validate-dev.sh` passed after the stack settled.
+- Real dev API validation passed:
+  - `/financial-engine-configuration` returned 10 definitions, 4 scenarios,
+    and 8 cost categories.
+  - ACME returned 10 initiatives.
+  - `ENT-005` Bankable Plan returned current version `2` and 2 history rows.
+  - Benefit Tracking yearly rollup returned locked baseline
+    `13769999.9988` and actual `12053200.0020`.
+- Real dev browser validation passed on:
+  - `/dashboard`
+  - `/financials`
+  - `/financials/initiative-portfolio`
+  - `/financials/benefits-register`
+  - `/financials/benefit-tracking`
+  - `/financials/bankable-plan`
+
+Schema/data SQL applied to dev:
+- `supabase/migrations/20260619000001_financial_engine_cost_category_consolidation.sql`
+
+Schema/data SQL required for production:
+- `supabase/migrations/20260619000001_financial_engine_cost_category_consolidation.sql`
+
+Production validation:
+- Pending promotion and validation.
+
 ### 2026-06-18 - Initiative Baseline-to-Target P&L Bridge
 
 Status: promoted to production
