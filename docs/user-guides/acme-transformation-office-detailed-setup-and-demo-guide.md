@@ -15,6 +15,9 @@ It expands the shorter ACME value guide with:
 
 No credentials are included in this guide.
 
+For a UI-only blank-tenant setup path that skips meetings, see
+[`acme-demo-tenant-ui-setup-guide.md`](acme-demo-tenant-ui-setup-guide.md).
+
 ---
 
 ## 1. Validated ACME Demo State
