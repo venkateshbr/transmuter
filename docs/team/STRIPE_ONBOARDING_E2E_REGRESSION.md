@@ -1,14 +1,14 @@
 # Stripe Onboarding and Tenant Deletion E2E Regression
 
-Purpose: reusable launch-regression scenario for the complete multi-tenant SaaS flow through the public Cloudflare hostnames, Stripe sandbox checkout, webhook provisioning, tenant UI setup, and platform-admin tenant cleanup.
+Purpose: reusable launch-regression scenario for the complete multi-tenant SaaS flow through the public Hostinger production hostname, Stripe sandbox checkout, webhook provisioning, tenant UI setup, and platform-admin tenant cleanup.
 
 ## Scope
 
 This scenario validates:
 
-- Public marketing and subscription signup on `https://transmuter.ishirock.com`.
+- Public marketing and subscription signup on `https://transmuter.ishirock.tech`.
 - Stripe sandbox checkout using the configured test product/price IDs.
-- Stripe webhook delivery to `https://transmuter.ishirock.com/api/billing/webhook`.
+- Stripe webhook delivery to `https://transmuter.ishirock.tech/api/billing/webhook`.
 - Tenant provisioning from the webhook.
 - Initial tenant admin login.
 - Initiative creation through the tenant UI.
@@ -20,16 +20,16 @@ This scenario validates:
 ## Prerequisites
 
 - Production Docker stack is running and healthy.
-- Cloudflare tunnel routes are active:
-  - `https://transmuter.ishirock.com` -> frontend.
+- Public production routing is active:
+  - `https://transmuter.ishirock.tech` -> frontend.
 - Frontend runtime config resolves to the same-origin API proxy:
-  - `https://transmuter.ishirock.com/assets/runtime-config.js`
+  - `https://transmuter.ishirock.tech/assets/runtime-config.js`
   - Expected: `window.__TRANSMUTER_API_URL__ = "/api";`
 - Stripe sandbox webhook endpoint is enabled for:
   - `checkout.session.completed`
   - `customer.subscription.updated`
   - `customer.subscription.deleted`
-- Platform admin can log in at `https://transmuter.ishirock.com/auth/login`.
+- Platform admin can log in at `https://transmuter.ishirock.tech/auth/login`.
 
 ## Test Data
 
@@ -48,7 +48,7 @@ Use a unique suffix per run, for example `YYYYMMDD-HHMM`.
 
 ## Scenario 1: Public Signup and Stripe Checkout
 
-1. Open `https://transmuter.ishirock.com/get-started`.
+1. Open `https://transmuter.ishirock.tech/get-started`.
 2. Enter the test organization and initial admin details.
 3. Click `Continue to Stripe Checkout`.
 4. Confirm the browser is redirected to `https://checkout.stripe.com/...`.
@@ -59,7 +59,7 @@ Use a unique suffix per run, for example `YYYYMMDD-HHMM`.
 6. Enter the Stripe sandbox card details.
 7. Click `Subscribe`.
 8. Confirm redirect returns to:
-   - `https://transmuter.ishirock.com/subscription/success?...`
+   - `https://transmuter.ishirock.tech/subscription/success?...`
 
 Expected result:
 
@@ -72,7 +72,7 @@ After checkout completes:
 
 1. Check Stripe sandbox dashboard for the checkout session.
 2. Confirm webhook delivery succeeded for `checkout.session.completed`.
-3. In the platform admin console, open `https://transmuter.ishirock.com/platform`.
+3. In the platform admin console, open `https://transmuter.ishirock.tech/platform`.
 4. Confirm the new tenant appears with:
    - Correct organization name and slug.
    - Active or provisioned subscription state.
@@ -86,7 +86,7 @@ Expected result:
 
 ## Scenario 3: Tenant Admin Login
 
-1. Open `https://transmuter.ishirock.com/auth/login`.
+1. Open `https://transmuter.ishirock.tech/auth/login`.
 2. Sign in as the newly provisioned tenant admin.
 3. If invite delivery produced a generated password, set or reset the tenant admin password in the sandbox auth admin console before this step.
 4. Confirm successful login lands on `/dashboard`.
@@ -265,7 +265,7 @@ Record the following for every regression run:
 
 - Checkout does not redirect to Stripe:
   - Verify frontend runtime config points at `/api`.
-  - Verify API CORS allows `https://transmuter.ishirock.com`.
+  - Verify API CORS allows `https://transmuter.ishirock.tech`.
 - Checkout succeeds but tenant is not provisioned:
   - Verify Stripe webhook endpoint URL and signing secret.
   - Check latest `checkout.session.completed` webhook delivery.
@@ -290,8 +290,8 @@ This flow intentionally crosses Stripe-hosted checkout, so it should run as an o
 Recommended future command:
 
 ```bash
-TRANSMUTER_UI_BASE_URL=https://transmuter.ishirock.com \
-TRANSMUTER_API_BASE_URL=https://transmuter.ishirock.com/api \
+TRANSMUTER_UI_BASE_URL=https://transmuter.ishirock.tech \
+TRANSMUTER_API_BASE_URL=https://transmuter.ishirock.tech/api \
 TRANSMUTER_E2E_STRIPE=true \
 npm run e2e:stripe-onboarding
 ```

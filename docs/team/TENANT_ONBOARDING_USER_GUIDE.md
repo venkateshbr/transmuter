@@ -1,6 +1,6 @@
 # Transmuter Tenant Onboarding and Portfolio User Guide
 
-Last updated: 2026-06-12
+Last updated: 2026-06-20
 
 This guide explains how a newly onboarded tenant should configure Transmuter, create or load initiatives, manage financials, and read the available dashboards. It uses the anonymised portfolio workbook `Initiative_Portfolio_Anonymised.xlsx` as a realistic example.
 
@@ -219,6 +219,38 @@ Recommended rows for the workbook example:
 | Net Value | Benefits minus recurring and one-time costs, depending on report view. |
 
 Use the value bridge to answer: "What is the value of the portfolio after costs?"
+
+### 4.6 Shared Costs
+
+Shared Costs are central costs that support more than one initiative. They are
+managed in `/shared-costs` and allocated for burdened executive reporting rather
+than entered as direct initiative cost lines by default.
+
+Use Shared Costs for items such as:
+
+- Shared technology platforms.
+- PMO and benefits-office run costs.
+- Cloud, license, or integration services used across initiatives.
+- Central change, training, advisory, or vendor support.
+
+Recommended setup sequence:
+
+1. Configure the relevant cost categories and financial scenarios in
+   **Admin -> Financial Configuration**.
+2. Open `/shared-costs`.
+3. Create a pool with the fiscal year, category, scenario, plan amount, actual
+   amount if known, and reporting treatment.
+4. Define the allocation policy using guided targets, method, and weights.
+5. Preview the allocation and reconcile it to the pool amount.
+6. Approve or lock the run before using it in board reporting.
+
+Default interpretation:
+
+- `/financials` remains the direct initiative economics view.
+- `/reports/control-tower` shows fully loaded executive economics when locked
+  shared-cost allocations are present.
+- Bankable Plan remains direct-only unless Finance enables a burdened bankable
+  reporting policy.
 
 ## 5. Governance and Stage Gates
 
@@ -645,7 +677,24 @@ Typical use:
 4. Lock the target snapshot.
 5. Track actual value against the locked target.
 
-### 10.6 Control Tower
+### 10.6 Shared Costs
+
+Route: `/shared-costs`
+
+Use this page for central costs that should burden multiple initiatives without
+hiding those costs in one initiative owner's direct cost case.
+
+Typical workflow:
+
+1. Create the shared-cost pool.
+2. Select the allocation method, such as benefit weighted, equal split, fixed
+   percentage, manual amount, or another configured method.
+3. Select target initiatives or dimensions.
+4. Preview the allocation and resolve exceptions.
+5. Approve or lock the allocation run.
+6. Review the resulting allocated-cost impact in Executive Control Tower.
+
+### 10.7 Control Tower
 
 Route: `/reports/control-tower`
 
@@ -659,7 +708,7 @@ Use this page for executive-level reporting across:
 
 Use it for leadership readouts rather than day-to-day editing.
 
-### 10.7 Progress Monitor
+### 10.8 Progress Monitor
 
 Routes:
 
@@ -679,7 +728,7 @@ Use these screens to manage delivery execution:
 | Status updates | Reporting cadence and narrative updates. |
 | Dependencies | Cross-initiative dependency tracking. |
 
-### 10.8 PMO / Governance Views
+### 10.9 PMO / Governance Views
 
 Routes:
 
@@ -695,7 +744,7 @@ Use these screens for:
 - KPI portfolio view.
 - AI-assisted insights where configured.
 
-### 10.9 Meetings
+### 10.10 Meetings
 
 Route: `/meetings`
 

@@ -1,18 +1,24 @@
 # Shared Costs Configurable Revamp Plan
 
-Status: Planning draft
+Status: Implemented and promoted to production
 Owner role: Vishwa
 Date: 2026-06-20
-Scope: Product, architecture, data model, API, UI, reporting, and acceptance plan for revamping the top-level `/shared-costs` capability.
+Scope: Historical product, architecture, data model, API, UI, reporting, and acceptance plan for the top-level `/shared-costs` capability.
+
+Implementation note: the configurable allocation engine was delivered in issue
+`#321` / PR `#327`, hardened in issue `#325` / PR `#328`, and promoted to
+production on 2026-06-20. See `docs/team/RELEASE_MANIFEST.md` for deployment
+and validation evidence.
 
 ## 1. Executive Summary
 
-Shared Costs is present in the platform today, but it is still a seed-level
-financial governance feature rather than a configurable Finance operating model.
-The current implementation can create a central cost pool, attach one allocation
-rule, run the allocation, and show allocated costs in Executive Control Tower
-burdened-value views. That is useful, but it is not yet aligned with the same
-principles as the configurable financial metrics engine:
+At plan creation, Shared Costs was present in the platform but was still a
+seed-level financial governance feature rather than a configurable Finance
+operating model. The pre-revamp implementation could create a central cost
+pool, attach one allocation rule, run the allocation, and show allocated costs
+in Executive Control Tower burdened-value views. That was useful, but it was
+not yet aligned with the same principles as the configurable financial metrics
+engine:
 
 - Finance-owned configuration should be selectable and validated, not entered as
   raw JSON.
@@ -25,8 +31,7 @@ principles as the configurable financial metrics engine:
 - Allocations should be available as a separate burden ledger and optionally as
   posted initiative financial cost lines, depending on tenant policy.
 
-The recommended revamp is to turn Shared Costs into a configurable allocation
-engine:
+The delivered revamp turns Shared Costs into a configurable allocation engine:
 
 ```text
 Cost pool -> allocation policy -> preview -> approved run -> allocation ledger -> reporting impact
@@ -36,17 +41,17 @@ The top-level menu should remain. It should become the Finance Lead's control
 surface for central PMO, platform, cloud, license, vendor, and shared delivery
 costs that support multiple initiatives.
 
-## 2. Current Branch Review
+## 2. Pre-Revamp Branch Review
 
-### 2.1 Current product surface
+### 2.1 Pre-revamp product surface
 
-Current UI:
+Pre-revamp UI:
 
 - Route: `/shared-costs`
 - Component: `apps/web/src/app/features/financials/shared-costs.component.ts`
 - Top-level navigation: `apps/web/src/app/app.ts`
 
-What a user can do today:
+What a user could do before the revamp:
 
 - Create a pool with name, category key, year, planned amount, and actual amount.
 - Select a pool.
@@ -56,7 +61,7 @@ What a user can do today:
 - Run an allocation immediately for `plan`.
 - View run history counts and total amounts.
 
-Current UI limitations:
+Pre-revamp UI limitations:
 
 - Pool category is free text, not selected from tenant cost categories.
 - Quarter, month, recurrence, status, and scenario are mostly hidden.
@@ -70,12 +75,12 @@ Current UI limitations:
 - There is no clear connection to financial scenarios, metric definitions, cost
   categories, value bridge rows, or bankable plan settings.
 
-### 2.2 Current schema
+### 2.2 Pre-revamp schema
 
-The current migration creates these tables in
+The pre-revamp migration created these tables in
 `supabase/migrations/20260510000001_executive_control_tower.sql`:
 
-| Table | Current purpose |
+| Table | Pre-revamp purpose |
 |---|---|
 | `shared_cost_pools` | Stores one central cost pool with year, optional quarter/month, plan/actual amounts, category key, recurrence flag, and status. |
 | `shared_cost_allocation_rules` | Stores one rule per pool, including method, filters JSON, weights JSON, and active flag. |
@@ -108,7 +113,7 @@ Gaps:
 - There is no audit trail for who changed the basis, approved a run, or voided a
   run.
 
-### 2.3 Current backend behavior
+### 2.3 Pre-revamp backend behavior
 
 Backend files:
 
@@ -117,7 +122,7 @@ Backend files:
 - Service: `apps/api/app/services/executive_control.py`
 - Repository: `apps/api/app/repositories/executive_control.py`
 
-Current API surface:
+Pre-revamp API surface:
 
 ```text
 GET    /shared-cost-pools
@@ -130,7 +135,7 @@ GET    /shared-cost-pools/{pool_id}/allocation-runs
 POST   /shared-cost-pools/{pool_id}/allocation-runs
 ```
 
-Current allocation methods:
+Pre-revamp allocation methods:
 
 - `equal_split`
 - `fixed_percentage`
@@ -139,7 +144,7 @@ Current allocation methods:
 - `revenue_weighted`
 - `headcount_weighted`
 
-Current engine behavior:
+Pre-revamp engine behavior:
 
 - Candidate initiatives are selected by a small filter set:
   `business_unit_id`, `workstream_id`, `tag`, `country`, `rag_status`, `stage`,
@@ -170,23 +175,23 @@ Gaps:
 - Zero-basis fallback to equal split may hide missing driver data.
 - Benefit and revenue methods use legacy fields instead of the configurable
   metric engine.
-- The current router marks runs complete on creation; there is no preview or
+- The pre-revamp router marked runs complete on creation; there was no preview or
   approval path.
 - There is no explicit error model for excluded initiatives, missing basis data,
   or unreconciled weights.
 
-### 2.4 Current reporting impact
+### 2.4 Pre-revamp reporting impact
 
 Shared Costs already affects:
 
-| Surface | Current impact |
+| Surface | Pre-revamp impact |
 |---|---|
 | Executive Control Tower `/reports/control-tower` | Adds allocated costs into burdened value bridge and `net_after_allocation`. |
 | Dashboard executive brief | Shows allocated costs, burdened costs, and net after allocation from the executive report. |
 | Executive Control Tower table | Shows initiative-level burdened cost and net after allocation. |
 | Needs Attention | Flags low-confidence initiatives that have allocated shared cost. |
 
-Current behavior is intentionally report-only. Allocations do not overwrite
+Pre-revamp behavior was intentionally report-only. Allocations did not overwrite
 direct initiative cost lines.
 
 Reporting gaps:
@@ -200,9 +205,9 @@ Reporting gaps:
 - No reporting freshness indicator showing which allocation run is driving the
   number.
 
-### 2.5 Current tests
+### 2.5 Pre-revamp tests
 
-Current coverage:
+Pre-revamp coverage:
 
 - Unit-style service tests prove allocation reconciliation and report impact.
 - Real API acceptance checks seeded pools, rules, runs, allocation totals, and
@@ -808,20 +813,24 @@ Rules:
 Use these scenarios as concrete examples for requirements, seeded data, UI
 acceptance, and demo validation.
 
-Current seeded proof:
-
-| Pool | Year | Category key | Method | Plan | Actual | Initiatives |
-|---|---:|---|---|---:|---:|---|
-| Group technology platform allocation | 2026 | software | Benefit weighted | `$600K` | `$540K` | TRN-001 North Asia Revenue Acceleration, TRN-002 ERP Consolidation & Automation, TRN-004 Back-Office Offshoring - Finance & HR |
-
-Canonical ACME 10-initiative scenarios for the revamped feature:
+Current ACME3 seeded proof:
 
 | Scenario | Pool | Category | Suggested method | Candidate initiatives | Acceptance focus |
 |---|---|---|---|---|---|
-| Platform burden | Group technology and data platform | Software / Licenses | Benefit weighted by Gross Margin Uplift or technology-tag weighted | ENT-002 Finance Process Automation, ENT-005 Enterprise Data Platform, ENT-006 Pricing & Discount Optimization, ENT-009 Supply Chain Control Tower, ENT-010 AI Service Desk Automation | Shows metric-backed allocation from the configurable financial engine. |
-| PMO governance burden | Transformation PMO and benefits office | People Support | Equal split across active bankable initiatives, or value weighted after benefits mature | All 10 ACME initiatives, optionally excluding ENT-001 when it represents the PMO itself | Shows central governance cost without hiding it in one direct cost line. |
-| Change/adoption burden | Shared change and training support | Training / Change Management | Manual amount or impacted-headcount weighted | ENT-002 Finance Process Automation, ENT-004 Back-office Finance & HR Offshoring, ENT-005 Enterprise Data Platform, ENT-010 AI Service Desk Automation | Tests manual amount validation, explainability, and adoption-cost allocation. |
-| Advisory/vendor burden | Central transformation advisory support | External Consultants | Fixed percentage by workstream | ENT-005 Enterprise Data Platform, ENT-008 Procurement Vendor Consolidation, ENT-009 Supply Chain Control Tower | Tests fixed percentage validation and workstream/dimension targeting. |
+| Platform burden | Group technology and data platform | Software / Licenses | Benefit weighted | ENT-002 Finance Process Automation, ENT-005 Enterprise Data Platform, ENT-006 Pricing & Discount Optimization, ENT-009 Supply Chain Control Tower, ENT-010 AI Service Desk Automation | Plan `$650K`, actual `$585K`; shows metric-backed allocation from gross-margin uplift. |
+| PMO governance burden | Transformation PMO and benefits office | Labor / Operations | Equal split | All 10 ACME initiatives | Plan `$400K`, actual `$360K`; shows central governance cost without hiding it in one direct cost line. |
+| Change/adoption burden | Shared change and training support | Training / Change Management | Manual amount | ENT-002 Finance Process Automation, ENT-004 Back-office Finance & HR Offshoring, ENT-005 Enterprise Data Platform, ENT-010 AI Service Desk Automation | Plan `$220K`, actual `$198K`; tests manual amount validation, explainability, and adoption-cost allocation. |
+| Advisory/vendor burden | Central advisory and vendor support | External Consultants | Fixed percentage | ENT-005 Enterprise Data Platform, ENT-008 Procurement Vendor Consolidation, ENT-009 Supply Chain Control Tower | Plan `$180K`, actual `$162K`; tests fixed percentage validation and workstream/dimension targeting. |
+
+Seeded totals:
+
+| Measure | Value |
+|---|---:|
+| Shared-cost plan | `$1.45M` |
+| Shared-cost actual | `$1.305M` |
+| Control Tower allocated plan | `$1.45M` |
+| Control Tower net after allocation | `$1,400,000.0004` |
+| Bankable Plan shared-cost inclusion | `false` by default |
 
 Demo policy defaults:
 

@@ -19,7 +19,8 @@ No credentials are included in this guide.
 
 ## 1. Validated ACME Demo State
 
-Validated on `https://transmuter-dev.ishirock.tech` against the ACME tenant.
+Validated on `https://transmuter-dev.ishirock.tech` against the ACME3
+transformation lab tenant.
 
 | Area | Status | Validation result |
 |---|---|---|
@@ -35,10 +36,15 @@ Validated on `https://transmuter-dev.ishirock.tech` against the ACME tenant.
 | Benefit Tracking / Bankable Plan | Board-demo-ready | ACME has locked bankable plans, non-zero locked baseline and actual benefit ledger values, and `ENT-005` rebaseline history. |
 | FY28 contributor drawer | Reconciles | Contributor drawer shows all 10 initiatives, benefit-line detail, validation status, and totals that reconcile to the Financial Overview summary. |
 | Benefits Register | Configured | Portfolio-wide benefit lines show gross, validated, risk-adjusted, bankable, and realized values with evidence and owner metadata. |
-| Shared Costs | Seeded proof available | Current dev data includes a 2026 group technology platform shared-cost pool with plan `$600K`, actual `$540K`, and allocations to three initiatives. Use the scenario pack below when refreshing the canonical 10-initiative ACME demo. |
+| Shared Costs | Configured in dev | Current ACME3 dev data includes four FY2028 shared-cost pools covering `benefit_weighted`, `equal_split`, `fixed_percentage`, and `manual_amount` methods. Total shared-cost plan is `$1.45M`, actual is `$1.305M`, and Control Tower allocated plan is `$1.45M`. |
 | Board pack export | Configured | Financial Overview can export a non-empty XLSX board pack using the same selected year and value basis. |
 
 ---
+
+Production note: the Shared Costs schema, API, and UI are live on
+`https://transmuter.ishirock.tech`, but production ACME demo data is not yet at
+dev ACME3 parity. Production ACME currently has 0 shared-cost pools and 0
+initiative dependencies; that seeded-data drift is tracked in issue `#304`.
 
 ## 2. Executive Storyline
 
@@ -860,35 +866,32 @@ not direct initiative cost lines. They are central costs allocated for burdened
 executive reporting and, later, optional burdened bankable-plan reporting if
 Finance enables that policy.
 
-Current seeded proof in dev:
-
-| Pool | Year | Category key | Method | Plan | Actual | Allocated initiatives |
-|---|---:|---|---|---:|---:|---|
-| Group technology platform allocation | 2026 | software | Benefit weighted | `$600K` | `$540K` | TRN-001 North Asia Revenue Acceleration, TRN-002 ERP Consolidation & Automation, TRN-004 Back-Office Offshoring - Finance & HR |
-
-Current seeded allocation detail:
-
-| Initiative | Plan allocation | Actual allocation | Why it is included |
-|---|---:|---:|---|
-| TRN-001 North Asia Revenue Acceleration | `$228K` | `$205.2K` | Commercial uplift benefits from common platform and integration services. |
-| TRN-002 ERP Consolidation & Automation | `$252K` | `$226.8K` | ERP automation uses the largest platform share. |
-| TRN-004 Back-Office Offshoring - Finance & HR | `$120K` | `$108.0K` | Shared services transition uses the common technology platform. |
-
-Canonical ACME scenarios to use when refreshing the 10-initiative demo:
+Current ACME3 seeded proof in dev:
 
 | Scenario | Pool | Category | Suggested method | Candidate initiatives | Demo point |
 |---|---|---|---|---|---|
-| Platform burden | Group technology and data platform | Software / Licenses | Benefit weighted by Gross Margin Uplift or technology-tag weighted | ENT-002 Finance Process Automation, ENT-005 Enterprise Data Platform, ENT-006 Pricing & Discount Optimization, ENT-009 Supply Chain Control Tower, ENT-010 AI Service Desk Automation | Shows that shared platform cost is spread across initiatives that consume the platform. |
-| PMO governance burden | Transformation PMO and benefits office | People Support | Equal split across active bankable initiatives, or value weighted after benefits mature | All 10 ACME initiatives, optionally excluding ENT-001 if it represents the PMO itself | Shows central governance cost without distorting one initiative's direct cost case. |
-| Change/adoption burden | Shared change and training support | Training / Change Management | Manual amount or impacted-headcount weighted | ENT-002 Finance Process Automation, ENT-004 Back-office Finance & HR Offshoring, ENT-005 Enterprise Data Platform, ENT-010 AI Service Desk Automation | Shows people/change cost allocated to initiatives with material adoption effort. |
-| Advisory/vendor burden | Central transformation advisory support | External Consultants | Fixed percentage by workstream | ENT-005 Enterprise Data Platform, ENT-008 Procurement Vendor Consolidation, ENT-009 Supply Chain Control Tower | Shows a central vendor cost allocated to the workstreams receiving advisory support. |
+| Platform burden | Group technology and data platform | Software / Licenses | Benefit weighted | ENT-002, ENT-005, ENT-006, ENT-009, ENT-010 | Plan `$650K`, actual `$585K`; shows metric-backed allocation from gross-margin uplift. |
+| PMO governance burden | Transformation PMO and benefits office | Labor / Operations | Equal split | All 10 ACME initiatives | Plan `$400K`, actual `$360K`; shows central governance cost without hiding it in one direct cost line. |
+| Change/adoption burden | Shared change and training support | Training / Change Management | Manual amount | ENT-002, ENT-004, ENT-005, ENT-010 | Plan `$220K`, actual `$198K`; validates manual amounts for process-heavy adoption costs. |
+| Advisory/vendor burden | Central advisory and vendor support | External Consultants | Fixed percentage | ENT-005, ENT-008, ENT-009 | Plan `$180K`, actual `$162K`; tests fixed percentage allocation for central vendor support. |
+
+Current seeded totals:
+
+| Measure | Value |
+|---|---:|
+| Shared-cost plan | `$1.45M` |
+| Shared-cost actual | `$1.305M` |
+| Control Tower allocated plan | `$1.45M` |
+| Control Tower net after allocation | `$1,400,000.0004` |
+| Bankable Plan shared-cost inclusion | `false` by default |
 
 Recommended demo actions:
 
 1. Open `/shared-costs`.
-2. Select the group technology platform pool.
-3. Explain the pool, method, plan amount, actual amount, and run history.
-4. Open `/reports/control-tower` with target year `2026`.
+2. Select each of the four FY2028 pools to show the method variety.
+3. Explain the pool, method, plan amount, actual amount, policy status, and run
+   history.
+4. Open `/reports/control-tower` with target year `2028`.
 5. Show allocated costs, burdened costs, and net after allocation.
 6. Explain that `/financials` direct cost views remain direct-only unless
    Finance enables generated cost-line posting.
@@ -1434,32 +1437,29 @@ Use it for:
 - preventing shared costs from being hidden inside a single initiative,
 - explaining fully loaded portfolio economics in Executive Control Tower.
 
-Current ACME demo proof:
+Current ACME3 demo proof:
 
 | Pool | Plan | Actual | Allocation method | Reporting impact |
 |---|---:|---:|---|---|
-| Group technology platform allocation | `$600K` | `$540K` | Benefit weighted | Executive Control Tower allocated-cost and net-after-allocation values for target year `2026`. |
+| Group technology and data platform | `$650K` | `$585K` | Benefit weighted | Metric-backed burden for technology and automation initiatives in target year `2028`. |
+| Transformation PMO and benefits office | `$400K` | `$360K` | Equal split | Governance burden across all 10 ACME initiatives in target year `2028`. |
+| Shared change and training support | `$220K` | `$198K` | Manual amount | Adoption and training burden for process-heavy initiatives in target year `2028`. |
+| Central advisory and vendor support | `$180K` | `$162K` | Fixed percentage | Vendor support burden for selected ERP/data and supply-chain initiatives in target year `2028`. |
 
 Demo sequence:
 
 1. Open `/shared-costs`.
-2. Select **Group technology platform allocation**.
+2. Select **Group technology and data platform**.
 3. Show that the pool is active, recurring, and tracked separately from direct
    initiative costs.
-4. Open the allocation rule and explain that the current implementation uses a
-   benefit-weighted allocation.
-5. Show run history and confirm that plan allocation equals the pool amount.
-6. Use this to introduce the revamp direction: guided policy builder, preview,
-   approval, lock, allocation ledger, and reporting impact view.
-
-Canonical ACME scenario examples for the revamped demo:
-
-| Pool | Candidate initiatives | Allocation basis | Why it matters |
-|---|---|---|---|
-| Group technology and data platform | ENT-002, ENT-005, ENT-006, ENT-009, ENT-010 | Gross Margin Uplift or technology tag | Platform costs should burden initiatives that consume shared data, AI, and integration services. |
-| Transformation PMO and benefits office | All 10 initiatives or all bankable initiatives | Equal split or value weighted | Central governance cost should be visible without being assigned to one owner as a direct cost. |
-| Shared change and training support | ENT-002, ENT-004, ENT-005, ENT-010 | Manual amount or impacted headcount | Adoption costs should follow initiatives with material process and people change. |
-| Central advisory/vendor support | ENT-005, ENT-008, ENT-009 | Fixed percentage by workstream | Advisory spend should burden workstreams that used the central vendor. |
+4. Open the allocation policy and explain the benefit-weighted method.
+5. Select the remaining pools to show equal split, manual amount, and fixed
+   percentage policies.
+6. Show run history and confirm that each locked run reconciles to the pool
+   amount.
+7. Open reporting settings and confirm Executive Control Tower inclusion is on,
+   Portfolio Financials inclusion is off, and Bankable Plan inclusion is off by
+   default.
 
 Speaker notes:
 
@@ -1525,17 +1525,17 @@ Shared-cost impact to call out:
 
 | Field | Meaning |
 |---|---|
-| Allocated Costs | Shared-cost allocations from completed or, after revamp, locked runs. |
+| Allocated Costs | Shared-cost allocations from completed or locked runs. |
 | Burdened Costs | Direct initiative costs plus allocated shared-cost burden. |
 | Net After Allocation | Benefits less direct costs and allocated shared costs. |
 
 Demo action:
 
-1. Set target year to `2026` when demonstrating the current seeded shared-cost
-   pool.
+1. Set target year to `2028` when demonstrating the current ACME3 shared-cost
+   pools.
 2. Point to **Allocated Costs** and **Net After Allocation**.
 3. Explain that the number should drill back to `/shared-costs` pool, rule, run,
-   and allocation basis after the revamp.
+   and allocation basis.
 
 Speaker notes:
 
@@ -1683,11 +1683,13 @@ Screens:
 Actions:
 
 1. Open **Shared Costs**.
-2. Select the group technology platform allocation.
-3. Show the pool amount, actual amount, allocation rule, and run history.
-4. Open **Executive Control Tower**.
-5. Set target year to `2026` for the current seeded shared-cost proof.
-6. Point to allocated costs, burdened costs, and net after allocation.
+2. Select the group technology and data platform pool.
+3. Show the pool amount, actual amount, allocation policy, and run history.
+4. Switch through the PMO, change/training, and advisory/vendor pools to show
+   equal split, manual amount, and fixed percentage allocation methods.
+5. Open **Executive Control Tower**.
+6. Set target year to `2028` for the current ACME3 shared-cost proof.
+7. Point to allocated costs, burdened costs, and net after allocation.
 
 Speaker notes:
 

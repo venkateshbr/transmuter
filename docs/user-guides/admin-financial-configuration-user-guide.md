@@ -1,6 +1,6 @@
 # Admin Financial Configuration User Guide
 
-Last updated: 2026-06-19
+Last updated: 2026-06-20
 
 Audience: tenant admins, transformation office users, finance leads, benefits
 controllers, and implementation teams configuring a new tenant.
@@ -991,8 +991,9 @@ waterline will also be wrong.
 
 ### 13.8 Shared Costs `/shared-costs`
 
-Financial configuration should affect this directly as the shared-cost feature
-is revamped.
+Financial configuration affects this directly. Shared-cost pools use configured
+cost categories, scenarios, metrics, reporting settings, and allocation methods
+from the tenant financial model.
 
 Shared costs allocate central pools across initiatives. Use this for platform,
 PMO, license, cloud, shared delivery, central vendor, and transformation-office
@@ -1005,20 +1006,12 @@ Current implementation:
 
 | Area | Current behavior |
 |---|---|
-| Pools | Created from `/shared-costs` with name, free-text category key, year, plan amount, and actual amount. |
-| Rules | Allocation method plus filters/weights JSON. |
-| Runs | Created immediately and stored as completed allocation runs. |
-| Reporting | Executive Control Tower and dashboard executive brief consume allocated costs in burdened value views. |
-
-Target configurable model:
-
-| Area | Configuration source |
-|---|---|
-| Cost category | Active `financial_cost_categories`, not free-text category keys. |
-| Scenario | Active `financial_scenarios`, such as Plan Base, Forecast, or Actual. |
-| Allocation basis | Active metric definitions, direct cost categories, initiative dimensions, or manual weights. |
-| Reporting treatment | Tenant or pool setting: report-only burden, generated cost lines, or both. |
-| Bankable plan treatment | Tenant setting; default should be direct-only until Finance enables burdened bankable value. |
+| Pools | Created from `/shared-costs` with name, fiscal year, configured cost category, scenario, plan amount, actual amount, owner, period grain, status, and reporting treatment. |
+| Policies | Allocation method, targets, driver metric or cost category where relevant, period mode, missing-basis behavior, and structured weights or manual amounts. |
+| Methods | Equal split, fixed percentage, manual amount, benefit weighted, revenue weighted, savings weighted, direct-cost weighted, headcount weighted, and metric weighted. |
+| Preview and runs | Preview reconciles allocation to the pool amount before approved or locked runs populate the allocation ledger. |
+| Reporting | Executive Control Tower and dashboard executive brief consume allocated costs in burdened value views when reporting settings include them. |
+| Bankable plan treatment | Tenant setting; default is direct-only until Finance enables burdened bankable value. |
 
 Recommended shared-cost operating model:
 
@@ -1041,8 +1034,8 @@ Best-practice guidance:
 - Keep direct initiative costs and allocated shared costs visibly separate.
 - Do not let allocations affect bankable plan values unless Finance has
   approved that reporting policy.
-- Avoid raw JSON rules for production tenants; use guided filters, selected
-  metrics, and explainable basis values.
+- Use guided targets, selected metrics, structured weights, and explainable
+  basis values.
 - Require preview and reconciliation before reports consume a new allocation
   run.
 - Lock historical runs so board reports can trace every allocated-cost number

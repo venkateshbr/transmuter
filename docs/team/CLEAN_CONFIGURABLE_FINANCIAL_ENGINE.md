@@ -212,7 +212,7 @@ Prahari review is required before merge for:
 6. Real API and browser acceptance.
 7. Deploy readiness and release notes.
 
-The current implementation can be removed as each area is replaced. Avoid
+The pre-refactor implementation can be removed as each area is replaced. Avoid
 maintaining parallel legacy contracts unless needed temporarily for a single PR
 to keep the app buildable.
 

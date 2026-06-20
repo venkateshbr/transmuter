@@ -6,7 +6,7 @@
 
 **Architecture:** Introduce a versioned, project-scoped financial baseline that is created when the plan gate is approved and then consumed by dashboards, portfolio finance views, workbook exports/imports, and reporting screens. Keep the existing initiative financial model as the editable planning surface, but promote a locked bankable plan snapshot as the immutable reference point for realization tracking and governance.
 
-**Tech Stack:** FastAPI, Supabase/PostgreSQL, Pydantic, Angular 18, Tailwind/CSS variables, existing financial services, existing dashboard/reporting services.
+**Tech Stack:** FastAPI, Supabase/PostgreSQL, Pydantic, Angular 21, Tailwind/CSS variables, existing financial services, existing dashboard/reporting services.
 
 ---
 
