@@ -28,7 +28,7 @@ status.
 
 ### 2026-06-20 - Financial Configuration Engine Consolidation
 
-Status: dev validated; pending production promotion
+Status: promoted to production
 
 GitHub tracking:
 - Issue: `#316`
@@ -90,7 +90,47 @@ Schema/data SQL required for production:
 - `supabase/migrations/20260619000001_financial_engine_cost_category_consolidation.sql`
 
 Production validation:
-- Pending promotion and validation.
+- Environment: `https://transmuter.ishirock.tech`
+- Schema: `transmuter`
+- Promotion commit:
+  `dacee75 docs: track financial engine consolidation release`
+- Schema/data SQL applied to production:
+  `supabase/migrations/20260619000001_financial_engine_cost_category_consolidation.sql`
+- Initial promotion with `--schema` failed before deployment because host-side
+  schema application could not resolve the Docker service hostname `db`.
+- Retried schema application with `POSTGRES_DOCKER_NETWORK=supabase-aethos_default`;
+  the app DB user could connect but could not create objects in schema
+  `transmuter`.
+- Applied the SQL successfully through the self-hosted Supabase DB container as
+  `supabase_admin`, with `search_path=transmuter,public,extensions`.
+- Production deployment then rebuilt/restarted the API and web containers with
+  `CONFIRM_PROMOTE=1 infra/hostinger/promote-dev-to-prod.sh`.
+- Initial scripted public validation hit the known transient `/health` 404
+  readiness race immediately after container recreation.
+- `infra/hostinger/validate-prod.sh` passed after the stack settled.
+- Real production API validation passed for runtime/schema health:
+  - `/financial-engine-configuration` returned 10 definitions, 4 scenarios,
+    and 8 cost categories.
+  - ACME returned 10 initiatives.
+  - Bankable Plan API responded for all 10 initiatives.
+- Real production browser validation passed for page rendering on:
+  - `/dashboard`
+  - `/financials`
+  - `/financials/initiative-portfolio`
+  - `/financials/benefits-register`
+  - `/financials/benefit-tracking`
+  - `/financials/bankable-plan`
+
+Operational notes:
+- Production ACME demo data is still not at dev parity. `ENT-001` has a locked
+  bankable plan v1, but `ENT-002` through `ENT-010` have no locked bankable
+  plan history; `ENT-005` does not show the dev v2 rebaseline example.
+- Production Benefit Tracking currently reports only the `ENT-001` locked
+  baseline (`-37500.0000`) and `0.0000` actuals, while Benefits Register shows
+  0 lines for the ACME tenant.
+- This is the known production-only seeded-data drift tracked in `#304`, not a
+  deployment/schema failure. `#304` was updated with the 2026-06-20 validation
+  evidence.
 
 ### 2026-06-18 - Initiative Baseline-to-Target P&L Bridge
 
