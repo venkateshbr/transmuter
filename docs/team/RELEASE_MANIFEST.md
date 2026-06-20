@@ -32,8 +32,8 @@ Status: dev validated, pending PR review and production promotion
 
 GitHub tracking:
 - Issue: `#321`
-- PR: pending
-- Commit: pending
+- PR: `#327`
+- Implementation commit: `d8bfdcb feat: add configurable shared cost allocation engine`
 
 Runtime changes:
 - Extended Shared Costs from raw JSON rules into a configurable allocation
