@@ -28,8 +28,7 @@ status.
 
 ### 2026-06-20 - Shared Costs Configurable Allocation Engine
 
-Status: feature PR merged, Prahari hardening dev validated, pending hardening PR
-review and production promotion
+Status: promoted to production
 
 GitHub tracking:
 - Issue: `#321`
@@ -37,6 +36,7 @@ GitHub tracking:
 - Prahari hardening issue: `#325`
 - Prahari hardening PR: `#328`
 - Implementation commit: `d8bfdcb feat: add configurable shared cost allocation engine`
+- Production promotion commit: `31c8805 fix: harden shared cost tenant references`
 
 Runtime changes:
 - Extended Shared Costs from raw JSON rules into a configurable allocation
@@ -115,7 +115,40 @@ Schema/data SQL required for production:
 - `supabase/migrations/20260620000002_harden_shared_cost_allocation_tenant_refs.sql`
 
 Production validation:
-- Pending.
+- Environment: `https://transmuter.ishirock.tech`
+- Schema: `transmuter`
+- Schema/data SQL applied to production through the self-hosted Supabase DB
+  container as `supabase_admin`, with
+  `search_path=transmuter,public,extensions`:
+  - `supabase/migrations/20260620000001_shared_cost_configurable_allocation_engine.sql`
+  - `supabase/migrations/20260620000002_harden_shared_cost_allocation_tenant_refs.sql`
+- Production deployment ran with:
+  `CONFIRM_PROMOTE=1 infra/hostinger/promote-dev-to-prod.sh`
+- Initial scripted public validation hit the known immediate `/health` 404
+  readiness race after container recreation.
+- `infra/hostinger/validate-prod.sh` passed after the production stack settled.
+- Production catalog validation confirmed `shared_cost_*_tenant_fk`
+  constraints on pools, rules, runs, allocations, targets, weights,
+  exceptions, audit events, periods, scenarios, metrics, and cost categories.
+- Production catalog validation confirmed same-tenant trigger validation for
+  shared-cost pool user refs, run user refs, audit actor refs, and posted
+  cost-line refs.
+- Production runtime API validation passed for:
+  - `/shared-costs/config` with 9 allocation methods.
+  - `/shared-cost-pools` responding successfully for the production ACME
+    tenant.
+  - `/reports/executive-control-tower` responding successfully for the
+    production ACME tenant.
+- Production browser validation passed for `/shared-costs` rendering the
+  Shared Costs workflow on `https://transmuter.ishirock.tech`.
+
+Operational notes:
+- The full ACME3 shared-cost acceptance scenario remains dev-only until
+  production demo data is backfilled. Production ACME currently has 0
+  initiative dependencies and 0 shared-cost pools, so
+  `test_real_api_executive_control_tower_phase_2a` fails on the known
+  production seeded-data drift tracked in `#304`, not on deployment/schema
+  health.
 
 ### 2026-06-20 - Financial Configuration Engine Consolidation
 
