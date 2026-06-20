@@ -6,6 +6,9 @@ This guide explains how a newly onboarded tenant should configure Transmuter, cr
 
 Public application URL: `https://transmuter.ishirock.tech`
 
+For a step-by-step ACME-style demo tenant setup using only the UI, see
+[`docs/user-guides/acme-demo-tenant-ui-setup-guide.md`](../user-guides/acme-demo-tenant-ui-setup-guide.md).
+
 ## 1. Who This Guide Is For
 
 Use this guide if you are:
