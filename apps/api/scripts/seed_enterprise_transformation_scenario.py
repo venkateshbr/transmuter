@@ -8,6 +8,7 @@ Usage:
 
 from __future__ import annotations
 
+import os
 from calendar import monthrange
 from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
@@ -22,10 +23,10 @@ load_dotenv(dotenv_path=Path(__file__).resolve().parents[3] / ".env")
 from app.core.database import get_supabase_admin  # noqa: E402
 from app.services.financial import FinancialService  # noqa: E402
 
-ORG_NAME = "Acme Global Manufacturing"
-ORG_SLUG = "acme-transformation-lab"
-ADMIN_EMAIL = "admin@acme-transformation.dev"
-ADMIN_PASSWORD = "Transmuter2026!"
+ORG_NAME = os.environ.get("TRANSMUTER_SEED_ORG_NAME", "Acme Global Manufacturing")
+ORG_SLUG = os.environ.get("TRANSMUTER_SEED_ORG_SLUG", "acme-transformation-lab")
+ADMIN_EMAIL = os.environ.get("TRANSMUTER_SEED_ADMIN_EMAIL", "admin@acme-transformation.dev")
+ADMIN_PASSWORD = os.environ.get("TRANSMUTER_SEED_ADMIN_PASSWORD", "Transmuter2026!")
 BASELINE_YEAR = 2026
 
 BASELINE_REVENUE = Decimal("20000000")
@@ -134,6 +135,28 @@ def ensure_admin_user(client: Client, tenant_id: str) -> str:
 
 def delete_tenant_rows(client: Client, tenant_id: str) -> None:
     tables = [
+        "shared_cost_allocation_audit_events",
+        "shared_cost_allocation_exceptions",
+        "shared_cost_allocations",
+        "shared_cost_allocation_runs",
+        "shared_cost_allocation_weights",
+        "shared_cost_allocation_targets",
+        "shared_cost_allocation_rules",
+        "shared_cost_pool_periods",
+        "shared_cost_pools",
+        "shared_cost_reporting_settings",
+        "meeting_artifacts",
+        "meeting_external_events",
+        "action_items",
+        "meeting_session_attendees",
+        "meeting_session_agenda_items",
+        "meeting_sessions",
+        "agenda_items",
+        "meeting_initiatives",
+        "meeting_attendees",
+        "meetings",
+        "initiative_dependencies",
+        "initiative_value_realization_notes",
         "financial_initiative_annual_baselines",
         "financial_tenant_annual_baselines",
         "financial_benefit_line_validation_events",
@@ -1414,6 +1437,564 @@ def insert_bankable_plan_and_realization_demo(
     for start in range(0, len(rows), 500):
         client.table("benefit_realization_ledger").insert(rows[start : start + 500]).execute()
 
+    note_rows = [
+        {
+            "id": str(uuid4()),
+            "tenant_id": tenant_id,
+            "initiative_id": initiative_ids["ENT-002"],
+            "author_id": user_id,
+            "note_type": "realization",
+            "period_label": "FY2028",
+            "planned_value": money(Decimal("1450000")),
+            "actual_value": money(Decimal("1285000")),
+            "explanation": (
+                "Commercial execution remains above baseline, but adoption timing "
+                "is the main variance to monitor in the next steering cycle."
+            ),
+        },
+        {
+            "id": str(uuid4()),
+            "tenant_id": tenant_id,
+            "initiative_id": initiative_ids["ENT-005"],
+            "author_id": user_id,
+            "note_type": "allocation",
+            "period_label": "FY2028",
+            "planned_value": money(Decimal("650000")),
+            "actual_value": money(Decimal("585000")),
+            "explanation": (
+                "Enterprise Data Platform carries a material share of group "
+                "technology platform costs because it benefits most from the "
+                "central data and tooling pool."
+            ),
+        },
+        {
+            "id": str(uuid4()),
+            "tenant_id": tenant_id,
+            "initiative_id": initiative_ids["ENT-010"],
+            "author_id": user_id,
+            "note_type": "board_note",
+            "period_label": "FY2028",
+            "planned_value": money(Decimal("900000")),
+            "actual_value": money(Decimal("792000")),
+            "explanation": (
+                "Collaboration tooling value is tracking behind plan in the first "
+                "half because shared services adoption is slower than expected."
+            ),
+        },
+    ]
+    client.table("initiative_value_realization_notes").insert(note_rows).execute()
+
+
+def insert_shared_cost_demo(
+    client: Client,
+    tenant_id: str,
+    user_id: str,
+    initiative_ids: dict[str, str],
+    metric_ids: dict[str, str],
+    scenario_ids: dict[str, str],
+) -> None:
+    categories = {
+        row["key"]: row["id"]
+        for row in client.table("financial_cost_categories")
+        .select("id,key")
+        .eq("tenant_id", tenant_id)
+        .execute()
+        .data
+        or []
+    }
+    seed_by_code = {row[0]: row for row in INITIATIVES}
+
+    def allocate_by_shares(
+        pool_id: str,
+        rule_id: str,
+        run_id: str,
+        codes: list[str],
+        shares: list[Decimal],
+        amount_plan: Decimal,
+        amount_actual: Decimal,
+        basis_label: str,
+    ) -> list[dict[str, object]]:
+        rows: list[dict[str, object]] = []
+        remaining_plan = amount_plan
+        remaining_actual = amount_actual
+        for index, code in enumerate(codes):
+            share = shares[index]
+            if index == len(codes) - 1:
+                plan = remaining_plan
+                actual = remaining_actual
+            else:
+                plan = (amount_plan * share).quantize(MONEY, rounding=ROUND_HALF_UP)
+                actual = (amount_actual * share).quantize(MONEY, rounding=ROUND_HALF_UP)
+                remaining_plan -= plan
+                remaining_actual -= actual
+            rows.append(
+                {
+                    "id": str(uuid4()),
+                    "tenant_id": tenant_id,
+                    "run_id": run_id,
+                    "pool_id": pool_id,
+                    "rule_id": rule_id,
+                    "initiative_id": initiative_ids[code],
+                    "allocation_basis": basis_label.lower().replace(" ", "_"),
+                    "basis_value": money(share),
+                    "allocated_plan": money(plan),
+                    "allocated_actual": money(actual),
+                    "period_start": "2028-01-01",
+                    "period_end": "2028-12-31",
+                    "scenario_id": scenario_ids["plan_base"],
+                    "basis_metric_definition_id": metric_ids.get("gm_uplift"),
+                    "basis_label": basis_label,
+                    "allocation_share": str(share.quantize(Decimal("0.00000001"))),
+                    "rounding_adjustment": money(Decimal("0")),
+                    "explanation": (
+                        f"{code} receives "
+                        f"{(share * Decimal('100')).quantize(Decimal('0.01'))}% of the pool "
+                        f"using {basis_label}."
+                    ),
+                    "exception_flags": {},
+                }
+            )
+        return rows
+
+    scenarios = [
+        {
+            "name": "Group technology and data platform",
+            "description": "Shared data, cloud, AI, and integration platform costs used by transformation initiatives.",
+            "category_key": "software",
+            "amount_plan": Decimal("650000"),
+            "amount_actual": Decimal("585000"),
+            "method": "benefit_weighted",
+            "driver_metric_definition_id": metric_ids["gm_uplift"],
+            "target_codes": ["ENT-002", "ENT-005", "ENT-006", "ENT-009", "ENT-010"],
+            "basis": "Gross Margin Uplift",
+            "shares": None,
+        },
+        {
+            "name": "Transformation PMO and benefits office",
+            "description": "Central governance and benefits-office run cost allocated across the bankable portfolio.",
+            "category_key": "labor",
+            "amount_plan": Decimal("400000"),
+            "amount_actual": Decimal("360000"),
+            "method": "equal_split",
+            "target_codes": list(initiative_ids.keys()),
+            "basis": "Equal split",
+            "shares": None,
+        },
+        {
+            "name": "Shared change and training support",
+            "description": "Shared adoption, training, and change-support capacity for process-heavy initiatives.",
+            "category_key": "training_change",
+            "amount_plan": Decimal("220000"),
+            "amount_actual": Decimal("198000"),
+            "method": "manual_amount",
+            "target_codes": ["ENT-002", "ENT-004", "ENT-005", "ENT-010"],
+            "basis": "Manual amount",
+            "manual_amounts": {
+                "ENT-002": Decimal("55000"),
+                "ENT-004": Decimal("70000"),
+                "ENT-005": Decimal("55000"),
+                "ENT-010": Decimal("40000"),
+            },
+            "shares": None,
+        },
+        {
+            "name": "Central advisory and vendor support",
+            "description": "Central advisory support allocated to workstreams that used the transformation vendor.",
+            "category_key": "external_consultants",
+            "amount_plan": Decimal("180000"),
+            "amount_actual": Decimal("162000"),
+            "method": "fixed_percentage",
+            "target_codes": ["ENT-005", "ENT-008", "ENT-009"],
+            "basis": "Fixed percentage",
+            "shares": [Decimal("0.40"), Decimal("0.35"), Decimal("0.25")],
+        },
+    ]
+
+    client.table("shared_cost_reporting_settings").upsert(
+        {
+            "tenant_id": tenant_id,
+            "include_in_executive_control_tower": True,
+            "include_in_dashboard_executive_brief": True,
+            "include_in_portfolio_financials": False,
+            "include_in_initiative_financials": True,
+            "include_in_bankable_plan": False,
+            "posting_mode": "report_only",
+        },
+        on_conflict="tenant_id",
+    ).execute()
+
+    for scenario in scenarios:
+        pool_id = str(uuid4())
+        rule_id = str(uuid4())
+        run_id = str(uuid4())
+        amount_plan = scenario["amount_plan"]
+        amount_actual = scenario["amount_actual"]
+        category_key = str(scenario["category_key"])
+        client.table("shared_cost_pools").insert(
+            {
+                "id": pool_id,
+                "tenant_id": tenant_id,
+                "name": scenario["name"],
+                "description": scenario["description"],
+                "category_key": category_key,
+                "cost_category_id": categories.get(category_key),
+                "scenario_id": scenario_ids["plan_base"],
+                "year": 2028,
+                "amount_plan": money(amount_plan),
+                "amount_actual": money(amount_actual),
+                "is_recurring": True,
+                "status": "active",
+                "period_grain": "annual",
+                "reporting_treatment": "report_only",
+                "currency_code": "USD",
+                "owner_id": user_id,
+            }
+        ).execute()
+        client.table("shared_cost_pool_periods").insert(
+            {
+                "id": str(uuid4()),
+                "tenant_id": tenant_id,
+                "pool_id": pool_id,
+                "scenario_id": scenario_ids["plan_base"],
+                "year": 2028,
+                "period_start": "2028-01-01",
+                "period_end": "2028-12-31",
+                "amount_plan": money(amount_plan),
+                "amount_actual": money(amount_actual),
+                "status": "locked",
+            }
+        ).execute()
+        client.table("shared_cost_allocation_rules").insert(
+            {
+                "id": rule_id,
+                "tenant_id": tenant_id,
+                "pool_id": pool_id,
+                "name": f"{scenario['basis']} allocation",
+                "allocation_method": scenario["method"],
+                "filters": {},
+                "weights": {},
+                "is_active": True,
+                "version": 1,
+                "policy_status": "locked",
+                "driver_metric_definition_id": scenario.get("driver_metric_definition_id"),
+                "driver_scenario_id": scenario_ids["plan_base"],
+                "driver_period_mode": "fiscal_year",
+                "missing_basis_behavior": "fail",
+                "is_locked": True,
+            }
+        ).execute()
+        target_rows = [
+            {
+                "id": str(uuid4()),
+                "tenant_id": tenant_id,
+                "rule_id": rule_id,
+                "target_mode": "include",
+                "dimension_type": "initiative",
+                "dimension_value": initiative_ids[code],
+                "label": code,
+            }
+            for code in scenario["target_codes"]
+        ]
+        client.table("shared_cost_allocation_targets").insert(target_rows).execute()
+
+        weights = []
+        if scenario["method"] == "manual_amount":
+            for code, manual_amount in scenario["manual_amounts"].items():
+                weights.append(
+                    {
+                        "id": str(uuid4()),
+                        "tenant_id": tenant_id,
+                        "rule_id": rule_id,
+                        "initiative_id": initiative_ids[code],
+                        "manual_amount": money(manual_amount),
+                        "label": code,
+                    }
+                )
+        elif scenario["method"] == "fixed_percentage":
+            for code, share in zip(scenario["target_codes"], scenario["shares"], strict=True):
+                weights.append(
+                    {
+                        "id": str(uuid4()),
+                        "tenant_id": tenant_id,
+                        "rule_id": rule_id,
+                        "initiative_id": initiative_ids[code],
+                        "percentage": money(share * Decimal("100")),
+                        "label": code,
+                    }
+                )
+        if weights:
+            client.table("shared_cost_allocation_weights").insert(weights).execute()
+
+        codes = scenario["target_codes"]
+        shares = scenario.get("shares")
+        if shares is None and scenario["method"] == "benefit_weighted":
+            bases = [seed_by_code[code][11] + seed_by_code[code][13] for code in codes]
+            total = sum(bases, Decimal("0"))
+            shares = [basis / total for basis in bases]
+        elif shares is None and scenario["method"] == "equal_split":
+            shares = [Decimal("1") / Decimal(len(codes)) for _code in codes]
+        elif shares is None and scenario["method"] == "manual_amount":
+            shares = [scenario["manual_amounts"][code] / amount_plan for code in codes]
+        allocation_rows = allocate_by_shares(
+            pool_id,
+            rule_id,
+            run_id,
+            codes,
+            shares,
+            amount_plan,
+            amount_actual,
+            str(scenario["basis"]),
+        )
+        client.table("shared_cost_allocation_runs").insert(
+            {
+                "id": run_id,
+                "tenant_id": tenant_id,
+                "pool_id": pool_id,
+                "rule_id": rule_id,
+                "scenario": "plan",
+                "scenario_id": scenario_ids["plan_base"],
+                "status": "locked",
+                "run_type": "posting",
+                "rule_version": 1,
+                "period_start": "2028-01-01",
+                "period_end": "2028-12-31",
+                "total_amount_plan": money(amount_plan),
+                "total_amount_actual": money(amount_actual),
+                "input_snapshot": {"seeded": True, "pool": scenario["name"]},
+                "exception_summary": {"count": 0, "blocking": 0, "exceptions": []},
+                "approved_by": user_id,
+                "approved_at": now(),
+                "locked_by": user_id,
+                "locked_at": now(),
+                "created_by": user_id,
+                "reporting_treatment": "report_only",
+            }
+        ).execute()
+        client.table("shared_cost_allocations").insert(allocation_rows).execute()
+        client.table("shared_cost_allocation_audit_events").insert(
+            {
+                "id": str(uuid4()),
+                "tenant_id": tenant_id,
+                "pool_id": pool_id,
+                "rule_id": rule_id,
+                "run_id": run_id,
+                "actor_id": user_id,
+                "event_type": "seeded_locked_run",
+                "message": "Seeded ACME shared-cost locked allocation run.",
+                "after_state": {"pool": scenario["name"], "amount_plan": money(amount_plan)},
+            }
+        ).execute()
+
+
+def insert_operating_cadence_demo(
+    client: Client,
+    tenant_id: str,
+    user_id: str,
+    initiative_ids: dict[str, str],
+    workstreams: dict[str, str],
+) -> None:
+    dependency_specs = [
+        (
+            "ENT-004",
+            "ENT-005",
+            "blocks",
+            "blocking",
+            "high",
+            "2028-03-31",
+            "ERP process standardization must stabilize before procurement wave 2 cutover.",
+        ),
+        (
+            "ENT-006",
+            "ENT-002",
+            "requires_decision",
+            "at_risk",
+            "high",
+            "2028-02-28",
+            "Enterprise data model decision gates the North America revenue analytics rollout.",
+        ),
+        (
+            "ENT-010",
+            "ENT-008",
+            "enables",
+            "active",
+            "medium",
+            "2028-04-15",
+            "Collaboration tooling adoption enables the shared services productivity case.",
+        ),
+    ]
+    dependency_rows = []
+    for upstream_code, downstream_code, dep_type, status, severity, due_date, notes in dependency_specs:
+        dependency_rows.append(
+            {
+                "id": str(uuid4()),
+                "tenant_id": tenant_id,
+                "upstream_initiative_id": initiative_ids[upstream_code],
+                "downstream_initiative_id": initiative_ids[downstream_code],
+                "dependency_type": dep_type,
+                "status": status,
+                "severity": severity,
+                "owner_id": user_id,
+                "due_date": due_date,
+                "resolution_notes": notes,
+            }
+        )
+    client.table("initiative_dependencies").insert(dependency_rows).execute()
+
+    meeting_specs = [
+        {
+            "name": "Transformation Steering Committee",
+            "workstream_id": None,
+            "scope": "all",
+            "recurrence": "weekly",
+            "day_of_week": 1,
+            "start_time": "09:00",
+            "duration_minutes": 75,
+            "description": "Executive cadence for value delivery, dependencies, shared costs, and gate decisions.",
+            "initiatives": ["ENT-002", "ENT-004", "ENT-005", "ENT-006", "ENT-010"],
+            "agenda": [
+                ("Portfolio value and bankable plan movement", None),
+                ("Shared-cost allocation and burdened value bridge", "ENT-005"),
+                ("ERP dependency and procurement cutover decision", "ENT-004"),
+            ],
+            "session_date": "2028-02-12",
+            "notes": "Reviewed FY2028 value bridge, locked shared-cost runs, and two high dependency risks.",
+            "action": (
+                "Validate procurement cutover readiness against ERP data migration dependency",
+                "ENT-005",
+                "high",
+                "2028-02-23",
+            ),
+        },
+        {
+            "name": "North Asia Workstream Review",
+            "workstream_id": workstreams["Commercial Growth"],
+            "scope": "workstream",
+            "recurrence": "weekly",
+            "day_of_week": 3,
+            "start_time": "14:00",
+            "duration_minutes": 60,
+            "description": "Regional commercial execution review for growth and pricing initiatives.",
+            "initiatives": ["ENT-002", "ENT-003"],
+            "agenda": [
+                ("Distributor segmentation lift and account conversion", "ENT-002"),
+                ("Pricing analytics adoption blockers", "ENT-003"),
+            ],
+            "session_date": "2028-02-14",
+            "notes": "Commercial Growth reviewed adoption blockers and pricing analytics rollout risks.",
+            "action": (
+                "Confirm North Asia account conversion evidence for next benefits review",
+                "ENT-002",
+                "medium",
+                "2028-02-26",
+            ),
+        },
+    ]
+
+    for meeting in meeting_specs:
+        meeting_id = str(uuid4())
+        attendee_id = str(uuid4())
+        session_id = str(uuid4())
+        client.table("meetings").insert(
+            {
+                "id": meeting_id,
+                "tenant_id": tenant_id,
+                "name": meeting["name"],
+                "workstream_id": meeting["workstream_id"],
+                "scope": meeting["scope"],
+                "recurrence": meeting["recurrence"],
+                "day_of_week": meeting["day_of_week"],
+                "start_time": meeting["start_time"],
+                "timezone": "UTC",
+                "duration_minutes": meeting["duration_minutes"],
+                "description": meeting["description"],
+                "owner_id": user_id,
+            }
+        ).execute()
+        client.table("meeting_attendees").insert(
+            {
+                "id": attendee_id,
+                "tenant_id": tenant_id,
+                "meeting_id": meeting_id,
+                "user_id": user_id,
+            }
+        ).execute()
+        client.table("meeting_initiatives").insert(
+            [
+                {
+                    "id": str(uuid4()),
+                    "tenant_id": tenant_id,
+                    "meeting_id": meeting_id,
+                    "initiative_id": initiative_ids[code],
+                }
+                for code in meeting["initiatives"]
+            ]
+        ).execute()
+        agenda_rows = []
+        for sort_order, (text, code) in enumerate(meeting["agenda"], start=1):
+            agenda_rows.append(
+                {
+                    "id": str(uuid4()),
+                    "tenant_id": tenant_id,
+                    "meeting_id": meeting_id,
+                    "initiative_id": initiative_ids[code] if code else None,
+                    "text": text,
+                    "sort_order": sort_order,
+                }
+            )
+        client.table("agenda_items").insert(agenda_rows).execute()
+        client.table("meeting_sessions").insert(
+            {
+                "id": session_id,
+                "tenant_id": tenant_id,
+                "meeting_id": meeting_id,
+                "session_date": meeting["session_date"],
+                "status": "completed",
+                "has_transcript": True,
+                "ai_optimised": True,
+                "transcript_text": meeting["notes"],
+                "notes": meeting["notes"],
+            }
+        ).execute()
+        client.table("meeting_session_attendees").insert(
+            {
+                "id": str(uuid4()),
+                "tenant_id": tenant_id,
+                "meeting_id": meeting_id,
+                "session_id": session_id,
+                "source_meeting_attendee_id": attendee_id,
+                "user_id": user_id,
+            }
+        ).execute()
+        client.table("meeting_session_agenda_items").insert(
+            [
+                {
+                    "id": str(uuid4()),
+                    "tenant_id": tenant_id,
+                    "meeting_id": meeting_id,
+                    "session_id": session_id,
+                    "source_agenda_item_id": row["id"],
+                    "initiative_id": row["initiative_id"],
+                    "text": row["text"],
+                    "sort_order": row["sort_order"],
+                }
+                for row in agenda_rows
+            ]
+        ).execute()
+        action_text, action_code, priority, due_date = meeting["action"]
+        client.table("action_items").insert(
+            {
+                "id": str(uuid4()),
+                "tenant_id": tenant_id,
+                "session_id": session_id,
+                "initiative_id": initiative_ids[action_code],
+                "description": action_text,
+                "assignee_id": user_id,
+                "priority": priority,
+                "status": "open",
+                "due_date": due_date,
+            }
+        ).execute()
+
 
 def main() -> None:
     client = get_supabase_admin()
@@ -1443,6 +2024,8 @@ def main() -> None:
         initiative_ids,
         gate_criteria,
     )
+    insert_shared_cost_demo(client, tenant_id, user_id, initiative_ids, metric_ids, scenario_ids)
+    insert_operating_cadence_demo(client, tenant_id, user_id, initiative_ids, workstreams)
     print("Seeded enterprise transformation scenario")
     print(f"  tenant_id: {tenant_id}")
     print(f"  login: {ADMIN_EMAIL}")
@@ -1450,6 +2033,7 @@ def main() -> None:
     print("  gate criteria: seeded")
     print("  bankable plans: seeded")
     print("  benefit ledger: seeded")
+    print("  shared cost pools: seeded")
     print(f"  FY26 revenue baseline: {money(BASELINE_REVENUE)}")
     print(f"  FY26 gross margin baseline: {money(BASELINE_GROSS_MARGIN)}")
     print("  FY28 plan target revenue uplift: 4000000.0000")

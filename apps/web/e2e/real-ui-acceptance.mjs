@@ -545,7 +545,7 @@ async function main() {
     );
     await page.send('Page.navigate', { url: `${uiBaseUrl}/shared-costs` });
     await waitFor(
-      () => evalJs(page, "location.pathname === '/shared-costs' && document.body.innerText.includes('Shared Cost Pools') && document.body.innerText.includes('Allocation Rules')"),
+      () => evalJs(page, "location.pathname === '/shared-costs' && (() => { const text = document.body.innerText.toLowerCase(); return text.includes('shared cost pools') && text.includes('allocation policy') && text.includes('reporting treatment') && text.includes('reconciliation and exceptions'); })()"),
       'shared cost page',
       20_000,
     );

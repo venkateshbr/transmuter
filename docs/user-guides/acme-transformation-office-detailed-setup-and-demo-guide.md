@@ -35,6 +35,7 @@ Validated on `https://transmuter-dev.ishirock.tech` against the ACME tenant.
 | Benefit Tracking / Bankable Plan | Board-demo-ready | ACME has locked bankable plans, non-zero locked baseline and actual benefit ledger values, and `ENT-005` rebaseline history. |
 | FY28 contributor drawer | Reconciles | Contributor drawer shows all 10 initiatives, benefit-line detail, validation status, and totals that reconcile to the Financial Overview summary. |
 | Benefits Register | Configured | Portfolio-wide benefit lines show gross, validated, risk-adjusted, bankable, and realized values with evidence and owner metadata. |
+| Shared Costs | Seeded proof available | Current dev data includes a 2026 group technology platform shared-cost pool with plan `$600K`, actual `$540K`, and allocations to three initiatives. Use the scenario pack below when refreshing the canonical 10-initiative ACME demo. |
 | Board pack export | Configured | Financial Overview can export a non-empty XLSX board pack using the same selected year and value basis. |
 
 ---
@@ -71,6 +72,14 @@ FY28 enterprise value view
 
 Use the first formula for EBITDA. Use the second only when discussing broader
 commercial value.
+
+Shared-cost narrative:
+
+> ACME also tracks central platform, PMO, advisory, and change costs separately
+> from direct initiative cost lines. These costs should burden executive value
+> views only after Finance approves an allocation run. Direct initiative
+> economics and bankable plan values remain direct-only unless Finance enables a
+> burdened reporting policy.
 
 ---
 
@@ -110,7 +119,7 @@ cadence.
 | Executive Sponsor / CEO / CFO | Approves portfolio ambition, funding, and major tradeoffs. Reviews value, risk, and decisions. | `/dashboard`, `/financials`, `/reports/control-tower`, board pack export | Decision outcomes, escalations, target changes approved outside the system. |
 | Transformation Office Director | Owns the portfolio operating cadence and confirms that the program is governed end to end. | `/dashboard`, `/initiatives/pipeline`, `/financials`, `/financials/benefit-tracking`, `/reports/control-tower` | Portfolio priorities, stage movement, meeting cadence, executive narrative. |
 | PMO Lead / Governance Manager | Maintains stage gates, milestones, risks, dependencies, actions, and meeting follow-up. | `/admin`, `/pmo/governance`, `/progress`, `/meetings`, initiative **Governance**, **Milestones**, **Risks**, **Dependencies** tabs | Gate criteria, submissions, milestones, RAID data, actions, meeting minutes. |
-| Finance Lead / Benefits Controller | Owns financial definitions, baseline integrity, benefit validation, cost validation, actuals governance, and board value reconciliation. | `/admin`, `/financials`, `/financials/benefits-register`, `/financials/bankable-plan`, `/financials/benefit-tracking`, initiative **Financials** tab | Metric definitions, scenarios, baselines, benefit validation status, cost categories, actual values, benefit ledger approval evidence. |
+| Finance Lead / Benefits Controller | Owns financial definitions, baseline integrity, benefit validation, cost validation, shared-cost governance, actuals governance, and board value reconciliation. | `/admin`, `/financials`, `/shared-costs`, `/financials/benefits-register`, `/financials/bankable-plan`, `/financials/benefit-tracking`, initiative **Financials** tab | Metric definitions, scenarios, baselines, benefit validation status, cost categories, shared-cost pools, allocation policies, actual values, benefit ledger approval evidence. |
 | Workstream Lead | Runs a slice of the portfolio and escalates blockers across initiatives. | `/initiatives/pipeline`, `/initiatives/matrix`, `/financials/benefit-tracking`, `/progress/roadmap`, `/reports/control-tower` | Workstream prioritization, progress narrative, cross-initiative blockers, workstream realization commentary. |
 | Initiative Owner | Owns delivery, status, milestones, risks, KPIs, assumptions, and source evidence for benefits. | `/initiatives/:id`, initiative **Overview**, **Financials**, **Milestones**, **KPIs**, **Risks**, **Status**, **Team** tabs | Initiative description, owners, dates, delivery status, risks, KPIs, benefit-line assumptions, realization evidence. |
 | Business Benefit Owner | Confirms that value has moved into business-as-usual operations and can be sustained. | `/financials/benefit-tracking`, `/financials/benefits-register`, initiative **Financials** and **Summary** tabs | Realization evidence, benefit ownership, sustainment notes, realized-value acceptance. |
@@ -135,7 +144,7 @@ cadence.
 | `/financials/bankable-plan` | Finance Lead / PMO Lead | Transformation Office Director | Shows locked approved plans and rebaseline history before actual realization is tracked against them. |
 | `/financials/benefit-tracking` | Benefits Controller | Finance Lead, Business Benefit Owners | Records and imports realized benefit ledger rows, compares actuals to locked bankable plan, and exposes variances. |
 | `/financials/waterline` | Transformation Office Director / Finance Lead | Workstream Leads | Freezes workstream targets after approval so future delivery is compared against a stable target. |
-| `/shared-costs` | Finance Lead | Transformation Office Director | Captures shared or cross-portfolio costs that are not naturally owned by a single initiative. |
+| `/shared-costs` | Finance Lead | Transformation Office Director | Captures shared or cross-portfolio costs, defines allocation policies, and explains burdened value without hiding central costs inside one initiative. |
 | `/progress`, `/progress/roadmap`, `/progress/action-items`, `/progress/status-updates` | PMO Lead | Initiative Owners, Workstream Leads | Runs the weekly operating cadence across milestones, actions, status reporting, and roadmap risks. |
 | `/meetings` and `/meetings/sessions/:id` | PMO Lead | Transformation Office Director, Workstream Leads | Runs steering committees and workstream reviews, captures agenda, attendees, minutes, decisions, and actions. |
 | `/pmo/governance`, `/pmo/risks`, `/pmo/kpis`, `/pmo/ai-insights` | PMO Lead | Finance Lead, Workstream Leads | Provides governance, risk, KPI, and AI-assisted portfolio views for program control. |
@@ -153,6 +162,7 @@ cadence.
 | Actual financial metric values | Finance Lead / Initiative Owner, depending on control model | Finance Lead | Entered in the **Actuals** scenario and compared against plan. |
 | Actual recurring and one-off costs | Finance Lead | Transformation Office Director | Entered as actual cost lines or actual cost values; recurring actuals affect net run-rate actuals. |
 | Benefit-line validation status | Finance Lead | Benefits Controller | Draft -> Submitted -> Finance validated or Rejected. |
+| Shared cost pools and allocation policies | Finance Lead | Transformation Office Director | Central costs are held outside direct initiative cost lines, allocated through approved runs, and consumed by burdened executive reporting. |
 | Bankable plan lock / rebaseline | Finance Lead / PMO Lead | Transformation Office Director | Freezes approved plan snapshots so realization is compared against a stable baseline. |
 | Benefit ledger actual realization | Benefits Controller / Business Benefit Owner | Finance Lead | Entered manually or imported by CSV in `/financials/benefit-tracking`; variance is calculated against locked plan. |
 | Milestones, risks, KPIs, actions, status updates | Initiative Owner / PMO Lead | Workstream Lead | Explains delivery confidence and blockers behind the financial variance. |
@@ -175,10 +185,13 @@ cadence.
 7. **Realize**: Benefits controller or business benefit owner enters realized
    benefit ledger rows in `/financials/benefit-tracking`, with actual amounts
    and evidence descriptions.
-8. **Report**: Finance uses `/financials`, `/financials/benefits-register`,
+8. **Allocate shared costs**: Finance maintains central cost pools in
+   `/shared-costs`, previews or runs allocation policies, and keeps direct
+   initiative costs separate from allocated burden.
+9. **Report**: Finance uses `/financials`, `/financials/benefits-register`,
    `/financials/benefit-tracking`, and board exports to reconcile value.
    Management uses `/dashboard` and `/reports/control-tower` to run decisions.
-9. **Sustain**: Business benefit owner accepts the realized value into BAU,
+10. **Sustain**: Business benefit owner accepts the realized value into BAU,
    unresolved variance remains visible, and lessons learned are recorded in the
    initiative summary.
 
@@ -836,6 +849,61 @@ Speaker notes:
 > risks, dependencies, and status updates explain whether the value is likely to
 > materialize and what management must unblock.
 
+### Shared cost scenario pack
+
+Screen:
+
+- `/shared-costs`
+
+Use this after initiatives and financial configuration exist. Shared costs are
+not direct initiative cost lines. They are central costs allocated for burdened
+executive reporting and, later, optional burdened bankable-plan reporting if
+Finance enables that policy.
+
+Current seeded proof in dev:
+
+| Pool | Year | Category key | Method | Plan | Actual | Allocated initiatives |
+|---|---:|---|---|---:|---:|---|
+| Group technology platform allocation | 2026 | software | Benefit weighted | `$600K` | `$540K` | TRN-001 North Asia Revenue Acceleration, TRN-002 ERP Consolidation & Automation, TRN-004 Back-Office Offshoring - Finance & HR |
+
+Current seeded allocation detail:
+
+| Initiative | Plan allocation | Actual allocation | Why it is included |
+|---|---:|---:|---|
+| TRN-001 North Asia Revenue Acceleration | `$228K` | `$205.2K` | Commercial uplift benefits from common platform and integration services. |
+| TRN-002 ERP Consolidation & Automation | `$252K` | `$226.8K` | ERP automation uses the largest platform share. |
+| TRN-004 Back-Office Offshoring - Finance & HR | `$120K` | `$108.0K` | Shared services transition uses the common technology platform. |
+
+Canonical ACME scenarios to use when refreshing the 10-initiative demo:
+
+| Scenario | Pool | Category | Suggested method | Candidate initiatives | Demo point |
+|---|---|---|---|---|---|
+| Platform burden | Group technology and data platform | Software / Licenses | Benefit weighted by Gross Margin Uplift or technology-tag weighted | ENT-002 Finance Process Automation, ENT-005 Enterprise Data Platform, ENT-006 Pricing & Discount Optimization, ENT-009 Supply Chain Control Tower, ENT-010 AI Service Desk Automation | Shows that shared platform cost is spread across initiatives that consume the platform. |
+| PMO governance burden | Transformation PMO and benefits office | People Support | Equal split across active bankable initiatives, or value weighted after benefits mature | All 10 ACME initiatives, optionally excluding ENT-001 if it represents the PMO itself | Shows central governance cost without distorting one initiative's direct cost case. |
+| Change/adoption burden | Shared change and training support | Training / Change Management | Manual amount or impacted-headcount weighted | ENT-002 Finance Process Automation, ENT-004 Back-office Finance & HR Offshoring, ENT-005 Enterprise Data Platform, ENT-010 AI Service Desk Automation | Shows people/change cost allocated to initiatives with material adoption effort. |
+| Advisory/vendor burden | Central transformation advisory support | External Consultants | Fixed percentage by workstream | ENT-005 Enterprise Data Platform, ENT-008 Procurement Vendor Consolidation, ENT-009 Supply Chain Control Tower | Shows a central vendor cost allocated to the workstreams receiving advisory support. |
+
+Recommended demo actions:
+
+1. Open `/shared-costs`.
+2. Select the group technology platform pool.
+3. Explain the pool, method, plan amount, actual amount, and run history.
+4. Open `/reports/control-tower` with target year `2026`.
+5. Show allocated costs, burdened costs, and net after allocation.
+6. Explain that `/financials` direct cost views remain direct-only unless
+   Finance enables generated cost-line posting.
+7. Explain that `/financials/bankable-plan` remains direct-only by default;
+   burdened bankable value should require a tenant setting and a locked
+   allocation run.
+
+Speaker notes:
+
+> Shared Costs answer a different question from initiative financials. Direct
+> initiative costs answer what the owner controls. Shared-cost burden answers
+> what the portfolio looks like after central platform, PMO, advisory, or change
+> costs are fairly allocated. We keep the two views separate so executives can
+> see fully loaded economics without corrupting initiative accountability.
+
 ---
 
 ## 7. Where to Demonstrate Value
@@ -1177,6 +1245,14 @@ Dashboards and reports impacted:
 | Initiative financial views | Shows locked financial mode when a current bankable plan exists; users can still edit forecast and actuals, but the approved baseline stays fixed. |
 | `/reports/control-tower` | Uses the same portfolio financial and realization story for executive review, so bankable-plan maturity affects how credible the value narrative is. |
 
+Shared-cost policy:
+
+- Default bankable plan values should remain direct-only.
+- Allocated shared costs should not reduce bankable value unless Finance enables
+  a burdened bankable reporting setting.
+- If burdened bankable value is enabled later, the screen should explain which
+  locked shared-cost allocation run reduced the value.
+
 Current ACME demo note:
 
 - ACME has locked bankable plan snapshots seeded for the 10 initiatives.
@@ -1355,13 +1431,43 @@ Use it for:
 
 - costs that support multiple initiatives,
 - platform, PMO, licensing, or shared delivery costs,
-- preventing shared costs from being hidden inside a single initiative.
+- preventing shared costs from being hidden inside a single initiative,
+- explaining fully loaded portfolio economics in Executive Control Tower.
+
+Current ACME demo proof:
+
+| Pool | Plan | Actual | Allocation method | Reporting impact |
+|---|---:|---:|---|---|
+| Group technology platform allocation | `$600K` | `$540K` | Benefit weighted | Executive Control Tower allocated-cost and net-after-allocation values for target year `2026`. |
+
+Demo sequence:
+
+1. Open `/shared-costs`.
+2. Select **Group technology platform allocation**.
+3. Show that the pool is active, recurring, and tracked separately from direct
+   initiative costs.
+4. Open the allocation rule and explain that the current implementation uses a
+   benefit-weighted allocation.
+5. Show run history and confirm that plan allocation equals the pool amount.
+6. Use this to introduce the revamp direction: guided policy builder, preview,
+   approval, lock, allocation ledger, and reporting impact view.
+
+Canonical ACME scenario examples for the revamped demo:
+
+| Pool | Candidate initiatives | Allocation basis | Why it matters |
+|---|---|---|---|
+| Group technology and data platform | ENT-002, ENT-005, ENT-006, ENT-009, ENT-010 | Gross Margin Uplift or technology tag | Platform costs should burden initiatives that consume shared data, AI, and integration services. |
+| Transformation PMO and benefits office | All 10 initiatives or all bankable initiatives | Equal split or value weighted | Central governance cost should be visible without being assigned to one owner as a direct cost. |
+| Shared change and training support | ENT-002, ENT-004, ENT-005, ENT-010 | Manual amount or impacted headcount | Adoption costs should follow initiatives with material process and people change. |
+| Central advisory/vendor support | ENT-005, ENT-008, ENT-009 | Fixed percentage by workstream | Advisory spend should burden workstreams that used the central vendor. |
 
 Speaker notes:
 
 > Shared costs keep the portfolio economics honest. If a license, platform, or
 > central support cost benefits multiple initiatives, Finance should track it
-> centrally instead of distorting one initiative's value case.
+> centrally instead of distorting one initiative's value case. The important
+> principle is separation: initiative financials show direct accountability,
+> while Control Tower can show fully loaded economics after allocation.
 
 ### Screen 14: Progress, PMO, and Meetings
 
@@ -1412,13 +1518,31 @@ Use it for:
 
 - management meeting view,
 - consolidated decision support,
-- executive reporting.
+- executive reporting,
+- burdened value after shared-cost allocation.
+
+Shared-cost impact to call out:
+
+| Field | Meaning |
+|---|---|
+| Allocated Costs | Shared-cost allocations from completed or, after revamp, locked runs. |
+| Burdened Costs | Direct initiative costs plus allocated shared-cost burden. |
+| Net After Allocation | Benefits less direct costs and allocated shared costs. |
+
+Demo action:
+
+1. Set target year to `2026` when demonstrating the current seeded shared-cost
+   pool.
+2. Point to **Allocated Costs** and **Net After Allocation**.
+3. Explain that the number should drill back to `/shared-costs` pool, rule, run,
+   and allocation basis after the revamp.
 
 Speaker notes:
 
 > The control tower is the management meeting view. It combines portfolio,
 > financials, risks, progress, blockers, and decision support into one operating
-> cadence.
+> cadence. It is also where executives should see burdened value after central
+> shared costs are allocated.
 
 Management use:
 
@@ -1549,7 +1673,32 @@ Speaker notes:
 > calculation subtracts recurring costs. One-off investment is used for payback
 > and funding discussion, not recurring EBITDA.
 
-### Segment 6: Explain governance and realization
+### Segment 6: Explain shared-cost burdening
+
+Screens:
+
+- `/shared-costs`
+- `/reports/control-tower`
+
+Actions:
+
+1. Open **Shared Costs**.
+2. Select the group technology platform allocation.
+3. Show the pool amount, actual amount, allocation rule, and run history.
+4. Open **Executive Control Tower**.
+5. Set target year to `2026` for the current seeded shared-cost proof.
+6. Point to allocated costs, burdened costs, and net after allocation.
+
+Speaker notes:
+
+> Direct initiative financials show what each initiative owner controls. Shared
+> Costs show central platform, PMO, license, advisory, or change costs that
+> support multiple initiatives. We allocate those centrally so the Control Tower
+> can show fully loaded value without hiding central costs inside a single
+> initiative. Bankable plan values remain direct-only unless Finance explicitly
+> enables burdened bankable reporting.
+
+### Segment 7: Explain governance and realization
 
 Screens:
 

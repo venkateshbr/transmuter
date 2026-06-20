@@ -991,12 +991,62 @@ waterline will also be wrong.
 
 ### 13.8 Shared Costs `/shared-costs`
 
-Financial configuration affects this indirectly.
+Financial configuration should affect this directly as the shared-cost feature
+is revamped.
 
-Shared costs allocate central pools across initiatives. These allocations appear
-in Executive Control Tower burdened value views, not as direct initiative cost
-lines. Keep shared-cost governance separate from direct cost categories unless
-Finance wants allocated shared costs to be part of direct initiative economics.
+Shared costs allocate central pools across initiatives. Use this for platform,
+PMO, license, cloud, shared delivery, central vendor, and transformation-office
+costs that support more than one initiative. These allocations should appear in
+Executive Control Tower burdened value views as allocated cost burden, not as
+direct initiative cost lines unless Finance explicitly enables generated cost
+line posting.
+
+Current implementation:
+
+| Area | Current behavior |
+|---|---|
+| Pools | Created from `/shared-costs` with name, free-text category key, year, plan amount, and actual amount. |
+| Rules | Allocation method plus filters/weights JSON. |
+| Runs | Created immediately and stored as completed allocation runs. |
+| Reporting | Executive Control Tower and dashboard executive brief consume allocated costs in burdened value views. |
+
+Target configurable model:
+
+| Area | Configuration source |
+|---|---|
+| Cost category | Active `financial_cost_categories`, not free-text category keys. |
+| Scenario | Active `financial_scenarios`, such as Plan Base, Forecast, or Actual. |
+| Allocation basis | Active metric definitions, direct cost categories, initiative dimensions, or manual weights. |
+| Reporting treatment | Tenant or pool setting: report-only burden, generated cost lines, or both. |
+| Bankable plan treatment | Tenant setting; default should be direct-only until Finance enables burdened bankable value. |
+
+Recommended shared-cost operating model:
+
+```text
+Cost pool -> allocation policy -> preview -> approved/locked run -> allocation ledger -> reporting impact
+```
+
+Recommended examples:
+
+| Shared cost pool | Typical category | Allocation basis | Example initiatives impacted |
+|---|---|---|---|
+| Group technology platform | Software / Licenses | Benefit weighted or usage weighted | Data platform, automation, pricing, ERP, service desk. |
+| Transformation PMO and benefits office | People Support | Equal split or stage/value weighted | All active initiatives or all bankable initiatives. |
+| Shared cloud and integration services | Software / Licenses | Workload, API volume, or technology tag | ERP, data platform, AI service desk, automation initiatives. |
+| Change adoption and training team | Training / Change | Manual amount or impacted headcount | ERP, offshoring, finance automation, customer onboarding. |
+| Central vendor advisory support | External Consultants | Fixed percentage by workstream | ERP/data, procurement, commercial growth, shared services. |
+
+Best-practice guidance:
+
+- Keep direct initiative costs and allocated shared costs visibly separate.
+- Do not let allocations affect bankable plan values unless Finance has
+  approved that reporting policy.
+- Avoid raw JSON rules for production tenants; use guided filters, selected
+  metrics, and explainable basis values.
+- Require preview and reconciliation before reports consume a new allocation
+  run.
+- Lock historical runs so board reports can trace every allocated-cost number
+  back to pool, rule, basis, period, and approver.
 
 ### 13.9 Executive Control Tower `/reports/control-tower`
 
@@ -1048,6 +1098,7 @@ If cost categories are missing, cost line creation falls back to poor taxonomy.
 | Annual baselines | Baseline cards, baseline formulas, Initiative Portfolio reconciliation. |
 | Scenarios | Base/high/actual reporting, variance, actual toggles, scenario summaries. |
 | Cost categories | Cost breakdown, category filter, cost bridge rows, recurring/one-off clarity. |
+| Shared cost pools and locked allocation runs | Executive Control Tower burdened value, dashboard allocated-cost cards, net after allocation, and any burdened bankable view if enabled. |
 | Bridge rows | Executive bridge narrative and custom bridge row presentation. |
 | Benefit lines | Benefits Register, validation workflow, evidence, handoff, risk adjustment. |
 | Bankable plan locks | Benefit Tracking and Waterline locked-plan comparisons. |
@@ -1100,6 +1151,7 @@ ACME is configured correctly for a board-demo transformation tenant:
 | Benefit metrics | Good: revenue driver is separated from GM uplift and cost savings. |
 | EBITDA treatment | Good: executive net run-rate uses GM uplift plus cost savings less recurring cost. |
 | Costs | Good: one-off and recurring costs are separated. |
+| Shared costs | Emerging: report-only allocations exist and affect burdened Executive Control Tower views, but configuration should be promoted to engine-backed pools, scenarios, policies, previews, and locked runs. |
 | Benefit lines | Good: ACME has named lines, validation status, evidence, risk adjustment, and handoff metadata. |
 | Dashboards | Good: FY28 Financial Overview, contributor drawer, Benefits Register, Benefit Tracking, Waterline, and board pack are populated. |
 | Caveat | Revenue uplift should remain a driver, not be added into EBITDA net value. |
@@ -1112,6 +1164,8 @@ For production tenants, improve on demo configuration by adding:
 - documented definitions for each metric and benefit class,
 - minimum evidence rules by value materiality,
 - explicit stage gate criteria for when value becomes bankable,
+- explicit shared-cost allocation policies for central PMO, platform, cloud,
+  training, and advisory pools,
 - formula metrics for every percentage instead of manually entered percentages,
 - initiative baseline allocation reconciliation before portfolio reporting,
 - periodic actuals upload or integration with Finance systems,
@@ -1193,6 +1247,25 @@ Set at least:
 Then allocate the same baseline metrics across initiatives. The Initiative
 Portfolio should reconcile to zero variance or an explained rounding variance.
 
+### 16.6 Shared cost pools
+
+Configure only after initiatives, cost categories, and scenarios exist.
+
+Recommended starter pools:
+
+| Pool | Category | Scenario | Allocation method | Reporting treatment |
+|---|---|---|---|---|
+| Transformation PMO and benefits office | People Support | Plan Base | Equal split across active initiatives, or benefit weighted once benefit data is mature. | Report-only burden. |
+| Group technology platform | Software / Licenses | Plan Base | Benefit weighted or technology-tag weighted. | Report-only burden. |
+| Shared change and adoption support | Training / Change | Plan Base | Manual amount or impacted-headcount weighted. | Report-only burden. |
+
+Recommended default:
+
+```text
+Do not post generated initiative cost lines and do not reduce bankable plan
+value until Finance explicitly approves those policies.
+```
+
 ---
 
 ## 17. Operating Checklist
@@ -1205,6 +1278,9 @@ Before go-live:
 - Tenant annual baseline year and values are set.
 - Initiative baseline allocations reconcile to tenant baseline.
 - Cost categories distinguish one-off from recurring.
+- Shared cost pools are documented separately from direct initiative cost lines.
+- Shared cost allocation runs reconcile to the pool amount before they are used
+  in executive reporting.
 - Value bridge rows include all material benefit metrics and cost categories.
 - Benefit lines exist for material value claims.
 - Evidence and Finance validation workflow are agreed.

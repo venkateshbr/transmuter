@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from calendar import monthrange
 from collections import defaultdict
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -18,11 +19,19 @@ from app.core.rbac import (
     can_view_all_initiatives,
 )
 from app.domain.executive_control import (
+    AllocationExceptionItem,
+    AllocationPreviewRequest,
+    AllocationPreviewResponse,
+    AllocationReconciliation,
     AllocationRuleCreate,
     AllocationRuleItem,
     AllocationRuleUpdate,
     AllocationRunCreate,
     AllocationRunItem,
+    AllocationTargetItem,
+    AllocationTargetUpsert,
+    AllocationWeightItem,
+    AllocationWeightUpsert,
     InitiativeDependencyCreate,
     InitiativeDependencyItem,
     InitiativeDependencyListResponse,
@@ -32,10 +41,14 @@ from app.domain.executive_control import (
     ReportFilterParams,
     ReportResponse,
     SharedCostAllocationItem,
+    SharedCostConfigResponse,
     SharedCostPoolCreate,
     SharedCostPoolItem,
     SharedCostPoolListResponse,
+    SharedCostPoolPeriodItem,
+    SharedCostPoolPeriodUpsert,
     SharedCostPoolUpdate,
+    SharedCostReportingSettings,
     ValueRealizationNoteCreate,
     ValueRealizationNoteItem,
 )
@@ -122,6 +135,56 @@ class ExecutiveControlService:
     def delete_dependency(self, dependency_id: str) -> None:
         self._repo.delete_dependency(dependency_id)
 
+    def shared_cost_config(self) -> SharedCostConfigResponse:
+        initiatives = self._repo.list_initiatives()
+        workstreams = self._repo.list_workstreams()
+        business_units = self._repo.list_business_units()
+        return SharedCostConfigResponse(
+            cost_categories=self._repo.list_cost_categories(),
+            scenarios=self._repo.list_financial_scenarios(),
+            metric_definitions=self._repo.list_metric_definitions(),
+            initiatives=[
+                {
+                    "id": row["id"],
+                    "initiative_code": row.get("initiative_code"),
+                    "name": row.get("name"),
+                    "workstream_id": row.get("workstream_id"),
+                    "tag": row.get("tag"),
+                    "stage": row.get("stage"),
+                    "rag_status": row.get("rag_status"),
+                }
+                for row in initiatives
+            ],
+            workstreams=workstreams,
+            business_units=business_units,
+            tags=sorted({row.get("tag") for row in initiatives if row.get("tag")}),
+            countries=sorted({row.get("country") for row in initiatives if row.get("country")}),
+            stages=sorted({row.get("stage") for row in initiatives if row.get("stage")}),
+            allocation_methods=[
+                {"key": "equal_split", "label": "Equal split"},
+                {"key": "fixed_percentage", "label": "Fixed percentage"},
+                {"key": "manual_amount", "label": "Manual amount"},
+                {"key": "benefit_weighted", "label": "Benefit weighted"},
+                {"key": "revenue_weighted", "label": "Revenue weighted"},
+                {"key": "savings_weighted", "label": "Savings weighted"},
+                {"key": "direct_cost_weighted", "label": "Direct cost weighted"},
+                {"key": "headcount_weighted", "label": "Headcount weighted"},
+                {"key": "metric_weighted", "label": "Metric weighted"},
+            ],
+            reporting_settings=self._settings_item(self._repo.get_reporting_settings()),
+        )
+
+    def get_reporting_settings(self) -> SharedCostReportingSettings:
+        getter = getattr(self._repo, "get_reporting_settings", None)
+        if not getter:
+            return SharedCostReportingSettings()
+        return self._settings_item(getter())
+
+    def update_reporting_settings(
+        self, data: SharedCostReportingSettings
+    ) -> SharedCostReportingSettings:
+        return self._settings_item(self._repo.update_reporting_settings(data.model_dump()))
+
     def list_pools(self, current_user: CurrentUser) -> SharedCostPoolListResponse:
         pools = [self._pool_item(row) for row in self._repo.list_pools()]
         if current_user.role == ROLE_INITIATIVE_OWNER:
@@ -144,13 +207,26 @@ class ExecutiveControlService:
         )
         return self._pool_item(row)
 
+    def list_pool_periods(self, pool_id: str) -> list[SharedCostPoolPeriodItem]:
+        if not self._repo.get_pool(pool_id):
+            raise HTTPException(status_code=404, detail="Shared cost pool not found")
+        return [self._period_item(row) for row in self._repo.list_pool_periods(pool_id)]
+
+    def replace_pool_periods(
+        self, pool_id: str, periods: list[SharedCostPoolPeriodUpsert]
+    ) -> list[SharedCostPoolPeriodItem]:
+        if not self._repo.get_pool(pool_id):
+            raise HTTPException(status_code=404, detail="Shared cost pool not found")
+        rows = [self._period_payload(period.model_dump(exclude_none=True)) for period in periods]
+        return [self._period_item(row) for row in self._repo.replace_pool_periods(pool_id, rows)]
+
     def list_rules(self, pool_id: str) -> list[AllocationRuleItem]:
         return [self._rule_item(row) for row in self._repo.list_rules(pool_id)]
 
     def create_rule(self, pool_id: str, data: AllocationRuleCreate) -> AllocationRuleItem:
         if not self._repo.get_pool(pool_id):
             raise HTTPException(status_code=404, detail="Shared cost pool not found")
-        row = self._repo.create_rule(pool_id, data.model_dump())
+        row = self._repo.create_rule(pool_id, self._rule_payload(data.model_dump()))
         return self._rule_item(row)
 
     def update_rule(
@@ -159,8 +235,44 @@ class ExecutiveControlService:
         rule = self._repo.get_rule(rule_id)
         if not rule or rule.get("pool_id") != pool_id:
             raise HTTPException(status_code=404, detail="Allocation rule not found")
-        row = self._repo.update_rule(rule_id, data.model_dump(exclude_unset=True))
+        row = self._repo.update_rule(
+            rule_id, self._rule_payload(data.model_dump(exclude_unset=True))
+        )
         return self._rule_item(row)
+
+    def replace_rule_targets(
+        self,
+        pool_id: str,
+        rule_id: str,
+        targets: list[AllocationTargetUpsert],
+    ) -> list[AllocationTargetItem]:
+        self._require_rule_for_pool(pool_id, rule_id)
+        rows = self._repo.replace_rule_targets(
+            rule_id,
+            [target.model_dump(exclude_none=True) for target in targets],
+        )
+        return [self._target_item(row) for row in rows]
+
+    def replace_rule_weights(
+        self,
+        pool_id: str,
+        rule_id: str,
+        weights: list[AllocationWeightUpsert],
+    ) -> list[AllocationWeightItem]:
+        self._require_rule_for_pool(pool_id, rule_id)
+        rows = self._repo.replace_rule_weights(
+            rule_id,
+            [self._weight_payload(weight.model_dump(exclude_none=True)) for weight in weights],
+        )
+        return [self._weight_item(row) for row in rows]
+
+    def preview_allocation_run(
+        self,
+        pool_id: str,
+        data: AllocationPreviewRequest,
+    ) -> AllocationPreviewResponse:
+        pool, rule = self._pool_and_rule(pool_id, data.rule_id)
+        return self._allocation_preview(pool, rule, data.scenario, data.scenario_id)
 
     def create_allocation_run(
         self,
@@ -172,27 +284,175 @@ class ExecutiveControlService:
         rule = self._repo.get_rule(data.rule_id)
         if not pool or not rule or rule.get("pool_id") != pool_id:
             raise HTTPException(status_code=404, detail="Pool or allocation rule not found")
-        amount_plan = _dec(pool.get("amount_plan"))
-        amount_actual = _dec(pool.get("amount_actual"))
-        allocations = self._build_allocations(pool, rule, data.scenario)
+        preview = self._allocation_preview(pool, rule, data.scenario, data.scenario_id)
+        blocking = [exc for exc in preview.exceptions if exc.severity == "blocking"]
+        if blocking:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "message": "Allocation preview has blocking exceptions",
+                    "exceptions": [exc.model_dump() for exc in blocking],
+                },
+            )
+        amount_plan = _dec(preview.reconciliation.pool_amount_plan)
+        amount_actual = _dec(preview.reconciliation.pool_amount_actual)
+        allocations = [
+            {
+                "initiative_id": row.initiative_id,
+                "allocation_basis": row.allocation_basis,
+                "basis_value": row.basis_value,
+                "allocated_plan": row.allocated_plan,
+                "allocated_actual": row.allocated_actual,
+                "allocation_share": row.allocation_share,
+                "rounding_adjustment": row.rounding_adjustment,
+                "basis_label": row.basis_label,
+                "explanation": row.explanation,
+                "exception_flags": row.exception_flags,
+                "period_start": preview.pool.metadata.get("period_start"),
+                "period_end": preview.pool.metadata.get("period_end"),
+                "scenario_id": preview.scenario_id,
+                "basis_metric_definition_id": rule.get("driver_metric_definition_id"),
+            }
+            for row in preview.allocations
+        ]
+        now = datetime.now(UTC).isoformat()
         run = self._repo.create_run(
             {
                 "pool_id": pool_id,
                 "rule_id": data.rule_id,
                 "scenario": data.scenario,
-                "status": "completed",
+                "scenario_id": preview.scenario_id,
+                "status": data.status,
+                "run_type": data.run_type,
+                "rule_version": rule.get("version") or 1,
                 "total_amount_plan": _money(amount_plan),
                 "total_amount_actual": _money(amount_actual)
                 if pool.get("amount_actual") is not None
                 else None,
+                "period_start": preview.pool.metadata.get("period_start"),
+                "period_end": preview.pool.metadata.get("period_end"),
+                "input_snapshot": {
+                    "pool": preview.pool.model_dump(),
+                    "rule": preview.rule.model_dump(),
+                },
+                "exception_summary": {
+                    "count": len(preview.exceptions),
+                    "blocking": len(blocking),
+                    "exceptions": [exc.model_dump() for exc in preview.exceptions],
+                },
+                "reporting_treatment": pool.get("reporting_treatment") or "report_only",
+                "approved_by": str(current_user.id),
+                "approved_at": now,
+                "locked_by": str(current_user.id) if data.status in {"locked", "posted"} else None,
+                "locked_at": now if data.status in {"locked", "posted"} else None,
                 "created_by": str(current_user.id),
             },
             allocations,
+        )
+        self._repo.create_exceptions(
+            [
+                {
+                    "run_id": run["id"],
+                    "rule_id": data.rule_id,
+                    "pool_id": pool_id,
+                    "initiative_id": exc.initiative_id,
+                    "exception_type": exc.exception_type,
+                    "severity": exc.severity,
+                    "message": exc.message,
+                    "metadata": exc.metadata,
+                }
+                for exc in preview.exceptions
+            ]
+        )
+        self._audit(
+            "allocation_run_created",
+            current_user,
+            pool_id=pool_id,
+            rule_id=data.rule_id,
+            run_id=run["id"],
+            after_state={
+                "status": data.status,
+                "reconciliation": preview.reconciliation.model_dump(),
+            },
         )
         return self._run_item({**run, "shared_cost_allocations": allocations})
 
     def list_runs(self, pool_id: str) -> list[AllocationRunItem]:
         return [self._run_item(row) for row in self._repo.list_runs(pool_id)]
+
+    def list_shared_cost_allocations(self) -> list[SharedCostAllocationItem]:
+        return [
+            SharedCostAllocationItem(
+                id=row.get("id", ""),
+                initiative_id=row["initiative_id"],
+                initiative_name=None,
+                allocation_basis=row["allocation_basis"],
+                basis_value=_money(row.get("basis_value")),
+                allocated_plan=_money(row.get("allocated_plan")),
+                allocated_actual=_money(row.get("allocated_actual"))
+                if row.get("allocated_actual") is not None
+                else None,
+                allocation_share=format(_dec(row.get("allocation_share")), "f"),
+                rounding_adjustment=_money(row.get("rounding_adjustment")),
+                basis_label=row.get("basis_label"),
+                explanation=row.get("explanation"),
+                exception_flags=row.get("exception_flags") or {},
+            )
+            for row in self._repo.list_allocations()
+        ]
+
+    def approve_run(
+        self,
+        pool_id: str,
+        run_id: str,
+        current_user: CurrentUser,
+        lock: bool = False,
+    ) -> AllocationRunItem:
+        run = self._repo.get_run(run_id)
+        if not run or run.get("pool_id") != pool_id:
+            raise HTTPException(status_code=404, detail="Allocation run not found")
+        now = datetime.now(UTC).isoformat()
+        patch: dict[str, Any] = {
+            "status": "locked" if lock else "approved",
+            "approved_by": str(current_user.id),
+            "approved_at": now,
+        }
+        if lock:
+            patch["locked_by"] = str(current_user.id)
+            patch["locked_at"] = now
+        updated = self._repo.update_run(run_id, patch)
+        self._audit(
+            "allocation_run_locked" if lock else "allocation_run_approved",
+            current_user,
+            pool_id=pool_id,
+            run_id=run_id,
+            before_state={"status": run.get("status")},
+            after_state=patch,
+        )
+        return self._run_item({**run, **updated})
+
+    def void_run(
+        self,
+        pool_id: str,
+        run_id: str,
+        reason: str,
+        current_user: CurrentUser,
+    ) -> AllocationRunItem:
+        if not reason.strip():
+            raise HTTPException(status_code=400, detail="Void reason is required")
+        run = self._repo.get_run(run_id)
+        if not run or run.get("pool_id") != pool_id:
+            raise HTTPException(status_code=404, detail="Allocation run not found")
+        updated = self._repo.update_run(run_id, {"status": "voided", "void_reason": reason})
+        self._audit(
+            "allocation_run_voided",
+            current_user,
+            pool_id=pool_id,
+            run_id=run_id,
+            before_state={"status": run.get("status")},
+            after_state={"status": "voided", "void_reason": reason},
+        )
+        return self._run_item({**run, **updated})
 
     def create_value_note(
         self,
@@ -267,13 +527,27 @@ class ExecutiveControlService:
             for row in self._repo.list_allocations()
             if row.get("initiative_id") in initiative_ids
         ]
+        settings = self.get_reporting_settings()
+        if not settings.include_in_executive_control_tower:
+            allocations = []
+        else:
+            allocations = [
+                row
+                for row in allocations
+                if (row.get("shared_cost_allocation_runs") or {}).get("status", "completed")
+                in {"locked", "posted", "completed"}
+            ]
         if filters.target_year:
             entries = [row for row in entries if row.get("year") == filters.target_year]
             costs = [row for row in costs if row.get("year") == filters.target_year]
             allocations = [
                 row
                 for row in allocations
-                if (row.get("shared_cost_pools") or {}).get("year") == filters.target_year
+                if (
+                    (row.get("shared_cost_allocation_runs") or {}).get("period_start")
+                    or f"{(row.get('shared_cost_pools') or {}).get('year')}-01-01"
+                )[:4]
+                == str(filters.target_year)
             ]
         dependencies = self.list_dependencies(current_user, filters=filters).rollups
         value_bridge = self._value_bridge(entries, costs, allocations)
@@ -305,82 +579,600 @@ class ExecutiveControlService:
             initiatives=rows,
         )
 
-    def _build_allocations(self, pool: dict, rule: dict, scenario: str) -> list[dict]:
-        candidates = self._allocation_candidates(rule.get("filters") or {})
-        if not candidates:
-            return []
-        entries = self._repo.list_financial_entries()
+    def _allocation_preview(
+        self,
+        pool: dict,
+        rule: dict,
+        scenario: str,
+        scenario_id: str | None = None,
+    ) -> AllocationPreviewResponse:
+        scenario_id = scenario_id or pool.get("scenario_id") or self._scenario_id_for(scenario)
+        period_start, period_end = self._period_bounds(pool)
         amount_plan = _dec(pool.get("amount_plan"))
         amount_actual = _dec(pool.get("amount_actual"))
-        basis = self._basis_values(candidates, entries, rule)
+        candidates, excluded, target_exceptions = self._allocation_candidates(rule)
+        exceptions: list[AllocationExceptionItem] = target_exceptions
+        if not candidates:
+            exceptions.append(
+                AllocationExceptionItem(
+                    exception_type="no_candidates",
+                    severity="blocking",
+                    message="Allocation policy did not select any initiatives.",
+                )
+            )
+        basis = self._basis_values(candidates, rule, scenario_id, period_start.year)
+        exceptions.extend(basis["exceptions"])
+        allocations = self._allocation_rows(
+            candidates,
+            rule,
+            basis["values"],
+            amount_plan,
+            amount_actual,
+            scenario,
+            basis["label"],
+            exceptions,
+        )
+        allocated_plan = sum((_dec(row.allocated_plan) for row in allocations), Decimal("0"))
+        allocated_actual = sum((_dec(row.allocated_actual) for row in allocations), Decimal("0"))
+        unallocated_plan = amount_plan - allocated_plan
+        unallocated_actual = amount_actual - allocated_actual
+        reconciled = unallocated_plan == Decimal("0.0000") and (
+            pool.get("amount_actual") is None or unallocated_actual == Decimal("0.0000")
+        )
+        if not reconciled and allocations:
+            exceptions.append(
+                AllocationExceptionItem(
+                    exception_type="unreconciled",
+                    severity="blocking",
+                    message="Allocated total does not reconcile to the shared cost pool amount.",
+                    metadata={
+                        "unallocated_plan": _money(unallocated_plan),
+                        "unallocated_actual": _money(unallocated_actual),
+                    },
+                )
+            )
+        pool_item = self._pool_item(
+            {
+                **pool,
+                "metadata": {
+                    **(pool.get("metadata") or {}),
+                    "period_start": period_start.isoformat(),
+                    "period_end": period_end.isoformat(),
+                },
+            }
+        )
+        return AllocationPreviewResponse(
+            pool=pool_item,
+            rule=self._rule_item(rule),
+            scenario=scenario,  # type: ignore[arg-type]
+            scenario_id=scenario_id,
+            candidate_count=len(candidates),
+            excluded_count=len(excluded),
+            allocations=allocations,
+            exceptions=exceptions,
+            reconciliation=AllocationReconciliation(
+                pool_amount_plan=_money(amount_plan),
+                allocated_plan=_money(allocated_plan),
+                unallocated_plan=_money(unallocated_plan),
+                pool_amount_actual=_money(amount_actual)
+                if pool.get("amount_actual") is not None
+                else None,
+                allocated_actual=_money(allocated_actual)
+                if pool.get("amount_actual") is not None
+                else None,
+                unallocated_actual=_money(unallocated_actual)
+                if pool.get("amount_actual") is not None
+                else None,
+                rounding_adjustment=_money(
+                    sum((_dec(row.rounding_adjustment) for row in allocations), Decimal("0"))
+                ),
+                reconciled=reconciled,
+            ),
+            reporting_impact={
+                "allocated_costs_plan": _money(allocated_plan),
+                "allocated_costs_actual": _money(allocated_actual),
+                "unallocated_plan": _money(unallocated_plan),
+            },
+        )
+
+    def _allocation_rows(
+        self,
+        candidates: list[dict],
+        rule: dict,
+        basis: dict[str, Decimal],
+        amount_plan: Decimal,
+        amount_actual: Decimal,
+        scenario: str,
+        basis_label: str,
+        exceptions: list[AllocationExceptionItem],
+    ) -> list[SharedCostAllocationItem]:
+        if not candidates:
+            return []
+        method = rule["allocation_method"]
+        if method == "manual_amount":
+            return self._manual_allocation_rows(
+                candidates, rule, amount_plan, amount_actual, scenario
+            )
+        if method == "fixed_percentage":
+            return self._percentage_allocation_rows(
+                candidates, rule, amount_plan, amount_actual, scenario, exceptions
+            )
         total_basis = sum(basis.values(), Decimal("0"))
-        rows = []
+        if total_basis == 0:
+            behavior = rule.get("missing_basis_behavior") or "fail"
+            if behavior == "equal_split":
+                basis = {row["id"]: Decimal("1") for row in candidates}
+                total_basis = Decimal(len(candidates))
+                exceptions.append(
+                    AllocationExceptionItem(
+                        exception_type="equal_split_fallback",
+                        severity="warning",
+                        message="No positive allocation basis was found; policy used equal split fallback.",
+                    )
+                )
+            elif behavior == "zero":
+                total_basis = Decimal("0")
+            else:
+                exceptions.append(
+                    AllocationExceptionItem(
+                        exception_type="missing_basis",
+                        severity="blocking",
+                        message="No positive allocation basis was found for the selected candidates.",
+                    )
+                )
+                return []
+        rows: list[SharedCostAllocationItem] = []
         remaining_plan = amount_plan
         remaining_actual = amount_actual
         for index, initiative in enumerate(candidates):
             initiative_id = initiative["id"]
-            if total_basis == 0:
-                share = Decimal("1") / Decimal(len(candidates))
-            else:
-                share = basis[initiative_id] / total_basis
+            value = basis.get(initiative_id, Decimal("0"))
+            share = Decimal("0") if total_basis == 0 else value / total_basis
             if index == len(candidates) - 1:
                 allocated_plan = remaining_plan
                 allocated_actual = remaining_actual
+                expected_plan = (amount_plan * share).quantize(Decimal("0.0001"))
+                rounding_adjustment = allocated_plan - expected_plan
             else:
                 allocated_plan = (amount_plan * share).quantize(Decimal("0.0001"))
                 allocated_actual = (amount_actual * share).quantize(Decimal("0.0001"))
+                rounding_adjustment = Decimal("0")
                 remaining_plan -= allocated_plan
                 remaining_actual -= allocated_actual
             rows.append(
-                {
-                    "initiative_id": initiative_id,
-                    "allocation_basis": rule["allocation_method"],
-                    "basis_value": _money(basis[initiative_id]),
-                    "allocated_plan": _money(allocated_plan),
-                    "allocated_actual": _money(allocated_actual)
-                    if scenario == "actual" and pool.get("amount_actual") is not None
-                    else None,
-                }
+                self._allocation_item_from_amounts(
+                    initiative,
+                    method,
+                    value,
+                    allocated_plan,
+                    allocated_actual,
+                    share,
+                    rounding_adjustment,
+                    basis_label,
+                    scenario,
+                )
             )
         return rows
 
-    def _allocation_candidates(self, filters: dict[str, Any]) -> list[dict]:
+    def _manual_allocation_rows(
+        self,
+        candidates: list[dict],
+        rule: dict,
+        amount_plan: Decimal,
+        amount_actual: Decimal,
+        scenario: str,
+    ) -> list[SharedCostAllocationItem]:
+        manual = self._weight_lookup(rule, "manual_amount")
+        rows: list[SharedCostAllocationItem] = []
+        for initiative in candidates:
+            amount = manual.get(initiative["id"], Decimal("0"))
+            share = Decimal("0") if amount_plan == 0 else amount / amount_plan
+            actual = (
+                (amount_actual * share).quantize(Decimal("0.0001"))
+                if amount_actual
+                else Decimal("0")
+            )
+            rows.append(
+                self._allocation_item_from_amounts(
+                    initiative,
+                    "manual_amount",
+                    amount,
+                    amount,
+                    actual,
+                    share,
+                    Decimal("0"),
+                    "Manual amount",
+                    scenario,
+                )
+            )
+        return rows
+
+    def _percentage_allocation_rows(
+        self,
+        candidates: list[dict],
+        rule: dict,
+        amount_plan: Decimal,
+        amount_actual: Decimal,
+        scenario: str,
+        exceptions: list[AllocationExceptionItem],
+    ) -> list[SharedCostAllocationItem]:
+        percentages = self._weight_lookup(rule, "percentage")
+        total_percentage = sum(percentages.values(), Decimal("0"))
+        if total_percentage != Decimal("100.0000"):
+            exceptions.append(
+                AllocationExceptionItem(
+                    exception_type="invalid_percentage_total",
+                    severity="blocking",
+                    message="Fixed percentage allocations must total 100.0000%.",
+                    metadata={"total_percentage": _money(total_percentage)},
+                )
+            )
+            return []
+        rows: list[SharedCostAllocationItem] = []
+        remaining_plan = amount_plan
+        remaining_actual = amount_actual
+        for index, initiative in enumerate(candidates):
+            pct = percentages.get(initiative["id"], Decimal("0"))
+            share = pct / Decimal("100")
+            if index == len(candidates) - 1:
+                allocated_plan = remaining_plan
+                allocated_actual = remaining_actual
+                expected = (amount_plan * share).quantize(Decimal("0.0001"))
+                rounding_adjustment = allocated_plan - expected
+            else:
+                allocated_plan = (amount_plan * share).quantize(Decimal("0.0001"))
+                allocated_actual = (amount_actual * share).quantize(Decimal("0.0001"))
+                rounding_adjustment = Decimal("0")
+                remaining_plan -= allocated_plan
+                remaining_actual -= allocated_actual
+            rows.append(
+                self._allocation_item_from_amounts(
+                    initiative,
+                    "fixed_percentage",
+                    pct,
+                    allocated_plan,
+                    allocated_actual,
+                    share,
+                    rounding_adjustment,
+                    "Fixed percentage",
+                    scenario,
+                )
+            )
+        return rows
+
+    def _allocation_item_from_amounts(
+        self,
+        initiative: dict,
+        method: str,
+        basis_value: Decimal,
+        allocated_plan: Decimal,
+        allocated_actual: Decimal,
+        share: Decimal,
+        rounding_adjustment: Decimal,
+        basis_label: str,
+        scenario: str,
+    ) -> SharedCostAllocationItem:
+        return SharedCostAllocationItem(
+            id="",
+            initiative_id=initiative["id"],
+            initiative_name=initiative.get("name"),
+            allocation_basis=method,
+            basis_value=_money(basis_value),
+            allocated_plan=_money(allocated_plan),
+            allocated_actual=_money(allocated_actual)
+            if scenario == "actual" or allocated_actual != 0
+            else None,
+            allocation_share=format(share.quantize(Decimal("0.00000001")), "f"),
+            rounding_adjustment=_money(rounding_adjustment),
+            basis_label=basis_label,
+            explanation=(
+                f"{initiative.get('initiative_code') or initiative.get('name')} receives "
+                f"{format((share * Decimal('100')).quantize(Decimal('0.0001')), 'f')}% "
+                f"of the pool using {basis_label}."
+            ),
+        )
+
+    def _allocation_candidates(
+        self, rule: dict
+    ) -> tuple[list[dict], list[dict], list[AllocationExceptionItem]]:
         initiatives = self._repo.list_initiatives()
-        return [row for row in initiatives if self._matches_filters(row, filters)]
+        list_targets = getattr(self._repo, "list_rule_targets", None)
+        targets = list_targets(rule["id"]) if list_targets else []
+        exceptions: list[AllocationExceptionItem] = []
+        if not targets:
+            filters = rule.get("filters") or {}
+            candidates = [row for row in initiatives if self._matches_filters(row, filters)]
+            return candidates, [row for row in initiatives if row not in candidates], exceptions
+        include_targets = [row for row in targets if row.get("target_mode") == "include"]
+        exclude_targets = [row for row in targets if row.get("target_mode") == "exclude"]
+        if not include_targets:
+            include_targets = [{"dimension_type": "all", "dimension_value": None}]
+        included = [row for row in initiatives if self._matches_any_target(row, include_targets)]
+        excluded = [row for row in included if self._matches_any_target(row, exclude_targets)]
+        candidates = [row for row in included if row not in excluded]
+        if excluded:
+            exceptions.append(
+                AllocationExceptionItem(
+                    exception_type="excluded_candidates",
+                    severity="info",
+                    message=f"{len(excluded)} initiatives were excluded by policy targets.",
+                    metadata={"excluded_count": len(excluded)},
+                )
+            )
+        return candidates, excluded, exceptions
 
     def _basis_values(
-        self, candidates: list[dict], entries: list[dict], rule: dict
-    ) -> dict[str, Decimal]:
+        self,
+        candidates: list[dict],
+        rule: dict,
+        scenario_id: str | None,
+        year: int,
+    ) -> dict[str, Any]:
         method = rule["allocation_method"]
-        weights = rule.get("weights") or {}
-        values: dict[str, Decimal] = {}
-        for row in candidates:
-            initiative_id = row["id"]
-            if method == "fixed_percentage" or method == "manual_amount":
-                values[initiative_id] = _dec(weights.get(initiative_id))
-            elif method == "benefit_weighted":
-                values[initiative_id] = sum(
-                    (
-                        _dec(entry.get("gm_uplift_base"))
-                        for entry in entries
-                        if entry.get("initiative_id") == initiative_id
-                    ),
-                    Decimal("0"),
-                )
-            elif method == "revenue_weighted":
-                values[initiative_id] = sum(
-                    (
-                        _dec(entry.get("revenue_uplift_base"))
-                        for entry in entries
-                        if entry.get("initiative_id") == initiative_id
-                    ),
-                    Decimal("0"),
-                )
-            elif method == "headcount_weighted":
-                values[initiative_id] = _dec(weights.get(initiative_id, 1))
-            else:
-                values[initiative_id] = Decimal("1")
+        exceptions: list[AllocationExceptionItem] = []
+        if method == "equal_split":
+            return {
+                "values": {row["id"]: Decimal("1") for row in candidates},
+                "label": "Equal split",
+                "exceptions": exceptions,
+            }
+        if method == "headcount_weighted":
+            return {
+                "values": self._weight_lookup(rule, "weight_value", default=Decimal("1")),
+                "label": "Headcount / FTE weight",
+                "exceptions": exceptions,
+            }
+        if method in {
+            "benefit_weighted",
+            "revenue_weighted",
+            "savings_weighted",
+            "metric_weighted",
+        }:
+            values, label = self._metric_basis_values(candidates, rule, method, scenario_id, year)
+            for row in candidates:
+                if values.get(row["id"], Decimal("0")) == 0:
+                    exceptions.append(
+                        AllocationExceptionItem(
+                            exception_type="missing_basis_value",
+                            severity="warning",
+                            initiative_id=row["id"],
+                            message=f"{row.get('name')} has no positive basis value for {label}.",
+                        )
+                    )
+            return {"values": values, "label": label, "exceptions": exceptions}
+        if method == "direct_cost_weighted":
+            values, label = self._cost_basis_values(candidates, rule, year)
+            return {"values": values, "label": label, "exceptions": exceptions}
+        return {
+            "values": {row["id"]: Decimal("1") for row in candidates},
+            "label": method.replace("_", " "),
+            "exceptions": exceptions,
+        }
+
+    def _weight_lookup(
+        self,
+        rule: dict,
+        field: str,
+        default: Decimal = Decimal("0"),
+    ) -> dict[str, Decimal]:
+        candidates = self._repo.list_initiatives()
+        values = {row["id"]: default for row in candidates}
+        list_weights = getattr(self._repo, "list_rule_weights", None)
+        rows = list_weights(rule["id"]) if list_weights else []
+        for row in rows:
+            initiative_id = row.get("initiative_id")
+            if initiative_id:
+                values[initiative_id] = _dec(row.get(field))
+        legacy = rule.get("weights") or {}
+        for initiative_id, value in legacy.items():
+            if initiative_id not in values or values[initiative_id] == default:
+                values[initiative_id] = _dec(value)
         return values
+
+    def _metric_basis_values(
+        self,
+        candidates: list[dict],
+        rule: dict,
+        method: str,
+        scenario_id: str | None,
+        year: int,
+    ) -> tuple[dict[str, Decimal], str]:
+        definitions = getattr(self._repo, "list_metric_definitions", lambda: [])()
+        definition_by_id = {row["id"]: row for row in definitions}
+        selected_definition_id = rule.get("driver_metric_definition_id")
+        if not selected_definition_id:
+            selected_definition_id = self._default_metric_definition_id(definitions, method)
+        selected_definition = definition_by_id.get(selected_definition_id or "")
+        selected_ids = (
+            {selected_definition_id}
+            if selected_definition_id
+            else {row["id"] for row in definitions if self._definition_matches_method(row, method)}
+        )
+        label = (
+            selected_definition.get("label") if selected_definition else method.replace("_", " ")
+        )
+        values = {row["id"]: Decimal("0") for row in candidates}
+        candidate_ids = set(values)
+        driver_scenario_id = rule.get("driver_scenario_id") or scenario_id
+        for row in getattr(self._repo, "list_metric_values", lambda: [])():
+            if row.get("initiative_id") not in candidate_ids:
+                continue
+            if row.get("metric_definition_id") not in selected_ids:
+                continue
+            if driver_scenario_id and row.get("scenario_id") != driver_scenario_id:
+                continue
+            if int(row.get("year") or 0) != year:
+                continue
+            values[row["initiative_id"]] += _dec(row.get("value"))
+        if not any(values.values()):
+            # Compatibility fallback for tenants not fully migrated to metric values.
+            entries = self._repo.list_financial_entries()
+            for entry in entries:
+                initiative_id = entry.get("initiative_id")
+                if initiative_id not in candidate_ids or int(entry.get("year") or 0) != year:
+                    continue
+                if method == "revenue_weighted":
+                    values[initiative_id] += _dec(entry.get("revenue_uplift_base"))
+                else:
+                    values[initiative_id] += _dec(entry.get("gm_uplift_base"))
+        return values, str(label or method.replace("_", " "))
+
+    @staticmethod
+    def _default_metric_definition_id(definitions: list[dict], method: str) -> str | None:
+        for row in definitions:
+            if method == "revenue_weighted" and row.get("benefit_class") == "revenue":
+                return row["id"]
+            if method == "savings_weighted" and row.get("benefit_class") == "savings":
+                return row["id"]
+            if method == "benefit_weighted" and row.get("benefit_class") in {
+                "margin",
+                "savings",
+                "avoidance",
+                "other",
+            }:
+                return row["id"]
+        return definitions[0]["id"] if method == "metric_weighted" and definitions else None
+
+    @staticmethod
+    def _definition_matches_method(row: dict, method: str) -> bool:
+        if method == "revenue_weighted":
+            return row.get("benefit_class") == "revenue"
+        if method == "savings_weighted":
+            return row.get("benefit_class") == "savings"
+        if method == "benefit_weighted":
+            return (
+                bool(row.get("is_benefit") or row.get("rollup_type") == "benefit")
+                and row.get("benefit_class") != "revenue"
+            )
+        return method == "metric_weighted"
+
+    def _cost_basis_values(
+        self,
+        candidates: list[dict],
+        rule: dict,
+        year: int,
+    ) -> tuple[dict[str, Decimal], str]:
+        categories = {
+            row["id"]: row for row in getattr(self._repo, "list_cost_categories", lambda: [])()
+        }
+        category_id = rule.get("driver_cost_category_id")
+        selected_category = categories.get(category_id or "")
+        values = {row["id"]: Decimal("0") for row in candidates}
+        candidate_ids = set(values)
+        for row in self._repo.list_direct_cost_lines():
+            if row.get("initiative_id") not in candidate_ids:
+                continue
+            if int(row.get("year") or 0) != year:
+                continue
+            if category_id and row.get("category_id") != category_id:
+                continue
+            values[row["initiative_id"]] += _dec(row.get("amount_plan"))
+        return values, selected_category.get(
+            "label", "Direct cost"
+        ) if selected_category else "Direct cost"
+
+    def _matches_any_target(self, row: dict, targets: list[dict]) -> bool:
+        return any(self._matches_target(row, target) for target in targets)
+
+    @staticmethod
+    def _matches_target(row: dict, target: dict) -> bool:
+        dimension = target.get("dimension_type")
+        value = target.get("dimension_value")
+        if dimension == "all":
+            return True
+        if dimension == "initiative":
+            return row.get("id") == value
+        if dimension == "business_unit":
+            return value in {
+                link.get("business_unit_id") for link in row.get("initiative_business_units") or []
+            }
+        field_by_dimension = {
+            "workstream": "workstream_id",
+            "tag": "tag",
+            "country": "country",
+            "stage": "stage",
+            "owner": "owner_id",
+            "rag_status": "rag_status",
+        }
+        field = field_by_dimension.get(str(dimension))
+        return bool(field and row.get(field) == value)
+
+    def _scenario_id_for(self, scenario: str) -> str | None:
+        scenarios = getattr(self._repo, "list_financial_scenarios", lambda: [])()
+        kind = (
+            "actual"
+            if scenario == "actual"
+            else "forecast"
+            if scenario == "forecast"
+            else "baseline"
+            if scenario == "baseline"
+            else "plan"
+        )
+        primary = next(
+            (
+                row["id"]
+                for row in scenarios
+                if row.get("kind") == kind and (kind != "plan" or row.get("is_primary"))
+            ),
+            None,
+        )
+        if primary:
+            return str(primary)
+        match = next((row["id"] for row in scenarios if row.get("kind") == kind), None)
+        return str(match) if match else None
+
+    @staticmethod
+    def _period_bounds(pool: dict) -> tuple[date, date]:
+        year = int(pool.get("year") or date.today().year)
+        if pool.get("month"):
+            month = int(pool["month"])
+            return date(year, month, 1), date(year, month, monthrange(year, month)[1])
+        if pool.get("quarter"):
+            start_month = (int(pool["quarter"]) - 1) * 3 + 1
+            end_month = start_month + 2
+            return date(year, start_month, 1), date(year, end_month, monthrange(year, end_month)[1])
+        return date(year, 1, 1), date(year, 12, 31)
+
+    def _require_rule_for_pool(self, pool_id: str, rule_id: str) -> dict:
+        rule = self._repo.get_rule(rule_id)
+        if not rule or rule.get("pool_id") != pool_id:
+            raise HTTPException(status_code=404, detail="Allocation rule not found")
+        return rule
+
+    def _pool_and_rule(self, pool_id: str, rule_id: str) -> tuple[dict, dict]:
+        pool = self._repo.get_pool(pool_id)
+        rule = self._repo.get_rule(rule_id)
+        if not pool or not rule or rule.get("pool_id") != pool_id:
+            raise HTTPException(status_code=404, detail="Pool or allocation rule not found")
+        return pool, rule
+
+    @staticmethod
+    def _settings_item(row: dict) -> SharedCostReportingSettings:
+        return SharedCostReportingSettings(
+            include_in_executive_control_tower=bool(
+                row.get("include_in_executive_control_tower", True)
+            ),
+            include_in_dashboard_executive_brief=bool(
+                row.get("include_in_dashboard_executive_brief", True)
+            ),
+            include_in_portfolio_financials=bool(row.get("include_in_portfolio_financials", False)),
+            include_in_initiative_financials=bool(
+                row.get("include_in_initiative_financials", True)
+            ),
+            include_in_bankable_plan=bool(row.get("include_in_bankable_plan", False)),
+            posting_mode=row.get("posting_mode", "report_only"),
+        )
+
+    def _audit(
+        self,
+        event_type: str,
+        current_user: CurrentUser,
+        **data: Any,
+    ) -> None:
+        create = getattr(self._repo, "create_audit_event", None)
+        if not create:
+            return
+        create({"event_type": event_type, "actor_id": str(current_user.id), **data})
 
     def _dependency_items(self) -> list[InitiativeDependencyItem]:
         return [self._dependency_item(row) for row in self._repo.list_dependencies()]
@@ -553,12 +1345,38 @@ class ExecutiveControlService:
         )
 
     def _pool_item(self, row: dict) -> SharedCostPoolItem:
-        allocations = [a for a in self._repo.list_allocations() if a.get("pool_id") == row["id"]]
+        allocations = [
+            a
+            for a in self._repo.list_allocations()
+            if a.get("pool_id") == row["id"]
+            and (a.get("shared_cost_allocation_runs") or {}).get("status", "completed")
+            in {"locked", "posted", "completed"}
+        ]
+        list_categories = getattr(self._repo, "list_cost_categories", lambda: [])
+        categories = {cat["id"]: cat for cat in list_categories()}
+        list_scenarios = getattr(self._repo, "list_financial_scenarios", lambda: [])
+        scenarios = {scenario["id"]: scenario for scenario in list_scenarios()}
+        category = categories.get(row.get("cost_category_id"))
+        scenario = scenarios.get(row.get("scenario_id"))
+        allocated_plan = sum((_dec(a.get("allocated_plan")) for a in allocations), Decimal("0"))
+        allocated_actual = sum((_dec(a.get("allocated_actual")) for a in allocations), Decimal("0"))
+        latest_run = next(
+            (
+                a.get("shared_cost_allocation_runs") or {}
+                for a in sorted(allocations, key=lambda item: str(item.get("created_at") or ""))
+            ),
+            {},
+        )
         return SharedCostPoolItem(
             id=row["id"],
             name=row["name"],
             description=row.get("description"),
             category_key=row.get("category_key", "other"),
+            cost_category_id=row.get("cost_category_id"),
+            category_label=category.get("label") if category else None,
+            scenario_id=row.get("scenario_id"),
+            scenario_key=scenario.get("key") if scenario else None,
+            scenario_label=scenario.get("label") if scenario else None,
             year=row["year"],
             quarter=row.get("quarter"),
             month=row.get("month"),
@@ -568,17 +1386,32 @@ class ExecutiveControlService:
             else None,
             is_recurring=bool(row.get("is_recurring")),
             status=row.get("status", "draft"),
-            allocated_plan=_money(
-                sum((_dec(a.get("allocated_plan")) for a in allocations), Decimal("0"))
-            ),
-            allocated_actual=_money(
-                sum((_dec(a.get("allocated_actual")) for a in allocations), Decimal("0"))
-            ),
+            period_grain=row.get("period_grain", "annual"),
+            reporting_treatment=row.get("reporting_treatment", "report_only"),
+            currency_code=row.get("currency_code", "USD"),
+            owner_id=row.get("owner_id"),
+            locked_at=row.get("locked_at"),
+            allocated_plan=_money(allocated_plan),
+            allocated_actual=_money(allocated_actual),
+            unallocated_plan=_money(_dec(row.get("amount_plan")) - allocated_plan),
+            unallocated_actual=_money(_dec(row.get("amount_actual")) - allocated_actual),
+            latest_run_status=latest_run.get("status"),
+            metadata=row.get("metadata") or {},
             created_at=row.get("created_at"),
         )
 
-    @staticmethod
-    def _rule_item(row: dict) -> AllocationRuleItem:
+    def _rule_item(self, row: dict) -> AllocationRuleItem:
+        list_metrics = getattr(self._repo, "list_metric_definitions", lambda: [])
+        metrics = {metric["id"]: metric for metric in list_metrics()}
+        list_categories = getattr(self._repo, "list_cost_categories", lambda: [])
+        categories = {cat["id"]: cat for cat in list_categories()}
+        list_scenarios = getattr(self._repo, "list_financial_scenarios", lambda: [])
+        scenarios = {scenario["id"]: scenario for scenario in list_scenarios()}
+        metric = metrics.get(row.get("driver_metric_definition_id"))
+        category = categories.get(row.get("driver_cost_category_id"))
+        scenario = scenarios.get(row.get("driver_scenario_id"))
+        list_targets = getattr(self._repo, "list_rule_targets", lambda _rule_id: [])
+        list_weights = getattr(self._repo, "list_rule_weights", lambda _rule_id: [])
         return AllocationRuleItem(
             id=row["id"],
             pool_id=row["pool_id"],
@@ -587,6 +1420,20 @@ class ExecutiveControlService:
             filters=row.get("filters") or {},
             weights=row.get("weights") or {},
             is_active=bool(row.get("is_active", True)),
+            version=int(row.get("version") or 1),
+            policy_status=row.get("policy_status", "active"),
+            driver_metric_definition_id=row.get("driver_metric_definition_id"),
+            driver_metric_label=metric.get("label") if metric else None,
+            driver_cost_category_id=row.get("driver_cost_category_id"),
+            driver_cost_category_label=category.get("label") if category else None,
+            driver_scenario_id=row.get("driver_scenario_id"),
+            driver_scenario_label=scenario.get("label") if scenario else None,
+            driver_period_mode=row.get("driver_period_mode", "pool_period"),
+            missing_basis_behavior=row.get("missing_basis_behavior", "fail"),
+            cap_floor_config=row.get("cap_floor_config") or {},
+            is_locked=bool(row.get("is_locked", False)),
+            targets=[self._target_item(target) for target in list_targets(row["id"])],
+            structured_weights=[self._weight_item(weight) for weight in list_weights(row["id"])],
         )
 
     @staticmethod
@@ -597,11 +1444,24 @@ class ExecutiveControlService:
             pool_id=row["pool_id"],
             rule_id=row["rule_id"],
             scenario=row.get("scenario", "plan"),
+            scenario_id=row.get("scenario_id"),
             status=row.get("status", "completed"),
+            run_type=row.get("run_type", "posting"),
+            rule_version=int(row.get("rule_version") or 1),
             total_amount_plan=_money(row.get("total_amount_plan")),
             total_amount_actual=_money(row.get("total_amount_actual"))
             if row.get("total_amount_actual") is not None
             else None,
+            period_start=row.get("period_start"),
+            period_end=row.get("period_end"),
+            reporting_treatment=row.get("reporting_treatment", "report_only"),
+            input_snapshot=row.get("input_snapshot") or {},
+            exception_summary=row.get("exception_summary") or {},
+            approved_by=row.get("approved_by"),
+            approved_at=row.get("approved_at"),
+            locked_by=row.get("locked_by"),
+            locked_at=row.get("locked_at"),
+            void_reason=row.get("void_reason"),
             created_by=row.get("created_by"),
             created_at=row["created_at"],
             allocations=[
@@ -615,9 +1475,59 @@ class ExecutiveControlService:
                     allocated_actual=_money(allocation.get("allocated_actual"))
                     if allocation.get("allocated_actual") is not None
                     else None,
+                    allocation_share=format(_dec(allocation.get("allocation_share")), "f"),
+                    rounding_adjustment=_money(allocation.get("rounding_adjustment")),
+                    basis_label=allocation.get("basis_label"),
+                    explanation=allocation.get("explanation"),
+                    exception_flags=allocation.get("exception_flags") or {},
                 )
                 for allocation in allocation_rows
             ],
+        )
+
+    @staticmethod
+    def _target_item(row: dict) -> AllocationTargetItem:
+        return AllocationTargetItem(
+            id=row["id"],
+            target_mode=row.get("target_mode", "include"),
+            dimension_type=row.get("dimension_type", "all"),
+            dimension_value=row.get("dimension_value"),
+            label=row.get("label"),
+        )
+
+    @staticmethod
+    def _weight_item(row: dict) -> AllocationWeightItem:
+        return AllocationWeightItem(
+            id=row["id"],
+            initiative_id=row.get("initiative_id"),
+            dimension_type=row.get("dimension_type"),
+            dimension_value=row.get("dimension_value"),
+            weight_value=_money(row.get("weight_value"))
+            if row.get("weight_value") is not None
+            else None,
+            percentage=_money(row.get("percentage")) if row.get("percentage") is not None else None,
+            manual_amount=_money(row.get("manual_amount"))
+            if row.get("manual_amount") is not None
+            else None,
+            label=row.get("label"),
+        )
+
+    @staticmethod
+    def _period_item(row: dict) -> SharedCostPoolPeriodItem:
+        return SharedCostPoolPeriodItem(
+            id=row["id"],
+            pool_id=row["pool_id"],
+            scenario_id=row.get("scenario_id"),
+            year=int(row["year"]),
+            quarter=row.get("quarter"),
+            month=row.get("month"),
+            period_start=row["period_start"],
+            period_end=row["period_end"],
+            amount_plan=_money(row.get("amount_plan")),
+            amount_actual=_money(row.get("amount_actual"))
+            if row.get("amount_actual") is not None
+            else None,
+            status=row.get("status", "active"),
         )
 
     @staticmethod
@@ -628,6 +1538,47 @@ class ExecutiveControlService:
     def _pool_payload(data: dict) -> dict:
         payload = {key: value for key, value in data.items() if value is not None}
         for key in ("amount_plan", "amount_actual"):
+            if key in payload:
+                payload[key] = _money(payload[key])
+        return payload
+
+    @classmethod
+    def _rule_payload(cls, data: dict) -> dict:
+        payload = {key: value for key, value in data.items() if value is not None}
+        if "structured_weights" in payload:
+            payload["structured_weights"] = [
+                cls._weight_payload(weight) for weight in payload["structured_weights"]
+            ]
+        return payload
+
+    @staticmethod
+    def _period_payload(data: dict) -> dict:
+        payload = {key: value for key, value in data.items() if value is not None}
+        year = int(payload["year"])
+        month = payload.get("month")
+        quarter = payload.get("quarter")
+        if month:
+            start = date(year, int(month), 1)
+            end = date(year, int(month), monthrange(year, int(month))[1])
+        elif quarter:
+            start_month = (int(quarter) - 1) * 3 + 1
+            end_month = start_month + 2
+            start = date(year, start_month, 1)
+            end = date(year, end_month, monthrange(year, end_month)[1])
+        else:
+            start = date(year, 1, 1)
+            end = date(year, 12, 31)
+        payload["period_start"] = start.isoformat()
+        payload["period_end"] = end.isoformat()
+        for key in ("amount_plan", "amount_actual"):
+            if key in payload:
+                payload[key] = _money(payload[key])
+        return payload
+
+    @staticmethod
+    def _weight_payload(data: dict) -> dict:
+        payload = {key: value for key, value in data.items() if value is not None}
+        for key in ("weight_value", "percentage", "manual_amount"):
             if key in payload:
                 payload[key] = _money(payload[key])
         return payload
