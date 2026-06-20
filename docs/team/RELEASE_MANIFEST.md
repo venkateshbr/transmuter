@@ -28,11 +28,14 @@ status.
 
 ### 2026-06-20 - Shared Costs Configurable Allocation Engine
 
-Status: dev validated, pending PR review and production promotion
+Status: feature PR merged, Prahari hardening dev validated, pending hardening PR
+review and production promotion
 
 GitHub tracking:
 - Issue: `#321`
 - PR: `#327`
+- Prahari hardening issue: `#325`
+- Prahari hardening PR: `#328`
 - Implementation commit: `d8bfdcb feat: add configurable shared cost allocation engine`
 
 Runtime changes:
@@ -49,24 +52,47 @@ Runtime changes:
 - Updated the ACME enterprise seed so `acme3-transformation-lab` includes 10
   initiatives, bankable plans, benefit ledger, dependency risks, management
   meetings, value-realization notes, and four FY2028 shared-cost pools.
+- Prahari follow-up hardened Shared Costs tenant isolation by replacing
+  id-only shared-cost ledger references with composite tenant-scoped foreign
+  keys where the schema owner can enforce them, plus trigger validation for
+  user actor/approval references and posted cost-line references.
 
 Local validation:
 - `cd apps/api && uv run --extra dev ruff check app/domain/executive_control.py app/services/executive_control.py app/repositories/executive_control.py app/routers/executive_control.py tests/test_executive_control.py tests/test_real_route_coverage.py tests/acceptance/test_real_api_sample_data.py scripts/seed_enterprise_transformation_scenario.py`
 - `cd apps/api && uv run --extra dev pytest tests/test_executive_control.py`
 - `cd apps/web && npm run build`
 - `git diff --check`
+- Prahari hardening follow-up:
+  - `cd apps/api && uv run --extra dev pytest tests/test_security_controls.py`
+  - `cd apps/api && uv run --extra dev ruff check tests/test_security_controls.py`
+  - `git diff --check`
 
 Dev deployment:
 - Environment: `https://transmuter-dev.ishirock.tech`
 - Schema: `transmuter_dev`
 - Schema/data SQL applied:
   `supabase/migrations/20260620000001_shared_cost_configurable_allocation_engine.sql`
+  `supabase/migrations/20260620000002_harden_shared_cost_allocation_tenant_refs.sql`
 - Deployed with:
   `ALLOW_INSECURE_TLS=1 infra/hostinger/deploy-change-to-dev.sh --schema supabase/migrations/20260620000001_shared_cost_configurable_allocation_engine.sql`
+- Hardening SQL was applied to `transmuter_dev` through the self-hosted
+  Supabase DB container as `supabase_admin`, with
+  `search_path=transmuter_dev,public,extensions`, because the default schema
+  apply role does not own the existing shared-cost tables.
+- Dev was redeployed after hardening with:
+  `ALLOW_INSECURE_TLS=1 infra/hostinger/deploy-change-to-dev.sh`
 - Initial scripted public validation hit the known immediate `/health` 404
   readiness race after container recreation.
 - `ALLOW_INSECURE_TLS=1 infra/hostinger/validate-dev.sh` passed after the dev
   stack settled.
+- Prahari hardening dev validation:
+  - Catalog check confirmed `shared_cost_*_tenant_fk` constraints on pools,
+    rules, runs, allocations, targets, weights, exceptions, audit events,
+    periods, scenarios, metrics, and cost categories.
+  - Catalog check confirmed same-tenant trigger validation for shared-cost
+    pool user refs, run user refs, audit actor refs, and posted cost-line refs.
+  - Focused real dev API acceptance passed for
+    `test_real_api_executive_control_tower_phase_2a` against ACME3.
 - ACME3 seeded in `transmuter_dev` with:
   - `TRANSMUTER_SEED_ORG_SLUG=acme3-transformation-lab`
   - `TRANSMUTER_SEED_ADMIN_EMAIL=admin@acme3-transformation.dev`
@@ -86,6 +112,7 @@ Dev deployment:
 
 Schema/data SQL required for production:
 - `supabase/migrations/20260620000001_shared_cost_configurable_allocation_engine.sql`
+- `supabase/migrations/20260620000002_harden_shared_cost_allocation_tenant_refs.sql`
 
 Production validation:
 - Pending.
