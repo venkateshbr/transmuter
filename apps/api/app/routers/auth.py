@@ -360,6 +360,10 @@ def _cleanup_failed_registration(admin: Any, tenant_id: str, auth_user_id: str |
         "user_workstreams",
         "users",
         "gate_criteria",
+        "financial_initiative_annual_baselines",
+        "financial_tenant_annual_baselines",
+        "initiative_financial_scope",
+        "financial_cost_categories",
         "financial_config_items",
         "financial_config_groups",
     ]

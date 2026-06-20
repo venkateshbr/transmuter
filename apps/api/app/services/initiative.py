@@ -660,10 +660,9 @@ class InitiativeService:
         required_tables = {
             "business_units": "business units",
             "workstreams": "workstreams",
-            "financial_config_groups": "financial configuration groups",
-            "financial_config_items": "financial configuration items",
             "financial_metric_definitions": "financial metric definitions",
             "financial_scenarios": "financial scenarios",
+            "financial_cost_categories": "financial cost categories",
             "stage_gate_definitions": "stage gates",
             "gate_criteria": "gate criteria",
         }

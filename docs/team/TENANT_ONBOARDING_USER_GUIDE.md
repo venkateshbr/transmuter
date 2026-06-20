@@ -47,8 +47,7 @@ Initiative creation is blocked until these checks are complete:
 | Organization settings | Defines tenant-level identity and strategic parameter storage. |
 | Business units | Defines business segments, markets, regions, brands, or functions used for ownership and filters. |
 | Workstreams | Defines the main transformation streams used in initiative grouping and dashboards. |
-| Financial configuration | Defines metric rows and cost categories visible on initiatives. |
-| Financial engine | Defines financial metric formulas, scenarios, reporting currency, fiscal calendar, and value bridge rows. |
+| Financial configuration | Defines metrics, formulas, scenarios, cost categories, bridge rows, reporting currency, and fiscal calendar. |
 | Stage gates | Defines the tenant lifecycle from idea through realization. |
 | Gate criteria | Defines the checklist that controls movement from one stage to the next. |
 | Users | Defines the people available for ownership, sponsorship, approvals, and collaboration. |
@@ -132,12 +131,14 @@ Tags are used in portfolio filters, the dashboard value matrix, and initiative s
 
 ## 4. Financial Configuration
 
-Financial configuration has two layers:
+Financial configuration is managed through one tenant-scoped engine under
+**Admin -> Financial Configuration**. The engine controls metric definitions,
+scenarios, formulas, reporting currency, cost categories, initiative financial
+scope, and value bridge rollups.
 
-1. **Financial configuration**: controls which financial rows and cost categories are available on initiatives.
-2. **Financial engine**: controls the metric definitions, scenarios, formulas, reporting currency, and value bridge rollups.
-
-Both are configured under **Admin -> Financial Configuration**.
+Legacy financial configuration rows may still exist for upgraded tenants and
+older reports, but new tenant setup should use the Financial Configuration
+Engine as the source of truth.
 
 ### 4.1 Reporting Settings
 
@@ -160,7 +161,7 @@ The workbook uses three scenarios:
 | `plan_high` | `Plan High` / `High Case` | Higher upside plan. |
 | `actual` | `Actual` | Actual delivered value or actual cost. |
 
-Create these in **Admin -> Financial Configuration -> Financial Metric Engine**.
+Create these in **Admin -> Financial Configuration -> Financial Configuration Engine**.
 
 ### 4.3 Financial Metrics
 
@@ -193,7 +194,7 @@ The workbook has cost rows such as:
 
 However, the workbook's **Cost Category** column is blank. During the test load, cost lines were assigned to the fallback category `other`.
 
-For a production tenant, configure cost categories before loading or creating initiatives. Example:
+For a production tenant, configure engine cost categories before loading or creating initiatives. Example:
 
 | Cost category | Rollup type | Examples |
 |---|---|---|
@@ -863,4 +864,3 @@ Follow this sequence for the cleanest implementation:
 | Manage risks | `/pmo/risks` |
 | Manage KPIs | `/pmo/kpis` |
 | Manage meetings | `/meetings` |
-

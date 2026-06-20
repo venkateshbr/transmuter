@@ -862,7 +862,7 @@ import { FormsModule } from '@angular/forms';
                                 <div class="mt-3 grid gap-2 sm:grid-cols-2">
                                   @for (category of activeCostCategoryItems(); track category.key) {
                                     <label class="flex items-center gap-2 text-xs font-bold text-[var(--t-text-primary)]">
-                                      <input type="checkbox" [checked]="bridgeRowCostCategorySelected(row, category.key)" (change)="toggleBridgeRowCostCategory(row, category.key)" [attr.aria-label]="'Use cost category ' + category.label + ' in bridge row'">
+                                      <input type="checkbox" [checked]="bridgeRowCostCategorySelected(row, category.id)" (change)="toggleBridgeRowCostCategory(row, category.id)" [attr.aria-label]="'Use cost category ' + category.label + ' in bridge row'">
                                       <span>{{ category.label }}</span>
                                     </label>
                                   }
@@ -931,107 +931,45 @@ import { FormsModule } from '@angular/forms';
                 </div>
               </div>
 
-              <div class="card p-8 space-y-6">
-                <div class="flex items-start justify-between gap-4">
-                  <div>
-                    <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Calculation Groups</h3>
-                    <p class="mt-1 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Declarative rollups for reporting</p>
-                  </div>
-                  <button type="button" class="btn-primary px-4 py-2 text-[10px]" (click)="saveFinancialConfiguration()" aria-label="Save financial configuration">Save</button>
-                </div>
-                <div class="space-y-3">
-                  @for (group of financialGroupsByKind('calculation'); track group.key) {
-                    <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4">
-                      <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">{{ group.rollup_type || 'rollup' }}</p>
-                      <input class="mt-2 w-full bg-transparent text-sm font-black text-[var(--t-text-primary)] outline-none" [ngModel]="group.label" (ngModelChange)="group.label = $event" aria-label="Calculation group label">
-                    </div>
-                  }
-                </div>
-              </div>
-
-              <div class="card p-8 space-y-6">
-                <div class="flex items-start justify-between gap-4">
-                  <div>
-                    <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Metric Rows</h3>
-                    <p class="mt-1 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Rename or hide system metrics without deleting values</p>
-                  </div>
-                  <button type="button" class="btn-secondary px-4 py-2 text-[10px]" (click)="addMetricGroup()" aria-label="Add metric category">Add Category</button>
-                </div>
-                <div class="space-y-5">
-                  @for (group of financialGroupsByKind('metric'); track group.key) {
-                    <section class="border border-[var(--t-border)]">
-                      <div class="flex items-center justify-between gap-3 border-b border-[var(--t-border)] bg-[var(--t-surface-raised)] px-4 py-3">
-                        <input class="min-w-0 flex-1 bg-transparent text-xs font-black uppercase tracking-widest text-[var(--t-accent)] outline-none" [ngModel]="group.label" (ngModelChange)="group.label = $event" aria-label="Metric group label">
-                        <div class="flex items-center gap-2">
-                          <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="saveFinancialConfiguration()" aria-label="Save metric category">Save</button>
-                          @if (!group.is_system) {
-                            <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="deleteFinancialGroup(group)" aria-label="Delete metric category">Delete</button>
-                          }
-                        </div>
-                      </div>
-                      <div class="divide-y divide-[var(--t-border)]">
-                        @for (item of financialItemsForGroup(group.key, 'metric'); track item.key) {
-                          <div class="grid gap-3 px-4 py-3 sm:grid-cols-[1fr_130px_auto_auto] sm:items-center">
-                            <input class="input-field py-2 text-xs font-bold" [ngModel]="item.label" (ngModelChange)="item.label = $event" aria-label="Metric label">
-                            <span class="font-mono text-[10px] text-[var(--t-text-tertiary)]">{{ item.system_metric_key || item.key }}</span>
-                            <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="item.is_active = !item.is_active" [attr.aria-label]="'Toggle ' + item.label">
-                              {{ item.is_active ? 'Active' : 'Hidden' }}
-                            </button>
-                            @if (!item.is_system) {
-                              <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="deleteFinancialItem(item)" aria-label="Delete metric">Delete</button>
-                            }
-                          </div>
-                        }
-                        <div class="grid gap-3 px-4 py-3 sm:grid-cols-[1fr_auto]">
-                          <input class="input-field py-2 text-xs" [ngModel]="newMetricNameForGroup(group.key)" (ngModelChange)="setNewMetricName(group.key, $event)" placeholder="New custom metric" aria-label="New custom metric name">
-                          <button type="button" class="btn-primary py-2 text-[10px]" [disabled]="!newMetricNameForGroup(group.key).trim()" (click)="addMetric(group.key)" aria-label="Create custom metric">Create Metric</button>
-                        </div>
-                      </div>
-                    </section>
-                  }
-                </div>
-              </div>
-
               <div class="card p-8 xl:col-span-2">
                 <div class="mb-6 flex items-start justify-between gap-4">
                   <div>
                     <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Cost Categories</h3>
-                    <p class="mt-1 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Grouped tenant taxonomy for initiative cost lines</p>
+                    <p class="mt-1 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Engine-owned taxonomy for initiative cost lines and bridge rows</p>
                   </div>
-                  <button type="button" class="btn-secondary px-4 py-2 text-[10px]" (click)="addCostCategoryGroup()" aria-label="Add cost category group">Add Group</button>
+                  <button type="button" class="btn-secondary px-4 py-2 text-[10px]" (click)="addCostCategoryDefinition()" aria-label="Add cost category">Add Category</button>
                 </div>
-                <div class="grid gap-5 lg:grid-cols-3">
-                  @for (group of financialGroupsByKind('cost_category'); track group.key) {
-                    <section class="border border-[var(--t-border)] bg-[var(--t-surface)]">
-                      <div class="flex items-center justify-between gap-3 border-b border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4">
-                        <input class="min-w-0 flex-1 bg-transparent text-sm font-black text-[var(--t-text-primary)] outline-none" [ngModel]="group.label" (ngModelChange)="group.label = $event" aria-label="Cost category group label">
-                        <div class="flex items-center gap-2">
-                          <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="saveFinancialConfiguration()" aria-label="Save cost group">Save</button>
-                          @if (!group.is_system) {
-                            <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="deleteFinancialGroup(group)" aria-label="Delete cost group">Delete</button>
-                          }
-                        </div>
+                <div class="divide-y divide-[var(--t-border)] border border-[var(--t-border)]">
+                  @for (category of costCategories(); track category.id || category.key) {
+                    <div class="grid gap-3 p-4 lg:grid-cols-[1fr_140px_140px_90px_auto] lg:items-end">
+                      <label class="grid gap-1">
+                        <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Label</span>
+                        <input class="input-field py-2 text-xs font-bold" [ngModel]="category.label" (ngModelChange)="category.label = $event" aria-label="Cost category label">
+                      </label>
+                      <label class="grid gap-1">
+                        <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Group</span>
+                        <input class="input-field py-2 text-xs" [ngModel]="category.group_key || ''" (ngModelChange)="category.group_key = $event || null" aria-label="Cost category group">
+                      </label>
+                      <label class="grid gap-1">
+                        <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Rollup</span>
+                        <select class="input-field py-2 text-xs" [ngModel]="category.rollup_type || ''" (ngModelChange)="category.rollup_type = $event || null" aria-label="Cost category rollup">
+                          <option value="">Unclassified</option>
+                          <option value="recurring_cost">Recurring</option>
+                          <option value="one_off_cost">One-time</option>
+                          <option value="total_cost">Total cost</option>
+                        </select>
+                      </label>
+                      <label class="grid gap-1">
+                        <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Order</span>
+                        <input type="number" class="input-field py-2 text-xs" [ngModel]="category.display_order" (ngModelChange)="category.display_order = numberValue($event)" aria-label="Cost category display order">
+                      </label>
+                      <div class="flex items-center gap-2">
+                        <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="category.is_active = !category.is_active" [attr.aria-label]="'Toggle ' + category.label">
+                          {{ category.is_active ? 'Active' : 'Hidden' }}
+                        </button>
+                        <button type="button" class="btn-primary px-3 py-2 text-[10px]" (click)="saveCostCategoryDefinition(category)" aria-label="Save cost category">Save</button>
                       </div>
-                      <div class="divide-y divide-[var(--t-border)]">
-                        @for (item of financialItemsForGroup(group.key, 'cost_category'); track item.key) {
-                          <div class="grid gap-3 p-4">
-                            <input class="input-field py-2 text-xs font-bold" [ngModel]="item.label" (ngModelChange)="item.label = $event" aria-label="Cost category label">
-                            <div class="flex items-center justify-between gap-2">
-                              <select class="input-field py-2 text-xs" [ngModel]="item.rollup_type || ''" (ngModelChange)="item.rollup_type = $event || null" aria-label="Cost category rollup">
-                                <option value="">No rollup default</option>
-                                <option value="recurring_cost">Recurring</option>
-                                <option value="one_off_cost">One-time</option>
-                              </select>
-                              <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="deleteCostCategory(item)" aria-label="Delete cost category">Delete</button>
-                            </div>
-                          </div>
-                        }
-                        <div class="grid gap-3 p-4">
-                          <input class="input-field py-2 text-xs" [ngModel]="newCostCategoryNameForGroup(group.key)" (ngModelChange)="setNewCostCategoryName(group.key, $event)" placeholder="New category name" aria-label="New cost category name">
-                          <button type="button" class="btn-primary py-2 text-[10px]" [disabled]="!newCostCategoryNameForGroup(group.key).trim()" (click)="addCostCategory(group.key)" aria-label="Create cost category">Create Category</button>
-                        </div>
-                      </div>
-                    </section>
+                    </div>
                   }
                 </div>
               </div>
@@ -1238,6 +1176,7 @@ export class AdminComponent implements OnInit {
   financialItems = signal<any[]>([]);
   metricDefinitions = signal<any[]>([]);
   scenarioDefinitions = signal<any[]>([]);
+  costCategories = signal<any[]>([]);
   bridgeRows = signal<any[]>([]);
   attributeDefinitions = signal<any[]>([]);
   reportingSettings = signal<any>({ fiscal_year_start_month: 1, reporting_currency: 'USD' });
@@ -1386,6 +1325,7 @@ export class AdminComponent implements OnInit {
     this.api.get<any>('/financial-engine-configuration').subscribe(res => {
       this.metricDefinitions.set(res.definitions || []);
       this.scenarioDefinitions.set(res.scenarios || []);
+      this.costCategories.set(res.cost_categories || []);
       this.bridgeRows.set(res.bridge_rows || []);
       this.attributeDefinitions.set(res.attribute_definitions || []);
       this.reportingSettings.set(res.settings || { fiscal_year_start_month: 1, reporting_currency: 'USD' });
@@ -1746,6 +1686,44 @@ export class AdminComponent implements OnInit {
     });
   }
 
+  addCostCategoryDefinition() {
+    const index = this.costCategories().length + 1;
+    this.costCategories.update(categories => [
+      ...categories,
+      {
+        key: `custom_cost_category_${Date.now()}`,
+        label: `Cost Category ${index}`,
+        group_key: 'costs',
+        rollup_type: 'one_off_cost',
+        display_order: 1000 + index,
+        attributes: {},
+        is_system: false,
+        is_active: true,
+      },
+    ]);
+  }
+
+  saveCostCategoryDefinition(category: any) {
+    const payload = {
+      id: category.id || null,
+      key: category.key || this.uniqueEngineKey(category.label, 'cost_category', this.costCategories()),
+      label: category.label,
+      group_key: category.group_key || null,
+      rollup_type: category.rollup_type || null,
+      display_order: Number(category.display_order || 0),
+      attributes: category.attributes || {},
+      is_system: Boolean(category.is_system),
+      is_active: category.is_active !== false,
+    };
+    const request = category.id
+      ? this.api.patch(`/admin/financial-engine/cost-categories/${category.id}`, payload)
+      : this.api.post('/admin/financial-engine/cost-categories', payload);
+    request.subscribe(() => {
+      this.loadFinancialEngineConfiguration();
+      this.loadAuditLogs();
+    });
+  }
+
   addBridgeRowDefinition() {
     const index = this.bridgeRows().length + 1;
     this.bridgeRows.update(rows => [
@@ -1755,6 +1733,7 @@ export class AdminComponent implements OnInit {
         label: `Bridge Row ${index}`,
         row_kind: 'metric_set',
         metric_definition_ids: [],
+        cost_category_ids: [],
         cost_category_keys: [],
         sign: 1,
         display_order: 1000 + index,
@@ -1770,6 +1749,7 @@ export class AdminComponent implements OnInit {
       label: row.label,
       row_kind: row.row_kind || 'metric_set',
       metric_definition_ids: row.row_kind === 'net' ? [] : (row.metric_definition_ids || []),
+      cost_category_ids: row.row_kind === 'net' ? [] : (row.cost_category_ids || []),
       cost_category_keys: row.row_kind === 'net' ? [] : (row.cost_category_keys || []),
       sign: Number(row.sign || 1) < 0 ? -1 : 1,
       display_order: Number(row.display_order || 0),
@@ -1834,9 +1814,9 @@ export class AdminComponent implements OnInit {
   }
 
   activeCostCategoryItems(): any[] {
-    return this.financialItems()
-      .filter(item => item.item_type === 'cost_category' && item.is_active !== false)
-      .sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0));
+    return this.costCategories()
+      .filter(item => item.id && item.is_active !== false)
+      .sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0) || String(a.label || '').localeCompare(String(b.label || '')));
   }
 
   bridgeRowMetricSelected(row: any, metricId: string): boolean {
@@ -1849,14 +1829,14 @@ export class AdminComponent implements OnInit {
     row.metric_definition_ids = Array.from(current);
   }
 
-  bridgeRowCostCategorySelected(row: any, categoryKey: string): boolean {
-    return (row.cost_category_keys || []).includes(categoryKey);
+  bridgeRowCostCategorySelected(row: any, categoryId: string): boolean {
+    return (row.cost_category_ids || []).includes(categoryId);
   }
 
-  toggleBridgeRowCostCategory(row: any, categoryKey: string) {
-    const current = new Set<string>(row.cost_category_keys || []);
-    current.has(categoryKey) ? current.delete(categoryKey) : current.add(categoryKey);
-    row.cost_category_keys = Array.from(current);
+  toggleBridgeRowCostCategory(row: any, categoryId: string) {
+    const current = new Set<string>(row.cost_category_ids || []);
+    current.has(categoryId) ? current.delete(categoryId) : current.add(categoryId);
+    row.cost_category_ids = Array.from(current);
   }
 
   addMetricGroup() {

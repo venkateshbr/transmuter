@@ -229,9 +229,22 @@ class FinancialBridgeRow(BaseModel):
     label: str = Field(..., min_length=1, max_length=200)
     row_kind: Literal["metric_set", "cost_set", "subtotal", "net"]
     metric_definition_ids: list[str] = Field(default_factory=list)
+    cost_category_ids: list[str] = Field(default_factory=list)
     cost_category_keys: list[str] = Field(default_factory=list)
     sign: Literal[-1, 1] = 1
     display_order: int = 0
+    is_active: bool = True
+
+
+class FinancialCostCategory(BaseModel):
+    id: str | None = None
+    key: str = Field(..., min_length=1, max_length=120)
+    label: str = Field(..., min_length=1, max_length=200)
+    group_key: str | None = Field(None, max_length=120)
+    rollup_type: FinancialRollupType | None = None
+    display_order: int = 0
+    attributes: dict[str, object] = Field(default_factory=dict)
+    is_system: bool = False
     is_active: bool = True
 
 
@@ -250,6 +263,7 @@ class FinancialAttributeDefinition(BaseModel):
 class FinancialEngineConfigurationResponse(BaseModel):
     definitions: list[FinancialMetricDefinition]
     scenarios: list[FinancialScenarioDefinition]
+    cost_categories: list[FinancialCostCategory] = Field(default_factory=list)
     bridge_rows: list[FinancialBridgeRow]
     attribute_definitions: list[FinancialAttributeDefinition] = Field(default_factory=list)
     settings: FinancialReportingSettings
@@ -366,6 +380,7 @@ class ConfigurableFinancialGridResponse(BaseModel):
     initiative_id: str
     definitions: list[FinancialMetricDefinition]
     scenarios: list[FinancialScenarioDefinition]
+    cost_categories: list[FinancialCostCategory] = Field(default_factory=list)
     baseline: InitiativeAnnualBaselineResponse | None = None
     benefit_lines: list[FinancialBenefitLine] = Field(default_factory=list)
     values: list[ConfigurableFinancialMetricValueRow] = Field(default_factory=list)
@@ -426,6 +441,8 @@ class FinancialMetricDeactivateRequest(BaseModel):
 class InitiativeFinancialSelections(BaseModel):
     metric_keys: list[str] = Field(default_factory=list)
     cost_category_keys: list[str] = Field(default_factory=list)
+    metric_definition_ids: list[str] = Field(default_factory=list)
+    cost_category_ids: list[str] = Field(default_factory=list)
 
 
 class InitiativeFinancialSelectionsResponse(BaseModel):
@@ -569,6 +586,7 @@ class FinancialSummary(BaseModel):
 class CostLineCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=300)
     category_key: str = Field("other", min_length=1, max_length=120)
+    category_id: str | None = None
     year: int = Field(..., ge=2020, le=2040)
     quarter: Quarter | None = None
     month: int | None = Field(None, ge=1, le=12)
@@ -580,6 +598,7 @@ class CostLineCreate(BaseModel):
 class CostLineUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=300)
     category_key: str | None = Field(None, min_length=1, max_length=120)
+    category_id: str | None = None
     year: int | None = Field(None, ge=2020, le=2040)
     quarter: Quarter | None = None
     month: int | None = Field(None, ge=1, le=12)
@@ -592,6 +611,7 @@ class CostLineItem(BaseModel):
     id: str
     initiative_id: str
     name: str
+    category_id: str | None = None
     category_key: str = "other"
     year: int
     quarter: int | None = None

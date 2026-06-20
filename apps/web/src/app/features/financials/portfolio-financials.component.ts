@@ -100,7 +100,7 @@ interface ContributorsResponse {
 }
 
 interface FinancialConfiguration {
-  items: Array<{ key: string; label: string; item_type: string; is_active: boolean }>;
+  cost_categories?: Array<{ id?: string; key: string; label: string; is_active: boolean }>;
 }
 
 interface StageGateDefinition {
@@ -702,8 +702,8 @@ export class PortfolioFinancialsComponent implements OnInit {
     { id: 'cumulative', label: 'Cumulative through year' },
   ];
 
-  costCategories = computed(() => (this.configuration()?.items || [])
-    .filter(item => item.item_type === 'cost_category' && item.is_active));
+  costCategories = computed(() => (this.configuration()?.cost_categories || [])
+    .filter(item => item.is_active));
   stageOptions = computed(() => {
     const seen = new Set<string>();
     const options: Array<{ id: string; label: string }> = [];
@@ -724,9 +724,9 @@ export class PortfolioFinancialsComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    this.api.get<FinancialConfiguration>('/financial-configuration').subscribe({
+    this.api.get<FinancialConfiguration>('/financial-engine-configuration').subscribe({
       next: config => this.configuration.set(config),
-      error: () => this.configuration.set({ items: [] }),
+      error: () => this.configuration.set({ cost_categories: [] }),
     });
     this.api.get<StageGateDefinition[]>('/governance/stage-gates').subscribe({
       next: gates => this.stageGateDefinitions.set(Array.isArray(gates) ? gates : []),

@@ -48,6 +48,7 @@ from app.domain.financials import (
     FinancialCellAssumptionUpdate,
     FinancialConfigurationResponse,
     FinancialConfigurationUpdate,
+    FinancialCostCategory,
     FinancialEngineConfigurationResponse,
     FinancialForecastResponse,
     FinancialForecastUpdate,
@@ -751,6 +752,34 @@ async def update_financial_scenario_definition(
 ) -> FinancialScenarioDefinition:
     assert_can_manage_initiatives(current_user)
     return svc.update_scenario_definition(scenario_id, body)
+
+
+@router.post(
+    "/admin/financial-engine/cost-categories",
+    response_model=FinancialCostCategory,
+    status_code=201,
+)
+async def create_financial_cost_category(
+    body: FinancialCostCategory,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> FinancialCostCategory:
+    assert_can_manage_initiatives(current_user)
+    return svc.create_cost_category(body)
+
+
+@router.patch(
+    "/admin/financial-engine/cost-categories/{cost_category_id}",
+    response_model=FinancialCostCategory,
+)
+async def update_financial_cost_category(
+    cost_category_id: str,
+    body: FinancialCostCategory,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> FinancialCostCategory:
+    assert_can_manage_initiatives(current_user)
+    return svc.update_cost_category(cost_category_id, body)
 
 
 @router.post(

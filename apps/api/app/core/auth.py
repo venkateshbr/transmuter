@@ -67,7 +67,7 @@ def _current_user_from_app_token(token: str, path: str) -> CurrentUser | None:
         .maybe_single()
         .execute()
     )
-    if not user_row.data:
+    if not user_row or not user_row.data:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account not found in platform",

@@ -345,6 +345,21 @@ class FinancialRepository:
                 return []
             raise
 
+    def list_financial_scope(self, initiative_id: str) -> list[dict]:  # type: ignore[type-arg]
+        try:
+            result = (
+                self._c.table("initiative_financial_scope")
+                .select("*")
+                .eq("tenant_id", self._tid)
+                .eq("initiative_id", initiative_id)
+                .execute()
+            )
+            return result.data or []
+        except Exception as exc:
+            if self._is_missing_table(exc, "initiative_financial_scope"):
+                return []
+            raise
+
     def list_bankable_plans(self, initiative_id: str) -> list[dict]:  # type: ignore[type-arg]
         try:
             result = (
@@ -707,7 +722,56 @@ class FinancialRepository:
         if rows:
             self._c.table("initiative_financial_selections").insert(rows).execute()
 
+    def replace_financial_scope(
+        self,
+        initiative_id: str,
+        metric_definition_ids: list[str],
+        cost_category_ids: list[str],
+        all_metric_definition_ids: list[str] | None = None,
+        all_cost_category_ids: list[str] | None = None,
+    ) -> None:
+        try:
+            (
+                self._c.table("initiative_financial_scope")
+                .delete()
+                .eq("tenant_id", self._tid)
+                .eq("initiative_id", initiative_id)
+                .execute()
+            )
+            active_metric_ids = set(metric_definition_ids)
+            active_category_ids = set(cost_category_ids)
+            metric_rows = sorted(set(all_metric_definition_ids or metric_definition_ids))
+            category_rows = sorted(set(all_cost_category_ids or cost_category_ids))
+            rows = [
+                {
+                    "id": str(uuid4()),
+                    "tenant_id": self._tid,
+                    "initiative_id": initiative_id,
+                    "scope_type": "metric_definition",
+                    "metric_definition_id": metric_id,
+                    "is_active": metric_id in active_metric_ids,
+                }
+                for metric_id in metric_rows
+            ] + [
+                {
+                    "id": str(uuid4()),
+                    "tenant_id": self._tid,
+                    "initiative_id": initiative_id,
+                    "scope_type": "cost_category",
+                    "cost_category_id": category_id,
+                    "is_active": category_id in active_category_ids,
+                }
+                for category_id in category_rows
+            ]
+            if rows:
+                self._c.table("initiative_financial_scope").insert(rows).execute()
+        except Exception as exc:
+            if self._is_missing_table(exc, "initiative_financial_scope"):
+                return
+            raise
+
     def create_cost_line(self, initiative_id: str, data: dict) -> dict:  # type: ignore[type-arg]
+        data = self._cost_line_with_engine_category(data)
         data["id"] = str(uuid4())
         data["tenant_id"] = self._tid
         data["initiative_id"] = initiative_id
@@ -720,6 +784,7 @@ class FinancialRepository:
         cost_line_id: str,
         data: dict,  # type: ignore[type-arg]
     ) -> dict:  # type: ignore[type-arg]
+        data = self._cost_line_with_engine_category(data)
         data["updated_at"] = datetime.now(UTC).isoformat()
         result = (
             self._c.table("financial_cost_lines")
@@ -777,6 +842,80 @@ class FinancialRepository:
             .execute()
         )
         return result.data or []
+
+    def list_cost_categories(self) -> list[dict]:  # type: ignore[type-arg]
+        try:
+            result = (
+                self._c.table("financial_cost_categories")
+                .select("*")
+                .eq("tenant_id", self._tid)
+                .order("display_order")
+                .order("label")
+                .execute()
+            )
+            return result.data or []
+        except Exception as exc:
+            if self._is_missing_table(exc, "financial_cost_categories"):
+                return []
+            raise
+
+    def get_cost_category_by_key(self, category_key: str) -> dict | None:  # type: ignore[type-arg]
+        try:
+            result = (
+                self._c.table("financial_cost_categories")
+                .select("*")
+                .eq("tenant_id", self._tid)
+                .eq("key", category_key)
+                .maybe_single()
+                .execute()
+            )
+            return result.data if result and result.data else None
+        except Exception as exc:
+            if self._is_missing_table(exc, "financial_cost_categories"):
+                return None
+            raise
+
+    def get_cost_category_by_id(self, category_id: str) -> dict | None:  # type: ignore[type-arg]
+        try:
+            result = (
+                self._c.table("financial_cost_categories")
+                .select("*")
+                .eq("tenant_id", self._tid)
+                .eq("id", category_id)
+                .maybe_single()
+                .execute()
+            )
+            return result.data if result and result.data else None
+        except Exception as exc:
+            if self._is_missing_table(exc, "financial_cost_categories"):
+                return None
+            raise
+
+    def create_cost_category(self, data: dict) -> dict:  # type: ignore[type-arg]
+        payload = {
+            **data,
+            "id": data.get("id") or str(uuid4()),
+            "tenant_id": self._tid,
+            "created_at": data.get("created_at") or datetime.now(UTC).isoformat(),
+            "updated_at": data.get("updated_at") or datetime.now(UTC).isoformat(),
+        }
+        result = self._c.table("financial_cost_categories").insert(payload).execute()
+        return result.data[0]
+
+    def update_cost_category(
+        self,
+        cost_category_id: str,
+        data: dict,  # type: ignore[type-arg]
+    ) -> dict | None:  # type: ignore[type-arg]
+        payload = {**data, "updated_at": datetime.now(UTC).isoformat()}
+        result = (
+            self._c.table("financial_cost_categories")
+            .update(payload)
+            .eq("tenant_id", self._tid)
+            .eq("id", cost_category_id)
+            .execute()
+        )
+        return result.data[0] if result.data else None
 
     def list_tenant_annual_baselines(
         self,
@@ -1137,11 +1276,13 @@ class FinancialRepository:
             )
 
     def reassign_cost_category(self, category_key: str, replacement_key: str) -> int:
+        replacement = self.get_cost_category_by_key(replacement_key)
         result = (
             self._c.table("financial_cost_lines")
             .update(
                 {
                     "category_key": replacement_key,
+                    "category_id": replacement.get("id") if replacement else None,
                     "updated_at": datetime.now(UTC).isoformat(),
                 }
             )
@@ -1150,13 +1291,24 @@ class FinancialRepository:
             .execute()
         )
         (
-            self._c.table("financial_config_items")
+            self._c.table("financial_cost_categories")
             .update({"is_active": False, "updated_at": datetime.now(UTC).isoformat()})
             .eq("tenant_id", self._tid)
             .eq("key", category_key)
-            .eq("item_type", "cost_category")
             .execute()
         )
+        try:
+            (
+                self._c.table("financial_config_items")
+                .update({"is_active": False, "updated_at": datetime.now(UTC).isoformat()})
+                .eq("tenant_id", self._tid)
+                .eq("key", category_key)
+                .eq("item_type", "cost_category")
+                .execute()
+            )
+        except Exception as exc:
+            if not self._is_missing_table(exc, "financial_config_items"):
+                raise
         return len(result.data or [])
 
     def deactivate_metric(self, metric_key: str) -> None:
@@ -1214,6 +1366,7 @@ class FinancialRepository:
         """Replace category-period cost values from the grid/import payload."""
         saved = []
         for row in rows:
+            row = self._cost_line_with_engine_category(row)
             row["tenant_id"] = self._tid
             row["initiative_id"] = initiative_id
             existing_rows = self._find_cost_lines(initiative_id, row)
@@ -1232,6 +1385,23 @@ class FinancialRepository:
             if result.data:
                 saved.append(result.data[0])
         return saved
+
+    def _cost_line_with_engine_category(self, data: dict) -> dict:  # type: ignore[type-arg]
+        payload = dict(data)
+        category = None
+        raw_category_id = payload.get("category_id")
+        if raw_category_id:
+            category = self.get_cost_category_by_id(str(raw_category_id))
+        if not category:
+            category_key = str(payload.get("category_key") or "other")
+            category = self.get_cost_category_by_key(category_key)
+        if category:
+            payload["category_id"] = category["id"]
+            payload["category_key"] = category["key"]
+        else:
+            payload["category_key"] = str(payload.get("category_key") or "other")
+            payload.pop("category_id", None)
+        return payload
 
     # ── Portfolio aggregation ─────────────────────────────────────────────────
 

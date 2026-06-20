@@ -60,6 +60,7 @@ from app.domain.financials import (
     FinancialConfigItem,
     FinancialConfigurationResponse,
     FinancialConfigurationUpdate,
+    FinancialCostCategory,
     FinancialEngineConfigurationResponse,
     FinancialEntryRow,
     FinancialEntryUpdate,
@@ -390,6 +391,7 @@ class FinancialService:
             initiative_id=initiative_id,
             definitions=config.definitions,
             scenarios=config.scenarios,
+            cost_categories=config.cost_categories,
             baseline=baseline,
             benefit_lines=[
                 self._to_benefit_line(row) for row in self._repo.list_benefit_lines(initiative_id)
@@ -532,6 +534,7 @@ class FinancialService:
                 row = {
                     "name": cl.name,
                     "category_key": cl.category_key,
+                    "category_id": cl.category_id,
                     "year": cl.year,
                     "quarter": cl.quarter,
                     "month": cl.month,
@@ -620,6 +623,7 @@ class FinancialService:
                     {
                         "name": line.name,
                         "category_key": line.category_key,
+                        "category_id": line.category_id,
                         "year": line.year,
                         "quarter": line.quarter,
                         "month": line.month,
@@ -689,6 +693,7 @@ class FinancialService:
             {
                 "name": data.name,
                 "category_key": data.category_key,
+                "category_id": data.category_id,
                 "year": data.year,
                 "quarter": data.quarter,
                 "month": data.month,
@@ -709,7 +714,15 @@ class FinancialService:
     ) -> CostLineItem:
         self._ensure_tenant_initiative(initiative_id)
         patch: dict[str, object] = {}
-        for field in ("name", "category_key", "year", "quarter", "month", "is_recurring"):
+        for field in (
+            "name",
+            "category_key",
+            "category_id",
+            "year",
+            "quarter",
+            "month",
+            "is_recurring",
+        ):
             val = getattr(data, field)
             if val is not None:
                 patch[field] = val
@@ -836,6 +849,22 @@ class FinancialService:
     # ── Tenant financial configuration ───────────────────────────────────────
 
     def get_configuration(self) -> FinancialConfigurationResponse:
+        engine_config = self.get_engine_configuration()
+        if engine_config.definitions or engine_config.cost_categories:
+            if not engine_config.cost_categories:
+                legacy_items = getattr(self._repo, "list_config_items", lambda: [])()
+                if any(row.get("item_type") == "cost_category" for row in legacy_items):
+                    groups = [
+                        self._to_config_group(row)
+                        for row in getattr(self._repo, "list_config_groups", lambda: [])()
+                    ]
+                    group_key_by_id = {group.id: group.key for group in groups if group.id}
+                    items = [
+                        self._to_config_item(row, group_key_by_id.get(row.get("group_id")))
+                        for row in legacy_items
+                    ]
+                    return FinancialConfigurationResponse(groups=groups, items=items)
+            return self._engine_configuration_as_legacy_response(engine_config)
         groups = [self._to_config_group(row) for row in self._repo.list_config_groups()]
         group_key_by_id = {group.id: group.key for group in groups if group.id}
         items = [
@@ -845,20 +874,27 @@ class FinancialService:
         return FinancialConfigurationResponse(groups=groups, items=items)
 
     def get_engine_configuration(self) -> FinancialEngineConfigurationResponse:
-        settings_row = self._repo.get_reporting_settings()
+        settings_row = getattr(self._repo, "get_reporting_settings", lambda: {})()
         return FinancialEngineConfigurationResponse(
             definitions=[
-                self._to_metric_definition(row) for row in self._repo.list_metric_definitions()
+                self._to_metric_definition(row)
+                for row in getattr(self._repo, "list_metric_definitions", lambda: [])()
             ],
             scenarios=[
-                self._to_scenario_definition(row) for row in self._repo.list_financial_scenarios()
+                self._to_scenario_definition(row)
+                for row in getattr(self._repo, "list_financial_scenarios", lambda: [])()
+            ],
+            cost_categories=[
+                self._to_cost_category(row)
+                for row in getattr(self._repo, "list_cost_categories", lambda: [])()
             ],
             bridge_rows=[
-                self._to_bridge_row(row) for row in self._repo.list_financial_bridge_rows()
+                self._to_bridge_row(row)
+                for row in getattr(self._repo, "list_financial_bridge_rows", lambda: [])()
             ],
             attribute_definitions=[
                 self._to_attribute_definition(row)
-                for row in self._repo.list_financial_attribute_definitions()
+                for row in getattr(self._repo, "list_financial_attribute_definitions", lambda: [])()
             ],
             settings=FinancialReportingSettings(
                 fiscal_year_start_month=settings_row.get("fiscal_year_start_month") or 1,
@@ -932,7 +968,7 @@ class FinancialService:
         return self._to_scenario_definition(row)
 
     def create_bridge_row(self, data: FinancialBridgeRow) -> FinancialBridgeRow:
-        payload = data.model_dump(mode="json", exclude_none=True)
+        payload = self._bridge_row_payload(data)
         payload.pop("id", None)
         row = self._repo.create_financial_bridge_row(payload)
         return self._to_bridge_row(row)
@@ -942,7 +978,7 @@ class FinancialService:
         bridge_row_id: str,
         data: FinancialBridgeRow,
     ) -> FinancialBridgeRow:
-        payload = data.model_dump(mode="json", exclude_none=True)
+        payload = self._bridge_row_payload(data)
         payload.pop("id", None)
         row = self._repo.update_financial_bridge_row(bridge_row_id, payload)
         if not row:
@@ -951,6 +987,27 @@ class FinancialService:
                 detail="Financial bridge row not found",
             )
         return self._to_bridge_row(row)
+
+    def create_cost_category(self, data: FinancialCostCategory) -> FinancialCostCategory:
+        payload = self._cost_category_payload(data)
+        payload.pop("id", None)
+        row = self._repo.create_cost_category(payload)
+        return self._to_cost_category(row)
+
+    def update_cost_category(
+        self,
+        cost_category_id: str,
+        data: FinancialCostCategory,
+    ) -> FinancialCostCategory:
+        payload = self._cost_category_payload(data)
+        payload.pop("id", None)
+        row = self._repo.update_cost_category(cost_category_id, payload)
+        if not row:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Financial cost category not found",
+            )
+        return self._to_cost_category(row)
 
     def create_attribute_definition(
         self,
@@ -982,6 +1039,35 @@ class FinancialService:
         payload["options"] = [
             str(item).strip() for item in payload.get("options") or [] if str(item).strip()
         ]
+        return payload
+
+    def _bridge_row_payload(self, data: FinancialBridgeRow) -> dict:
+        payload = data.model_dump(mode="json", exclude_none=True)
+        categories_by_id = {
+            str(category.id): category
+            for category in self.get_engine_configuration().cost_categories
+        }
+        categories_by_key = {
+            category.key: category for category in self.get_engine_configuration().cost_categories
+        }
+        if payload.get("cost_category_ids"):
+            payload["cost_category_keys"] = [
+                categories_by_id[category_id].key
+                for category_id in payload["cost_category_ids"]
+                if category_id in categories_by_id
+            ]
+        elif payload.get("cost_category_keys"):
+            payload["cost_category_ids"] = [
+                str(categories_by_key[category_key].id)
+                for category_key in payload["cost_category_keys"]
+                if category_key in categories_by_key and categories_by_key[category_key].id
+            ]
+        return payload
+
+    @staticmethod
+    def _cost_category_payload(data: FinancialCostCategory) -> dict:
+        payload = data.model_dump(mode="json", exclude_none=True)
+        payload["attributes"] = payload.get("attributes") or {}
         return payload
 
     def get_governance_settings(self) -> FinancialGovernanceSettings:
@@ -1191,6 +1277,26 @@ class FinancialService:
         valid_metric_keys, valid_cost_keys = self._active_selection_keys(config)
         metric_keys = [key for key in selections.metric_keys if key in valid_metric_keys]
         cost_keys = [key for key in selections.cost_category_keys if key in valid_cost_keys]
+        engine = self.get_engine_configuration()
+        metric_ids_by_key = {
+            definition.key: str(definition.id) for definition in engine.definitions
+        }
+        category_ids_by_key = {
+            category.key: str(category.id) for category in engine.cost_categories if category.id
+        }
+        metric_definition_ids = [
+            metric_ids_by_key[key] for key in metric_keys if key in metric_ids_by_key
+        ]
+        cost_category_ids = [
+            category_ids_by_key[key] for key in cost_keys if key in category_ids_by_key
+        ]
+        getattr(self._repo, "replace_financial_scope", lambda *args, **kwargs: None)(
+            initiative_id,
+            metric_definition_ids,
+            cost_category_ids,
+            sorted(metric_ids_by_key.values()),
+            sorted(category_ids_by_key.values()),
+        )
         self._repo.replace_financial_selections(
             initiative_id,
             metric_keys,
@@ -4026,6 +4132,47 @@ class FinancialService:
         config: FinancialConfigurationResponse | None = None,
     ) -> InitiativeFinancialSelections:
         valid_metric_keys, valid_cost_keys = self._active_selection_keys(config)
+        scope_rows = getattr(self._repo, "list_financial_scope", lambda _initiative_id: [])(
+            initiative_id
+        )
+        if scope_rows:
+            definitions = {
+                row["id"]: row
+                for row in getattr(self._repo, "list_metric_definitions", lambda: [])()
+            }
+            categories = {
+                row["id"]: row for row in getattr(self._repo, "list_cost_categories", lambda: [])()
+            }
+            metric_definition_ids = {
+                str(row["metric_definition_id"])
+                for row in scope_rows
+                if row.get("scope_type") == "metric_definition"
+                and row.get("is_active", True)
+                and row.get("metric_definition_id") in definitions
+            }
+            cost_category_ids = {
+                str(row["cost_category_id"])
+                for row in scope_rows
+                if row.get("scope_type") == "cost_category"
+                and row.get("is_active", True)
+                and row.get("cost_category_id") in categories
+            }
+            metric_keys = {
+                str(definitions[metric_id]["key"])
+                for metric_id in metric_definition_ids
+                if str(definitions[metric_id]["key"]) in valid_metric_keys
+            }
+            cost_keys = {
+                str(categories[category_id]["key"])
+                for category_id in cost_category_ids
+                if str(categories[category_id]["key"]) in valid_cost_keys
+            }
+            return InitiativeFinancialSelections(
+                metric_keys=sorted(metric_keys),
+                cost_category_keys=sorted(cost_keys),
+                metric_definition_ids=sorted(metric_definition_ids),
+                cost_category_ids=sorted(cost_category_ids),
+            )
         selection_rows = self._repo.list_financial_selections(initiative_id)
         if selection_rows:
             metric_keys = {
@@ -4072,9 +4219,25 @@ class FinancialService:
                 if self._cost_line_has_value(row) and category_key in valid_cost_keys:
                     cost_keys.add(category_key)
 
+        metric_keys = metric_keys & valid_metric_keys
+        cost_keys = cost_keys & valid_cost_keys
+        definitions_by_key = {
+            row["key"]: row for row in getattr(self._repo, "list_metric_definitions", lambda: [])()
+        }
+        categories_by_key = {
+            row["key"]: row for row in getattr(self._repo, "list_cost_categories", lambda: [])()
+        }
         return InitiativeFinancialSelections(
-            metric_keys=sorted(metric_keys & valid_metric_keys),
-            cost_category_keys=sorted(cost_keys & valid_cost_keys),
+            metric_keys=sorted(metric_keys),
+            cost_category_keys=sorted(cost_keys),
+            metric_definition_ids=sorted(
+                str(definitions_by_key[key]["id"])
+                for key in metric_keys
+                if key in definitions_by_key
+            ),
+            cost_category_ids=sorted(
+                str(categories_by_key[key]["id"]) for key in cost_keys if key in categories_by_key
+            ),
         )
 
     def _active_selection_keys(
@@ -4097,6 +4260,30 @@ class FinancialService:
 
     def initialize_default_selections(self, initiative_id: str) -> None:
         valid_metric_keys, valid_cost_keys = self._active_selection_keys()
+        engine = self.get_engine_configuration()
+        metric_ids_by_key = {
+            definition.key: str(definition.id) for definition in engine.definitions
+        }
+        category_ids_by_key = {
+            category.key: str(category.id) for category in engine.cost_categories if category.id
+        }
+        default_metric_ids = [
+            metric_ids_by_key[key]
+            for key in self._default_metric_keys()
+            if key in metric_ids_by_key
+        ]
+        default_category_ids = [
+            category_ids_by_key[key]
+            for key in self._default_cost_category_keys()
+            if key in category_ids_by_key
+        ]
+        getattr(self._repo, "replace_financial_scope", lambda *args, **kwargs: None)(
+            initiative_id,
+            default_metric_ids,
+            default_category_ids,
+            sorted(metric_ids_by_key.values()),
+            sorted(category_ids_by_key.values()),
+        )
         self._repo.replace_financial_selections(
             initiative_id,
             self._default_metric_keys(),
@@ -4108,12 +4295,9 @@ class FinancialService:
     @staticmethod
     def _default_metric_keys() -> list[str]:
         return [
-            "revenue_uplift_base",
-            "revenue_uplift_high",
-            "revenue_uplift_actual",
-            "gm_uplift_base",
-            "gm_uplift_high",
-            "gm_uplift_actual",
+            "revenue_uplift",
+            "gross_margin",
+            "gm_uplift",
             "cost_savings",
         ]
 
@@ -5311,7 +5495,9 @@ class FinancialService:
         repo = getattr(self, "_repo", None)
         if repo is None:
             return {}
-        return {str(row["id"]): row for row in repo.list_metric_definitions()}
+        return {
+            str(row["id"]): row for row in getattr(repo, "list_metric_definitions", lambda: [])()
+        }
 
     @staticmethod
     def _baseline_amount(
@@ -5620,6 +5806,102 @@ class FinancialService:
         return str(year)
 
     @staticmethod
+    def _engine_configuration_as_legacy_response(
+        config: FinancialEngineConfigurationResponse,
+    ) -> FinancialConfigurationResponse:
+        groups: dict[str, FinancialConfigGroup] = {
+            "benefits": FinancialConfigGroup(
+                key="benefits",
+                label="Benefits",
+                kind="calculation",
+                rollup_type="benefit",
+                display_order=10,
+                is_system=True,
+            ),
+            "recurring_costs": FinancialConfigGroup(
+                key="recurring_costs",
+                label="Recurring Costs",
+                kind="calculation",
+                rollup_type="recurring_cost",
+                display_order=20,
+                is_system=True,
+            ),
+            "one_off_costs": FinancialConfigGroup(
+                key="one_off_costs",
+                label="One-off Costs",
+                kind="calculation",
+                rollup_type="one_off_cost",
+                display_order=30,
+                is_system=True,
+            ),
+            "net_value": FinancialConfigGroup(
+                key="net_value",
+                label="Net Value",
+                kind="calculation",
+                rollup_type="net_value",
+                display_order=40,
+                is_system=True,
+            ),
+        }
+        items: list[FinancialConfigItem] = []
+
+        for definition in config.definitions:
+            group_key = definition.group_key or ("benefits" if definition.is_benefit else "metrics")
+            if group_key not in groups:
+                groups[group_key] = FinancialConfigGroup(
+                    key=group_key,
+                    label=group_key.replace("_", " ").title(),
+                    kind="metric",
+                    display_order=100 + len(groups),
+                    is_system=definition.is_system,
+                    is_active=True,
+                )
+            items.append(
+                FinancialConfigItem(
+                    id=definition.id,
+                    group_key=group_key,
+                    key=definition.key,
+                    label=definition.label,
+                    item_type="metric",
+                    system_metric_key=definition.key,
+                    rollup_type=definition.rollup_type,
+                    display_order=definition.display_order,
+                    is_system=definition.is_system,
+                    is_active=definition.is_active,
+                )
+            )
+
+        for category in config.cost_categories:
+            group_key = category.group_key or "costs"
+            if group_key not in groups:
+                groups[group_key] = FinancialConfigGroup(
+                    key=group_key,
+                    label=group_key.replace("_", " ").title(),
+                    kind="cost_category",
+                    display_order=200 + len(groups),
+                    is_system=category.is_system,
+                    is_active=True,
+                )
+            items.append(
+                FinancialConfigItem(
+                    id=category.id,
+                    group_key=group_key,
+                    key=category.key,
+                    label=category.label,
+                    item_type="cost_category",
+                    rollup_type=category.rollup_type,
+                    display_order=category.display_order,
+                    is_system=category.is_system,
+                    is_active=category.is_active,
+                )
+            )
+
+        return FinancialConfigurationResponse(
+            groups=sorted(groups.values(), key=lambda group: group.display_order),
+            items=sorted(items, key=lambda item: (item.item_type, item.display_order, item.label)),
+        )
+
+    @staticmethod
     def _to_config_group(row: dict) -> FinancialConfigGroup:  # type: ignore[type-arg]
         return FinancialConfigGroup(
             id=row.get("id"),
@@ -5656,7 +5938,7 @@ class FinancialService:
             label=row["label"],
             description=row.get("description"),
             group_key=row.get("group_key"),
-            value_type=row["value_type"],
+            value_type=row.get("value_type") or "currency",
             unit=row.get("unit"),
             direction=row.get("direction") or "increase_good",
             aggregation=row.get("aggregation") or "sum",
@@ -5681,8 +5963,8 @@ class FinancialService:
         return FinancialScenarioDefinition(
             id=row["id"],
             key=row["key"],
-            label=row["label"],
-            kind=row["kind"],
+            label=row.get("label") or str(row["key"]).replace("_", " ").title(),
+            kind=row.get("kind") or ("actual" if row.get("key") == "actual" else "plan"),
             is_primary=row.get("is_primary", False),
             is_system=row.get("is_system", False),
             is_active=row.get("is_active", True),
@@ -5697,9 +5979,24 @@ class FinancialService:
             label=row["label"],
             row_kind=row["row_kind"],
             metric_definition_ids=row.get("metric_definition_ids") or [],
+            cost_category_ids=row.get("cost_category_ids") or [],
             cost_category_keys=row.get("cost_category_keys") or [],
             sign=row.get("sign") or 1,
             display_order=row.get("display_order") or 0,
+            is_active=row.get("is_active", True),
+        )
+
+    @staticmethod
+    def _to_cost_category(row: dict) -> FinancialCostCategory:  # type: ignore[type-arg]
+        return FinancialCostCategory(
+            id=row.get("id"),
+            key=row["key"],
+            label=row["label"],
+            group_key=row.get("group_key"),
+            rollup_type=row.get("rollup_type"),
+            display_order=row.get("display_order") or 0,
+            attributes=row.get("attributes") or {},
+            is_system=row.get("is_system", False),
             is_active=row.get("is_active", True),
         )
 
@@ -6193,6 +6490,7 @@ class FinancialService:
             id=row["id"],
             initiative_id=row["initiative_id"],
             name=row["name"],
+            category_id=row.get("category_id"),
             category_key=row.get("category_key") or "other",
             year=row["year"],
             quarter=row.get("quarter"),

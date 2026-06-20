@@ -7,7 +7,7 @@ controllers, and implementation teams configuring a new tenant.
 
 This guide explains the **Admin -> Financial Configuration** menu in Transmuter,
 including the configurable financial metric engine, annual baselines, scenarios,
-value bridge rows, calculation groups, metric rows, and cost categories.
+value bridge rows, line attributes, reporting settings, and cost categories.
 
 It also explains how these settings are implemented in the current system, how
 they relate to initiative financial entry and portfolio reporting, what breaks
@@ -30,34 +30,31 @@ It answers these questions:
 
 | Question | Configuration area |
 |---|---|
-| What financial metrics can initiatives use? | Metric Engine -> Metric Definitions |
-| What is the original business baseline? | Metric Engine -> Annual Baselines |
-| Which lanes should be tracked? | Metric Engine -> Scenarios |
-| How should value be presented to executives? | Metric Engine -> Value Bridge Rows |
-| Which extra fields should benefit and cost lines capture? | Metric Engine -> Line Attribute Registry |
-| Which fixed legacy rollups exist? | Calculation Groups |
-| Which legacy/display metric rows are visible? | Metric Rows |
-| Which cost categories can cost lines use? | Cost Categories |
+| What financial metrics can initiatives use? | Financial Configuration Engine -> Metric Definitions |
+| What is the original business baseline? | Financial Configuration Engine -> Annual Baselines |
+| Which lanes should be tracked? | Financial Configuration Engine -> Scenarios |
+| How should value be presented to executives? | Financial Configuration Engine -> Value Bridge Rows |
+| Which extra fields should benefit and cost lines capture? | Financial Configuration Engine -> Line Attribute Registry |
+| Which cost categories can cost lines use? | Financial Configuration Engine -> Cost Categories |
 | What fiscal calendar and currency should reports use? | Reporting Settings |
 
-There are currently two configuration layers in this screen:
+There is now one active configuration layer in this screen:
 
-1. **Financial Metric Engine**
-   - New configurable financial model.
-   - Uses tenant-scoped metric definitions, scenarios, benefit lines, monthly
-     metric values, formulas, annual baselines, bridge rows, and reporting
-     settings.
-   - Primary source for new tenant financial data.
+**Financial Configuration Engine**
 
-2. **Legacy Financial Configuration**
-   - Older tenant taxonomy for calculation groups, metric rows, and cost
-     categories.
-   - Still used by cost category selectors, cost breakdowns, some legacy
-     compatibility paths, and category filters.
+- Tenant-scoped source of truth for metric definitions, scenarios, benefit
+  lines, monthly metric values, formulas, annual baselines, cost categories,
+  bridge rows, line attributes, and reporting settings.
+- Cost lines are assigned to engine-owned cost categories. The category key is
+  still stored for import/export and backward-compatible reporting, but the
+  category definition is managed by the engine.
+- Legacy calculation groups and metric rows are retained only as compatibility
+  facades for old data paths and historical `financial_entries` views. Do not
+  configure them as a second model for new tenants.
 
-For a new tenant, configure both layers. The metric engine defines benefits and
-formulas. The legacy cost configuration defines cost categories and cost rollup
-behavior.
+For a new tenant, configure only the Financial Configuration Engine. ACME and
+Ishirock are the protected tenant examples; other sample tenants can be reset or
+removed during cleanup if they are not needed for a release validation run.
 
 ---
 
@@ -86,10 +83,12 @@ Primary tables:
 | `financial_benefit_lines` | Stores named benefit lines under initiatives, tied to metric definitions. |
 | `financial_metric_values` | Stores monthly values by initiative, metric, scenario, optional benefit line, year, and month. |
 | `financial_cost_lines` | Stores initiative cost lines with category, plan amount, actual amount, period, and recurring flag. |
+| `financial_cost_categories` | Defines tenant-owned cost categories used by cost lines, value bridge cost rows, and filters. |
 | `financial_bridge_rows` | Defines report bridge rows and their metric/cost inputs. |
 | `financial_attribute_definitions` | Defines reusable benefit-line and cost-line attribute names/types. |
-| `financial_config_groups` | Legacy/admin grouping for calculations, metric rows, and cost category groups. |
-| `financial_config_items` | Legacy/admin metric row and cost category items. |
+| `initiative_financial_scope` | Stores the engine metric and cost category scope selected for each initiative. |
+| `financial_config_groups` | Compatibility grouping for older calculation and metric row paths. Not the active engine. |
+| `financial_config_items` | Compatibility items for older metric row and cost category paths. Not the active engine. |
 
 ### 2.2 Money handling
 
@@ -166,13 +165,10 @@ For a new tenant, configure in this order:
    - Finance owner, benefit owner, evidence source, P&L line, confidence,
      dependency, vendor, cost nature, or other tenant-specific fields.
 
-8. **Calculation groups and metric rows**
-   - Keep aligned with the tenant's executive language and legacy display needs.
-
-9. **Initiative financial setup**
+8. **Initiative financial setup**
    - Add initiative baselines, benefit lines, monthly values, and cost lines.
 
-10. **Governance**
+9. **Governance**
    - Configure stage gates, gate criteria, bankable plan lock, and benefit
      validation expectations.
 
@@ -226,7 +222,7 @@ monthly values remain unchanged.
 
 ---
 
-## 5. Financial Metric Engine
+## 5. Financial Configuration Engine
 
 Metric definitions are the heart of the configurable financial model.
 
@@ -241,7 +237,7 @@ Metric definitions are the heart of the configurable financial model.
 | Unit | Optional unit label. | `%`, `hours`, `USD/hour` |
 | Direction | Whether increase or decrease is favorable. | `increase_good` |
 | Aggregation | How monthly values roll up. | `sum`, `avg`, `last`, `formula` |
-| Rollup type | Legacy rollup hint. | `benefit`, `total_cost` |
+| Rollup type | Reporting rollup hint. | `benefit`, `total_cost` |
 | Is benefit | Whether values count as benefits. | `true` |
 | Benefit class | Benefit type. | `revenue`, `margin`, `savings`, `avoidance`, `other` |
 | Formula | Expression for computed rows. | `gm_uplift / revenue_uplift * 100` |
@@ -553,7 +549,7 @@ investment view.
 | Cost rows | Cost burden is hidden or net value appears overstated. |
 | Net row | Executives cannot see clear net value. |
 | Wrong metric IDs | Values show zero even when initiative data exists. |
-| Wrong cost category keys | Cost rows show zero or omit costs. |
+| Wrong cost category selections | Cost rows show zero or omit costs. |
 
 ### 8.5 Best-practice guidance
 
@@ -640,104 +636,70 @@ weaker:
 
 ---
 
-## 10. Calculation Groups
+## 10. Legacy Compatibility Model
 
-Calculation groups are the older financial configuration layer for standard
-rollups.
+Older Transmuter releases used `financial_config_groups`,
+`financial_config_items`, `financial_entries`, and
+`initiative_financial_selections` to model calculation groups, display metric
+rows, and cost categories. Those records can still exist because some older
+tenants, imports, exports, and compatibility endpoints may read them.
 
-### 10.1 Default groups
+They are no longer the active admin configuration model.
 
-Typical calculation groups:
+### 10.1 Current role
 
-| Group | Rollup type |
+The Financial Configuration Engine owns:
+
+- metric definitions instead of legacy metric rows,
+- cost categories instead of legacy cost category items,
+- bridge rows instead of fixed calculation group behavior,
+- initiative financial scope instead of legacy initiative selections.
+
+When an initiative scope is saved, the platform writes the engine scope and
+mirrors the older selection shape for compatibility. When cost lines are saved,
+the platform resolves the engine cost category and also stores the category key
+for reports and workbook flows that still expect a stable text key.
+
+### 10.2 Why compatibility remains
+
+The compatibility tables and endpoints remain available to protect upgraded
+tenants and reduce rollout risk:
+
+| Compatibility area | Why it remains |
 |---|---|
-| Benefits | `benefit` |
-| Recurring Costs | `recurring_cost` |
-| One-time Costs | `one_off_cost` |
-| Total Costs | `total_cost` |
-| Net Value | `net_value` |
+| `financial_entries` | Older initiative financial grids and historical data may still reference legacy row keys. |
+| `financial_config_groups` / `financial_config_items` | Existing tenants may have saved labels and row visibility settings. |
+| `initiative_financial_selections` | Older initiative scope reads can still resolve selected rows during migration. |
+| `financial_cost_lines.category_key` | Workbook import/export, category filters, and older reports use stable category keys. |
 
-### 10.2 Current role
+For ACME and Ishirock, the engine should be the source of truth. Non-essential
+sample tenants can be deleted or reloaded once ACME and Ishirock have been
+validated against the engine.
 
-Calculation groups support legacy/configuration compatibility and naming. The
-new metric engine drives most configurable benefit behavior, but cost and
-legacy reporting paths still refer to these rollup concepts.
+### 10.3 Impact of moving under one engine
 
-### 10.3 Impact if misconfigured
-
-If calculation groups are renamed, reporting usually still works because keys
-and rollup types matter more than labels. If groups are deleted or deactivated
-without replacement, older financial configuration screens and legacy paths may
-lose structure.
+| Area | Impact |
+|---|---|
+| Admin setup | Admins configure one model instead of matching two separate financial surfaces. |
+| Cost classification | Cost lines resolve to tenant-owned engine categories while preserving keys for compatibility. |
+| Value bridge | Cost-set rows reference engine category IDs, reducing key drift and deleted-category errors. |
+| Initiative scope | Scope can include both metric definitions and cost categories in one tenant-scoped table. |
+| Tenant cleanup | Deleting a tenant must remove `initiative_financial_scope` and `financial_cost_categories` along with cost lines and metric values. |
+| Migration risk | Existing data must be backfilled so old category keys map to engine categories before legacy categories are de-emphasized. |
 
 ### 10.4 Best-practice guidance
 
-Keep calculation groups simple. Use them to mirror executive reporting:
-
-- Benefits,
-- Recurring Costs,
-- One-off Costs,
-- Total Costs,
-- Net Value.
-
-Do not create too many calculation groups. Use metric definitions and bridge
-rows for detailed model design.
+Do not create new calculation groups or metric rows for new tenant work. Create
+metric definitions, scenarios, cost categories, and bridge rows in the engine.
+Treat legacy configuration screens or endpoints as migration aids only.
 
 ---
 
-## 11. Metric Rows
-
-Metric rows are part of the older financial configuration layer.
-
-### 11.1 What they do
-
-Metric rows let admins rename, hide, and group legacy/system metric rows without
-deleting values.
-
-Default groups historically included:
-
-- Revenue,
-- COGS,
-- Gross Margin.
-
-Default metric rows historically included base/high/actual variants such as:
-
-- Revenue Uplift Base,
-- Revenue Uplift High,
-- Revenue Uplift Actual,
-- Gross Margin Base,
-- GM Uplift Base,
-- COGS Base,
-- percentage rows.
-
-### 11.2 Current role
-
-For clean/new data, metric definitions are the preferred source of truth.
-Metric rows still support compatibility with existing financial selections,
-legacy `financial_entries`, and display/scoping controls.
-
-### 11.3 Impact if misconfigured
-
-| Misconfiguration | Impact |
-|---|---|
-| Hiding legacy metric rows | Legacy initiative financial grids may hide those rows. |
-| Deleting custom legacy rows | Existing selections may need replacement. |
-| Changing labels only | Usually safe; changes display labels, not financial math. |
-| Confusing metric rows with metric definitions | New configurable engine reports may not change because they use metric definitions. |
-
-### 11.4 Best-practice guidance
-
-For new tenants, prefer metric definitions over legacy metric rows. Keep legacy
-metric rows aligned with the same language, but do not use them as the main
-configuration surface for new value models.
-
----
-
-## 12. Cost Categories
+## 11. Cost Categories
 
 Cost categories define the taxonomy used by initiative cost lines.
 
-### 12.1 What they control
+### 11.1 What they control
 
 Cost categories control:
 
@@ -748,17 +710,28 @@ Cost categories control:
 - contributor drawer cost labels,
 - recurring versus one-off defaults in the UI.
 
-### 12.2 Cost category fields
+### 11.2 Cost category fields
 
 | Field | Meaning |
 |---|---|
-| Group | Category group, such as Implementation or Operating. |
+| ID | Tenant-scoped engine category identifier used by cost lines and bridge rows. |
 | Key | Stable category key saved on cost lines. |
 | Label | User-facing category name. |
-| Rollup type | `recurring_cost`, `one_off_cost`, or blank. |
+| Group key | Category group, such as implementation, operating, technology, or people. |
+| Rollup type | `recurring_cost`, `one_off_cost`, `total_cost`, or blank. |
+| Display order | Sort order in selectors and admin lists. |
+| Attributes | Optional tenant-specific metadata. |
 | Active | Whether available in selectors. |
 
-### 12.3 Default categories
+Admin API:
+
+```text
+POST /admin/financial-engine/cost-categories
+PATCH /admin/financial-engine/cost-categories/{cost_category_id}
+GET /financial-engine-configuration
+```
+
+### 11.3 Default categories
 
 Common defaults:
 
@@ -771,7 +744,7 @@ Common defaults:
 | Labor / Operations | `recurring_cost` |
 | Other | blank or tenant-specific |
 
-### 12.4 ACME example
+### 11.4 ACME example
 
 ACME deliberately separates cost treatment:
 
@@ -789,17 +762,17 @@ $5.40M GM uplift + $3.75M cost savings - $0.80M recurring cost
 
 ACME also shows $2.5M one-off investment separately for payback discussion.
 
-### 12.5 Impact if categories are missing or wrong
+### 11.5 Impact if categories are missing or wrong
 
 | Problem | Impact |
 |---|---|
 | No categories | Users cannot classify costs well; breakdowns are weak. |
 | Wrong recurring/one-off treatment | Net run-rate can be materially wrong. |
 | Category key removed while cost lines exist | Existing costs need reassignment. |
-| Bridge rows do not include category keys | Costs are missing from value bridge. |
+| Bridge rows do not include the relevant cost categories | Costs are missing from value bridge. |
 | Everything classified as Other | Dashboards work, but management insight is poor. |
 
-### 12.6 Best-practice guidance
+### 11.6 Best-practice guidance
 
 Create a small, finance-approved cost taxonomy before entering data. Avoid
 overly granular categories unless they support decision-making.
@@ -816,7 +789,7 @@ Recommended minimum:
 
 ---
 
-## 13. How The Pieces Relate
+## 12. How The Pieces Relate
 
 The financial model is connected like this:
 
@@ -851,7 +824,7 @@ Bridge Rows
   -> Executive explanation of benefits, costs, and net value
 ```
 
-### 13.1 Example: ACME metric flow
+### 12.1 Example: ACME metric flow
 
 ACME has these benefit metrics:
 
@@ -874,7 +847,7 @@ Revenue uplift remains visible as a driver, but should not be added to EBITDA
 net value unless the tenant intentionally defines a separate enterprise-value
 view.
 
-### 13.2 Hypothetical example: automation productivity
+### 12.2 Hypothetical example: automation productivity
 
 Suppose a tenant wants to model productivity:
 
@@ -898,11 +871,11 @@ released hours only create capacity and not recognized margin, keep
 
 ---
 
-## 14. Dashboard, Report, And Chart Mapping
+## 13. Dashboard, Report, And Chart Mapping
 
 This section maps each financial configuration item to the user-facing screens.
 
-### 14.1 Dashboard `/dashboard`
+### 13.1 Dashboard `/dashboard`
 
 Financial configuration affects:
 
@@ -918,7 +891,7 @@ If metrics are not configured, the dashboard still shows initiative counts,
 RAG, risks, milestones, actions, and KPIs, but financial value cards and matrix
 cells will be zero or incomplete.
 
-### 14.2 Portfolio Financials `/financials`
+### 13.2 Portfolio Financials `/financials`
 
 Financial configuration affects:
 
@@ -931,7 +904,7 @@ Financial configuration affects:
 | Run-rate value ramp | Period net value from benefits less recurring costs. |
 | Value bridge | Bridge rows, metric definitions, scenarios, cost categories. |
 | Plan vs Actuals table | Scenarios, monthly values, cost plan/actual amounts. |
-| Cost Breakdown | Cost categories and cost line category keys. |
+| Cost Breakdown | Engine cost categories and cost line category assignments. |
 | Contributor drawer | Benefit lines, benefit validation, evidence, cost lines. |
 | Board Pack export | Same selected financial basis and report payload. |
 
@@ -939,7 +912,7 @@ If cost categories are not configured, cost breakdown and category filters are
 weak. If benefit metrics are not configured, benefits and net value are zero.
 If scenarios are missing, actual toggles and base/high cases are incomplete.
 
-### 14.3 Initiative Portfolio `/financials/initiative-portfolio`
+### 13.3 Initiative Portfolio `/financials/initiative-portfolio`
 
 Financial configuration affects:
 
@@ -957,7 +930,7 @@ If initiative baselines are missing, rows are flagged incomplete and
 reconciliation fails. If benefit metrics are not marked as benefits, value
 columns may not appear or totals may be zero.
 
-### 14.4 Benefits Register `/financials/benefits-register`
+### 13.4 Benefits Register `/financials/benefits-register`
 
 Financial configuration affects:
 
@@ -973,7 +946,7 @@ If benefit lines are not created, the register is empty even if summary values
 exist at metric level. For good governance, use benefit lines for material value
 claims.
 
-### 14.5 Benefit Tracking `/financials/benefit-tracking`
+### 13.5 Benefit Tracking `/financials/benefit-tracking`
 
 Financial configuration affects:
 
@@ -989,7 +962,7 @@ Tracking also depends on bankable plan locks and actual realization ledger data.
 If plans are not locked or actual ledger rows are missing, this screen cannot
 show realization discipline.
 
-### 14.6 Bankable Plan `/financials/bankable-plan`
+### 13.6 Bankable Plan `/financials/bankable-plan`
 
 Financial configuration affects:
 
@@ -1002,7 +975,7 @@ Financial configuration affects:
 If financial configuration is incomplete before a lock, the locked snapshot will
 preserve incomplete financial data. Rebaseline should be governed and auditable.
 
-### 14.7 Waterline `/financials/waterline`
+### 13.7 Waterline `/financials/waterline`
 
 Financial configuration affects:
 
@@ -1016,7 +989,7 @@ If workstream target locks are missing, the waterline cannot show committed
 value. If net value is miscalculated because recurring costs are wrong, the
 waterline will also be wrong.
 
-### 14.8 Shared Costs `/shared-costs`
+### 13.8 Shared Costs `/shared-costs`
 
 Financial configuration affects this indirectly.
 
@@ -1025,7 +998,7 @@ in Executive Control Tower burdened value views, not as direct initiative cost
 lines. Keep shared-cost governance separate from direct cost categories unless
 Finance wants allocated shared costs to be part of direct initiative economics.
 
-### 14.9 Executive Control Tower `/reports/control-tower`
+### 13.9 Executive Control Tower `/reports/control-tower`
 
 Financial configuration affects:
 
@@ -1045,14 +1018,14 @@ What is the portfolio value after shared cost burden?
 
 Use it after the core metric engine and direct cost categories are working.
 
-### 14.10 Initiative Detail Financials
+### 13.10 Initiative Detail Financials
 
 Financial configuration affects:
 
 | Area | Configuration used |
 |---|---|
 | Scenario toggle | Active scenarios. |
-| Financial grid rows | Active metric definitions and legacy metric rows. |
+| Financial grid rows | Active metric definitions and formula rows. |
 | Read-only formula rows | Formula metric definitions. |
 | Benefit line creation | Active non-formula benefit metric definitions. |
 | Cost line creation | Active cost categories. |
@@ -1065,7 +1038,7 @@ If cost categories are missing, cost line creation falls back to poor taxonomy.
 
 ---
 
-## 15. What Functionality Is Unavailable Without Proper Configuration
+## 14. What Functionality Is Unavailable Without Proper Configuration
 
 | Missing configuration | Functionality degraded or unavailable |
 |---|---|
@@ -1083,9 +1056,9 @@ If cost categories are missing, cost line creation falls back to poor taxonomy.
 
 ---
 
-## 16. Finance And Transformation Best-Practice Assessment
+## 15. Finance And Transformation Best-Practice Assessment
 
-### 16.1 What the current model does well
+### 15.1 What the current model does well
 
 The current model aligns with strong finance/transformation practice in these
 ways:
@@ -1100,7 +1073,7 @@ ways:
 8. It uses Decimal money handling.
 9. It supports benefit line drilldown, not just top-line summary numbers.
 
-### 16.2 Where tenants must be careful
+### 15.2 Where tenants must be careful
 
 The model is powerful enough to create bad reporting if configured poorly.
 
@@ -1116,7 +1089,7 @@ Common risks:
 | Too many custom metrics | Users cannot maintain the model. | Start with a small, finance-approved metric set. |
 | Changing keys after data load | Formulas/imports/reports may break. | Treat keys as permanent after launch. |
 
-### 16.3 ACME assessment
+### 15.3 ACME assessment
 
 ACME is configured correctly for a board-demo transformation tenant:
 
@@ -1131,7 +1104,7 @@ ACME is configured correctly for a board-demo transformation tenant:
 | Dashboards | Good: FY28 Financial Overview, contributor drawer, Benefits Register, Benefit Tracking, Waterline, and board pack are populated. |
 | Caveat | Revenue uplift should remain a driver, not be added into EBITDA net value. |
 
-### 16.4 Better ways to use the model
+### 15.4 Better ways to use the model
 
 For production tenants, improve on demo configuration by adding:
 
@@ -1147,11 +1120,11 @@ For production tenants, improve on demo configuration by adding:
 
 ---
 
-## 17. Quick-Start Template For A New Tenant
+## 16. Quick-Start Template For A New Tenant
 
 Use this as a starting point.
 
-### 17.1 Metric definitions
+### 16.1 Metric definitions
 
 | Key | Label | Type | Aggregation | Benefit class | Benefit? |
 |---|---|---|---|---|---|
@@ -1176,7 +1149,7 @@ gross_margin_run_rate_pct = target_gross_margin / target_revenue * 100
 gm_improvement_pct = gm_uplift / baseline_annual_gross_margin_baseline * 100
 ```
 
-### 17.2 Scenarios
+### 16.2 Scenarios
 
 | Key | Label | Kind |
 |---|---|---|
@@ -1186,7 +1159,7 @@ gm_improvement_pct = gm_uplift / baseline_annual_gross_margin_baseline * 100
 | `actual` | Actual | actual |
 | `forecast` | Forecast | forecast |
 
-### 17.3 Cost categories
+### 16.3 Cost categories
 
 | Key | Label | Rollup |
 |---|---|---|
@@ -1199,7 +1172,7 @@ gm_improvement_pct = gm_uplift / baseline_annual_gross_margin_baseline * 100
 | `labor` | Labor / Operations | recurring |
 | `other` | Other | blank |
 
-### 17.4 Value bridge rows
+### 16.4 Value bridge rows
 
 | Row | Kind | Inputs | Sign |
 |---|---|---|---:|
@@ -1210,7 +1183,7 @@ gm_improvement_pct = gm_uplift / baseline_annual_gross_margin_baseline * 100
 | One-off Investment | cost_set | implementation, consulting, tooling, training | - |
 | Net Run-rate Value | net | calculated | + |
 
-### 17.5 Baselines
+### 16.5 Baselines
 
 Set at least:
 
@@ -1222,7 +1195,7 @@ Portfolio should reconcile to zero variance or an explained rounding variance.
 
 ---
 
-## 18. Operating Checklist
+## 17. Operating Checklist
 
 Before go-live:
 
@@ -1251,7 +1224,7 @@ Monthly operating cadence:
 
 ---
 
-## 19. Recommendations
+## 18. Recommendations
 
 1. Keep `plan_base`, `plan_high`, `actual`, and `baseline` keys as standard
    keys. Rename labels if needed, but avoid changing keys.

@@ -12,6 +12,7 @@ from app.domain.initiatives import InitiativeCreate
 from app.main import _login_attempts, app
 from app.repositories.audit import AuditRepository
 from app.routers.auth import _mint_token
+from app.routers.platform import TENANT_DELETE_TABLES
 
 client = TestClient(app)
 
@@ -398,6 +399,10 @@ def test_register_cleans_up_partial_tenant_when_bootstrap_fails(monkeypatch) -> 
         "user_workstreams",
         "users",
         "gate_criteria",
+        "financial_initiative_annual_baselines",
+        "financial_tenant_annual_baselines",
+        "initiative_financial_scope",
+        "financial_cost_categories",
         "financial_config_items",
         "financial_config_groups",
         "organizations",
@@ -599,6 +604,52 @@ def test_user_lifecycle_migration_revokes_direct_user_mutations() -> None:
         "REVOKE INSERT, UPDATE, DELETE ON TABLE user_workstreams FROM anon, authenticated"
         in migration
     )
+
+
+def test_financial_engine_consolidation_migration_enforces_tenant_refs() -> None:
+    migration = (
+        Path(__file__)
+        .parents[3]
+        .joinpath(
+            "supabase/migrations/20260619000001_financial_engine_cost_category_consolidation.sql"
+        )
+        .read_text()
+    )
+
+    assert "financial_cost_lines_category_tenant_fk" in migration
+    assert "FOREIGN KEY (tenant_id, category_id)" in migration
+    assert "REFERENCES financial_cost_categories(tenant_id, id)" in migration
+    assert "initiative_financial_scope_initiative_tenant_fk" in migration
+    assert "FOREIGN KEY (tenant_id, initiative_id)" in migration
+    assert "initiative_financial_scope_metric_tenant_fk" in migration
+    assert "FOREIGN KEY (tenant_id, metric_definition_id)" in migration
+    assert "initiative_financial_scope_category_tenant_fk" in migration
+    assert "FOREIGN KEY (tenant_id, cost_category_id)" in migration
+    assert "financial_bridge_rows_validate_tenant_refs" in migration
+    assert "NEW.metric_definition_ids" in migration
+    assert "NEW.cost_category_ids" in migration
+
+
+def test_financial_engine_consolidation_migration_is_dirty_rollup_tolerant() -> None:
+    migration = (
+        Path(__file__)
+        .parents[3]
+        .joinpath(
+            "supabase/migrations/20260619000001_financial_engine_cost_category_consolidation.sql"
+        )
+        .read_text()
+    )
+
+    assert (
+        "item.rollup_type IN ('recurring_cost','one_off_cost','total_cost','net_value')"
+        in migration
+    )
+    assert "ELSE NULL" in migration
+
+
+def test_platform_tenant_delete_preview_includes_annual_baselines() -> None:
+    assert "financial_initiative_annual_baselines" in TENANT_DELETE_TABLES
+    assert "financial_tenant_annual_baselines" in TENANT_DELETE_TABLES
 
 
 def test_custom_tag_migration_removes_legacy_fixed_tag_constraint() -> None:

@@ -104,7 +104,8 @@ This setup tests that the financial engine can configure:
 - formula metrics that become financial benefits (`auto_gross_margin_gain`),
 - formula metrics that are informational and not benefits (`auto_realization_pct`),
 - bridge rows driven by metric definition IDs,
-- cost bridge rows driven by cost category keys.
+- cost bridge rows driven by engine cost category IDs with stable category keys
+  retained for import/export.
 
 ---
 
@@ -352,7 +353,7 @@ Automation Gross Margin Gain, Plan Base
 
 #### `cost_set`
 
-Sums cost lines for the listed cost category keys.
+Sums cost lines for the selected engine cost categories.
 
 If sign is `-1`, the displayed bridge row is negative.
 

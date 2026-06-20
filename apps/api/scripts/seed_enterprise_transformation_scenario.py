@@ -141,10 +141,12 @@ def delete_tenant_rows(client: Client, tenant_id: str) -> None:
         "bankable_plans",
         "gate_submissions",
         "financial_metric_values",
+        "initiative_financial_scope",
         "financial_benefit_lines",
         "financial_cost_lines",
         "financial_bridge_rows",
         "financial_attribute_definitions",
+        "financial_cost_categories",
         "financial_metric_definitions",
         "financial_scenarios",
         "financial_config_items",
@@ -639,6 +641,35 @@ def insert_engine_config(
         ).execute()
         metric_ids[key] = row_id
 
+    cost_categories = [
+        ("implementation", "Implementation / Project Cost", "implementation", "one_off_cost", 10),
+        ("technology_tooling", "Technology / Tooling", "implementation", "one_off_cost", 20),
+        ("external_consultants", "External Consultants", "implementation", "one_off_cost", 30),
+        ("training_change", "Training / Change Management", "implementation", "one_off_cost", 40),
+        ("software", "Software / Licenses", "operating", "recurring_cost", 50),
+        ("maintenance", "Support / Maintenance", "operating", "recurring_cost", 60),
+        ("labor", "People Support", "operating", "recurring_cost", 70),
+        ("other", "Other", "uncategorized", None, 999),
+    ]
+    cost_category_ids: dict[str, str] = {}
+    for key, label, group_key, rollup_type, order in cost_categories:
+        row_id = str(uuid4())
+        client.table("financial_cost_categories").insert(
+            {
+                "id": row_id,
+                "tenant_id": tenant_id,
+                "key": key,
+                "label": label,
+                "group_key": group_key,
+                "rollup_type": rollup_type,
+                "display_order": order,
+                "attributes": {},
+                "is_system": True,
+                "is_active": True,
+            }
+        ).execute()
+        cost_category_ids[key] = row_id
+
     bridge_rows = [
         ("revenue", "Revenue Uplift", "metric_set", ["revenue_uplift"], [], 1, 10),
         ("margin", "Gross Margin Uplift", "metric_set", ["gm_uplift"], [], 1, 20),
@@ -672,6 +703,7 @@ def insert_engine_config(
                 "label": label,
                 "row_kind": row_kind,
                 "metric_definition_ids": [metric_ids[m] for m in metric_keys],
+                "cost_category_ids": [cost_category_ids[c] for c in cost_keys],
                 "cost_category_keys": cost_keys,
                 "sign": sign,
                 "display_order": order,

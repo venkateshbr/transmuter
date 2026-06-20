@@ -59,6 +59,7 @@ interface FinancialGrid {
   initiative_id: string;
   definitions?: FinancialMetricDefinition[];
   scenarios?: FinancialScenarioDefinition[];
+  cost_categories?: FinancialCostCategory[];
   baseline?: InitiativeAnnualBaseline | null;
   benefit_lines?: FinancialBenefitLine[];
   values?: ConfigurableMetricValue[];
@@ -227,6 +228,16 @@ interface FinancialConfigItem {
   rollup_type?: string | null;
   display_order: number;
   is_system: boolean;
+  is_active: boolean;
+}
+
+interface FinancialCostCategory {
+  id?: string;
+  key: string;
+  label: string;
+  group_key?: string | null;
+  rollup_type?: string | null;
+  display_order: number;
   is_active: boolean;
 }
 
@@ -970,8 +981,13 @@ export class FinancialsTabComponent implements OnInit {
   );
 
   costCategoryDefinitions = computed(() =>
-    (this.configuration()?.items || [])
-      .filter(item => item.item_type === 'cost_category' && item.is_active !== false)
+    ((this.grid()?.cost_categories || []) as Array<FinancialCostCategory | FinancialConfigItem>)
+      .concat(
+        this.grid()?.cost_categories?.length
+          ? []
+          : (this.configuration()?.items || []).filter(item => item.item_type === 'cost_category'),
+      )
+      .filter(item => item.is_active !== false)
       .sort((a, b) => a.label.localeCompare(b.label)),
   );
 
