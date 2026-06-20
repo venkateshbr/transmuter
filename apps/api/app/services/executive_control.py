@@ -217,10 +217,7 @@ class ExecutiveControlService:
     ) -> list[SharedCostPoolPeriodItem]:
         if not self._repo.get_pool(pool_id):
             raise HTTPException(status_code=404, detail="Shared cost pool not found")
-        rows = [
-            self._period_payload(period.model_dump(exclude_none=True))
-            for period in periods
-        ]
+        rows = [self._period_payload(period.model_dump(exclude_none=True)) for period in periods]
         return [self._period_item(row) for row in self._repo.replace_pool_periods(pool_id, rows)]
 
     def list_rules(self, pool_id: str) -> list[AllocationRuleItem]:
@@ -238,7 +235,9 @@ class ExecutiveControlService:
         rule = self._repo.get_rule(rule_id)
         if not rule or rule.get("pool_id") != pool_id:
             raise HTTPException(status_code=404, detail="Allocation rule not found")
-        row = self._repo.update_rule(rule_id, self._rule_payload(data.model_dump(exclude_unset=True)))
+        row = self._repo.update_rule(
+            rule_id, self._rule_payload(data.model_dump(exclude_unset=True))
+        )
         return self._rule_item(row)
 
     def replace_rule_targets(
@@ -371,7 +370,10 @@ class ExecutiveControlService:
             pool_id=pool_id,
             rule_id=data.rule_id,
             run_id=run["id"],
-            after_state={"status": data.status, "reconciliation": preview.reconciliation.model_dump()},
+            after_state={
+                "status": data.status,
+                "reconciliation": preview.reconciliation.model_dump(),
+            },
         )
         return self._run_item({**run, "shared_cost_allocations": allocations})
 
@@ -611,9 +613,7 @@ class ExecutiveControlService:
             exceptions,
         )
         allocated_plan = sum((_dec(row.allocated_plan) for row in allocations), Decimal("0"))
-        allocated_actual = sum(
-            (_dec(row.allocated_actual) for row in allocations), Decimal("0")
-        )
+        allocated_actual = sum((_dec(row.allocated_actual) for row in allocations), Decimal("0"))
         unallocated_plan = amount_plan - allocated_plan
         unallocated_actual = amount_actual - allocated_actual
         reconciled = unallocated_plan == Decimal("0.0000") and (
@@ -690,7 +690,9 @@ class ExecutiveControlService:
             return []
         method = rule["allocation_method"]
         if method == "manual_amount":
-            return self._manual_allocation_rows(candidates, rule, amount_plan, amount_actual, scenario)
+            return self._manual_allocation_rows(
+                candidates, rule, amount_plan, amount_actual, scenario
+            )
         if method == "fixed_percentage":
             return self._percentage_allocation_rows(
                 candidates, rule, amount_plan, amount_actual, scenario, exceptions
@@ -765,7 +767,11 @@ class ExecutiveControlService:
         for initiative in candidates:
             amount = manual.get(initiative["id"], Decimal("0"))
             share = Decimal("0") if amount_plan == 0 else amount / amount_plan
-            actual = (amount_actual * share).quantize(Decimal("0.0001")) if amount_actual else Decimal("0")
+            actual = (
+                (amount_actual * share).quantize(Decimal("0.0001"))
+                if amount_actual
+                else Decimal("0")
+            )
             rows.append(
                 self._allocation_item_from_amounts(
                     initiative,
@@ -916,7 +922,12 @@ class ExecutiveControlService:
                 "label": "Headcount / FTE weight",
                 "exceptions": exceptions,
             }
-        if method in {"benefit_weighted", "revenue_weighted", "savings_weighted", "metric_weighted"}:
+        if method in {
+            "benefit_weighted",
+            "revenue_weighted",
+            "savings_weighted",
+            "metric_weighted",
+        }:
             values, label = self._metric_basis_values(candidates, rule, method, scenario_id, year)
             for row in candidates:
                 if values.get(row["id"], Decimal("0")) == 0:
@@ -972,12 +983,14 @@ class ExecutiveControlService:
         if not selected_definition_id:
             selected_definition_id = self._default_metric_definition_id(definitions, method)
         selected_definition = definition_by_id.get(selected_definition_id or "")
-        selected_ids = {selected_definition_id} if selected_definition_id else {
-            row["id"]
-            for row in definitions
-            if self._definition_matches_method(row, method)
-        }
-        label = selected_definition.get("label") if selected_definition else method.replace("_", " ")
+        selected_ids = (
+            {selected_definition_id}
+            if selected_definition_id
+            else {row["id"] for row in definitions if self._definition_matches_method(row, method)}
+        )
+        label = (
+            selected_definition.get("label") if selected_definition else method.replace("_", " ")
+        )
         values = {row["id"]: Decimal("0") for row in candidates}
         candidate_ids = set(values)
         driver_scenario_id = rule.get("driver_scenario_id") or scenario_id
@@ -1011,7 +1024,12 @@ class ExecutiveControlService:
                 return row["id"]
             if method == "savings_weighted" and row.get("benefit_class") == "savings":
                 return row["id"]
-            if method == "benefit_weighted" and row.get("benefit_class") in {"margin", "savings", "avoidance", "other"}:
+            if method == "benefit_weighted" and row.get("benefit_class") in {
+                "margin",
+                "savings",
+                "avoidance",
+                "other",
+            }:
                 return row["id"]
         return definitions[0]["id"] if method == "metric_weighted" and definitions else None
 
@@ -1022,7 +1040,10 @@ class ExecutiveControlService:
         if method == "savings_weighted":
             return row.get("benefit_class") == "savings"
         if method == "benefit_weighted":
-            return bool(row.get("is_benefit") or row.get("rollup_type") == "benefit") and row.get("benefit_class") != "revenue"
+            return (
+                bool(row.get("is_benefit") or row.get("rollup_type") == "benefit")
+                and row.get("benefit_class") != "revenue"
+            )
         return method == "metric_weighted"
 
     def _cost_basis_values(
@@ -1031,7 +1052,9 @@ class ExecutiveControlService:
         rule: dict,
         year: int,
     ) -> tuple[dict[str, Decimal], str]:
-        categories = {row["id"]: row for row in getattr(self._repo, "list_cost_categories", lambda: [])()}
+        categories = {
+            row["id"]: row for row in getattr(self._repo, "list_cost_categories", lambda: [])()
+        }
         category_id = rule.get("driver_cost_category_id")
         selected_category = categories.get(category_id or "")
         values = {row["id"]: Decimal("0") for row in candidates}
@@ -1044,7 +1067,9 @@ class ExecutiveControlService:
             if category_id and row.get("category_id") != category_id:
                 continue
             values[row["initiative_id"]] += _dec(row.get("amount_plan"))
-        return values, selected_category.get("label", "Direct cost") if selected_category else "Direct cost"
+        return values, selected_category.get(
+            "label", "Direct cost"
+        ) if selected_category else "Direct cost"
 
     def _matches_any_target(self, row: dict, targets: list[dict]) -> bool:
         return any(self._matches_target(row, target) for target in targets)
@@ -1059,8 +1084,7 @@ class ExecutiveControlService:
             return row.get("id") == value
         if dimension == "business_unit":
             return value in {
-                link.get("business_unit_id")
-                for link in row.get("initiative_business_units") or []
+                link.get("business_unit_id") for link in row.get("initiative_business_units") or []
             }
         field_by_dimension = {
             "workstream": "workstream_id",
@@ -1075,7 +1099,15 @@ class ExecutiveControlService:
 
     def _scenario_id_for(self, scenario: str) -> str | None:
         scenarios = getattr(self._repo, "list_financial_scenarios", lambda: [])()
-        kind = "actual" if scenario == "actual" else "forecast" if scenario == "forecast" else "baseline" if scenario == "baseline" else "plan"
+        kind = (
+            "actual"
+            if scenario == "actual"
+            else "forecast"
+            if scenario == "forecast"
+            else "baseline"
+            if scenario == "baseline"
+            else "plan"
+        )
         primary = next(
             (
                 row["id"]
@@ -1124,7 +1156,9 @@ class ExecutiveControlService:
                 row.get("include_in_dashboard_executive_brief", True)
             ),
             include_in_portfolio_financials=bool(row.get("include_in_portfolio_financials", False)),
-            include_in_initiative_financials=bool(row.get("include_in_initiative_financials", True)),
+            include_in_initiative_financials=bool(
+                row.get("include_in_initiative_financials", True)
+            ),
             include_in_bankable_plan=bool(row.get("include_in_bankable_plan", False)),
             posting_mode=row.get("posting_mode", "report_only"),
         )
@@ -1399,9 +1433,7 @@ class ExecutiveControlService:
             cap_floor_config=row.get("cap_floor_config") or {},
             is_locked=bool(row.get("is_locked", False)),
             targets=[self._target_item(target) for target in list_targets(row["id"])],
-            structured_weights=[
-                self._weight_item(weight) for weight in list_weights(row["id"])
-            ],
+            structured_weights=[self._weight_item(weight) for weight in list_weights(row["id"])],
         )
 
     @staticmethod
@@ -1473,9 +1505,7 @@ class ExecutiveControlService:
             weight_value=_money(row.get("weight_value"))
             if row.get("weight_value") is not None
             else None,
-            percentage=_money(row.get("percentage"))
-            if row.get("percentage") is not None
-            else None,
+            percentage=_money(row.get("percentage")) if row.get("percentage") is not None else None,
             manual_amount=_money(row.get("manual_amount"))
             if row.get("manual_amount") is not None
             else None,

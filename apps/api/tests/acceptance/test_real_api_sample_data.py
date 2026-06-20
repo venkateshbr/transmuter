@@ -95,8 +95,12 @@ def test_real_api_executive_control_tower_phase_2a() -> None:
         shared_config = client.get("/shared-costs/config", headers=headers)
         shared_config.raise_for_status()
         shared_config_data = shared_config.json()
-        assert any(item["key"] == "fixed_percentage" for item in shared_config_data["allocation_methods"])
-        assert shared_config_data["reporting_settings"]["include_in_executive_control_tower"] is True
+        assert any(
+            item["key"] == "fixed_percentage" for item in shared_config_data["allocation_methods"]
+        )
+        assert (
+            shared_config_data["reporting_settings"]["include_in_executive_control_tower"] is True
+        )
 
         pools = client.get("/shared-cost-pools", headers=headers)
         pools.raise_for_status()

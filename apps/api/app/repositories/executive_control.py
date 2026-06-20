@@ -390,8 +390,7 @@ class ExecutiveControlRepository:
         if not rows:
             return
         payload = [
-            {**row, "id": row.get("id") or str(uuid4()), "tenant_id": self._tid}
-            for row in rows
+            {**row, "id": row.get("id") or str(uuid4()), "tenant_id": self._tid} for row in rows
         ]
         self._c.table("shared_cost_allocation_exceptions").insert(payload).execute()
 
