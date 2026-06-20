@@ -92,11 +92,26 @@ def test_real_api_executive_control_tower_phase_2a() -> None:
             item["upstream"]["id"] != item["downstream"]["id"] for item in dependency_data["items"]
         )
 
+        shared_config = client.get("/shared-costs/config", headers=headers)
+        shared_config.raise_for_status()
+        shared_config_data = shared_config.json()
+        assert any(item["key"] == "fixed_percentage" for item in shared_config_data["allocation_methods"])
+        assert shared_config_data["reporting_settings"]["include_in_executive_control_tower"] is True
+
         pools = client.get("/shared-cost-pools", headers=headers)
         pools.raise_for_status()
         pool_items = pools.json()["items"]
         assert pool_items
-        pool = next(item for item in pool_items if item["year"] == 2026)
+        pool = next(
+            (
+                item
+                for item in pool_items
+                if Decimal(item["amount_plan"]) > Decimal("0")
+                and Decimal(item["allocated_plan"]) == Decimal(item["amount_plan"])
+            ),
+            pool_items[0],
+        )
+        target_year = pool["year"]
         assert Decimal(pool["amount_plan"]) > Decimal("0")
         assert Decimal(pool["allocated_plan"]) == Decimal(pool["amount_plan"])
 
@@ -121,8 +136,18 @@ def test_real_api_executive_control_tower_phase_2a() -> None:
             run["total_amount_plan"]
         )
 
+        preview = client.post(
+            f"/shared-cost-pools/{pool['id']}/allocation-runs/preview",
+            headers=headers,
+            json={"rule_id": rule_items[0]["id"], "scenario": "plan"},
+        )
+        preview.raise_for_status()
+        preview_data = preview.json()
+        assert preview_data["candidate_count"] >= len(run["allocations"])
+        assert preview_data["reconciliation"]["reconciled"] is True
+
         control_tower = client.get(
-            "/reports/executive-control-tower?target_year=2026",
+            f"/reports/executive-control-tower?target_year={target_year}",
             headers=headers,
         )
         control_tower.raise_for_status()
@@ -132,7 +157,7 @@ def test_real_api_executive_control_tower_phase_2a() -> None:
         assert control_data["dependency_risk"]["total"] == dependency_data["rollups"]["total"]
 
         investor_summary = client.get(
-            "/reports/investor-summary?target_year=2026",
+            f"/reports/investor-summary?target_year={target_year}",
             headers=headers,
         )
         investor_summary.raise_for_status()
@@ -141,7 +166,7 @@ def test_real_api_executive_control_tower_phase_2a() -> None:
         assert investor_data["summary"]["initiative_count"] >= 1
 
         owner_cockpit = client.get(
-            "/reports/owner-cockpit?target_year=2026",
+            f"/reports/owner-cockpit?target_year={target_year}",
             headers=headers,
         )
         owner_cockpit.raise_for_status()

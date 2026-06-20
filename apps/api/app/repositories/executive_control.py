@@ -141,6 +141,35 @@ class ExecutiveControlRepository:
         )
         return result.data or []
 
+    def list_pool_periods(self, pool_id: str) -> list[dict]:
+        result = (
+            self._c.table("shared_cost_pool_periods")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .eq("pool_id", pool_id)
+            .order("year")
+            .order("month")
+            .execute()
+        )
+        return result.data or []
+
+    def replace_pool_periods(self, pool_id: str, rows: list[dict]) -> list[dict]:
+        (
+            self._c.table("shared_cost_pool_periods")
+            .delete()
+            .eq("tenant_id", self._tid)
+            .eq("pool_id", pool_id)
+            .execute()
+        )
+        if not rows:
+            return []
+        payload = [
+            {**row, "id": row.get("id") or str(uuid4()), "tenant_id": self._tid, "pool_id": pool_id}
+            for row in rows
+        ]
+        result = self._c.table("shared_cost_pool_periods").insert(payload).execute()
+        return result.data or []
+
     def create_pool(self, data: dict) -> dict:
         payload = {**data, "id": str(uuid4()), "tenant_id": self._tid}
         result = self._c.table("shared_cost_pools").insert(payload).execute()
@@ -169,9 +198,16 @@ class ExecutiveControlRepository:
         return result.data if result and result.data else None
 
     def create_rule(self, pool_id: str, data: dict) -> dict:
+        targets = data.pop("targets", [])
+        weights = data.pop("structured_weights", [])
         payload = {**data, "id": str(uuid4()), "tenant_id": self._tid, "pool_id": pool_id}
         result = self._c.table("shared_cost_allocation_rules").insert(payload).execute()
-        return result.data[0]
+        rule = result.data[0]
+        if targets:
+            self.replace_rule_targets(rule["id"], targets)
+        if weights:
+            self.replace_rule_weights(rule["id"], weights)
+        return rule
 
     def update_rule(self, rule_id: str, data: dict) -> dict:
         payload = {**data, "updated_at": datetime.now(UTC).isoformat()}
@@ -206,6 +242,72 @@ class ExecutiveControlRepository:
         )
         return result.data if result and result.data else None
 
+    def list_rule_targets(self, rule_id: str) -> list[dict]:
+        result = (
+            self._c.table("shared_cost_allocation_targets")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .eq("rule_id", rule_id)
+            .order("target_mode")
+            .order("dimension_type")
+            .execute()
+        )
+        return result.data or []
+
+    def replace_rule_targets(self, rule_id: str, targets: list[dict]) -> list[dict]:
+        (
+            self._c.table("shared_cost_allocation_targets")
+            .delete()
+            .eq("tenant_id", self._tid)
+            .eq("rule_id", rule_id)
+            .execute()
+        )
+        if not targets:
+            return []
+        rows = [
+            {
+                **target,
+                "id": target.get("id") or str(uuid4()),
+                "tenant_id": self._tid,
+                "rule_id": rule_id,
+            }
+            for target in targets
+        ]
+        result = self._c.table("shared_cost_allocation_targets").insert(rows).execute()
+        return result.data or []
+
+    def list_rule_weights(self, rule_id: str) -> list[dict]:
+        result = (
+            self._c.table("shared_cost_allocation_weights")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .eq("rule_id", rule_id)
+            .execute()
+        )
+        return result.data or []
+
+    def replace_rule_weights(self, rule_id: str, weights: list[dict]) -> list[dict]:
+        (
+            self._c.table("shared_cost_allocation_weights")
+            .delete()
+            .eq("tenant_id", self._tid)
+            .eq("rule_id", rule_id)
+            .execute()
+        )
+        if not weights:
+            return []
+        rows = [
+            {
+                **weight,
+                "id": weight.get("id") or str(uuid4()),
+                "tenant_id": self._tid,
+                "rule_id": rule_id,
+            }
+            for weight in weights
+        ]
+        result = self._c.table("shared_cost_allocation_weights").insert(rows).execute()
+        return result.data or []
+
     def create_run(self, data: dict, allocations: list[dict]) -> dict:
         run_payload = {**data, "id": str(uuid4()), "tenant_id": self._tid}
         run = self._c.table("shared_cost_allocation_runs").insert(run_payload).execute().data[0]
@@ -235,14 +337,67 @@ class ExecutiveControlRepository:
         )
         return result.data or []
 
+    def get_run(self, run_id: str) -> dict | None:
+        result = (
+            self._c.table("shared_cost_allocation_runs")
+            .select("*,shared_cost_allocations(*,initiatives(name))")
+            .eq("tenant_id", self._tid)
+            .eq("id", run_id)
+            .maybe_single()
+            .execute()
+        )
+        return result.data if result and result.data else None
+
+    def update_run(self, run_id: str, data: dict) -> dict:
+        result = (
+            self._c.table("shared_cost_allocation_runs")
+            .update(data)
+            .eq("tenant_id", self._tid)
+            .eq("id", run_id)
+            .execute()
+        )
+        return result.data[0]
+
     def list_allocations(self) -> list[dict]:
         result = (
             self._c.table("shared_cost_allocations")
-            .select("*,shared_cost_pools(year,quarter,month,is_recurring,category_key)")
+            .select(
+                "*,"
+                "shared_cost_pools(year,quarter,month,is_recurring,category_key,"
+                "reporting_treatment),"
+                "shared_cost_allocation_runs(status,run_type,locked_at,scenario_id,"
+                "period_start,period_end)"
+            )
             .eq("tenant_id", self._tid)
             .execute()
         )
         return result.data or []
+
+    def list_allocations_for_initiative(self, initiative_id: str) -> list[dict]:
+        result = (
+            self._c.table("shared_cost_allocations")
+            .select(
+                "*,shared_cost_pools(name,category_key,year,quarter,month),"
+                "shared_cost_allocation_runs(status,scenario_id,period_start,period_end)"
+            )
+            .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
+            .execute()
+        )
+        return result.data or []
+
+    def create_exceptions(self, rows: list[dict]) -> None:
+        if not rows:
+            return
+        payload = [
+            {**row, "id": row.get("id") or str(uuid4()), "tenant_id": self._tid}
+            for row in rows
+        ]
+        self._c.table("shared_cost_allocation_exceptions").insert(payload).execute()
+
+    def create_audit_event(self, data: dict) -> None:
+        payload = {**data, "id": str(uuid4()), "tenant_id": self._tid}
+        self._c.table("shared_cost_allocation_audit_events").insert(payload).execute()
 
     def create_value_note(self, initiative_id: str, author_id: str, data: dict) -> dict:
         payload = {
@@ -269,9 +424,11 @@ class ExecutiveControlRepository:
     def list_metric_definitions(self) -> list[dict]:
         result = (
             self._c.table("financial_metric_definitions")
-            .select("id,key,rollup_type,benefit_class,is_benefit")
+            .select("id,key,label,value_type,rollup_type,benefit_class,is_benefit,is_active")
             .eq("tenant_id", self._tid)
             .eq("is_active", True)
+            .order("display_order")
+            .order("label")
             .execute()
         )
         return result.data or []
@@ -279,12 +436,74 @@ class ExecutiveControlRepository:
     def list_financial_scenarios(self) -> list[dict]:
         result = (
             self._c.table("financial_scenarios")
-            .select("id,key,kind,is_primary,is_active")
+            .select("id,key,label,kind,is_primary,is_active")
             .eq("tenant_id", self._tid)
             .eq("is_active", True)
+            .order("display_order")
+            .order("label")
             .execute()
         )
         return result.data or []
+
+    def list_cost_categories(self) -> list[dict]:
+        result = (
+            self._c.table("financial_cost_categories")
+            .select("id,key,label,group_key,rollup_type,is_active")
+            .eq("tenant_id", self._tid)
+            .eq("is_active", True)
+            .order("display_order")
+            .order("label")
+            .execute()
+        )
+        return result.data or []
+
+    def list_workstreams(self) -> list[dict]:
+        result = (
+            self._c.table("workstreams")
+            .select("id,name")
+            .eq("tenant_id", self._tid)
+            .order("name")
+            .execute()
+        )
+        return result.data or []
+
+    def list_business_units(self) -> list[dict]:
+        result = (
+            self._c.table("business_units")
+            .select("id,name,code")
+            .eq("tenant_id", self._tid)
+            .order("name")
+            .execute()
+        )
+        return result.data or []
+
+    def get_reporting_settings(self) -> dict:
+        result = (
+            self._c.table("shared_cost_reporting_settings")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .maybe_single()
+            .execute()
+        )
+        if result and result.data:
+            return result.data
+        inserted = (
+            self._c.table("shared_cost_reporting_settings")
+            .insert({"tenant_id": self._tid})
+            .execute()
+        )
+        return inserted.data[0]
+
+    def update_reporting_settings(self, data: dict) -> dict:
+        payload = {**data, "updated_at": datetime.now(UTC).isoformat()}
+        existing = self.get_reporting_settings()
+        result = (
+            self._c.table("shared_cost_reporting_settings")
+            .update(payload)
+            .eq("tenant_id", self._tid)
+            .execute()
+        )
+        return result.data[0] if result.data else existing
 
     def list_metric_values(self) -> list[dict]:
         result = (

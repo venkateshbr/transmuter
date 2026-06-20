@@ -97,14 +97,18 @@ async function main() {
   assert(initiativeId, 'Seeded initiative is required for detail dependency UI');
 
   const userDataDir = await mkdtemp(join(tmpdir(), 'transmuter-phase2a-ui-'));
-  const chrome = spawn(chromeBin, [
+  const chromeArgs = [
     '--headless=new',
     `--remote-debugging-port=${debugPort}`,
     `--user-data-dir=${userDataDir}`,
     '--no-first-run',
     '--no-default-browser-check',
     'about:blank',
-  ], { stdio: ['ignore', 'ignore', 'pipe'] });
+  ];
+  if (typeof process.getuid === 'function' && process.getuid() === 0) {
+    chromeArgs.splice(1, 0, '--no-sandbox');
+  }
+  const chrome = spawn(chromeBin, chromeArgs, { stdio: ['ignore', 'ignore', 'pipe'] });
 
   chrome.stderr.on('data', chunk => {
     const text = chunk.toString();
@@ -140,7 +144,7 @@ async function main() {
     await assertPage(
       page,
       `${uiBaseUrl}/shared-costs`,
-      "location.pathname === '/shared-costs' && document.body.innerText.includes('Shared Cost Pools') && document.body.innerText.includes('Allocation Rules')",
+      "location.pathname === '/shared-costs' && (() => { const text = document.body.innerText.toLowerCase(); return text.includes('shared cost pools') && text.includes('allocation policy') && text.includes('reporting treatment'); })()",
       'shared cost pools page',
     );
     await assertPage(

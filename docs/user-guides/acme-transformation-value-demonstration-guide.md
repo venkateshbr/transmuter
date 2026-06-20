@@ -35,12 +35,21 @@ The portfolio story is:
 5. One-off implementation investment totals **$2.5M**. It is visible in the
    bridge and cost reports, but it should not be confused with recurring
    EBITDA drag.
+6. Shared platform, PMO, advisory, and change costs are managed separately from
+   direct initiative costs. They affect burdened executive reporting only after
+   Finance approves or runs an allocation.
 
 The clean executive message is:
 
 > ACME is moving from a $20.0M revenue / $9.0M gross margin FY26 baseline toward
 > a FY28 run-rate case with $4.0M revenue growth and $8.35M EBITDA-effective net
 > run-rate value after recurring operating costs.
+
+When discussing shared costs, add:
+
+> Direct initiative economics remain the owner-accountable view. Executive
+> Control Tower can also show a fully loaded view after shared platform, PMO, or
+> support costs are allocated across the initiatives that benefit from them.
 
 ---
 
@@ -334,6 +343,42 @@ The financial engine then rolls cost lines into:
 - one-off costs actual,
 - total costs.
 
+### Shared cost pools
+
+Shared costs are central costs that benefit more than one initiative. They are
+not entered as direct initiative cost lines by default. Finance manages them in
+`/shared-costs` and allocates them for burdened executive reporting.
+
+Use shared cost pools for:
+
+- group technology and data platform costs,
+- transformation PMO and benefits-office costs,
+- shared cloud, license, or integration costs,
+- change/adoption support teams,
+- central advisory or vendor support.
+
+Current dev proof:
+
+| Pool | Year | Plan | Actual | Allocation basis | Report impact |
+|---|---:|---:|---:|---|---|
+| Group technology platform allocation | 2026 | `$600K` | `$540K` | Benefit weighted | Executive Control Tower allocated costs and net after allocation. |
+
+Recommended canonical ACME pools for future demo refresh:
+
+| Pool | Candidate initiatives | Basis |
+|---|---|---|
+| Group technology and data platform | ENT-002, ENT-005, ENT-006, ENT-009, ENT-010 | Gross Margin Uplift or technology-tag weighted. |
+| Transformation PMO and benefits office | All 10 active or bankable initiatives | Equal split or value weighted. |
+| Shared change and training support | ENT-002, ENT-004, ENT-005, ENT-010 | Manual amount or impacted-headcount weighted. |
+| Central advisory/vendor support | ENT-005, ENT-008, ENT-009 | Fixed percentage by workstream. |
+
+Default policy:
+
+- Keep shared costs separate from direct initiative costs.
+- Keep bankable plan values direct-only unless Finance enables burdened
+  bankable reporting.
+- Use Control Tower for the fully loaded executive view.
+
 ---
 
 ## 9. How to read the EBITDA value bridge
@@ -495,6 +540,15 @@ It shows:
 - initiatives needing attention,
 - initiative-level burdened value table,
 - persona views for management, investor, and owner.
+
+Shared-cost interpretation:
+
+- **Allocated Costs** are shared-cost allocations from completed or locked runs.
+- **Burdened Costs** are direct costs plus allocated shared costs.
+- **Net After Allocation** is the fully loaded executive value view.
+- Use target year `2026` for the current seeded group technology platform proof.
+- Keep `/financials` as the direct portfolio financial view unless Finance has
+  enabled generated cost-line posting.
 
 Use this screen when the audience asks:
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -10,12 +11,22 @@ client = TestClient(app)
 
 
 def _headers() -> dict[str, str]:
-    response = client.post(
-        "/auth/login",
-        json={"email": "admin@ishirock.dev", "password": "Transmuter2026!"},
-    )
+    credentials = [
+        (
+            os.environ.get("TRANSMUTER_TEST_EMAIL", "admin@ishirock.dev"),
+            os.environ.get("TRANSMUTER_TEST_PASSWORD", "Transmuter2026!"),
+        ),
+        ("admin@acme3-transformation.dev", "Transmuter2026!"),
+        ("admin@acme-transformation.dev", "Transmuter2026!"),
+    ]
+    response = None
+    for email, password in dict.fromkeys(credentials):
+        response = client.post("/auth/login", json={"email": email, "password": password})
+        if response.is_success:
+            return {"Authorization": f"Bearer {response.json()['access_token']}"}
+    assert response is not None
     response.raise_for_status()
-    return {"Authorization": f"Bearer {response.json()['access_token']}"}
+    return {}
 
 
 def _first_initiative(headers: dict[str, str]) -> str:
@@ -197,21 +208,52 @@ def test_real_executive_control_routes_cover_reports_and_shared_costs() -> None:
     dependencies = client.get("/initiative-dependencies", headers=headers)
     dependencies.raise_for_status()
 
+    config = client.get("/shared-costs/config", headers=headers)
+    config.raise_for_status()
+    config_data = config.json()
+    assert any(item["key"] == "equal_split" for item in config_data["allocation_methods"])
+    assert "reporting_settings" in config_data
+
+    settings = client.get("/shared-costs/reporting-settings", headers=headers)
+    settings.raise_for_status()
+    restored_settings = client.put(
+        "/shared-costs/reporting-settings",
+        headers=headers,
+        json=settings.json(),
+    )
+    restored_settings.raise_for_status()
+
     pools = client.get("/shared-cost-pools", headers=headers)
     pools.raise_for_status()
     pool_items = pools.json()["items"]
     assert pool_items
     pool_id = pool_items[0]["id"]
+    target_year = pool_items[0]["year"]
 
     for path in (
+        f"/shared-cost-pools/{pool_id}/periods",
         f"/shared-cost-pools/{pool_id}/allocation-rules",
         f"/shared-cost-pools/{pool_id}/allocation-runs",
-        "/reports/executive-control-tower?target_year=2026",
-        "/reports/investor-summary?target_year=2026",
-        "/reports/owner-cockpit?target_year=2026",
+        "/shared-cost-allocations",
+        f"/reports/executive-control-tower?target_year={target_year}",
+        f"/reports/investor-summary?target_year={target_year}",
+        f"/reports/owner-cockpit?target_year={target_year}",
     ):
         response = client.get(path, headers=headers)
         response.raise_for_status()
+
+    rules = client.get(f"/shared-cost-pools/{pool_id}/allocation-rules", headers=headers)
+    rule_items = rules.json()
+    if rule_items:
+        preview = client.post(
+            f"/shared-cost-pools/{pool_id}/allocation-runs/preview",
+            headers=headers,
+            json={"rule_id": rule_items[0]["id"], "scenario": "plan"},
+        )
+        preview.raise_for_status()
+        preview_data = preview.json()
+        assert "reconciliation" in preview_data
+        assert "allocations" in preview_data
 
     initiative_id = _first_initiative(headers)
     notes = client.get(

@@ -26,6 +26,70 @@ status.
 
 ## Current Release Entries
 
+### 2026-06-20 - Shared Costs Configurable Allocation Engine
+
+Status: dev validated, pending PR review and production promotion
+
+GitHub tracking:
+- Issue: `#321`
+- PR: pending
+- Commit: pending
+
+Runtime changes:
+- Extended Shared Costs from raw JSON rules into a configurable allocation
+  engine with tenant-scoped pool periods, allocation targets, structured
+  weights, reporting settings, preview reconciliation, exceptions, audit
+  events, and locked/posting run metadata.
+- Added allocation methods for equal split, fixed percentage, manual amount,
+  benefit weighted, revenue weighted, savings weighted, direct-cost weighted,
+  headcount weighted, and metric weighted policies.
+- Updated `/shared-costs` to manage pools, rules, targets, weights, preview
+  reconciliation, locked runs, and dashboard/report treatment settings without
+  raw JSON entry.
+- Updated the ACME enterprise seed so `acme3-transformation-lab` includes 10
+  initiatives, bankable plans, benefit ledger, dependency risks, management
+  meetings, value-realization notes, and four FY2028 shared-cost pools.
+
+Local validation:
+- `cd apps/api && uv run --extra dev ruff check app/domain/executive_control.py app/services/executive_control.py app/repositories/executive_control.py app/routers/executive_control.py tests/test_executive_control.py tests/test_real_route_coverage.py tests/acceptance/test_real_api_sample_data.py scripts/seed_enterprise_transformation_scenario.py`
+- `cd apps/api && uv run --extra dev pytest tests/test_executive_control.py`
+- `cd apps/web && npm run build`
+- `git diff --check`
+
+Dev deployment:
+- Environment: `https://transmuter-dev.ishirock.tech`
+- Schema: `transmuter_dev`
+- Schema/data SQL applied:
+  `supabase/migrations/20260620000001_shared_cost_configurable_allocation_engine.sql`
+- Deployed with:
+  `ALLOW_INSECURE_TLS=1 infra/hostinger/deploy-change-to-dev.sh --schema supabase/migrations/20260620000001_shared_cost_configurable_allocation_engine.sql`
+- Initial scripted public validation hit the known immediate `/health` 404
+  readiness race after container recreation.
+- `ALLOW_INSECURE_TLS=1 infra/hostinger/validate-dev.sh` passed after the dev
+  stack settled.
+- ACME3 seeded in `transmuter_dev` with:
+  - `TRANSMUTER_SEED_ORG_SLUG=acme3-transformation-lab`
+  - `TRANSMUTER_SEED_ADMIN_EMAIL=admin@acme3-transformation.dev`
+- Real dev API acceptance passed:
+  - `test_real_api_seeded_dashboard_and_meetings`
+  - `test_real_api_executive_control_tower_phase_2a`
+- Real dev browser validation passed:
+  - `CHROME_BIN=/usr/bin/chromium-browser TRANSMUTER_UI_BASE_URL=https://transmuter-dev.ishirock.tech TRANSMUTER_API_BASE_URL=https://transmuter-dev.ishirock.tech/api TRANSMUTER_E2E_EMAIL=admin@acme3-transformation.dev TRANSMUTER_E2E_PASSWORD=Transmuter2026! CHROME_DEBUG_PORT=9334 node apps/web/e2e/phase2a-ui-acceptance.mjs`
+- ACME3 reconciliation validation passed:
+  - 4 FY2028 shared-cost pools.
+  - Methods covered: `benefit_weighted`, `equal_split`, `fixed_percentage`,
+    `manual_amount`.
+  - Shared-cost plan: `1450000.0000`; actual: `1305000.0000`.
+  - Control Tower allocated plan: `1450000.0000`.
+  - Control Tower net after allocation: `1400000.0004`.
+  - Bankable Plan shared-cost inclusion default: `false`.
+
+Schema/data SQL required for production:
+- `supabase/migrations/20260620000001_shared_cost_configurable_allocation_engine.sql`
+
+Production validation:
+- Pending.
+
 ### 2026-06-20 - Financial Configuration Engine Consolidation
 
 Status: promoted to production
