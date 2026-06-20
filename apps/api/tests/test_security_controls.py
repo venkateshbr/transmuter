@@ -630,6 +630,65 @@ def test_financial_engine_consolidation_migration_enforces_tenant_refs() -> None
     assert "NEW.cost_category_ids" in migration
 
 
+def test_shared_cost_hardening_migration_enforces_tenant_refs() -> None:
+    migration = (
+        Path(__file__)
+        .parents[3]
+        .joinpath(
+            "supabase/migrations/20260620000002_harden_shared_cost_allocation_tenant_refs.sql"
+        )
+        .read_text()
+    )
+
+    assert "shared_cost_pools_tenant_id_id_uidx" in migration
+    assert "shared_cost_allocation_rules_tenant_id_id_uidx" in migration
+    assert "shared_cost_allocation_runs_tenant_id_id_uidx" in migration
+    assert "shared_cost_validate_tenant_refs" in migration
+
+    expected_constraints = {
+        "shared_cost_rules_pool_tenant_fk": "REFERENCES shared_cost_pools(tenant_id, id)",
+        "shared_cost_runs_pool_tenant_fk": "REFERENCES shared_cost_pools(tenant_id, id)",
+        "shared_cost_runs_rule_tenant_fk": (
+            "REFERENCES shared_cost_allocation_rules(tenant_id, id)"
+        ),
+        "shared_cost_allocations_run_tenant_fk": (
+            "REFERENCES shared_cost_allocation_runs(tenant_id, id)"
+        ),
+        "shared_cost_allocations_pool_tenant_fk": ("REFERENCES shared_cost_pools(tenant_id, id)"),
+        "shared_cost_allocations_rule_tenant_fk": (
+            "REFERENCES shared_cost_allocation_rules(tenant_id, id)"
+        ),
+        "shared_cost_allocations_initiative_tenant_fk": ("REFERENCES initiatives(tenant_id, id)"),
+        "shared_cost_pool_periods_pool_tenant_fk": ("REFERENCES shared_cost_pools(tenant_id, id)"),
+        "shared_cost_pool_periods_scenario_tenant_fk": (
+            "REFERENCES financial_scenarios(tenant_id, id)"
+        ),
+        "shared_cost_targets_rule_tenant_fk": (
+            "REFERENCES shared_cost_allocation_rules(tenant_id, id)"
+        ),
+        "shared_cost_weights_rule_tenant_fk": (
+            "REFERENCES shared_cost_allocation_rules(tenant_id, id)"
+        ),
+        "shared_cost_weights_initiative_tenant_fk": ("REFERENCES initiatives(tenant_id, id)"),
+        "shared_cost_exceptions_run_tenant_fk": (
+            "REFERENCES shared_cost_allocation_runs(tenant_id, id)"
+        ),
+        "shared_cost_audit_run_tenant_fk": (
+            "REFERENCES shared_cost_allocation_runs(tenant_id, id)"
+        ),
+    }
+    for constraint_name, reference in expected_constraints.items():
+        assert constraint_name in migration
+        assert reference in migration
+
+    assert "shared_cost_pools.owner_id must belong to the same tenant" in migration
+    assert "shared_cost_allocation_runs.approved_by must belong to the same tenant" in migration
+    assert "shared_cost_allocations.posted_cost_line_id must belong to the same tenant" in migration
+    assert (
+        "shared_cost_allocation_audit_events.actor_id must belong to the same tenant" in migration
+    )
+
+
 def test_financial_engine_consolidation_migration_is_dirty_rollup_tolerant() -> None:
     migration = (
         Path(__file__)
