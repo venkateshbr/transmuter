@@ -1120,6 +1120,63 @@ Use it for:
 - comparing versions after rebaseline,
 - navigating to editable financial scope.
 
+What the bankable plan means:
+
+- A bankable plan is the locked, read-only snapshot of an approved initiative
+  value case.
+- The editable source remains the initiative financial scope and financial grid:
+  selected metrics, selected cost categories, benefit lines, cost lines,
+  annual baselines, and plan/actual scenario values.
+- Once the configured governance approval path locks the plan, realization
+  reporting compares actual benefit delivery against that approved snapshot
+  instead of against a moving forecast.
+- Rebaseline creates a new version. It does not overwrite the prior approved
+  version, so Finance can explain what changed, when it changed, and why.
+
+When it applies:
+
+1. During planning, initiatives are still editable and are not yet bankable.
+2. After the initiative passes the configured approval gate, the system creates
+   the locked bankable snapshot.
+3. After lock, the plan is treated as the committed baseline for realization
+   tracking and governance reporting.
+4. If scope, assumptions, timing, or value materially changes, Finance or PMO
+   creates a rebaseline version instead of changing the old lock.
+
+Feature behavior:
+
+| Capability | What it does | ACME demo proof |
+|---|---|---|
+| Current lock status | Shows whether the selected initiative is still editable or has a locked plan. | Select any seeded ACME initiative to show a locked status. |
+| Snapshot summary | Shows locked net value, entry count, cost-line count, metric count, and selected scope count. | Use it to prove the bankable value is generated from the initiative value case. |
+| Version history | Lists approval and rebaseline versions with lock time, reason, trigger, and locked-by metadata. | Select `ENT-005 Enterprise Data Platform`; current version is v2. |
+| Editable scope link | Opens the underlying initiative financial scope without changing the locked snapshot. | Explain that scope edits require a new approval or rebaseline before they become bankable. |
+| Rebaseline governance | Preserves prior versions while creating a new current baseline. | Use `ENT-005` to explain controlled baseline movement. |
+
+Primary use cases:
+
+- Board commitment: show the approved value case that management agreed to
+  count as bankable.
+- Benefits realization: compare actual delivered value against a fixed baseline
+  by period, workstream, and initiative.
+- Finance control: stop late edits to plan assumptions from silently improving
+  variance.
+- Steering committee review: explain whether variance is caused by delivery
+  leakage, timing delay, or a formally approved rebaseline.
+- Audit trail: retain a versioned record of approval and rebaseline decisions.
+
+Dashboards and reports impacted:
+
+| Surface | Impact of bankable plan |
+|---|---|
+| `/financials/bankable-plan` | Primary review page for locked snapshots, current version, and rebaseline history. |
+| `/financials/benefit-tracking` | Uses locked plan values as the baseline for realized benefit ledger rows, portfolio/workstream/initiative variance, and period summaries. |
+| `/financials/waterline` | Shows whether initiative value is sourced from a locked bankable plan or a current financial preview when building workstream target views. |
+| `/dashboard` | Shows bankable workstream target widgets and stage-gate value versus locked bankable plan context. |
+| Board-pack export | Includes benefit ledger rollups that compare actual realization against bankable baseline amounts. |
+| Initiative financial views | Shows locked financial mode when a current bankable plan exists; users can still edit forecast and actuals, but the approved baseline stays fixed. |
+| `/reports/control-tower` | Uses the same portfolio financial and realization story for executive review, so bankable-plan maturity affects how credible the value narrative is. |
+
 Current ACME demo note:
 
 - ACME has locked bankable plan snapshots seeded for the 10 initiatives.
