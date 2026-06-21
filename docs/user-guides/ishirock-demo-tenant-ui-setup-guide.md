@@ -85,9 +85,9 @@ This guide was validated against:
 | `supabase/migrations/20260611000002_clean_configurable_financial_engine.sql` | Configurable metric, scenario, benefit-line, and metric-value tables. |
 | `supabase/migrations/20260615000001_annual_financial_baselines.sql` | Tenant and initiative annual baseline tables. |
 
-## 3. Current Tenant State
+## 3. Tenant State
 
-Read-only inspection of the current local `ishirock` tenant on 2026-06-21
+Initial read-only inspection of the local `ishirock` tenant on 2026-06-21
 showed:
 
 | Area | Current tenant state |
@@ -136,7 +136,38 @@ Interpretation:
   extra risk attached to a non-workbook initiative, and inactive test cost
   categories.
 - Baselines, bankable plans, benefit realization ledger rows, and workstream
-  target locks are not yet configured.
+  target locks were not yet configured.
+
+Post-remediation state after issue `#335` on 2026-06-21:
+
+| Area | Current tenant state |
+|---|---:|
+| Active workbook initiatives | `21` |
+| Archived non-workbook initiatives | `2` |
+| Business units | `9` |
+| Workstreams | `4` |
+| Benefit lines | `63` |
+| Finance-validated benefit lines | `63` |
+| Cost lines | `867` |
+| Gate 3 approved submissions | `21` |
+| Tenant annual baselines | `4` FY25 values |
+| Initiative annual baselines | `84` FY25 values |
+| Bankable plans | `21` |
+| Benefit realization ledger rows | `0` |
+| Workstream target locks | `4` |
+
+Post-remediation interpretation:
+
+- `TRN-007` and `TRN-008` are archived, not deleted.
+- Business unit names and initiative BU links now match the workbook.
+- `EBR-1` duplicate grid cost rows have been removed.
+- FY25 tenant and initiative baselines reconcile exactly.
+- All 63 benefit lines are Finance validated and assigned to the transformation
+  office for demo handoff.
+- Bankable plans and waterline target locks exist for all 21 workbook
+  initiatives.
+- Benefit realization actuals are still intentionally blank because the workbook
+  does not provide actual values for the reviewed dashboard lanes.
 
 ## 4. Create Or Open The Tenant
 
@@ -917,9 +948,11 @@ For each initiative:
 Current tenant state:
 
 - Workbook initiatives already show stage `committed`.
-- Bankable plan snapshots do not exist yet.
-- If the UI requires approval history to create bankable plans, use the
-  governance workflow instead of editing stage directly.
+- Post-remediation, all 21 workbook initiatives have approved Gate 3
+  submissions and bankable plan version `1` locked from those approvals.
+- If a tenant is reloaded from scratch and the UI requires approval history to
+  create bankable plans, use the governance workflow instead of editing stage
+  directly.
 
 Recommended lock sequence:
 
@@ -988,10 +1021,36 @@ Expected FY28 net targets after EBR-1 duplicate-cost cleanup:
 | Southgate Region | `$3.525M` |
 | **Total** | **`$18.073M`** |
 
+Post-remediation locked waterline target values:
+
+| Workstream | Locked target value |
+|---|---:|
+| Westmark Region | `$23.760M` |
+| Eastbridge Region | `$22.863M` |
+| Northpeak Region | `$22.200M` |
+| Southgate Region | `$15.604M` |
+| **Total** | **`$84.427M`** |
+
+Important impact:
+
+- The FY28 net target table above is the correct value to reconcile
+  `/dashboard` and Initiative Portfolio against the workbook `Dashboards` sheet.
+- The locked waterline target values are higher because the current platform
+  lock implementation uses each initiative bankable snapshot
+  `summary.net_value_plan`, which aggregates the stored plan run-rate basis
+  instead of accepting a `target_year` such as FY28.
+- For management demos focused on exact workbook dashboard matching, show the
+  FY28 dashboard and Initiative Portfolio views.
+- For waterline demos, explain that the lock currently represents the all-period
+  bankable target basis. If the desired behavior is FY28-only waterline targets,
+  create a product change to add a target-year parameter to waterline preview
+  and lock snapshots.
+
 Validation:
 
 - Locked target history appears for each workstream.
-- `/dashboard` workstream target cards show locked workstreams and target values.
+- `/dashboard` FY28 plan values match the workbook dashboard when FY28 is
+  selected.
 - `/financials/benefit-tracking` and `/financials/waterline` agree after
   realization rows are entered.
 
@@ -1180,7 +1239,10 @@ Screen:
 Expected after locks:
 
 - Four workstream target locks exist.
-- Locked target values match the FY28 workstream net values in section 19.3.
+- Locked target values match the platform bankable snapshot basis described in
+  section 18.
+- Locked target values do not match the FY28-only workbook dashboard values
+  until the platform supports target-year waterline locks.
 
 ## 21. Impact And Remediation Review
 
@@ -1188,16 +1250,17 @@ Use this section to decide what to correct before a management demo.
 
 | Issue | Impact | Recommended action | Required for exact FY28 dashboard match |
 |---|---|---|---|
-| Two non-workbook initiatives, `TRN-007` and `TRN-008`. | Dashboard initiative count shows `23` instead of workbook `21`; blank tag appears. | Archive or delete them for a clean workbook demo. | No for financial totals, yes for count/filter cleanliness. |
-| Extra business unit `Southeast Asia`. | Admin and filters include a non-workbook BU. | Remove if unused. | No for FY28 financial totals. |
-| `Group` named differently from workbook `GROUP`. | BU filter label does not match workbook. | Rename to `GROUP`. | No for FY28 workstream/tag totals; yes for BU-level matching. |
-| Extra BU links on multiple initiatives. | BU filters do not match the workbook BU column. | Remove extra BU links listed in section 10.2. | No for workstream/tag totals; yes for BU-level matching. |
+| Resolved: two non-workbook initiatives, `TRN-007` and `TRN-008`. | Dashboard initiative count showed `23` instead of workbook `21`; blank tag appeared. | Archived during issue `#335`; keep archived for clean workbook demos. | No for financial totals, yes for count/filter cleanliness. |
+| Resolved: extra business unit `Southeast Asia`. | Admin and filters included a non-workbook BU. | Removed during issue `#335`. | No for FY28 financial totals. |
+| Resolved: `Group` named differently from workbook `GROUP`. | BU filter label did not match workbook. | Renamed to `GROUP` during issue `#335`. | No for FY28 workstream/tag totals; yes for BU-level matching. |
+| Resolved: extra BU links on multiple initiatives. | BU filters did not match the workbook BU column. | Extra links removed during issue `#335`. | No for workstream/tag totals; yes for BU-level matching. |
 | Inactive UI acceptance cost categories. | Admin configuration clutter. | Delete/archive inactive test categories if demo users will inspect Admin. | No. |
-| Duplicate `EBR-1` grid cost rows. | FY28 dashboard cost is `$3.626M` instead of `$3.560M`; net is `$18.007M` instead of `$18.073M`. | Delete `EBR-1` `Recurring Costs (Grid)` and `One-off Costs (Grid)` rows. | Yes. |
+| Resolved: duplicate `EBR-1` grid cost rows. | FY28 dashboard cost was `$3.626M` instead of `$3.560M`; net was `$18.007M` instead of `$18.073M`. | Duplicate `EBR-1` `Recurring Costs (Grid)` and `One-off Costs (Grid)` rows removed during issue `#335`. | Yes. |
 | Two extra zero metric rows on `EBR-1`. | Row count is `4,696` instead of clean parser `4,694`; totals are unchanged. | Leave or clean through reload/database maintenance. | No. |
-| No tenant or initiative annual baselines. | Initiative Portfolio cannot reconcile FY25 baseline yet. | Enter tenant and initiative FY25 baselines. | Required for baseline reports, not for FY28 dashboard value. |
-| No bankable plans. | Bankable Plan and Benefit Tracking cannot show locked plan. | Submit/approve gates and lock plans. | Required for bankable/realization demo, not for raw dashboard values. |
+| Resolved: no tenant or initiative annual baselines. | Initiative Portfolio could not reconcile FY25 baseline. | FY25 tenant and initiative baselines entered during issue `#335`. | Required for baseline reports, not for FY28 dashboard value. |
+| Resolved: no bankable plans. | Bankable Plan and Benefit Tracking could not show locked plan. | Gate 3 approvals and plan locks created during issue `#335`. | Required for bankable/realization demo, not for raw dashboard values. |
 | No realization ledger rows. | Benefit Tracking actuals remain blank/zero. | Enter approved or explicitly labeled demo actuals. | No for workbook plan match; yes for actuals demo. |
+| Waterline locks use all-period bankable plan value, not FY28-only dashboard value. | `/financials/waterline` locked totals show `$84.427M`, while FY28 workbook dashboard net is `$18.073M`. | For the current demo, use FY28 dashboard and Initiative Portfolio for workbook matching; create a product change if waterline must lock by target year. | No for `/dashboard`; yes if the demo claims waterline equals FY28 dashboard. |
 | FY26 platform dashboard subtracts one-off imported cost lines. | FY26 `/dashboard` net will not match workbook `Dashboards` annual net unless one-off costs are excluded. | Use FY28 for exact dashboard match, or decide whether one-off investment should be excluded from dashboard cost treatment. | Not relevant if demo focuses on FY28. |
 
 ## 22. Recommended Demo Script
@@ -1244,16 +1307,16 @@ Before calling Ishirock demo-ready:
 | Tags | automation, commercial, offshoring. |
 | Financial scenarios | baseline, plan_base, plan_high, actual. |
 | Metrics | Required workbook metrics active. |
-| Tenant FY25 baseline | Revenue entered; margin/value entered only if Finance-approved. |
+| Tenant FY25 baseline | Revenue, margin/value, cost, and net entered from the workbook. |
 | Initiative FY25 baselines | Entered for all 21 workbook initiatives. |
 | Benefit lines | 63 reviewed and Finance validated for full readiness. |
 | EBR-1 duplicate cost rows | Removed for exact FY28 dashboard match. |
 | Dashboard FY28 gross margin | `$21.633M`. |
 | Dashboard FY28 cost plan | `$3.560M` after cleanup. |
 | Dashboard FY28 net value | `$18.073M` after cleanup. |
-| Bankable plans | Locked for the demo sample or all 21 initiatives. |
+| Bankable plans | Locked for all 21 workbook initiatives. |
 | Benefit ledger | Actuals entered only if explicitly approved or labeled as demo. |
-| Workstream target locks | Four locks if demonstrating waterline. |
+| Workstream target locks | Four locks exist; total locked target basis is `$84.427M`. |
 
 ## 24. Notes On Implementation Behavior
 
@@ -1275,4 +1338,7 @@ The following implementation details explain why the UI behaves the way it does:
   value, while costs are subtracted from net.
 - `/dashboard` chooses the maximum available year if no target year is selected.
   Select `FY28` explicitly when matching the workbook dashboard.
-
+- `/financials/waterline` target locks use current bankable plan snapshot
+  `summary.net_value_plan` and do not currently take a `target_year` parameter.
+  For Ishirock, this means waterline locks represent the all-period bankable
+  target basis rather than the FY28-only workbook dashboard value.
