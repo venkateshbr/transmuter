@@ -14,6 +14,17 @@ interface NavItem {
   children?: NavItem[];
 }
 
+interface DashboardConfigItem {
+  dashboard_key: string;
+  label: string;
+  route_path: string;
+  menu_group: 'dashboard' | 'primary' | 'hidden';
+  icon: string;
+  display_order: number;
+  is_enabled: boolean;
+  allowed_roles?: string[];
+}
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;
@@ -413,6 +424,8 @@ export class App {
   protected readonly globalSearchResults = signal<GlobalSearchResult[]>([]);
   protected readonly globalSearchOpen = signal(false);
   protected readonly globalSearchLoading = signal(false);
+  protected readonly dashboardConfig = signal<DashboardConfigItem[]>([]);
+  protected readonly dashboardConfigLoaded = signal(false);
   private globalSearchTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
@@ -426,7 +439,11 @@ export class App {
       if (event instanceof NavigationEnd || event instanceof NavigationCancel || event instanceof NavigationError) {
         this.loading.endNavigation();
       }
+      if (event instanceof NavigationEnd) {
+        this.loadDashboardConfiguration();
+      }
     });
+    this.loadDashboardConfiguration();
   }
 
   protected get navItems(): NavItem[] {
@@ -435,23 +452,16 @@ export class App {
         { label: 'Platform', path: '/platform', icon: 'admin_panel_settings' },
       ];
     }
+    const dashboardChildren = this.dashboardNavChildren();
+    const primaryConfigured = this.primaryConfiguredDashboards();
     return [
       {
         label: 'Dashboard',
         path: '/dashboard',
         icon: 'grid',
-        children: [
-          { label: 'Executive Dashboard', path: '/dashboard', icon: 'grid' },
-          { label: 'Financial Overview', path: '/financials', icon: 'payments' },
-          { label: 'Initiative Portfolio', path: '/financials/initiative-portfolio', icon: 'table_chart' },
-          { label: 'Bankable Plan', path: '/financials/bankable-plan', icon: 'account_balance' },
-          { label: 'Benefits Register', path: '/financials/benefits-register', icon: 'fact_check' },
-          { label: 'Benefit Tracking', path: '/financials/benefit-tracking', icon: 'trending_up' },
-          { label: 'Waterline', path: '/financials/waterline', icon: 'water_drop' },
-          { label: 'Control Tower', path: '/reports/control-tower', icon: 'summarize' },
-        ],
+        children: dashboardChildren,
       },
-      { label: 'Shared Costs',     path: '/shared-costs',       icon: 'account_balance' },
+      ...primaryConfigured,
       { label: 'Initiatives',      path: '/initiatives/pipeline', icon: 'list' },
       { label: 'Progress Monitor', path: '/progress',           icon: 'bar-chart' },
       { label: 'Governance',       path: '/pmo/governance',     icon: 'shield' },
@@ -508,6 +518,85 @@ export class App {
     this.navMenuOpen.set(this.navMenuOpen() === path ? null : path);
   }
 
+  private loadDashboardConfiguration(): void {
+    if (!this.auth.isAuthenticated() || this.isPlatformAdmin()) {
+      this.dashboardConfig.set([]);
+      this.dashboardConfigLoaded.set(false);
+      return;
+    }
+    this.api.get<{ dashboards: DashboardConfigItem[] }>('/dashboard/configuration').subscribe({
+      next: response => {
+        this.dashboardConfig.set(response?.dashboards || []);
+        this.dashboardConfigLoaded.set(true);
+      },
+      error: () => {
+        this.dashboardConfig.set([]);
+        this.dashboardConfigLoaded.set(true);
+      },
+    });
+  }
+
+  private dashboardNavChildren(): NavItem[] {
+    const configured = this.enabledConfiguredDashboards()
+      .filter(item => item.menu_group === 'dashboard')
+      .map(item => ({
+        label: item.label,
+        path: item.route_path,
+        icon: item.icon || 'grid',
+      }));
+    if (configured.length) return configured;
+    return this.dashboardConfigLoaded()
+      ? this.defaultDashboardChildren()
+      : this.starterDashboardChildren();
+  }
+
+  private primaryConfiguredDashboards(): NavItem[] {
+    const configured = this.enabledConfiguredDashboards()
+      .filter(item => item.menu_group === 'primary')
+      .map(item => ({
+        label: item.label,
+        path: item.route_path,
+        icon: item.icon || 'grid',
+      }));
+    if (this.dashboardConfig().length) return configured;
+    return this.dashboardConfigLoaded()
+      ? [{ label: 'Shared Costs', path: '/shared-costs', icon: 'account_balance' }]
+      : [];
+  }
+
+  private enabledConfiguredDashboards(): DashboardConfigItem[] {
+    const role = this.auth.getRole() || 'viewer';
+    return this.dashboardConfig()
+      .filter(item => item.is_enabled !== false)
+      .filter(item => !item.allowed_roles?.length || item.allowed_roles.includes(role))
+      .sort((a, b) =>
+        Number(a.display_order || 0) - Number(b.display_order || 0)
+        || String(a.label || '').localeCompare(String(b.label || '')),
+      );
+  }
+
+  private defaultDashboardChildren(): NavItem[] {
+    return [
+      { label: 'Executive Dashboard', path: '/dashboard', icon: 'grid' },
+      { label: 'Financial Overview', path: '/financials', icon: 'payments' },
+      { label: 'Initiative Portfolio', path: '/financials/initiative-portfolio', icon: 'table_chart' },
+      { label: 'Investments & Payback', path: '/financials/investments-payback', icon: 'request_quote' },
+      { label: 'Bankable Plan', path: '/financials/bankable-plan', icon: 'account_balance' },
+      { label: 'Benefits Register', path: '/financials/benefits-register', icon: 'fact_check' },
+      { label: 'Benefit Tracking', path: '/financials/benefit-tracking', icon: 'trending_up' },
+      { label: 'Waterline', path: '/financials/waterline', icon: 'water_drop' },
+      { label: 'Control Tower', path: '/reports/control-tower', icon: 'summarize' },
+    ];
+  }
+
+  private starterDashboardChildren(): NavItem[] {
+    return [
+      { label: 'Executive Dashboard', path: '/dashboard', icon: 'grid' },
+      { label: 'Financial Overview', path: '/financials', icon: 'payments' },
+      { label: 'Initiative Portfolio', path: '/financials/initiative-portfolio', icon: 'table_chart' },
+    ];
+  }
+
   protected isNavGroupActive(item: NavItem): boolean {
     const currentPath = this.router.url.split('?')[0];
     return currentPath === item.path || !!item.children?.some(child => currentPath === child.path || currentPath.startsWith(`${child.path}/`));
@@ -526,6 +615,11 @@ export class App {
       input?.focus();
       this.globalSearchOpen.set(true);
     }
+  }
+
+  @HostListener('window:dashboard-configuration-updated')
+  protected refreshDashboardConfiguration(): void {
+    this.loadDashboardConfiguration();
   }
 
   protected onGlobalSearchChange(value: string): void {

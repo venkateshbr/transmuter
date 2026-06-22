@@ -74,6 +74,7 @@ from app.domain.financials import (
     PortfolioFinancialsResponse,
     PortfolioGranularity,
     PortfolioInitiativePortfolioResponse,
+    PortfolioInvestmentPaybackResponse,
     PortfolioValueBridgeBasis,
     PortfolioValueRampResponse,
     ScenarioFinancialSummary,
@@ -1052,6 +1053,30 @@ async def get_portfolio_financials(
         stage=stage,
         tag=tag,
         category_key=category_key,
+    )
+
+
+@router.get("/portfolio/investments-payback", response_model=PortfolioInvestmentPaybackResponse)
+async def get_portfolio_investments_payback(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+    value_year: int | None = Query(None, ge=2020, le=2060),
+    scenario: str = Query("plan_base"),
+    initiative_id: str | None = Query(None),
+    workstream_id: str | None = Query(None),
+    business_unit_id: str | None = Query(None),
+    stage: str | None = Query(None),
+    tag: str | None = Query(None),
+) -> PortfolioInvestmentPaybackResponse:
+    assert_can_view_portfolio(current_user)
+    return svc.get_portfolio_investments_payback(
+        value_year=value_year,
+        scenario=scenario,
+        initiative_id=initiative_id,
+        workstream_id=workstream_id,
+        business_unit_id=business_unit_id,
+        stage=stage,
+        tag=tag,
     )
 
 

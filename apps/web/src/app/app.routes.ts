@@ -84,6 +84,11 @@ export const routes: Routes = [
               import('./features/financials/initiative-portfolio.component').then(m => m.InitiativePortfolioComponent),
           },
           {
+            path: 'investments-payback',
+            loadComponent: () =>
+              import('./features/financials/investments-payback.component').then(m => m.InvestmentsPaybackComponent),
+          },
+          {
             path: 'waterline',
             loadComponent: () =>
               import('./features/financials/waterline.component').then(m => m.WaterlineComponent),

@@ -1925,6 +1925,26 @@ class _InitiativePortfolioRepo:
         ]
 
 
+class _CumulativeInvestmentPaybackRepo(_InitiativePortfolioRepo):
+    def get_all_cost_lines(self) -> list[dict]:
+        return [
+            {
+                "initiative_id": "i1",
+                "year": 2028,
+                "amount_plan": "10.0000",
+                "amount_actual": None,
+                "is_recurring": True,
+            },
+            {
+                "initiative_id": "i2",
+                "year": 2027,
+                "amount_plan": "25.0000",
+                "amount_actual": None,
+                "is_recurring": False,
+            },
+        ]
+
+
 def test_initiative_portfolio_reconciles_baseline_and_value_year() -> None:
     service = cast(Any, FinancialService.__new__(FinancialService))
     service._repo = _InitiativePortfolioRepo()
@@ -1949,6 +1969,28 @@ def test_initiative_portfolio_reconciles_baseline_and_value_year() -> None:
     assert response.totals.one_off_costs == "25.0000"
     assert response.totals.net_run_rate_value == "90.0000"
     assert all(item.reconciled for item in response.baseline_reconciliation)
+
+
+def test_investments_payback_reuses_initiative_portfolio_math() -> None:
+    service = cast(Any, FinancialService.__new__(FinancialService))
+    service._repo = _CumulativeInvestmentPaybackRepo()
+
+    response = service.get_portfolio_investments_payback(
+        value_year=2028,
+        scenario="plan_base",
+    )
+
+    assert response.summary.one_off_investment == "25.0000"
+    assert response.summary.net_run_rate_value == "90.0000"
+    assert response.summary.payback_months == "3.3333"
+    assert response.summary.payback_label == "3.3 months"
+    assert response.summary.initiatives_with_payback == 2
+    assert [row.initiative_id for row in response.rows] == ["i1", "i2"]
+    assert response.rows[0].payback_status == "immediate"
+    assert response.rows[0].payback_label == "Immediate"
+    assert response.rows[1].payback_status == "payback"
+    assert response.rows[1].payback_months == "5.0000"
+    assert response.rows[1].payback_label == "5.0 months"
 
 
 class _ValueBridgeBasisRepo:

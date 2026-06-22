@@ -109,6 +109,9 @@ from app.domain.financials import (
     PortfolioInitiativePortfolioResponse,
     PortfolioInitiativePortfolioRow,
     PortfolioInitiativePortfolioTotals,
+    PortfolioInvestmentPaybackResponse,
+    PortfolioInvestmentPaybackRow,
+    PortfolioInvestmentPaybackSummary,
     PortfolioInYearValueCard,
     PortfolioValueBridgeBasis,
     PortfolioValueRampPeriod,
@@ -2617,6 +2620,70 @@ class FinancialService:
             config=config,
         )
         return response
+
+    def get_portfolio_investments_payback(
+        self,
+        value_year: int | None = None,
+        scenario: str = "plan_base",
+        initiative_id: str | None = None,
+        workstream_id: str | None = None,
+        business_unit_id: str | None = None,
+        stage: str | None = None,
+        tag: str | None = None,
+    ) -> PortfolioInvestmentPaybackResponse:
+        portfolio = self.get_portfolio_initiative_portfolio(
+            value_year=value_year,
+            scenario=scenario,
+            initiative_id=initiative_id,
+            workstream_id=workstream_id,
+            business_unit_id=business_unit_id,
+            stage=stage,
+            tag=tag,
+        )
+        one_off_by_initiative = self._cumulative_one_off_investments(
+            initiative_ids={row.initiative_id for row in portfolio.rows},
+            value_year=portfolio.value_year,
+            scenario_key=portfolio.scenario,
+        )
+        rows = [
+            self._to_payback_row(
+                row,
+                one_off_investment=one_off_by_initiative.get(
+                    row.initiative_id, Decimal("0")
+                ),
+            )
+            for row in portfolio.rows
+        ]
+        rows.sort(
+            key=lambda row: (
+                row.payback_months is None,
+                _dec(row.payback_months or "999999999"),
+                -_dec(row.net_run_rate_value),
+                row.initiative_name,
+            )
+        )
+        total_one_off = sum(one_off_by_initiative.values(), Decimal("0"))
+        total_net = _dec(portfolio.totals.net_run_rate_value)
+        summary_months, summary_label = self._payback_months_and_label(total_one_off, total_net)
+        return PortfolioInvestmentPaybackResponse(
+            value_year=portfolio.value_year,
+            scenario=portfolio.scenario,
+            summary=PortfolioInvestmentPaybackSummary(
+                benefits_total=portfolio.totals.benefits_total,
+                recurring_costs=portfolio.totals.recurring_costs,
+                one_off_investment=_money(total_one_off),
+                net_run_rate_value=portfolio.totals.net_run_rate_value,
+                payback_months=summary_months,
+                payback_label=summary_label,
+                initiatives_with_payback=len(
+                    [row for row in rows if row.payback_status in {"immediate", "payback"}]
+                ),
+                initiatives_not_reached=len(
+                    [row for row in rows if row.payback_status == "not_reached"]
+                ),
+            ),
+            rows=rows,
+        )
 
     def get_portfolio_financial_contributors(
         self,
@@ -5405,6 +5472,74 @@ class FinancialService:
             totals[bucket] = _dec(totals[bucket]) + amount
             totals["total"] = _dec(totals["total"]) + amount
         return totals
+
+    @classmethod
+    def _to_payback_row(
+        cls,
+        row: PortfolioInitiativePortfolioRow,
+        *,
+        one_off_investment: Decimal | None = None,
+    ) -> PortfolioInvestmentPaybackRow:
+        one_off = _dec(one_off_investment if one_off_investment is not None else row.one_off_costs)
+        net = _dec(row.net_run_rate_value)
+        months, label = cls._payback_months_and_label(one_off, net)
+        if one_off <= 0:
+            status_value: Literal["immediate", "payback", "not_reached", "no_investment"] = (
+                "immediate"
+            )
+        elif net <= 0:
+            status_value = "not_reached"
+        else:
+            status_value = "payback"
+        return PortfolioInvestmentPaybackRow(
+            initiative_id=row.initiative_id,
+            initiative_code=row.initiative_code,
+            initiative_name=row.initiative_name,
+            stage=row.stage,
+            workstream_name=row.workstream_name,
+            benefits_total=row.benefits_total,
+            recurring_costs=row.recurring_costs,
+            one_off_investment=_money(one_off),
+            net_run_rate_value=row.net_run_rate_value,
+            payback_months=months,
+            payback_label=label,
+            payback_status=status_value,
+        )
+
+    def _cumulative_one_off_investments(
+        self,
+        *,
+        initiative_ids: set[str],
+        value_year: int | None,
+        scenario_key: str,
+    ) -> dict[str, Decimal]:
+        investments = {initiative_id: Decimal("0") for initiative_id in initiative_ids}
+        for row in self._repo.get_all_cost_lines():
+            initiative_id = str(row.get("initiative_id"))
+            if initiative_id not in investments or row.get("is_recurring", False):
+                continue
+            if value_year is not None and row.get("year") is not None and int(row["year"]) > value_year:
+                continue
+            raw_amount = (
+                row.get("amount_actual") if scenario_key == "actual" else row.get("amount_plan")
+            )
+            investments[initiative_id] += _dec(raw_amount)
+        return investments
+
+    @staticmethod
+    def _payback_months_and_label(
+        one_off_investment: Decimal,
+        annual_net_run_rate: Decimal,
+    ) -> tuple[str | None, str]:
+        if one_off_investment <= 0:
+            return "0.0000", "Immediate"
+        if annual_net_run_rate <= 0:
+            return None, "Not reached"
+        months = (one_off_investment / annual_net_run_rate) * Decimal("12")
+        rounded = months.quantize(Decimal("0.0001"))
+        if rounded < Decimal("1"):
+            return _money(rounded), "<1 month"
+        return _money(rounded), f"{rounded.quantize(Decimal('0.1'))} months"
 
     @staticmethod
     def _clean_bridge_case(

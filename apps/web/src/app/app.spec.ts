@@ -21,6 +21,20 @@ describe('App', () => {
   let apiPostCalls: unknown[] = [];
   let logoutCalled = false;
   let themeToggleCalled = false;
+  const dashboardConfigResponse = {
+    dashboards: [
+      { dashboard_key: 'executive_dashboard', label: 'Executive Dashboard', route_path: '/dashboard', menu_group: 'dashboard', icon: 'grid', display_order: 10, is_enabled: true },
+      { dashboard_key: 'financial_overview', label: 'Financial Overview', route_path: '/financials', menu_group: 'dashboard', icon: 'payments', display_order: 20, is_enabled: true },
+      { dashboard_key: 'initiative_portfolio', label: 'Initiative Portfolio', route_path: '/financials/initiative-portfolio', menu_group: 'dashboard', icon: 'table_chart', display_order: 30, is_enabled: true },
+      { dashboard_key: 'investments_payback', label: 'Investments & Payback', route_path: '/financials/investments-payback', menu_group: 'dashboard', icon: 'request_quote', display_order: 40, is_enabled: true },
+      { dashboard_key: 'bankable_plan', label: 'Bankable Plan', route_path: '/financials/bankable-plan', menu_group: 'dashboard', icon: 'account_balance', display_order: 50, is_enabled: true },
+      { dashboard_key: 'benefits_register', label: 'Benefits Register', route_path: '/financials/benefits-register', menu_group: 'dashboard', icon: 'fact_check', display_order: 60, is_enabled: true },
+      { dashboard_key: 'benefit_tracking', label: 'Benefit Tracking', route_path: '/financials/benefit-tracking', menu_group: 'dashboard', icon: 'trending_up', display_order: 70, is_enabled: true },
+      { dashboard_key: 'waterline', label: 'Waterline', route_path: '/financials/waterline', menu_group: 'dashboard', icon: 'water_drop', display_order: 80, is_enabled: true },
+      { dashboard_key: 'control_tower', label: 'Control Tower', route_path: '/reports/control-tower', menu_group: 'dashboard', icon: 'summarize', display_order: 90, is_enabled: true },
+      { dashboard_key: 'shared_costs', label: 'Shared Costs', route_path: '/shared-costs', menu_group: 'primary', icon: 'account_balance', display_order: 100, is_enabled: true },
+    ],
+  };
 
   beforeAll(() => {
     Object.defineProperty(window, 'matchMedia', {
@@ -96,6 +110,7 @@ describe('App', () => {
         {
           provide: ApiService,
           useValue: {
+            get: () => of(dashboardConfigResponse),
             post: (...args: unknown[]) => {
               apiPostCalls.push(args);
               return of({
@@ -161,6 +176,7 @@ describe('App', () => {
       '/dashboard',
       '/financials',
       '/financials/initiative-portfolio',
+      '/financials/investments-payback',
       '/financials/bankable-plan',
       '/financials/benefits-register',
       '/financials/benefit-tracking',

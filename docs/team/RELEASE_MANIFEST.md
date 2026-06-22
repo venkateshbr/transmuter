@@ -26,6 +26,73 @@ status.
 
 ## Current Release Entries
 
+### 2026-06-22 - Configurable Dashboards And Investments Payback
+
+Status: dev validated; production promotion in progress
+
+GitHub tracking:
+- Issue: `#339`
+- PR: not yet opened
+- Commit:
+  - `5c2e650 feat: add configurable dashboards and payback view`
+
+Runtime changes:
+- Added tenant-scoped dashboard configuration with RLS, admin controls, shell
+  menu filtering, and tenant bootstrap defaults.
+- Existing tenants are backfilled with all dashboards enabled.
+- New tenant bootstrap enables only Executive Dashboard, Financial Overview,
+  and Initiative Portfolio by default.
+- Added an Investments & Payback dashboard and portfolio API using cumulative
+  one-off investment through the selected value year and annual net run-rate
+  payback months.
+- Kept new-tenant bootstrap focused on financial engine defaults only; it does
+  not seed workstreams, business units, gates, or initiatives.
+- Updated initiative creation readiness to rely on the new financial engine
+  definitions, scenarios, and cost categories instead of legacy financial
+  configuration groups/items.
+
+Local validation:
+- `cd apps/api && uv run ruff check app/domain/dashboard_config.py app/domain/financials.py app/routers/admin.py app/routers/auth.py app/routers/dashboard.py app/routers/financials.py app/routers/platform.py app/services/dashboard_config.py app/services/financial.py app/services/tenant_bootstrap.py scripts/seed_enterprise_transformation_scenario.py tests/test_tenant_bootstrap.py tests/test_financial_portfolio.py`
+- `cd apps/api && uv run pytest tests/test_financial_dynamic_value_bridge.py tests/test_executive_control.py tests/test_financial_portfolio.py tests/test_tenant_bootstrap.py -q`
+- `cd apps/web && npm test -- --watch=false`
+- `cd apps/web && npm run build`
+- `git diff --check`
+
+Dev deployment:
+- Environment: `https://transmuter-dev.ishirock.tech`
+- Schema: `transmuter_dev`
+- Schema/data SQL applied:
+  `supabase/migrations/20260622000001_tenant_dashboard_configuration.sql`
+- Deployed with:
+  `infra/hostinger/deploy-change-to-dev.sh --schema supabase/migrations/20260622000001_tenant_dashboard_configuration.sql`
+- Initial scripted public validation hit the known immediate `/health` 404
+  readiness race after container recreation.
+- `infra/hostinger/validate-dev.sh` passed after the dev stack settled.
+- Public dev health checks passed for `/health` and `/api/health`.
+- Browser guide validation passed for tenant
+  `qa-dashboard-config-1782116455704`:
+  - Setup checklist complete.
+  - 10 initiatives.
+  - FY2028 net run-rate `8350000.0012`.
+  - One-off investment `2500000.0000`.
+  - Payback months `3.5928`.
+- Read-only tenant integrity checks passed:
+  - `acme3-transformation-lab`: 10 dashboards enabled, 5 business units,
+    5 workstreams, 10 initiatives, 4 scenarios, 10 metrics,
+    8 cost categories, 6 bridge rows.
+  - `ishirock`: 10 dashboards enabled, 10 business units, 4 workstreams,
+    23 initiatives, 4 scenarios, 11 metrics, 57 cost categories,
+    6 bridge rows.
+  - `qa-dashboard-config-1782116455704`: 10 dashboards enabled,
+    5 business units, 5 workstreams, 10 initiatives, 4 scenarios,
+    10 metrics, 8 cost categories, 6 bridge rows.
+
+Schema/data SQL required for production:
+- `supabase/migrations/20260622000001_tenant_dashboard_configuration.sql`
+
+Production validation:
+- Pending promotion.
+
 ### 2026-06-20 - Shared Costs Configurable Allocation Engine
 
 Status: promoted to production

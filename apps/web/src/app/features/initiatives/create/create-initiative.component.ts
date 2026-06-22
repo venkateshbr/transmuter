@@ -178,7 +178,7 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
             <p class="text-[10px] font-black uppercase tracking-widest text-amber-600">Tenant setup required</p>
             <h2 class="mt-1 text-lg font-black" style="color:var(--t-text-primary)">Configure the tenant before creating initiatives</h2>
             <p class="mt-2 max-w-3xl text-sm leading-6" style="color:var(--t-text-secondary)">
-              Complete the setup checklist in Admin first. That includes business units, workstreams, financial configuration,
+              Complete the setup checklist in Admin first. That includes business units, workstreams,
               financial engine definitions, stage gates, and gate criteria.
             </p>
           </div>
@@ -667,7 +667,7 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
         <p class="text-[10px] font-black uppercase tracking-widest text-amber-600">Tenant setup required</p>
         <p class="mt-2 text-sm font-bold text-[var(--t-text-primary)]">Upload is disabled until the tenant setup checklist is complete.</p>
         <p class="mt-1 text-sm leading-6 text-[var(--t-text-secondary)]">
-          Configure business units, workstreams, financial configuration, financial engine definitions, stage gates, and gate criteria in Admin first.
+          Configure business units, workstreams, financial engine definitions, stage gates, and gate criteria in Admin first.
         </p>
       </div>
 
@@ -796,7 +796,7 @@ export class CreateInitiativeComponent {
   readonly tags = signal<string[]>([]);
   readonly users = signal<UserOption[]>([]);
   readonly financialConfiguration = signal<FinancialConfiguration | null>(null);
-  readonly financialEngineConfiguration = signal<any>({ definitions: [], scenarios: [], settings: {} });
+  readonly financialEngineConfiguration = signal<any>({ definitions: [], scenarios: [], cost_categories: [], settings: {} });
   readonly stageGateDefinitions = signal<any[]>([]);
   readonly gateCriteria = signal<any[]>([]);
   readonly financialSelectionsLocked = signal(false);
@@ -894,8 +894,8 @@ export class CreateInitiativeComponent {
       error: () => this.financialConfiguration.set(null),
     });
     this.api.get<any>('/financial-engine-configuration').subscribe({
-      next: r => this.financialEngineConfiguration.set(r || { definitions: [], scenarios: [], settings: {} }),
-      error: () => this.financialEngineConfiguration.set({ definitions: [], scenarios: [], settings: {} }),
+      next: r => this.financialEngineConfiguration.set(r || { definitions: [], scenarios: [], cost_categories: [], settings: {} }),
+      error: () => this.financialEngineConfiguration.set({ definitions: [], scenarios: [], cost_categories: [], settings: {} }),
     });
     this.api.get<any[]>('/governance/stage-gates').subscribe({
       next: r => this.stageGateDefinitions.set(Array.isArray(r) ? r : []),
@@ -1370,10 +1370,9 @@ export class CreateInitiativeComponent {
     return Boolean(
       this.businessUnits().length &&
       this.workstreams().length &&
-      this.financialConfiguration()?.groups?.length &&
-      this.financialConfiguration()?.items?.length &&
       this.financialEngineConfiguration()?.definitions?.length &&
       this.financialEngineConfiguration()?.scenarios?.length &&
+      this.financialEngineConfiguration()?.cost_categories?.length &&
       this.stageGateDefinitions().length &&
       this.gateCriteria().length
     );

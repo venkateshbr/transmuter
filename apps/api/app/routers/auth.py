@@ -363,9 +363,13 @@ def _cleanup_failed_registration(admin: Any, tenant_id: str, auth_user_id: str |
         "financial_initiative_annual_baselines",
         "financial_tenant_annual_baselines",
         "initiative_financial_scope",
+        "financial_bridge_rows",
         "financial_cost_categories",
+        "financial_metric_definitions",
+        "financial_scenarios",
         "financial_config_items",
         "financial_config_groups",
+        "tenant_dashboard_config",
     ]
     for table in tenant_tables:
         with suppress(Exception):

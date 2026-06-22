@@ -21,6 +21,7 @@ from supabase import Client
 load_dotenv(dotenv_path=Path(__file__).resolve().parents[3] / ".env")
 
 from app.core.database import get_supabase_admin  # noqa: E402
+from app.services.dashboard_config import DashboardConfigService  # noqa: E402
 from app.services.financial import FinancialService  # noqa: E402
 
 ORG_NAME = os.environ.get("TRANSMUTER_SEED_ORG_NAME", "Acme Global Manufacturing")
@@ -2025,6 +2026,7 @@ def main() -> None:
         gate_criteria,
     )
     insert_shared_cost_demo(client, tenant_id, user_id, initiative_ids, metric_ids, scenario_ids)
+    DashboardConfigService(client, tenant_id).enable_all_defaults()
     insert_operating_cadence_demo(client, tenant_id, user_id, initiative_ids, workstreams)
     print("Seeded enterprise transformation scenario")
     print(f"  tenant_id: {tenant_id}")

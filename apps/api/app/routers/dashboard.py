@@ -5,10 +5,12 @@ from fastapi.responses import Response
 from supabase import Client
 
 from app.core.auth import CurrentUser, get_current_user
-from app.core.database import get_supabase_request_client
+from app.core.database import get_supabase_admin, get_supabase_request_client
 from app.domain.dashboard import DashboardResponse
+from app.domain.dashboard_config import DashboardConfigResponse
 from app.repositories.dashboard import DashboardRepository
 from app.services.dashboard import DashboardService
+from app.services.dashboard_config import DashboardConfigService
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -19,6 +21,20 @@ def _svc(
 ) -> DashboardService:
     repo = DashboardRepository(client, current_user.tenant_id)
     return DashboardService(repo)
+
+
+def _config_svc(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> DashboardConfigService:
+    return DashboardConfigService(get_supabase_admin(), str(current_user.tenant_id))
+
+
+@router.get("/configuration", response_model=DashboardConfigResponse)
+async def get_dashboard_configuration(
+    svc: Annotated[DashboardConfigService, Depends(_config_svc)],
+) -> DashboardConfigResponse:
+    """Get enabled dashboard registry for current tenant navigation."""
+    return svc.get_configuration()
 
 
 @router.get("", response_model=DashboardResponse)
