@@ -58,6 +58,7 @@ describe('App', () => {
         provideRouter([
           { path: 'dashboard', component: EmptyRouteComponent },
           { path: 'meetings', component: EmptyRouteComponent },
+          { path: 'people', component: EmptyRouteComponent },
           { path: 'platform', component: EmptyRouteComponent },
           { path: 'profile', component: EmptyRouteComponent },
           { path: 'auth/login', component: EmptyRouteComponent },
@@ -168,13 +169,43 @@ describe('App', () => {
     ]);
   });
 
-  it('should expose meetings and people as primary navigation items without a More menu', () => {
+  it('should expose all authenticated sections as primary navigation items without a More menu', () => {
     const fixture = TestBed.createComponent(App);
     const component = fixture.componentInstance as any;
 
     expect(component.primaryNavItems.map((item: any) => item.path)).toContain('/meetings');
     expect(component.primaryNavItems.map((item: any) => item.path)).toContain('/people');
+    expect(component.primaryNavItems.map((item: any) => item.path)).toEqual([
+      '/dashboard',
+      '/shared-costs',
+      '/initiatives/pipeline',
+      '/progress',
+      '/pmo/governance',
+      '/pmo/kpis',
+      '/pmo/risks',
+      '/meetings',
+      '/people',
+    ]);
     expect(component.overflowNavItems).toEqual([]);
+  });
+
+  it('should navigate to people from the primary top navigation', async () => {
+    const router = TestBed.inject(Router);
+    await router.navigateByUrl('/dashboard');
+
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const peopleLink = compiled.querySelector<HTMLAnchorElement>('header nav a[href="/people"]');
+    expect(peopleLink).toBeTruthy();
+
+    peopleLink?.click();
+    await fixture.whenStable();
+
+    expect(router.url).toBe('/people');
   });
 
   it('should render platform-only navigation for platform admins', async () => {
