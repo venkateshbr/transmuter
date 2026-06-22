@@ -28,7 +28,7 @@ status.
 
 ### 2026-06-22 - Governed Bankable Plan Rebaseline
 
-Status: ready for production promotion
+Status: promoted to production
 
 GitHub tracking:
 - Issue: `#339`
@@ -85,7 +85,28 @@ Schema SQL required for production:
 - `supabase/migrations/20260622000001_governed_bankable_rebaseline.sql`
 
 Production validation:
-- Pending promotion.
+- Environment: `https://transmuter.ishirock.tech`
+- Schema: `transmuter`
+- Initial promotion with `--schema` hit the known Docker-only `db` hostname
+  issue from the host.
+- Production schema SQL was applied through the self-hosted Supabase DB
+  container as `supabase_admin`, with
+  `search_path=transmuter,public,extensions`:
+  - `supabase/migrations/20260622000001_governed_bankable_rebaseline.sql`
+- Production deployment ran with:
+  `CONFIRM_PROMOTE=1 infra/hostinger/promote-dev-to-prod.sh`
+- First retry hit a transient Docker Hub auth 404 for `node:22-alpine`; rerun
+  succeeded.
+- Initial scripted public validation hit the known immediate `/health` 404
+  readiness race after container recreation.
+- `infra/hostinger/validate-prod.sh` passed after the production stack settled.
+- Public production health checks passed for `/health` and `/api/health`.
+- Production schema validation confirmed `gate_submissions` has:
+  - `submission_type text`
+  - `requested_bankable_plan_version integer`
+  - `requested_snapshot jsonb`
+- Production route validation confirmed `/financials/bankable-plan` and
+  `/pmo/governance` return the Angular app shell.
 
 ### 2026-06-22 - Configurable Dashboards And Investments Payback
 
