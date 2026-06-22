@@ -22,8 +22,11 @@ For a UI-only blank-tenant setup path that skips meetings, see
 
 ## 1. Validated ACME Demo State
 
-Validated on `https://transmuter-dev.ishirock.tech` against the ACME3
-transformation lab tenant.
+Validated on `https://transmuter-dev.ishirock.tech` against the ACME4
+transformation lab tenant. ACME4 was created through the current signup flow and
+uses generated `TRN-001` through `TRN-010` initiative codes. Where this guide
+uses historical `ENT-*` scenario codes, map them by row order to the ACME4
+`TRN-*` codes.
 
 | Area | Status | Validation result |
 |---|---|---|
@@ -36,17 +39,18 @@ transformation lab tenant.
 | Initiatives | Configured | 10 ACME initiatives. |
 | Initiative baseline allocation | Reconciles | Initiative baselines total `$20.0M` revenue and `$9.0M` gross margin. |
 | FY28 Financial Overview | Reconciles | Benefits `$9.15M`, recurring costs `$0.80M`, net run-rate value `$8.35M`. |
-| Benefit Tracking / Bankable Plan | Board-demo-ready | ACME has locked bankable plans, non-zero locked baseline and actual benefit ledger values, and `ENT-005` rebaseline history. |
+| Investments & Payback | Reconciles | One-off investment `$2.50M`, FY28 net run-rate `$8.35M`, payback about `3.6` months. |
+| Benefit Tracking / Bankable Plan | Board-demo-ready | ACME4 has locked bankable plans for all 10 initiatives, non-zero locked baseline and actual benefit ledger values, and governed `TRN-005` rebaseline history. |
 | FY28 contributor drawer | Reconciles | Contributor drawer shows all 10 initiatives, benefit-line detail, validation status, and totals that reconcile to the Financial Overview summary. |
 | Benefits Register | Configured | Portfolio-wide benefit lines show gross, validated, risk-adjusted, bankable, and realized values with evidence and owner metadata. |
-| Shared Costs | Configured in dev | Current ACME3 dev data includes four FY2028 shared-cost pools covering `benefit_weighted`, `equal_split`, `fixed_percentage`, and `manual_amount` methods. Total shared-cost plan is `$1.45M`, actual is `$1.305M`, and Control Tower allocated plan is `$1.45M`. |
+| Shared Costs | Configured in dev | Current ACME4 dev data includes four FY2028 shared-cost pools covering `benefit_weighted`, `equal_split`, `fixed_percentage`, and `manual_amount` methods. Total shared-cost plan is `$1.45M`, actual is `$1.305M`, and Control Tower allocated plan is `$1.45M`. |
 | Board pack export | Configured | Financial Overview can export a non-empty XLSX board pack using the same selected year and value basis. |
 
 ---
 
 Production note: the Shared Costs schema, API, and UI are live on
 `https://transmuter.ishirock.tech`, but production ACME demo data is not yet at
-dev ACME3 parity. Production ACME currently has 0 shared-cost pools and 0
+dev ACME4 parity. Production ACME currently has 0 shared-cost pools and 0
 initiative dependencies; that seeded-data drift is tracked in issue `#304`.
 
 ## 2. Executive Storyline
@@ -149,6 +153,7 @@ cadence.
 | Initiative **Financials** tab | Finance Lead | Initiative Owner, Business Benefit Owner | Maintains benefit lines, cost lines, plan/high/actual scenario values, validation status, and assumptions. |
 | Initiative **Milestones**, **KPIs**, **Risks**, **Dependencies**, **Status**, **Team** tabs | Initiative Owner / PMO Lead | Workstream Lead | Maintains execution evidence that explains whether the value case is credible. |
 | `/financials` | Finance Lead | Transformation Office Director | Reconciles portfolio baseline, planned benefits, actuals, recurring costs, one-off investment, net run-rate value, and contributor detail. |
+| `/financials/investments-payback` | Finance Lead / Transformation Office Director | Executive Sponsor | Shows cumulative one-off investment, annual net run-rate value, and payback period by portfolio and initiative. |
 | `/financials/benefits-register` | Finance Lead / Benefits Controller | Initiative Owners, Business Benefit Owners | Shows each benefit line with plan, actual, validated amount, risk adjustment, evidence, owner, and validation status. |
 | `/financials/bankable-plan` | Finance Lead / PMO Lead | Transformation Office Director | Shows locked approved plans and rebaseline history before actual realization is tracked against them. |
 | `/financials/benefit-tracking` | Benefits Controller | Finance Lead, Business Benefit Owners | Records and imports realized benefit ledger rows, compares actuals to locked bankable plan, and exposes variances. |
@@ -869,7 +874,7 @@ not direct initiative cost lines. They are central costs allocated for burdened
 executive reporting and, later, optional burdened bankable-plan reporting if
 Finance enables that policy.
 
-Current ACME3 seeded proof in dev:
+Current ACME4 seeded proof in dev:
 
 | Scenario | Pool | Category | Suggested method | Candidate initiatives | Demo point |
 |---|---|---|---|---|---|
@@ -1022,6 +1027,8 @@ Demo sequence:
 7. Point to Benefits, Recurring Costs, and Net Run-rate Value.
 8. Change year to `2027` to show ramp year.
 9. Change back to `2028` to show run-rate.
+10. Open `/financials/investments-payback` to show `$2.50M` one-off
+    investment and the `3.6` month payback period.
 
 Speaker notes:
 
@@ -1223,9 +1230,9 @@ Feature behavior:
 |---|---|---|
 | Current lock status | Shows whether the selected initiative is still editable or has a locked plan. | Select any seeded ACME initiative to show a locked status. |
 | Snapshot summary | Shows locked net value, entry count, cost-line count, metric count, and selected scope count. | Use it to prove the bankable value is generated from the initiative value case. |
-| Version history | Lists approval and rebaseline versions with lock time, reason, trigger, and locked-by metadata. | Select `ENT-005 Enterprise Data Platform`; current version is v2. |
+| Version history | Lists approval and rebaseline versions with lock time, reason, trigger, and locked-by metadata. | Select ACME4 `TRN-005 Enterprise Data Platform` to show current version 2 created from governed rebaseline approval. |
 | Editable scope link | Opens the underlying initiative financial scope without changing the locked snapshot. | Explain that scope edits require a new approval or rebaseline before they become bankable. |
-| Rebaseline governance | Preserves prior versions while creating a new current baseline. | Use `ENT-005` to explain controlled baseline movement. |
+| Rebaseline governance | Preserves prior versions while creating a new current baseline. | Use ACME4 `TRN-005` to explain controlled baseline movement through Bankable Plan request and Governance approval. |
 
 Primary use cases:
 
@@ -1262,8 +1269,8 @@ Shared-cost policy:
 Current ACME demo note:
 
 - ACME has locked bankable plan snapshots seeded for the 10 initiatives.
-- Use `ENT-005 Enterprise Data Platform` to demonstrate version history and
-  rebaseline handling; the current plan is version 2.
+- ACME4 has locked current plans and `TRN-005 Enterprise Data Platform` carries
+  version-2 governed rebaseline history.
 - Use this screen as the governance proof that approved value cases are locked
   before realization is tracked.
 
@@ -1271,8 +1278,9 @@ Speaker notes:
 
 > The bankable plan is the immutable version of an approved value case. Once an
 > initiative passes the configured approval gate, the plan becomes the baseline
-> for realization tracking. ACME now has locked bankable plans, so we can show
-> both the current approved plan and a controlled rebaseline example.
+> for realization tracking. ACME4 now has locked bankable plans and a governed
+> TRN-005 rebaseline example, so we can show both the current approved plan and a
+> controlled baseline-change approval.
 
 Management use:
 
@@ -1440,7 +1448,7 @@ Use it for:
 - preventing shared costs from being hidden inside a single initiative,
 - explaining fully loaded portfolio economics in Executive Control Tower.
 
-Current ACME3 demo proof:
+Current ACME4 demo proof:
 
 | Pool | Plan | Actual | Allocation method | Reporting impact |
 |---|---:|---:|---|---|
@@ -1534,7 +1542,7 @@ Shared-cost impact to call out:
 
 Demo action:
 
-1. Set target year to `2028` when demonstrating the current ACME3 shared-cost
+1. Set target year to `2028` when demonstrating the current ACME4 shared-cost
    pools.
 2. Point to **Allocated Costs** and **Net After Allocation**.
 3. Explain that the number should drill back to `/shared-costs` pool, rule, run,
@@ -1691,7 +1699,7 @@ Actions:
 4. Switch through the PMO, change/training, and advisory/vendor pools to show
    equal split, manual amount, and fixed percentage allocation methods.
 5. Open **Executive Control Tower**.
-6. Set target year to `2028` for the current ACME3 shared-cost proof.
+6. Set target year to `2028` for the current ACME4 shared-cost proof.
 7. Point to allocated costs, burdened costs, and net after allocation.
 
 Speaker notes:
@@ -1760,7 +1768,7 @@ Speaker notes:
 | What costs are recurring? | `/financials`, cost category filter | FY28 recurring run cost `$0.80M`. |
 | What investment is needed? | `/financials`, Year = 2027; cost breakdown | One-off investment `$2.5M`. |
 | Who owns the value? | `/initiatives/pipeline`; initiative detail | Owner, group owner, BU, and workstream per initiative. |
-| Is the plan locked? | `/financials/bankable-plan` | ACME has locked bankable plan snapshots; use `ENT-005` to show version 2 and rebaseline history. |
+| Is the plan locked? | `/financials/bankable-plan` | ACME4 has locked bankable plan snapshots for all 10 initiatives; use `TRN-005` to show version 2 and governed rebaseline history. |
 | Which benefit lines are Finance validated? | `/financials/benefits-register` | Filter by Finance validated and show owner, evidence, plan, actual, validated, risk-adjusted, bankable, and realized values. |
 | Is value realized or just planned? | `/financials/benefit-tracking` | ACME has realized actuals in the benefit ledger; compare actuals to locked bankable plan by portfolio, workstream, initiative, and period. |
 | Where are risks and blockers? | Initiative **Risks**, **Status**, `/pmo/risks`, `/progress/status-updates` | Show RAG status, risk list, and overdue updates. |

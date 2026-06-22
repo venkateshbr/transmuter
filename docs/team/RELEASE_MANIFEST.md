@@ -26,6 +26,67 @@ status.
 
 ## Current Release Entries
 
+### 2026-06-22 - Governed Bankable Plan Rebaseline
+
+Status: ready for production promotion
+
+GitHub tracking:
+- Issue: `#339`
+- PR: not yet opened
+- Commit:
+  - `120c6db feat: add governed bankable plan rebaseline`
+
+Runtime changes:
+- Added a governed rebaseline workflow for Bankable Plan baseline changes.
+- `/financials/bankable-plan` now submits a rebaseline request instead of
+  directly changing the current locked plan.
+- Rebaseline requests are stored as governance submissions with
+  `submission_type = bankable_plan_rebaseline`.
+- `/pmo/governance` shows and approves/rejects Bankable Plan rebaseline
+  requests.
+- Approval creates the next immutable `bankable_plans` version with
+  `trigger_type = rebaseline`; pending requests do not affect Benefit Tracking,
+  Waterline, dashboards, or board-pack exports.
+- ACME4 `TRN-005` now has version-2 governed rebaseline history.
+
+Local validation:
+- `cd apps/api && uv run pytest tests/test_bankable_plans.py -q`
+- `cd apps/web && ./node_modules/.bin/tsc --noEmit -p tsconfig.app.json`
+- `cd apps/web && ./node_modules/.bin/ngc -p tsconfig.app.json`
+- `node --check apps/web/e2e/acme4-full-demo-ui-e2e.mjs`
+- `git diff --check`
+
+Dev deployment:
+- Environment: `https://transmuter-dev.ishirock.tech`
+- Schema: `transmuter_dev`
+- Schema SQL applied:
+  `supabase/migrations/20260622000001_governed_bankable_rebaseline.sql`
+- Deployed with:
+  `infra/hostinger/deploy-change-to-dev.sh --schema supabase/migrations/20260622000001_governed_bankable_rebaseline.sql`
+- Initial scripted public validation hit the known immediate `/health` 404
+  readiness race after container recreation.
+- Manual public and local dev health checks passed for `/health` and
+  `/api/health`.
+- ACME4 browser validation passed:
+  - 10 initiatives.
+  - 10 locked bankable plans.
+  - 11 KPI rows.
+  - 10 risk rows.
+  - 20 milestones.
+  - 3 dependencies.
+  - Benefit ledger actuals `12053200.0020`.
+  - 4 shared-cost pools.
+  - `TRN-005` bankable plan `rebaselineVersion: 2`.
+- Dev database validation confirmed:
+  - `TRN-005` v1: `approval`, `stage_gate`, `approved`.
+  - `TRN-005` v2: `rebaseline`, `bankable_plan_rebaseline`, `approved`.
+
+Schema SQL required for production:
+- `supabase/migrations/20260622000001_governed_bankable_rebaseline.sql`
+
+Production validation:
+- Pending promotion.
+
 ### 2026-06-22 - Configurable Dashboards And Investments Payback
 
 Status: promoted to production

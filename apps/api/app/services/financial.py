@@ -1716,6 +1716,7 @@ class FinancialService:
         initiative_id: str,
         locked_by_id: str,
         reason: str | None = None,
+        trigger_submission_id: str | None = None,
     ) -> BankablePlanVersion:
         self._ensure_tenant_initiative(initiative_id)
         latest = self._repo.get_latest_bankable_plan(initiative_id)
@@ -1731,7 +1732,7 @@ class FinancialService:
                 "initiative_id": initiative_id,
                 "version": int(latest["version"]) + 1,
                 "trigger_type": "rebaseline",
-                "trigger_submission_id": latest.get("trigger_submission_id"),
+                "trigger_submission_id": trigger_submission_id or latest.get("trigger_submission_id"),
                 "locked_by_id": locked_by_id,
                 "locked_at": datetime.now(UTC).isoformat(),
                 "locked_reason": reason or latest.get("locked_reason"),

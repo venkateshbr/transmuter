@@ -1,14 +1,18 @@
 # ACME Demo Tenant UI Setup Guide
 
-Last updated: 2026-06-20
+Last updated: 2026-06-22
 
 This guide explains how a normal tenant user can create a blank tenant and turn
 it into an ACME-style transformation demo tenant through the Transmuter UI.
 
-Use this guide for ACME, ACME2, or ACME3 demo tenants. The scenario is the same
-for each tenant; only the organization name, slug, and users change. ACME3 is
-the canonical latest demo state because it includes the current Shared Costs
-allocation engine.
+Use this guide for ACME, ACME2, ACME3, or ACME4 demo tenants. The scenario is
+the same for each tenant; only the organization name, slug, and users change.
+ACME4 is the canonical full demo state for dev because it was created through
+the current signup flow, uses the current financial engine, and now includes
+Shared Costs allocation, benefit ledger rows, milestones, KPIs, risks,
+dependencies, locked bankable plans, and governed rebaseline history. ACME3
+remains the legacy reference tenant for the original `ENT-*` initiative-code
+sequence.
 
 No credentials are included in this guide.
 
@@ -35,7 +39,7 @@ After completing this guide, the tenant can demonstrate:
 
 This guide intentionally skips Meeting setup.
 
-Expected ACME3 totals:
+Expected ACME4 totals:
 
 | Area | Expected result |
 |---|---:|
@@ -83,14 +87,39 @@ https://transmuter-dev.ishirock.tech
 | ACME | Acme Global Manufacturing | `acme-transformation-lab` |
 | ACME2 | Acme Global Manufacturing 2 | `acme2-transformation-lab` |
 | ACME3 | Acme Global Manufacturing 3 | `acme3-transformation-lab` |
+| ACME4 | Acme Global Manufacturing 4 | `acme4-transformation-lab` |
 
 4. Enter the initial administrator name and email.
 5. Enter planned users, for example `12`.
 6. Complete the subscription checkout flow for the environment.
 7. Return to Transmuter and sign in as the initial administrator.
 
-New tenants should start blank. Do not expect business units, workstreams,
-initiatives, or financial configuration to be preloaded.
+New tenants should start without business units, workstreams, initiatives, stage
+gates, or gate criteria. The platform does bootstrap default financial engine
+configuration and default dashboard configuration:
+
+- Financial engine defaults: scenarios, metric definitions, cost categories,
+  value bridge rows, and reporting settings.
+- Dashboard defaults: Executive Dashboard, Financial Overview, and Initiative
+  Portfolio are enabled. Other dashboards are enabled from Admin > Dashboard
+  Configuration when a demo tenant needs the full menu.
+
+Current platform-created tenants generate initiative codes such as `TRN-001`
+through `TRN-010`. The guide tables still use the historical `ENT-001` through
+`ENT-010` scenario sequence. For ACME4, use the same row order and map:
+
+| Historical guide code | ACME4 generated code |
+|---|---|
+| `ENT-001` | `TRN-001` |
+| `ENT-002` | `TRN-002` |
+| `ENT-003` | `TRN-003` |
+| `ENT-004` | `TRN-004` |
+| `ENT-005` | `TRN-005` |
+| `ENT-006` | `TRN-006` |
+| `ENT-007` | `TRN-007` |
+| `ENT-008` | `TRN-008` |
+| `ENT-009` | `TRN-009` |
+| `ENT-010` | `TRN-010` |
 
 ### 2.2 First Login
 
@@ -179,6 +208,11 @@ Screen:
 
 - `/admin`
 - Tab: **Financial Configuration**
+
+New tenants include the standard financial engine rows by default. Use this
+section to confirm the defaults, adjust labels or formulas if needed, and enter
+the ACME tenant baseline values. Do not recreate duplicate rows if the default
+rows already exist.
 
 ### 5.1 Reporting Settings
 
@@ -303,6 +337,29 @@ Create these criteria:
 | 4 | Implementation evidence submitted | Execution evidence confirms the initiative is live or materially complete. |
 | 4 | Actuals collection started | Benefit realization actuals are being captured in the ledger. |
 | 5 | Benefits realized and accepted | Realized value is accepted by the transformation office and business owner. |
+
+## 6.3 Configure Demo Dashboards
+
+Screen:
+
+- `/admin`
+- Tab: **Dashboard Configuration**
+
+For a full ACME demo tenant, enable these dashboards and reports:
+
+- Executive Dashboard
+- Financial Overview
+- Initiative Portfolio
+- Investments & Payback
+- Bankable Plan
+- Benefits Register
+- Benefit Tracking
+- Waterline
+- Executive Control Tower
+- Shared Costs
+
+New tenants intentionally start with only the three starter dashboards enabled.
+This setup step makes the full ACME demo menu visible.
 
 ## 7. Create The ACME Initiatives
 
@@ -592,11 +649,22 @@ to the ACME demo stage:
 4. Leave Gate 5 unapproved unless you want to demonstrate fully realized
    initiatives.
 
-For ENT-005, run a rebaseline if the UI exposes rebaseline controls. Use reason:
+For ENT-005, run a governed bankable-plan rebaseline:
+
+1. Open `/financials/bankable-plan`.
+2. Select ENT-005, or TRN-005 in ACME4.
+3. Select **Request rebaseline**.
+4. Enter this reason:
 
 ```text
 Enterprise Data Platform delivery timing and tooling assumptions were refreshed.
 ```
+
+5. Submit the request.
+6. Open `/pmo/governance?status=pending`.
+7. Approve the **Bankable plan rebaseline** request.
+8. Return to `/financials/bankable-plan` and confirm ENT-005/TRN-005 shows
+   version `2` with a rebaseline history entry.
 
 ## 13. Enter Benefit Tracking Actuals
 
@@ -841,7 +909,22 @@ Explain:
 > This is the finance ranking table. It helps identify material initiatives,
 > concentration risk, and value cases that need leadership attention.
 
-### 15.7 Benefits Register `/financials/benefits-register`
+### 15.7 Investments & Payback `/financials/investments-payback`
+
+Show:
+
+- Portfolio one-off investment: `$2.50M`.
+- FY28 net run-rate value: `$8.35M`.
+- Portfolio payback period: about `3.6` months.
+- Initiative-level payback rows.
+
+Explain:
+
+> This view separates investment funding from recurring EBITDA run-rate. One-off
+> investment is accumulated through the selected value year and compared with
+> annual net run-rate value to show payback period.
+
+### 15.8 Benefits Register `/financials/benefits-register`
 
 Show:
 
@@ -862,7 +945,7 @@ Explain:
 > value from validated value and keeps evidence, owner, risk, and handoff status
 > visible.
 
-### 15.8 Bankable Plan `/financials/bankable-plan`
+### 15.9 Bankable Plan `/financials/bankable-plan`
 
 Show:
 
@@ -878,7 +961,7 @@ Explain:
 > tracking compares actuals to this locked baseline instead of chasing a moving
 > target.
 
-### 15.9 Benefit Tracking `/financials/benefit-tracking`
+### 15.10 Benefit Tracking `/financials/benefit-tracking`
 
 Set scope:
 
@@ -908,7 +991,7 @@ Explain:
 > Benefit Tracking is the actual realization layer. It shows whether approved
 > bankable value has moved into actual business results.
 
-### 15.10 Waterline `/financials/waterline`
+### 15.11 Waterline `/financials/waterline`
 
 Use it to demonstrate locked targets by workstream.
 
@@ -926,7 +1009,7 @@ Explain:
 > useful when leadership wants to know whether realized value is above or below
 > the approved target line.
 
-### 15.11 Shared Costs `/shared-costs`
+### 15.12 Shared Costs `/shared-costs`
 
 Show:
 
@@ -944,7 +1027,7 @@ Explain:
 > benefits and costs; Control Tower can show the portfolio after central PMO,
 > platform, change, and vendor support costs are allocated.
 
-### 15.12 Progress `/progress` And Roadmap `/progress/roadmap`
+### 15.13 Progress `/progress` And Roadmap `/progress/roadmap`
 
 Show:
 
@@ -957,7 +1040,7 @@ Explain:
 > Progress explains whether the financial case is deliverable. It connects the
 > value story to milestone execution.
 
-### 15.13 Governance `/pmo/governance`
+### 15.14 Governance `/pmo/governance`
 
 Show:
 
@@ -972,7 +1055,7 @@ Explain:
 > initiative passes controlled stages, and the bankable plan is locked from an
 > approved gate.
 
-### 15.14 PMO KPIs `/pmo/kpis`
+### 15.15 PMO KPIs `/pmo/kpis`
 
 Show:
 
@@ -986,7 +1069,7 @@ Explain:
 > moving. If benefits are planned but KPIs are missing, realization confidence
 > should be challenged.
 
-### 15.15 PMO Risks `/pmo/risks`
+### 15.16 PMO Risks `/pmo/risks`
 
 Show:
 
@@ -1001,7 +1084,7 @@ Explain:
 > data, adoption, or finance-validation risk should still get leadership
 > attention.
 
-### 15.16 Executive Control Tower `/reports/control-tower`
+### 15.17 Executive Control Tower `/reports/control-tower`
 
 Set target year to `2028`.
 
@@ -1060,12 +1143,53 @@ Before presenting, verify:
 | What do Shared Costs change? | `/shared-costs`, `/reports/control-tower` | They add allocated central burden to executive reporting without changing direct initiative accountability. |
 | Why can `/financials` and Control Tower differ? | `/financials` and `/reports/control-tower` | `/financials` is direct-only by default; Control Tower can include allocated shared-cost burden. |
 
-## 18. Notes For ACME, ACME2, And ACME3
+## 18. Browser E2E Validation
 
-- Use the same setup data for all three tenants.
-- ACME3 should be treated as the canonical latest demo because it includes the
-  current Shared Costs configurable allocation engine.
+The maintained browser automation for this guide is:
+
+```bash
+TRANSMUTER_E2E_EMAIL=admin@acme4-transformation.dev \
+TRANSMUTER_E2E_PASSWORD='<password>' \
+node apps/web/e2e/acme4-full-demo-ui-e2e.mjs
+```
+
+Use `TRANSMUTER_UI_BASE_URL` and `TRANSMUTER_API_BASE_URL` to point the runner
+at another environment. The runner signs in through the browser, maps the
+historical `ENT-*` guide sequence to ACME4's generated `TRN-*` initiative codes,
+uses UI screens to enrich initiatives, configures Shared Costs, imports the
+benefit ledger, and verifies the dashboard routes.
+
+Validated on dev on 2026-06-22:
+
+| Area | Result |
+|---|---:|
+| Initiatives | 10 |
+| Bankable plans | 10 |
+| KPIs | 11 |
+| Risks | 10 |
+| Milestones | 20 |
+| Dependencies | 3 |
+| Benefit ledger actuals | `$12,053,200.0020` |
+| Shared-cost pools | 4 |
+| ENT-005/TRN-005 bankable plan version | 2 |
+
+The Benefit Tracking import screen accepts the mapped CSV through the UI file
+control. In headless Chromium the visible Import button did not reliably fire
+the upload handler, so the runner completes the import with the same
+authenticated browser session using `FormData` against the platform API. This is
+a UI automation reliability gap, not a data setup shortcut; no database writes
+are used by the runner.
+
+## 19. Notes For ACME, ACME2, ACME3, And ACME4
+
+- Use the same setup data for all demo tenants.
+- ACME4 should be treated as the canonical full demo in dev because it proves
+  tenant signup, the current financial engine, current dashboard configuration,
+  shared-cost allocation, benefit tracking, governed bankable-plan rebaseline,
+  and initiative delivery artifacts.
+- ACME3 remains useful as the legacy reference tenant for original `ENT-*` demo
+  codes.
 - Use unique slugs and user emails for each tenant.
-- If production ACME does not show the ACME3 shared-cost pools, that is the
+- If production ACME does not show the ACME4 shared-cost pools, that is the
   known production demo-data drift tracked in issue `#304`; it is not a Shared
   Costs schema or deployment failure.

@@ -941,7 +941,7 @@ class BankablePlanResponse(BaseModel):
 
 
 class BankablePlanRebaselineRequest(BaseModel):
-    reason: str | None = None
+    reason: str = Field(..., min_length=10, max_length=1000)
 
 
 class BenefitLedgerEntryCreate(BaseModel):

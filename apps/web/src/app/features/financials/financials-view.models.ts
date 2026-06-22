@@ -280,6 +280,7 @@ export interface GovernanceSubmission {
   id: string;
   initiative_id: string;
   gate_number: number;
+  submission_type?: 'stage_gate' | 'bankable_plan_rebaseline' | string;
   submitted_by_id: string;
   submitted_by_name?: string | null;
   submitted_at: string;
@@ -289,6 +290,8 @@ export interface GovernanceSubmission {
   decided_at?: string | null;
   commentary?: string | null;
   criteria_snapshot?: Array<Record<string, unknown>> | null;
+  requested_bankable_plan_version?: number | null;
+  requested_snapshot?: Record<string, unknown> | null;
 }
 
 export interface GovernanceStatusResponse {

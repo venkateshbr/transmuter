@@ -109,6 +109,7 @@ class GateSubmissionItem(BaseModel):
     id: str
     initiative_id: str
     gate_number: int
+    submission_type: Literal["stage_gate", "bankable_plan_rebaseline"] = "stage_gate"
     submitted_by_id: str
     submitted_by_name: str | None = None
     submitted_at: str
@@ -118,6 +119,8 @@ class GateSubmissionItem(BaseModel):
     decided_at: str | None = None
     commentary: str | None = None
     criteria_snapshot: list[dict[str, Any]] | None = None
+    requested_bankable_plan_version: int | None = None
+    requested_snapshot: dict[str, Any] | None = None
 
 
 class GovernanceStatusResponse(BaseModel):

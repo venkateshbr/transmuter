@@ -32,6 +32,7 @@ TENANT_ID = UUID("11111111-1111-1111-1111-111111111111")
 USER_ID = UUID("22222222-2222-2222-2222-222222222222")
 INITIATIVE_ID = "init-1"
 SUBMISSION_ID = "submission-1"
+REBASELINE_SUBMISSION_ID = "submission-rebaseline-1"
 
 
 class FakePlanRepo:
@@ -133,10 +134,13 @@ class FakeGovernanceRepo:
                 "submitted_by_id": str(USER_ID),
                 "submitted_at": "2026-06-08T00:00:00Z",
                 "decision": "pending",
+                "submission_type": "stage_gate",
                 "decided_by_id": None,
                 "decided_at": None,
                 "commentary": None,
                 "criteria_snapshot": [{"id": "c1", "label": "Plan"}],
+                "requested_bankable_plan_version": None,
+                "requested_snapshot": None,
                 "submitter": {"display_name": "Requester"},
                 "decider": None,
             }
@@ -163,6 +167,17 @@ class FakeGovernanceRepo:
         row["decision"] = data.get("decision", row["decision"])
         row["commentary"] = data.get("commentary")
         return self.get_submission(submission_id) or row
+
+    def create_submission(self, data: dict) -> dict:
+        row = {
+            **data,
+            "id": data.get("id") or f"submission-{len(self.submissions) + 1}",
+            "tenant_id": str(TENANT_ID),
+            "submitter": {"display_name": "Requester"},
+            "decider": None,
+        }
+        self.submissions[row["id"]] = row
+        return self.get_submission(row["id"]) or row
 
     def get_gate(self, initiative_id: str, gate_number: int) -> dict | None:
         if initiative_id == INITIATIVE_ID and gate_number == 1:
@@ -200,6 +215,7 @@ class FakeAuditRepo:
 
 class FakeFinancialLockService:
     calls: list[dict[str, object]] = []
+    rebaseline_calls: list[dict[str, object]] = []
 
     def __init__(self, client: object, tenant_id: UUID) -> None:
         self.client = client
@@ -221,6 +237,44 @@ class FakeFinancialLockService:
                 "tenant_id": self.tenant_id,
             }
         )
+
+    def rebaseline_bankable_plan(
+        self,
+        initiative_id: str,
+        locked_by_id: str,
+        reason: str | None = None,
+        trigger_submission_id: str | None = None,
+    ) -> None:
+        self.rebaseline_calls.append(
+            {
+                "initiative_id": initiative_id,
+                "locked_by_id": locked_by_id,
+                "reason": reason,
+                "trigger_submission_id": trigger_submission_id,
+                "tenant_id": self.tenant_id,
+            }
+        )
+
+
+class FakeGovernedRebaselineService:
+    def submit_bankable_plan_rebaseline(self, initiative_id: str, reason: str) -> dict[str, object]:
+        return {
+            "id": REBASELINE_SUBMISSION_ID,
+            "initiative_id": initiative_id,
+            "gate_number": 1,
+            "submission_type": "bankable_plan_rebaseline",
+            "submitted_by_id": str(USER_ID),
+            "submitted_by_name": "Requester",
+            "submitted_at": "2026-06-22T00:00:00Z",
+            "decision": "pending",
+            "decided_by_id": None,
+            "decided_by_name": None,
+            "decided_at": None,
+            "commentary": reason,
+            "criteria_snapshot": [{"criterion_id": "rebaseline-reason", "label": "Reason"}],
+            "requested_bankable_plan_version": 2,
+            "requested_snapshot": {"summary": {"net_value_plan": "42.0000"}},
+        }
 
 
 @pytest.fixture()
@@ -338,6 +392,7 @@ def test_governance_approval_creates_bankable_plan_lock(
     monkeypatch: pytest.MonkeyPatch, governance_service: GovernanceService
 ) -> None:
     FakeFinancialLockService.calls = []
+    FakeFinancialLockService.rebaseline_calls = []
     monkeypatch.setattr("app.services.governance.FinancialService", FakeFinancialLockService)
 
     submission = governance_service.record_decision(
@@ -353,6 +408,51 @@ def test_governance_approval_creates_bankable_plan_lock(
             "submission_id": SUBMISSION_ID,
             "locked_by_id": str(USER_ID),
             "locked_reason": "Looks good",
+            "tenant_id": TENANT_ID,
+        }
+    ]
+    assert FakeFinancialLockService.rebaseline_calls == []
+
+
+def test_governance_approval_creates_rebaseline_without_stage_transition(
+    monkeypatch: pytest.MonkeyPatch, governance_service: GovernanceService
+) -> None:
+    FakeFinancialLockService.calls = []
+    FakeFinancialLockService.rebaseline_calls = []
+    monkeypatch.setattr("app.services.governance.FinancialService", FakeFinancialLockService)
+    repo = cast(Any, governance_service._repo)
+    repo.submissions[REBASELINE_SUBMISSION_ID] = {
+        "id": REBASELINE_SUBMISSION_ID,
+        "tenant_id": str(TENANT_ID),
+        "initiative_id": INITIATIVE_ID,
+        "gate_number": 1,
+        "submission_type": "bankable_plan_rebaseline",
+        "submitted_by_id": str(USER_ID),
+        "submitted_at": "2026-06-22T00:00:00Z",
+        "decision": "pending",
+        "decided_by_id": None,
+        "decided_at": None,
+        "commentary": "Annual baseline refresh",
+        "criteria_snapshot": [{"id": "rebaseline-reason", "label": "Reason"}],
+        "requested_bankable_plan_version": 2,
+        "requested_snapshot": {"summary": {"net_value_plan": "42.0000"}},
+    }
+
+    submission = governance_service.record_decision(
+        REBASELINE_SUBMISSION_ID,
+        GateDecisionPatch(decision="approved", commentary="Approved rebaseline"),
+    )
+
+    assert submission.decision == "approved"
+    assert submission.submission_type == "bankable_plan_rebaseline"
+    assert repo.stage == "scoping"
+    assert FakeFinancialLockService.calls == []
+    assert FakeFinancialLockService.rebaseline_calls == [
+        {
+            "initiative_id": INITIATIVE_ID,
+            "locked_by_id": str(USER_ID),
+            "reason": "Approved rebaseline",
+            "trigger_submission_id": REBASELINE_SUBMISSION_ID,
             "tenant_id": TENANT_ID,
         }
     ]
@@ -415,7 +515,7 @@ def test_benefit_ledger_csv_import_maps_code_and_upserts(
     assert rows[0]["description"] == "January revised"
 
 
-def test_bankable_plan_routes_expose_current_history_and_rebaseline(
+def test_bankable_plan_routes_expose_current_history_and_rebaseline_request(
     monkeypatch: pytest.MonkeyPatch,
     bankable_service: FinancialService,
 ) -> None:
@@ -430,6 +530,9 @@ def test_bankable_plan_routes_expose_current_history_and_rebaseline(
     app.dependency_overrides[get_current_user] = lambda: tenant_user
     app.dependency_overrides[get_supabase_request_client] = lambda: object()
     app.dependency_overrides[financials_router._svc] = lambda: bankable_service
+    app.dependency_overrides[financials_router._governance_svc] = (
+        lambda: FakeGovernedRebaselineService()
+    )
     monkeypatch.setattr(
         financials_router, "assert_can_view_initiative", lambda *args, **kwargs: None
     )
@@ -438,12 +541,6 @@ def test_bankable_plan_routes_expose_current_history_and_rebaseline(
     )
 
     try:
-        lock_resp = client.post(
-            f"/initiatives/{INITIATIVE_ID}/bankable-plan/rebaseline",
-            json={"reason": "Refresh"},
-        )
-        assert lock_resp.status_code == 404
-
         bankable_service.lock_bankable_plan_from_approval(
             INITIATIVE_ID,
             SUBMISSION_ID,
@@ -463,15 +560,18 @@ def test_bankable_plan_routes_expose_current_history_and_rebaseline(
 
         rebaseline_resp = client.post(
             f"/initiatives/{INITIATIVE_ID}/bankable-plan/rebaseline",
-            json={"reason": "Refresh"},
+            json={"reason": "Refresh annual baseline assumptions"},
         )
         assert rebaseline_resp.status_code == 200
-        assert rebaseline_resp.json()["version"] == 2
+        rebaseline_data = rebaseline_resp.json()
+        assert rebaseline_data["submission_type"] == "bankable_plan_rebaseline"
+        assert rebaseline_data["decision"] == "pending"
+        assert rebaseline_data["requested_bankable_plan_version"] == 2
 
         current_after_resp = client.get(f"/initiatives/{INITIATIVE_ID}/bankable-plan")
         assert current_after_resp.status_code == 200
-        assert current_after_resp.json()["current"]["version"] == 2
-        assert [row["version"] for row in current_after_resp.json()["history"]] == [1, 2]
+        assert current_after_resp.json()["current"]["version"] == 1
+        assert [row["version"] for row in current_after_resp.json()["history"]] == [1]
     finally:
         app.dependency_overrides.clear()
 

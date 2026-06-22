@@ -86,7 +86,9 @@ from app.domain.financials import (
     WorkstreamTargetLockVersion,
     WorkstreamTargetPreviewResponse,
 )
+from app.domain.governance import GateSubmissionItem
 from app.services.financial import FinancialService
+from app.services.governance import GovernanceService
 
 router = APIRouter(tags=["financials"])
 
@@ -96,6 +98,13 @@ def _svc(
     client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> FinancialService:
     return FinancialService(client, current_user.tenant_id)
+
+
+def _governance_svc(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
+) -> GovernanceService:
+    return GovernanceService(client, current_user.tenant_id, current_user.id, current_user.role)
 
 
 def _admin_svc(
@@ -275,20 +284,16 @@ async def list_bankable_plan_history(
 
 @router.post(
     "/initiatives/{initiative_id}/bankable-plan/rebaseline",
-    response_model=BankablePlanVersion,
+    response_model=GateSubmissionItem,
 )
-async def rebaseline_bankable_plan(
+async def request_bankable_plan_rebaseline(
     initiative_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
-    svc: Annotated[FinancialService, Depends(_svc)],
-    body: BankablePlanRebaselineRequest | None = None,
-) -> BankablePlanVersion:
+    svc: Annotated[GovernanceService, Depends(_governance_svc)],
+    body: BankablePlanRebaselineRequest,
+) -> GateSubmissionItem:
     assert_can_manage_initiatives(current_user)
-    return svc.rebaseline_bankable_plan(
-        initiative_id,
-        str(current_user.id),
-        reason=body.reason if body else None,
-    )
+    return svc.submit_bankable_plan_rebaseline(initiative_id, body.reason)
 
 
 @router.get(
