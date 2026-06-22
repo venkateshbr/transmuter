@@ -28,7 +28,7 @@ status.
 
 ### 2026-06-22 - Configurable Dashboards And Investments Payback
 
-Status: dev validated; production promotion in progress
+Status: promoted to production
 
 GitHub tracking:
 - Issue: `#339`
@@ -91,7 +91,26 @@ Schema/data SQL required for production:
 - `supabase/migrations/20260622000001_tenant_dashboard_configuration.sql`
 
 Production validation:
-- Pending promotion.
+- Environment: `https://transmuter.ishirock.tech`
+- Schema: `transmuter`
+- Production schema SQL was applied through the self-hosted Supabase DB
+  container as `supabase_admin`, with
+  `search_path=transmuter,public,extensions`, because the promotion script's
+  default schema DB URL resolved the Docker-only `db` hostname from the host.
+- Schema/data SQL applied:
+  `supabase/migrations/20260622000001_tenant_dashboard_configuration.sql`
+- Production deployment ran with:
+  `CONFIRM_PROMOTE=1 infra/hostinger/promote-dev-to-prod.sh`
+- Initial scripted public validation hit the known immediate `/health` 404
+  readiness race after container recreation.
+- `infra/hostinger/validate-prod.sh` passed after the production stack settled.
+- Public production health checks passed for `/health` and `/api/health`.
+- Production schema validation confirmed:
+  - 50 `tenant_dashboard_config` rows.
+  - 50 enabled dashboard rows.
+  - 5 organizations backfilled.
+- Production route validation confirmed `/financials/investments-payback` and
+  `/admin` return the Angular app shell.
 
 ### 2026-06-20 - Shared Costs Configurable Allocation Engine
 
