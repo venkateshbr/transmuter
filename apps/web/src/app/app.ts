@@ -53,8 +53,8 @@ interface GlobalSearchResult {
 
       <!-- Top Navigation Bar -->
       @if (showAppChrome()) {
-      <header class="fixed top-0 left-0 right-0 z-50 flex h-auto flex-wrap items-start gap-3 border-b border-[var(--t-border)]
-                     bg-[var(--t-surface)]/95 px-5 py-3 shadow-[0_2px_16px_rgba(7,31,60,0.06)] backdrop-blur-sm xl:h-16 xl:flex-nowrap xl:items-center xl:py-0">
+      <header class="fixed top-0 left-0 right-0 z-50 flex h-16 flex-nowrap items-center gap-3 border-b border-[var(--t-border)]
+                     bg-[var(--t-surface)]/95 px-5 py-0 shadow-[0_2px_16px_rgba(7,31,60,0.06)] backdrop-blur-sm">
 
         <!-- Logo -->
         <a [routerLink]="homeLink()" class="flex items-center gap-3 shrink-0" aria-label="Transmuter home">
@@ -69,7 +69,7 @@ interface GlobalSearchResult {
         </a>
 
         <!-- Primary Nav -->
-        <nav class="flex min-w-0 flex-1 items-center gap-0.5 overflow-visible">
+        <nav class="flex min-w-0 flex-1 flex-nowrap items-center gap-0.5 overflow-x-auto xl:overflow-visible">
           @for (item of primaryNavItems; track item.path) {
             @if (item.children?.length) {
               <div class="relative shrink-0">
@@ -134,7 +134,7 @@ interface GlobalSearchResult {
           }
         </nav>
 
-        <div class="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2 xl:flex-nowrap">
+        <div class="ml-auto flex min-w-0 shrink-0 flex-nowrap items-center justify-end gap-2">
           <!-- Theme toggle -->
           <button (click)="themeService.toggle()" class="btn-ghost flex h-9 w-9 items-center justify-center border border-[var(--t-border)] text-sm" aria-label="Toggle theme">
             <span class="material-icons text-base">{{ themeService.isDark() ? 'light_mode' : 'dark_mode' }}</span>
@@ -191,7 +191,7 @@ interface GlobalSearchResult {
           </div>
 
           @if (!isPlatformAdmin()) {
-            <div class="relative basis-full min-w-0 xl:basis-[18rem] xl:flex-none">
+            <div class="relative hidden min-w-0 flex-none 2xl:block 2xl:w-72">
               <span class="material-icons pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-[var(--t-text-tertiary)]">search</span>
               <input
                 type="search"
@@ -236,7 +236,7 @@ interface GlobalSearchResult {
       }
 
       <!-- Main Content -->
-      <main [ngClass]="showAppChrome() ? 'pt-28 xl:pt-16' : ''">
+      <main [ngClass]="showAppChrome() ? 'pt-16' : ''">
         <router-outlet />
       </main>
 
@@ -266,8 +266,8 @@ interface GlobalSearchResult {
 
       <!-- AI Assistant Right Panel -->
       @if (aiPanelOpen()) {
-        <aside class="fixed top-28 right-0 bottom-0 w-96 border-l border-[var(--t-border)]
-                      bg-[var(--t-surface)] z-40 flex flex-col shadow-2xl animate-slide-in-right xl:top-16">
+        <aside class="fixed top-16 right-0 bottom-0 w-96 border-l border-[var(--t-border)]
+                      bg-[var(--t-surface)] z-40 flex flex-col shadow-2xl animate-slide-in-right">
           <div class="flex items-center justify-between px-5 py-4 border-b border-[var(--t-border)]">
             <div>
               <p class="text-[13px] font-black uppercase text-[var(--t-text-primary)]">Ask Transmuter</p>
