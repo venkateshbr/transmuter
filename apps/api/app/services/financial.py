@@ -1732,7 +1732,8 @@ class FinancialService:
                 "initiative_id": initiative_id,
                 "version": int(latest["version"]) + 1,
                 "trigger_type": "rebaseline",
-                "trigger_submission_id": trigger_submission_id or latest.get("trigger_submission_id"),
+                "trigger_submission_id": trigger_submission_id
+                or latest.get("trigger_submission_id"),
                 "locked_by_id": locked_by_id,
                 "locked_at": datetime.now(UTC).isoformat(),
                 "locked_reason": reason or latest.get("locked_reason"),
@@ -2649,9 +2650,7 @@ class FinancialService:
         rows = [
             self._to_payback_row(
                 row,
-                one_off_investment=one_off_by_initiative.get(
-                    row.initiative_id, Decimal("0")
-                ),
+                one_off_investment=one_off_by_initiative.get(row.initiative_id, Decimal("0")),
             )
             for row in portfolio.rows
         ]
@@ -5519,7 +5518,11 @@ class FinancialService:
             initiative_id = str(row.get("initiative_id"))
             if initiative_id not in investments or row.get("is_recurring", False):
                 continue
-            if value_year is not None and row.get("year") is not None and int(row["year"]) > value_year:
+            if (
+                value_year is not None
+                and row.get("year") is not None
+                and int(row["year"]) > value_year
+            ):
                 continue
             raw_amount = (
                 row.get("amount_actual") if scenario_key == "actual" else row.get("amount_plan")

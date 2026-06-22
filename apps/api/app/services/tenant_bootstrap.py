@@ -56,9 +56,48 @@ STARTER_METRICS = [
         [],
         20,
     ),
-    ("revenue_uplift", "Revenue Uplift", "revenue", "currency", "increase_good", "sum", "benefit", True, "revenue", None, [], 30),
-    ("gm_uplift", "Gross Margin Uplift", "margin", "currency", "increase_good", "sum", "benefit", True, "margin", None, [], 40),
-    ("cost_savings", "Cost Savings", "savings", "currency", "increase_good", "sum", "benefit", True, "savings", None, [], 50),
+    (
+        "revenue_uplift",
+        "Revenue Uplift",
+        "revenue",
+        "currency",
+        "increase_good",
+        "sum",
+        "benefit",
+        True,
+        "revenue",
+        None,
+        [],
+        30,
+    ),
+    (
+        "gm_uplift",
+        "Gross Margin Uplift",
+        "margin",
+        "currency",
+        "increase_good",
+        "sum",
+        "benefit",
+        True,
+        "margin",
+        None,
+        [],
+        40,
+    ),
+    (
+        "cost_savings",
+        "Cost Savings",
+        "savings",
+        "currency",
+        "increase_good",
+        "sum",
+        "benefit",
+        True,
+        "savings",
+        None,
+        [],
+        50,
+    ),
     (
         "target_revenue",
         "Target Revenue",
@@ -146,7 +185,15 @@ STARTER_BRIDGE_ROWS = [
     ("revenue", "Revenue Uplift", "metric_set", ["revenue_uplift"], [], 1, 10),
     ("margin", "Gross Margin Uplift", "metric_set", ["gm_uplift"], [], 1, 20),
     ("savings", "Cost Savings", "metric_set", ["cost_savings"], [], 1, 30),
-    ("recurring_costs", "Recurring Costs", "cost_set", [], ["software", "maintenance", "labor"], -1, 40),
+    (
+        "recurring_costs",
+        "Recurring Costs",
+        "cost_set",
+        [],
+        ["software", "maintenance", "labor"],
+        -1,
+        40,
+    ),
     ("net_run_rate_value", "Net Run-rate Value", "net", [], [], 1, 50),
     (
         "one_off_investment",
@@ -331,8 +378,12 @@ class TenantBootstrapService:
                     "key": key,
                     "label": label,
                     "row_kind": row_kind,
-                    "metric_definition_ids": [metrics[item] for item in metric_keys if item in metrics],
-                    "cost_category_ids": [categories[item] for item in cost_keys if item in categories],
+                    "metric_definition_ids": [
+                        metrics[item] for item in metric_keys if item in metrics
+                    ],
+                    "cost_category_ids": [
+                        categories[item] for item in cost_keys if item in categories
+                    ],
                     "cost_category_keys": cost_keys,
                     "sign": sign,
                     "display_order": order,
@@ -346,19 +397,9 @@ class TenantBootstrapService:
         return len(rows)
 
     def _existing_keys(self, table: str, tenant_id: str) -> set[str]:
-        result = (
-            self._client.table(table)
-            .select("key")
-            .eq("tenant_id", tenant_id)
-            .execute()
-        )
+        result = self._client.table(table).select("key").eq("tenant_id", tenant_id).execute()
         return {str(row["key"]) for row in result.data or []}
 
     def _id_by_key(self, table: str, tenant_id: str) -> dict[str, str]:
-        result = (
-            self._client.table(table)
-            .select("id,key")
-            .eq("tenant_id", tenant_id)
-            .execute()
-        )
+        result = self._client.table(table).select("id,key").eq("tenant_id", tenant_id).execute()
         return {str(row["key"]): str(row["id"]) for row in result.data or []}

@@ -34,8 +34,12 @@ class DashboardDefinition:
 
 
 DASHBOARD_DEFINITIONS: tuple[DashboardDefinition, ...] = (
-    DashboardDefinition("executive_dashboard", "Executive Dashboard", "/dashboard", "dashboard", "grid", 10),
-    DashboardDefinition("financial_overview", "Financial Overview", "/financials", "dashboard", "payments", 20),
+    DashboardDefinition(
+        "executive_dashboard", "Executive Dashboard", "/dashboard", "dashboard", "grid", 10
+    ),
+    DashboardDefinition(
+        "financial_overview", "Financial Overview", "/financials", "dashboard", "payments", 20
+    ),
     DashboardDefinition(
         "initiative_portfolio",
         "Initiative Portfolio",
@@ -52,12 +56,39 @@ DASHBOARD_DEFINITIONS: tuple[DashboardDefinition, ...] = (
         "request_quote",
         40,
     ),
-    DashboardDefinition("bankable_plan", "Bankable Plan", "/financials/bankable-plan", "dashboard", "account_balance", 50),
-    DashboardDefinition("benefits_register", "Benefits Register", "/financials/benefits-register", "dashboard", "fact_check", 60),
-    DashboardDefinition("benefit_tracking", "Benefit Tracking", "/financials/benefit-tracking", "dashboard", "trending_up", 70),
-    DashboardDefinition("waterline", "Waterline", "/financials/waterline", "dashboard", "water_drop", 80),
-    DashboardDefinition("control_tower", "Control Tower", "/reports/control-tower", "dashboard", "summarize", 90),
-    DashboardDefinition("shared_costs", "Shared Costs", "/shared-costs", "primary", "account_balance", 100),
+    DashboardDefinition(
+        "bankable_plan",
+        "Bankable Plan",
+        "/financials/bankable-plan",
+        "dashboard",
+        "account_balance",
+        50,
+    ),
+    DashboardDefinition(
+        "benefits_register",
+        "Benefits Register",
+        "/financials/benefits-register",
+        "dashboard",
+        "fact_check",
+        60,
+    ),
+    DashboardDefinition(
+        "benefit_tracking",
+        "Benefit Tracking",
+        "/financials/benefit-tracking",
+        "dashboard",
+        "trending_up",
+        70,
+    ),
+    DashboardDefinition(
+        "waterline", "Waterline", "/financials/waterline", "dashboard", "water_drop", 80
+    ),
+    DashboardDefinition(
+        "control_tower", "Control Tower", "/reports/control-tower", "dashboard", "summarize", 90
+    ),
+    DashboardDefinition(
+        "shared_costs", "Shared Costs", "/shared-costs", "primary", "account_balance", 100
+    ),
 )
 
 
@@ -115,7 +146,9 @@ class DashboardConfigService:
             self._client.table("tenant_dashboard_config")
             .update({"is_enabled": True, "updated_at": datetime.now(UTC).isoformat()})
             .eq("tenant_id", self._tenant_id)
-            .in_("dashboard_key", [definition.dashboard_key for definition in DASHBOARD_DEFINITIONS])
+            .in_(
+                "dashboard_key", [definition.dashboard_key for definition in DASHBOARD_DEFINITIONS]
+            )
             .execute()
         )
         return len(result.data or [])
@@ -131,9 +164,7 @@ class DashboardConfigService:
             .order("label")
             .execute()
         )
-        return DashboardConfigResponse(
-            dashboards=[self._to_item(row) for row in result.data or []]
-        )
+        return DashboardConfigResponse(dashboards=[self._to_item(row) for row in result.data or []])
 
     def update_configuration(self, data: DashboardConfigUpdate) -> DashboardConfigResponse:
         self.ensure_defaults()

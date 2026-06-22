@@ -530,8 +530,8 @@ def test_bankable_plan_routes_expose_current_history_and_rebaseline_request(
     app.dependency_overrides[get_current_user] = lambda: tenant_user
     app.dependency_overrides[get_supabase_request_client] = lambda: object()
     app.dependency_overrides[financials_router._svc] = lambda: bankable_service
-    app.dependency_overrides[financials_router._governance_svc] = (
-        lambda: FakeGovernedRebaselineService()
+    app.dependency_overrides[financials_router._governance_svc] = lambda: (
+        FakeGovernedRebaselineService()
     )
     monkeypatch.setattr(
         financials_router, "assert_can_view_initiative", lambda *args, **kwargs: None
