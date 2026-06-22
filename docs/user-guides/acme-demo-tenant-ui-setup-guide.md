@@ -1,33 +1,38 @@
-# ACME Demo Tenant UI Setup Guide
+# Transformation Tenant UI Setup Guide With ACME Example
 
 Last updated: 2026-06-22
 
-This guide explains how a normal tenant user can create a blank tenant and turn
-it into an ACME-style transformation demo tenant through the Transmuter UI.
+This guide explains how a normal tenant user can create a blank tenant and
+configure a transformation office through the Transmuter UI. ACME is used as a
+complete worked example, but the same sequence should be used for any customer
+or internal transformation program.
 
-Use this guide for ACME, ACME2, ACME3, or ACME4 demo tenants. The scenario is
-the same for each tenant; only the organization name, slug, and users change.
-ACME4 is the canonical full demo state for dev because it was created through
-the current signup flow, uses the current financial engine, and now includes
-Shared Costs allocation, benefit ledger rows, milestones, KPIs, risks,
-dependencies, locked bankable plans, and governed rebaseline history. ACME3
-remains the legacy reference tenant for the original `ENT-*` initiative-code
-sequence.
+Use the ACME values as reference data, not as required tenant data. For a real
+tenant, replace ACME's business units, workstreams, initiatives, financial
+baselines, benefits, costs, owners, risks, KPIs, shared costs, and dashboard
+choices with the tenant's own transformation model.
+
+For Transmuter demo environments, ACME4 is the canonical full demo state in dev
+because it was created through the current signup flow, uses the current
+financial engine, and includes Shared Costs allocation, benefit ledger rows,
+milestones, KPIs, risks, dependencies, locked bankable plans, and governed
+rebaseline history. ACME3 remains the legacy reference tenant for the original
+`ENT-*` initiative-code sequence.
 
 No credentials are included in this guide.
 
-## 1. Demo Outcome
+## 1. Setup Outcome
 
-After completing this guide, the tenant can demonstrate:
+After completing this guide, the tenant should have a usable transformation
+office that can demonstrate:
 
 - Tenant onboarding and first-run setup.
-- Master data: business units, workstreams, market, theme, and tags.
+- Master data: business units, workstreams, markets, themes, and tags.
 - Financial configuration: scenarios, metrics, baselines, cost categories, value
   bridge rows, and fiscal settings.
 - Governance stage gates and gate criteria.
-- Ten ACME initiatives with owners, dimensions, financial scope, baselines,
-  benefits, costs, KPIs, risks, milestones, dependencies, and bankable plan
-  locks.
+- Initiatives with owners, dimensions, financial scope, baselines, benefits,
+  costs, KPIs, risks, milestones, dependencies, and bankable plan locks.
 - Benefit validation, benefit tracking, realization ledger, and plan-vs-actual
   variance.
 - Shared Costs pools, allocation policies, previews, locked runs, and reporting
@@ -39,7 +44,7 @@ After completing this guide, the tenant can demonstrate:
 
 This guide intentionally skips Meeting setup.
 
-Expected ACME4 totals:
+ACME example totals:
 
 | Area | Expected result |
 |---|---:|
@@ -62,6 +67,55 @@ Gross Margin Uplift + Cost Savings - Recurring Costs
 = $8.35M
 ```
 
+For your own tenant, keep this formula only if the tenant's value basis matches
+the standard transformation value pattern:
+
+```text
+EBITDA-effective net run-rate
+= margin uplift + cost savings - recurring run costs
+```
+
+Use one-off investment for funding and payback-period analysis, not as recurring
+EBITDA drag.
+
+### 1.1 How To Use This Guide For A Non-ACME Tenant
+
+Before entering data, define the tenant's own transformation model:
+
+| Setup area | Tenant-specific decision | ACME example |
+|---|---|---|
+| Organization | Company or business unit running the program. | Acme Global Manufacturing 4 |
+| Baseline year | Last stable year used for revenue, margin, cost, or operating baseline. | FY2026 |
+| Target year | Year used for board run-rate value. | FY2028 |
+| Business units | Management or reporting units that own value. | Corporate, Commercial, Operations, Shared Services, Technology |
+| Workstreams | Transformation programs or delivery lanes. | Automation, Commercial Growth, ERP & Data Platform, Offshoring, Procurement |
+| Value metrics | The measures that prove benefit. | Revenue Uplift, Gross Margin Uplift, Cost Savings |
+| Cost model | One-off investment and recurring run-cost categories. | Implementation, technology/tooling, training, software, labor |
+| Governance | Gates and criteria used to make value bankable. | Five-gate identify-to-realize lifecycle |
+| Dashboards | Which dashboards the tenant needs in its menu. | Full demo menu enabled |
+
+Use ACME tables in later sections as examples of scale, sequencing, and data
+shape. A tenant with 6 initiatives should create 6 initiatives; a tenant with 30
+initiatives should create 30. The key requirement is that baselines, benefits,
+costs, owners, and governance decisions reconcile for that tenant.
+
+### 1.2 Tenant Setup Worksheet
+
+Capture this information before starting UI entry:
+
+| Question | Tenant answer |
+|---|---|
+| What is the transformation office name and purpose? |  |
+| Which baseline year and target value year will leadership use? |  |
+| Which business units own the value? |  |
+| Which workstreams organize delivery? |  |
+| Which value levers matter: revenue, margin, savings, avoidance, working capital, service quality, risk reduction? |  |
+| Which metrics should become financial metrics versus operational KPIs? |  |
+| Which cost categories are one-off investment and which are recurring? |  |
+| Who can submit, validate, approve, and rebaseline value cases? |  |
+| Which dashboards should be visible for this tenant? |  |
+| Which initiatives need shared-cost allocation rather than direct initiative cost lines? |  |
+
 ## 2. Create The Tenant
 
 Use the public app URL for the target environment:
@@ -80,7 +134,8 @@ https://transmuter-dev.ishirock.tech
 
 1. Open the public app URL.
 2. Select **Get Started**.
-3. Create the tenant using one of these names:
+3. Create the tenant using the customer's organization name and slug. For ACME
+   demo tenants, use one of these names:
 
 | Tenant | Organization name | Suggested slug |
 |---|---|---|
@@ -141,7 +196,8 @@ Screen:
 
 ### 3.1 Business Units
 
-Create these business units:
+Create business units that match the tenant's management accountability model.
+For ACME, create these business units:
 
 | Business unit | Purpose |
 |---|---|
@@ -153,7 +209,8 @@ Create these business units:
 
 ### 3.2 Workstreams
 
-Create these workstreams:
+Create workstreams that match the tenant's transformation program structure.
+For ACME, create these workstreams:
 
 | Workstream | Primary focus |
 |---|---|
@@ -165,7 +222,8 @@ Create these workstreams:
 
 ### 3.3 Market, Theme, Tags
 
-Create:
+Create markets, themes, and tags that match how the tenant wants to filter
+portfolio value. For ACME, create:
 
 | Type | Values |
 |---|---|
@@ -211,8 +269,8 @@ Screen:
 
 New tenants include the standard financial engine rows by default. Use this
 section to confirm the defaults, adjust labels or formulas if needed, and enter
-the ACME tenant baseline values. Do not recreate duplicate rows if the default
-rows already exist.
+the tenant's baseline values. Do not recreate duplicate rows if the default rows
+already exist.
 
 ### 5.1 Reporting Settings
 
@@ -227,7 +285,7 @@ Save settings.
 
 ### 5.2 Scenarios
 
-Create or confirm these active scenarios:
+Create or confirm the active scenarios the tenant needs. ACME uses:
 
 | Key | Label | Kind | Primary |
 |---|---|---|---|
@@ -240,7 +298,8 @@ Use **Plan Base** as the primary board plan.
 
 ### 5.3 Metric Definitions
 
-Create these metric definitions:
+Create metric definitions that match the tenant's value story. ACME uses a
+revenue, gross margin, and savings model:
 
 | Key | Label | Type | Aggregation | Benefit class | Formula |
 |---|---|---|---|---|---|
@@ -260,7 +319,8 @@ precision.
 
 ### 5.4 Tenant Annual Baselines
 
-In **Annual Baselines**, enter:
+In **Annual Baselines**, enter the tenant's approved starting baseline. ACME
+uses:
 
 | Metric | Baseline year | Value |
 |---|---:|---:|
@@ -268,10 +328,13 @@ In **Annual Baselines**, enter:
 | Annual Gross Margin Baseline | 2026 | `9000000` |
 
 This sets ACME's starting point at `$20.0M` revenue and `$9.0M` gross margin.
+For another tenant, replace both the baseline year and values with the tenant's
+approved source baseline.
 
 ### 5.5 Cost Categories
 
-Create these cost categories:
+Create cost categories that separate one-off investment from recurring costs.
+ACME uses:
 
 | Key | Label | Group | Rollup |
 |---|---|---|---|
@@ -286,7 +349,8 @@ Create these cost categories:
 
 ### 5.6 Value Bridge Rows
 
-Create these bridge rows in order:
+Create value bridge rows that match how leadership wants benefits and costs to
+reconcile. ACME uses these rows in order:
 
 | Key | Label | Row kind | Sign | Inputs |
 |---|---|---|---:|---|
@@ -297,7 +361,9 @@ Create these bridge rows in order:
 | `one_off_costs` | One-off Costs | Cost set | `-` | Implementation / Project Cost, Technology / Tooling, External Consultants, Training / Change Management |
 | `net_value` | Net Value | Net | `+` | Calculated net row |
 
-Use this bridge to explain why FY28 run-rate value is `$8.35M`.
+Use this bridge to explain why ACME FY28 run-rate value is `$8.35M`. For another
+tenant, the same row pattern can be reused with different metric inputs and
+different totals.
 
 ## 6. Configure Governance
 
@@ -308,7 +374,7 @@ Screen:
 
 ### 6.1 Stage Gates
 
-Create five gates:
+Create gates that match the tenant's approval lifecycle. ACME uses five gates:
 
 | Gate | Key | Label | From stage | To stage | Approval |
 |---:|---|---|---|---|---|
@@ -323,7 +389,7 @@ where the UI offers it.
 
 ### 6.2 Gate Criteria
 
-Create these criteria:
+Create criteria that make the tenant's value cases auditable. ACME uses:
 
 | Gate | Criterion | Guidance |
 |---:|---|---|
@@ -345,7 +411,7 @@ Screen:
 - `/admin`
 - Tab: **Dashboard Configuration**
 
-For a full ACME demo tenant, enable these dashboards and reports:
+Enable the dashboards this tenant needs. For a full ACME demo tenant, enable:
 
 - Executive Dashboard
 - Financial Overview
@@ -359,15 +425,18 @@ For a full ACME demo tenant, enable these dashboards and reports:
 - Shared Costs
 
 New tenants intentionally start with only the three starter dashboards enabled.
-This setup step makes the full ACME demo menu visible.
+This setup step makes the chosen tenant menu visible. Do not enable dashboards
+that the tenant will not maintain with real data.
 
-## 7. Create The ACME Initiatives
+## 7. Create Initiatives
 
 Screen:
 
 - `/initiatives/new`
 
-Create ten initiatives. Use **Create with Transmuter** and enter the data below.
+Create the tenant's actual initiatives. Use **Create with Transmuter** and enter
+the tenant's own names, owners, dimensions, stages, dates, and value logic. ACME
+uses ten initiatives as a complete example:
 
 | Code | Name | BU | Workstream | Tag | Type | Priority | RAG | Stage |
 |---|---|---|---|---|---|---|---|---|
@@ -382,7 +451,7 @@ Create ten initiatives. Use **Create with Transmuter** and enter the data below.
 | ENT-009 | Supply Chain Control Tower | Operations | Procurement & Supply Chain | automation | Cost Avoidance | Medium | Amber | Executing |
 | ENT-010 | AI Service Desk Automation | Technology | Automation | automation | Cost Reduction | Medium | Green | Executing |
 
-Use these common fields:
+For ACME, use these common fields:
 
 | Field | Value |
 |---|---|
@@ -395,8 +464,9 @@ Use these common fields:
 | Value logic | Measured against FY26 annual baseline metrics with plan-only bankable value. |
 | Dependencies text | Dependent on enterprise data readiness, BU sponsorship, and change adoption. |
 
-If the UI asks for owner and group owner, use the transformation office lead for
-the first pass. Reassign individual owners later if needed.
+For another tenant, use the actual initiative owner and accountable sponsor. If
+the program is still being prepared, the transformation office lead can own the
+first pass and reassign individual owners later.
 
 ## 8. Configure Initiative Financial Scope
 
@@ -423,14 +493,17 @@ For each initiative:
    - People Support
 7. Save scope.
 
-You can keep all metrics and categories enabled for every ACME initiative. That
-keeps the demo consistent even when some values are zero.
+For a tenant setup, enable only the metrics and cost categories that apply to the
+initiative. For ACME, all metrics and categories can stay enabled for every
+initiative so the demo remains consistent even when some values are zero.
 
 ## 9. Enter Initiative Baselines And Benefits
 
 ### 9.1 Annual Initiative Data
 
-Use this table for each initiative's FY26 baseline and FY28 board case.
+Use the tenant's approved baseline and target-year board case for each
+initiative. The ACME example uses each initiative's FY26 baseline and FY28 board
+case:
 
 | Code | FY26 revenue baseline | FY26 GM baseline | FY28 revenue uplift | FY28 GM uplift | FY28 savings | FY28 recurring cost | One-off investment |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -462,7 +535,8 @@ margin.
 
 ### 9.3 Benefit Lines
 
-For each initiative, create three named benefit lines:
+For each initiative, create benefit lines for the metrics that apply. ACME uses
+three named benefit lines where relevant:
 
 | Metric | Benefit line name |
 |---|---|
@@ -470,7 +544,7 @@ For each initiative, create three named benefit lines:
 | Gross Margin Uplift | `<initiative code> gross margin uplift` |
 | Cost Savings | `<initiative code> cost savings` |
 
-Use these settings:
+For ACME, use these settings:
 
 | Field | Value |
 |---|---|
@@ -497,7 +571,8 @@ same value for January through December.
 
 ### 9.4 FY27 Ramp Values
 
-Enter these Plan Base FY27 values before using the multipliers above:
+For ACME, enter these Plan Base FY27 values before using the multipliers above.
+For another tenant, replace these with the tenant's ramp-year forecast:
 
 | Code | 2027 revenue uplift | 2027 GM uplift | 2027 savings |
 |---|---:|---:|---:|
@@ -514,8 +589,8 @@ Enter these Plan Base FY27 values before using the multipliers above:
 
 ## 10. Enter Cost Lines
 
-For each initiative, add one-off and recurring cost lines on the **Financials**
-tab.
+For each initiative, add the tenant's one-off and recurring cost lines on the
+**Financials** tab. ACME uses the allocation pattern below.
 
 ### 10.1 One-Off Costs
 
@@ -554,7 +629,8 @@ Validation totals:
 
 ### 11.1 Milestones
 
-For each initiative, open **Milestones** and create:
+For each initiative, open **Milestones** and create milestones that prove
+delivery progress. ACME uses:
 
 | Milestone | Planned start | Planned end | Status |
 |---|---|---|---|
@@ -563,7 +639,8 @@ For each initiative, open **Milestones** and create:
 
 ### 11.2 KPIs
 
-For each initiative, open **KPIs** and create two or three KPIs:
+For each initiative, open **KPIs** and create two or three KPIs that prove the
+operational driver behind the benefit. ACME examples:
 
 | Initiative type | Suggested KPIs |
 |---|---|
@@ -581,7 +658,8 @@ Use:
 
 ### 11.3 Risks
 
-For each initiative, open **Risks** and create at least two risks:
+For each initiative, open **Risks** and create at least two risks that could
+affect delivery or realization. ACME examples:
 
 | Risk | Impact | Likelihood | Mitigation |
 |---|---|---|---|
@@ -594,7 +672,8 @@ signals to show.
 
 ### 11.4 Dependencies
 
-Open **Dependencies** on the initiative detail page where available. Create:
+Open **Dependencies** on the initiative detail page where available. For a real
+tenant, model the dependencies that leadership must manage. ACME uses:
 
 | Upstream | Downstream | Type | Status | Severity | Due date | Notes |
 |---|---|---|---|---|---|---|
@@ -613,7 +692,8 @@ For each initiative:
 1. Open **Financials**.
 2. In the benefit line section, submit each benefit line to Finance.
 3. Validate most lines as Finance.
-4. Leave a few lines in different statuses to demonstrate the Benefits Register:
+4. For a live tenant, use the real validation status. For an ACME demo, leave a
+   few lines in different statuses to demonstrate the Benefits Register:
 
 | Example | Status |
 |---|---|
@@ -641,7 +721,8 @@ For each initiative:
 9. Confirm the plan shows **Locked** and a version number.
 
 After Gate 2 is approved and the plan is locked, move each initiative forward
-to the ACME demo stage:
+to its current delivery stage. For the ACME demo, move initiatives to
+**Executing**:
 
 1. Return to the initiative **Governance** or **Overview** tab.
 2. Submit and approve Gate 3 and Gate 4 where the UI requires gate movement.
@@ -649,7 +730,8 @@ to the ACME demo stage:
 4. Leave Gate 5 unapproved unless you want to demonstrate fully realized
    initiatives.
 
-For ENT-005, run a governed bankable-plan rebaseline:
+If a tenant has approved a baseline change, run a governed bankable-plan
+rebaseline. ACME uses ENT-005/TRN-005 as the example:
 
 1. Open `/financials/bankable-plan`.
 2. Select ENT-005, or TRN-005 in ACME4.
@@ -675,7 +757,8 @@ Screen:
 You can enter actuals manually in **Ledger Entries** or upload them in
 **Import**.
 
-For a fast UI demo, enter yearly rows:
+For a tenant setup, enter the tenant's actual realization ledger rows. For a
+fast ACME UI demo, enter yearly rows:
 
 | Code | 2027 bankable plan | 2027 actual | 2028 bankable plan | 2028 actual |
 |---|---:|---:|---:|---:|
@@ -736,7 +819,8 @@ economics.
 
 ### 14.2 Pools And Policies
 
-Create four FY2028 pools:
+Create shared-cost pools only for costs that support multiple initiatives. ACME
+uses four FY2028 pools:
 
 | Pool | Category | Plan | Actual | Method | Targets |
 |---|---|---:|---:|---|---|
@@ -787,7 +871,9 @@ Expected shared-cost totals:
 
 ## 15. Dashboard And Report Demo Walkthrough
 
-Use this sequence after setup is complete.
+Use this sequence after setup is complete. For a non-ACME tenant, keep the route
+sequence but replace the example filters, initiative names, and expected values
+with the tenant's own data.
 
 ### 15.1 Executive Dashboard `/dashboard`
 
@@ -1109,37 +1195,37 @@ Explain:
 
 ## 16. Final Demo Readiness Checklist
 
-Before presenting, verify:
+Before presenting or handing the tenant to users, verify:
 
 | Check | Expected |
 |---|---|
 | First-run setup | Complete or no blockers for initiative creation. |
-| Business units | 5 ACME units. |
-| Workstreams | 5 ACME workstreams. |
-| Financial scenarios | Baseline, Plan Base, Plan High, Actual. |
+| Business units | Tenant's configured management units; ACME has 5. |
+| Workstreams | Tenant's configured transformation lanes; ACME has 5. |
+| Financial scenarios | Tenant's active scenarios; ACME uses Baseline, Plan Base, Plan High, Actual. |
 | Metrics | Baselines, benefit metrics, and formulas configured. |
 | Cost categories | One-off and recurring categories configured. |
-| Stage gates | 5 gates with criteria. |
-| Initiatives | 10 ACME initiatives. |
-| Initiative baselines | Total revenue `$20.00M`, total GM `$9.00M`. |
-| FY28 financials | Benefits `$9.15M`, recurring costs `$0.80M`, net `$8.35M`. |
-| Benefit lines | Mix of Finance Validated, Submitted, Draft, and Rejected statuses. |
-| Bankable plans | Locked for all 10 initiatives. |
-| Benefit ledger | 2027 and 2028 actual rows entered or imported. |
-| Shared Costs | 4 FY2028 pools and locked runs. |
-| Control Tower | Shows allocated costs and net after allocation for 2028. |
+| Stage gates | Tenant's approval gates with criteria; ACME has 5. |
+| Initiatives | Tenant's active transformation portfolio; ACME has 10. |
+| Initiative baselines | Initiative baselines reconcile to tenant baseline; ACME totals `$20.00M` revenue and `$9.00M` GM. |
+| Target-year financials | Tenant target-year benefits, recurring costs, and net value reconcile; ACME FY28 net is `$8.35M`. |
+| Benefit lines | Real validation statuses, or a demo mix of Finance Validated, Submitted, Draft, and Rejected. |
+| Bankable plans | Locked for initiatives that have passed the configured approval gate. |
+| Benefit ledger | Actual rows entered or imported for the realization periods being demonstrated. |
+| Shared Costs | Shared pools and locked runs only where central costs need allocation. |
+| Control Tower | Shows allocated costs and net after allocation for the selected target year. |
 | Dashboards | Dashboard, Financials, Benefits Register, Benefit Tracking, and PMO views show non-empty data. |
 
 ## 17. Common Demo Questions
 
 | Question | Where to answer it | Answer |
 |---|---|---|
-| What is the FY28 run-rate value? | `/financials`, Year 2028 | `$8.35M` EBITDA-effective net run-rate. |
+| What is the target-year run-rate value? | `/financials`, target year | Tenant-specific net run-rate; ACME FY28 is `$8.35M`. |
 | Why not count revenue uplift directly in EBITDA? | `/financials`, value bridge | Revenue is a commercial driver; GM uplift and savings are EBITDA-effective. |
 | Where did a benefit number come from? | Initiative Financials and Benefits Register | Benefit line, scenario, period values, evidence, and validation status. |
 | What is locked for accountability? | `/financials/bankable-plan` | Approved bankable plan snapshot after Gate 2. |
 | Are actuals tracked? | `/financials/benefit-tracking` | Ledger actuals compare realized value to locked plan. |
-| Which initiatives are at risk? | `/dashboard`, `/pmo/risks`, `/reports/control-tower` | ENT-005 and ENT-009 should show visible risk/attention signals. |
+| Which initiatives are at risk? | `/dashboard`, `/pmo/risks`, `/reports/control-tower` | Tenant-specific risk items; ACME highlights ENT-005 and ENT-009. |
 | What do Shared Costs change? | `/shared-costs`, `/reports/control-tower` | They add allocated central burden to executive reporting without changing direct initiative accountability. |
 | Why can `/financials` and Control Tower differ? | `/financials` and `/reports/control-tower` | `/financials` is direct-only by default; Control Tower can include allocated shared-cost burden. |
 
@@ -1183,6 +1269,9 @@ are used by the runner.
 ## 19. Notes For ACME, ACME2, ACME3, And ACME4
 
 - Use the same setup data for all demo tenants.
+- For customer or internal tenant onboarding, use the workflow in this guide but
+  replace the ACME setup data with the tenant's own operating model, initiatives,
+  financial baselines, benefit assumptions, costs, owners, and dashboard needs.
 - ACME4 should be treated as the canonical full demo in dev because it proves
   tenant signup, the current financial engine, current dashboard configuration,
   shared-cost allocation, benefit tracking, governed bankable-plan rebaseline,
