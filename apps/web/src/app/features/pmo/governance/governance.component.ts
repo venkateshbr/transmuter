@@ -78,8 +78,8 @@ import { ActivatedRoute } from '@angular/router';
             
             <!-- Gate Indicator -->
             <div class="flex-none flex flex-col items-center justify-center w-20 h-20 rounded-3xl bg-[var(--t-surface-raised)] border border-[var(--t-border)] group-hover:border-[var(--t-accent)]/30 transition-all">
-              <span class="text-[10px] font-black text-[var(--t-text-tertiary)] uppercase">Gate</span>
-              <span class="text-3xl font-black text-[var(--t-accent)]">{{ s.gate_number }}</span>
+              <span class="text-[10px] font-black text-[var(--t-text-tertiary)] uppercase">{{ isRebaseline(s) ? 'Base' : 'Gate' }}</span>
+              <span class="text-3xl font-black text-[var(--t-accent)]">{{ isRebaseline(s) ? ('v' + (s.requested_bankable_plan_version || '2')) : s.gate_number }}</span>
             </div>
 
             <!-- Initiative Detail -->
@@ -89,9 +89,9 @@ import { ActivatedRoute } from '@angular/router';
                    TRN-{{ s.initiative_id.substring(0,3).toUpperCase() }}
                  </span>
                  <span class="text-[10px] font-black px-2 py-0.5 rounded border border-[var(--t-border)] text-[var(--t-text-secondary)]">
-                   {{ gateDefinition(s.gate_number)?.label || ('Gate ' + s.gate_number) }}
+                   {{ requestLabel(s) }}
                  </span>
-                 <span class="text-xs font-bold text-[var(--t-text-secondary)] uppercase tracking-tighter italic">Pending Transformation Review</span>
+                 <span class="text-xs font-bold text-[var(--t-text-secondary)] uppercase tracking-tighter italic">{{ isRebaseline(s) ? 'Pending finance baseline approval' : 'Pending Transformation Review' }}</span>
                </div>
                <h3 class="text-lg font-black text-[var(--t-text-primary)] truncate">
                  {{ s.initiatives?.name || 'Gate submission' }}
@@ -102,7 +102,7 @@ import { ActivatedRoute } from '@angular/router';
                <p class="mt-1 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">
                  Approvers:
                  <span class="text-[var(--t-text-secondary)]">
-                   {{ rolesText(gateDefinition(s.gate_number)?.approver_roles || ['transformation_office']) }}
+                   {{ rolesText(isRebaseline(s) ? ['transformation_office'] : (gateDefinition(s.gate_number)?.approver_roles || ['transformation_office'])) }}
                  </span>
                  <span class="mx-2">|</span>
                  <span [class.text-emerald-600]="gateDefinition(s.gate_number)?.approval_required !== false">
@@ -132,6 +132,11 @@ import { ActivatedRoute } from '@angular/router';
                <p class="text-[10px] font-medium leading-relaxed text-[var(--t-text-secondary)] italic">
                  "{{ s.commentary || 'No submission commentary recorded.' }}"
                </p>
+               @if (isRebaseline(s)) {
+                 <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">
+                   Approval creates bankable plan v{{ s.requested_bankable_plan_version || 'next' }}
+                 </p>
+               }
             </div>
 
             <!-- Status & Actions -->
@@ -238,6 +243,17 @@ export class GovernanceComponent implements OnInit {
 
   rolesText(roles: string[] | null | undefined): string {
     return (roles || []).join(', ');
+  }
+
+  isRebaseline(submission: any): boolean {
+    return submission?.submission_type === 'bankable_plan_rebaseline';
+  }
+
+  requestLabel(submission: any): string {
+    if (this.isRebaseline(submission)) {
+      return `Bankable plan rebaseline v${submission.requested_bankable_plan_version || 'next'}`;
+    }
+    return this.gateDefinition(submission.gate_number)?.label || (`Gate ${submission.gate_number}`);
   }
 
   getDecisionClass(decision: string): string {

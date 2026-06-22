@@ -641,7 +641,7 @@ class FinancialRepository:
             .maybe_single()
             .execute()
         )
-        if existing.data:
+        if existing and existing.data:
             row = self.update_benefit_ledger_entry(
                 initiative_id,
                 existing.data["id"],

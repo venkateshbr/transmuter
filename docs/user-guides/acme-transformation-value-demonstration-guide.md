@@ -12,10 +12,13 @@ No credentials are included in this guide.
 
 ---
 
-Validation note: the full ACME3 shared-cost demo state is validated in dev at
-`https://transmuter-dev.ishirock.tech`. Production at
+Validation note: the full ACME4 demo state is validated in dev at
+`https://transmuter-dev.ishirock.tech`. ACME4 uses generated `TRN-001` through
+`TRN-010` initiative codes; where this guide shows the historical `ENT-*`
+scenario sequence, map each row to the matching `TRN-*` row for ACME4.
+Production at
 `https://transmuter.ishirock.tech` has the Shared Costs schema, API, and UI
-promoted, but production ACME seeded data is not yet at dev ACME3 parity; that
+promoted, but production ACME seeded data is not yet at dev ACME4 parity; that
 demo-data drift is tracked in issue `#304`.
 
 ## 1. Executive storyline
@@ -363,7 +366,7 @@ Use shared cost pools for:
 - change/adoption support teams,
 - central advisory or vendor support.
 
-Current ACME3 dev proof:
+Current ACME4 dev proof:
 
 | Pool | Year | Plan | Actual | Allocation basis | Report impact |
 |---|---:|---:|---:|---|---|
@@ -431,7 +434,7 @@ If someone says "net value", ask which view they mean:
 
 - EBITDA-effective net run-rate,
 - enterprise value including revenue uplift,
-- net after one-off investment,
+- payback period after one-off investment,
 - net after shared-cost allocation in the control tower.
 
 That distinction prevents most value-bridge confusion.
@@ -498,6 +501,27 @@ Recommended demonstration:
 This is the strongest screen for proving that portfolio totals reconcile to
 initiative financial data.
 
+### Investments And Payback
+
+Navigation:
+
+```text
+/financials/investments-payback
+```
+
+Use Investments & Payback when the audience asks how much one-off investment is
+required and how quickly the FY28 run-rate value pays it back.
+
+For the ACME FY28 plan-base case, show:
+
+- one-off investment: `$2.50M`,
+- net run-rate value: `$8.35M`,
+- payback period: about `3.6` months,
+- initiative-level payback ranking.
+
+This view should be used instead of subtracting one-off investment from
+recurring EBITDA run-rate value.
+
 ### Initiative Financials
 
 Navigation:
@@ -556,7 +580,7 @@ Shared-cost interpretation:
 - **Allocated Costs** are shared-cost allocations from completed or locked runs.
 - **Burdened Costs** are direct costs plus allocated shared costs.
 - **Net After Allocation** is the fully loaded executive value view.
-- Use target year `2028` for the current ACME3 shared-cost proof.
+- Use target year `2028` for the current ACME4 shared-cost proof.
 - Keep `/financials` as the direct portfolio financial view unless Finance has
   enabled generated cost-line posting.
 
@@ -686,7 +710,8 @@ Use precise language:
 - **EBITDA-effective net run-rate value** when using GM uplift plus savings less
   recurring costs.
 - **Enterprise value including revenue uplift** when revenue uplift is included.
-- **Net after investment** when one-off implementation costs are subtracted.
+- **Payback period** when one-off implementation investment is compared with
+  annual net run-rate value.
 - **Net after allocation** when shared costs have been allocated in the control
   tower.
 

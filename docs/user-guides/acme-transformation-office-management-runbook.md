@@ -95,11 +95,13 @@ Run sequence:
    and baseline margin rate.
 4. Review benefits, recurring costs, one-off costs, net run-rate value, and
    actual variance.
-5. Use the contributor drawer to trace portfolio value to initiatives.
-6. Open `/financials/benefits-register` and review validation status.
-7. Open `/financials/benefit-tracking` and compare realized actuals to locked
+5. Open `/financials/investments-payback` to review one-off investment and
+   payback period.
+6. Use the contributor drawer to trace portfolio value to initiatives.
+7. Open `/financials/benefits-register` and review validation status.
+8. Open `/financials/benefit-tracking` and compare realized actuals to locked
    bankable plan.
-8. Open `/reports/control-tower` for the management decision view.
+9. Open `/reports/control-tower` for the management decision view.
 
 Decision focus:
 
@@ -380,4 +382,5 @@ Use these checks before a steering committee or board review:
 6. Do not present draft, rejected, or unvalidated benefit lines as Finance
    validated value.
 7. Do not let target changes bypass bankable-plan rebaseline governance.
-8. Use Control Tower for decisions and Financial Overview for reconciliation.
+8. Use Investments & Payback for one-off investment/payback questions.
+9. Use Control Tower for decisions and Financial Overview for reconciliation.

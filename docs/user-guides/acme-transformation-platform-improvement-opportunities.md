@@ -60,237 +60,186 @@ Board and management reviews usually look for evidence in six areas:
 
 ## 2. Current ACME Strengths
 
+Validated state as of 2026-06-22:
+
+- ACME4 is now the canonical complete dev demo tenant. It was registered
+  through the dev browser signup flow and enriched through browser automation
+  against the current financial engine.
+- ACME3 remains the legacy reference tenant for the original `ENT-*` initiative
+  code sequence.
+- The current platform now bootstraps financial engine defaults for new tenants,
+  but not business units, workstreams, governance gates, or initiatives.
+- Dashboard visibility is tenant-configurable in Admin. New tenants start with
+  Executive Dashboard, Financial Overview, and Initiative Portfolio enabled;
+  demo tenants should enable the remaining dashboards from Admin > Dashboard
+  Configuration.
+
 | Area | Current strength |
 |---|---|
 | Portfolio baseline | Tenant FY26 baseline is configured: `$20.0M` revenue and `$9.0M` gross margin. |
 | Initiative baseline allocation | Initiative annual baselines reconcile back to the portfolio baseline. |
-| Financial metric model | Baseline, revenue uplift, gross margin uplift, savings, target metrics, and percentage formulas are configured. |
+| Financial metric model | Baseline, revenue uplift, gross margin uplift, savings, target metrics, and percentage formulas are configured in the new financial engine. |
 | Scenario discipline | Baseline, Plan Base, Plan High, and Actual are configured as separate lanes. |
-| Cost classification | One-off and recurring costs are separated. |
+| Cost classification | One-off investment and recurring costs are separated; one-off investment is used for payback, not recurring EBITDA drag. |
 | FY28 management story | Financial Overview reconciles to `$8.35M` FY28 EBITDA-effective net run-rate value. |
-| Strategic dimensions | Business units, workstreams, markets, themes, and tags are configured. |
-| Stage gates | Stage gate definitions exist for a five-gate transformation lifecycle. |
+| Investments and payback | `/financials/investments-payback` shows cumulative one-off investment through the selected value year and portfolio payback months. |
+| Strategic dimensions | Business units, workstreams, markets, themes, and tags are configured in demo tenants. |
+| Stage gates | Stage gate definitions and gate criteria exist for a five-gate transformation lifecycle in ACME4. |
+| Contributor drilldown | FY28 portfolio contributor detail now includes benefit-line contribution and reconciles to Financial Overview. |
+| Benefit controls | Benefit-line validation states, Benefits Register, locked Bankable Plan, and Benefit Tracking are implemented. |
+| Board export | Financial board-pack export is available and returns a non-empty XLSX. |
+| Dashboard configuration | Admin can enable, hide, label, group, and order dashboards per tenant. |
 
 ---
 
-## 3. Gaps Found in Current ACME Demo
+## 3. Implementation Status Of Earlier Opportunities
 
-### Gap 1: Gate criteria are not configured
+| Earlier opportunity | Current status | Notes |
+|---|---|---|
+| Gate criteria for all gates | Done | ACME4 validation has 5 active gates and 10 active criteria. |
+| FY28 contributor drawer benefit drilldown | Done | Contributor totals reconcile to `$9.15M` benefits, `$0.80M` recurring costs, and `$8.35M` net run-rate. |
+| Populate Benefit Tracking for ACME | Done for ACME4 | ACME4 has 240 benefit realization ledger rows loaded through the browser guide runner. |
+| Populate Bankable Plan versions | Done for ACME4 | ACME4 has locked bankable plans for all 10 initiatives and `TRN-005` has version-2 history created through governed rebaseline request and approval. |
+| Clarify Value Bridge basis | Mostly done | APIs and UI support target-year run-rate and related basis labels. Continue to watch for copy that could imply one-off investment reduces recurring EBITDA run-rate. |
+| Finance sign-off per benefit line | Done | Benefit lines support Draft, Submitted, Finance Validated, and Rejected states with validation events. |
+| Portfolio Benefits Register | Done | `/financials/benefits-register` exposes portfolio benefit lines, validation status, evidence, risk adjustment, and totals. |
+| Portfolio board-pack export | Done | `/portfolio/board-pack.xlsx` exports a non-empty XLSX for selected basis/year. |
+| Configurable tenant dashboards | Done | Admin > Dashboard Configuration controls menu visibility. |
+| Investment payback dashboard | Done | `/financials/investments-payback` reports one-off investment, net run-rate, and payback months. |
+| New-engine-only initiative creation | Done | Initiative creation now depends on financial engine definitions, scenarios, and cost categories, not legacy financial configuration groups/items. |
+| Full ACME4 browser E2E | Done | `apps/web/e2e/acme4-full-demo-ui-e2e.mjs` signs in through the browser, enriches Acme4, imports ledger actuals, configures shared costs, requests and approves `TRN-005` rebaseline, and validates dashboard routes. |
 
-Observation:
+---
 
-- ACME setup status is `7/8`.
-- The missing check is gate criteria.
+## 4. Remaining Gaps And Current Findings
 
-Why it matters:
-
-- Benefits-realization practice expects clear evidence criteria before value is
-  accepted as validated, committed, or realized.
-- Without criteria, stage movement is weaker as an audit control.
-
-Recommendation:
-
-- Seed or configure criteria for each gate.
-- Minimum criteria should include baseline approval, Finance validation,
-  assumptions documented, delivery plan approved, and actual evidence submitted.
-
-Priority:
-
-- High for board-demo readiness.
-
-### Gap 2: FY28 Financial Overview contributor drawer omits benefit contribution
+### Gap 1: ACME4 uses generated `TRN-*` initiative codes
 
 Observation:
 
-- `/financials` Year = 2028 correctly shows:
-  - Benefits: `$9.15M`
-  - Recurring costs: `$0.80M`
-  - Net value: `$8.35M`
-- The FY28 contributor endpoint currently returns cost contribution by initiative
-  but benefit contribution as zero for clean financial-engine values.
+- ACME4 was created by the current platform and uses generated initiative codes
+  `TRN-001` through `TRN-010`.
+- Older ACME guide tables use the historical `ENT-001` through `ENT-010`
+  scenario sequence.
+- The browser runner maps `ENT-*` guide rows to ACME4's generated `TRN-*` codes
+  by row order.
 
 Why it matters:
 
-- A board reviewer will expect to click FY28 and see which initiatives drive the
-  `$9.15M` benefits.
-- The summary is correct, but the drilldown does not yet support the same
-  benefit traceability.
+- Demo instructions and ledger imports can appear inconsistent if users expect
+  ACME4 to have `ENT-*` codes.
 
 Recommendation:
 
-- Update portfolio contributor logic to include clean financial-engine metric
-  value contributions by initiative, scenario, period, and benefit line.
-- The drawer should show:
-  - revenue uplift,
-  - gross margin uplift,
-  - cost savings,
-  - recurring costs,
-  - one-off costs,
-  - net run-rate value.
-
-Priority:
-
-- High for management-demo credibility.
-
-### Gap 3: Benefit Tracking is not populated for ACME
-
-Observation:
-
-- `/financials/benefit-tracking` currently has zero locked baseline amount and
-  zero realized ledger amount for ACME.
-- ACME has plan and actual financial values, but no locked bankable-plan
-  snapshots or benefit ledger rows in the current seed.
-
-Why it matters:
-
-- Industry benefits realization separates planned value from realized value.
-- Boards often ask whether benefits are realized, not just planned.
-
-Recommendation:
-
-- Seed locked bankable-plan snapshots for the 10 ACME initiatives.
-- Seed benefit ledger actuals that reconcile to the current actual values.
-- Add a demo script for locking a plan and submitting realization evidence.
-
-Priority:
-
-- High for full end-to-end realization demo.
-
-### Gap 4: Bankable Plan screen lacks populated ACME versions
-
-Observation:
-
-- The Bankable Plan screen is available, but the ACME demo data does not include
-  locked plan version history.
-
-Why it matters:
-
-- A locked plan provides the immutable comparator for benefit realization.
-- Version history is critical for rebaseline governance.
-
-Recommendation:
-
-- Seed Gate 2 approvals and bankable plan snapshots.
-- Add version history for at least one rebaseline example.
-
-Priority:
-
-- Medium-high.
-
-### Gap 5: Portfolio Value Bridge needs clearer period/filter semantics
-
-Observation:
-
-- Financial Overview supports year, stage, and category filters.
-- Portfolio Value Bridge appears to aggregate across broader value data and can
-  be interpreted differently from the FY28 run-rate view.
-
-Why it matters:
-
-- Boards need to distinguish:
-  - in-year value,
-  - cumulative value,
-  - target-year run-rate,
-  - all-years value.
-
-Recommendation:
-
-- Add explicit labels and filters to the value bridge:
-  - Year
-  - Scenario
-  - Stage
-  - Workstream
-  - Tag
-  - Run-rate year versus cumulative all-years
-- Display a clear basis label such as `FY28 run-rate` or `All-years plan`.
+- Keep guide tables in scenario order, but explicitly document the ACME4
+  `ENT-*` to `TRN-*` mapping.
+- Consider adding a tenant-level code-prefix setting if customers need
+  branded initiative-code sequences.
 
 Priority:
 
 - Medium.
 
-### Gap 6: Finance sign-off is not explicit per benefit line
+### Gap 2: Full UI data entry is still too manual for repeatable ACME setup
 
 Observation:
 
-- Benefit lines can capture confidence and assumptions, and gate approval can
-  lock plans.
-- There is no obvious per-benefit Finance sign-off state in the current UI.
+- The guide is written for a normal user and remains valid, but entering all
+  monthly financial values, cost lines, benefit ledger rows, shared-cost rules,
+  milestones, KPIs, risks, and dependencies manually is lengthy.
+- The current ACME4 E2E runner uses visible UI flows for initiative enrichment
+  and shared-cost configuration. For the Benefit Tracking import, headless
+  Chromium selected the mapped CSV in the UI file control, but the visible
+  Import button did not reliably invoke the upload handler. The runner completes
+  that import with the authenticated browser session and `FormData`.
 
 Why it matters:
 
-- Benefits-realization best practice usually requires Finance validation before
-  value is counted as bankable or realized.
+- A strict UI-only regression should be able to repeat the guide without direct
+  database seed scripts. It should also be robust in headless CI.
 
 Recommendation:
 
-- Add benefit-line validation status:
-  - Draft
-  - Submitted
-  - Finance validated
-  - Rejected / needs evidence
-- Capture validator, timestamp, evidence link, and comment.
+- Add first-class UI import/bulk actions for:
+  - initiative portfolio setup,
+  - financial benefit values,
+  - cost lines,
+  - benefit ledger rows,
+- Harden the Benefit Tracking import button and file-selection event handling
+  for headless browser automation.
 
 Priority:
 
-- Medium-high.
+- High for sustainable guide regression.
 
-### Gap 7: Benefits register/profile view is implicit, not explicit
+### Gap 3: Demo tenant dashboard enablement is now a setup step
 
 Observation:
 
-- Benefit lines exist within initiative financials.
-- There is no standalone benefits register that shows all benefit lines,
-  owners, assumptions, confidence, timing, evidence, and status.
+- New tenants intentionally start with only Executive Dashboard, Financial
+  Overview, and Initiative Portfolio enabled.
+- ACME demos need additional dashboards such as Investments & Payback, Benefits
+  Register, Benefit Tracking, Bankable Plan, Waterline, Shared Costs, and
+  Control Tower.
 
 Why it matters:
 
-- Benefits management guidance commonly uses benefits registers and benefits
-  profiles to manage realization through the lifecycle.
+- A fresh tenant can be correctly configured but appear incomplete if dashboard
+  configuration is not updated.
 
 Recommendation:
 
-- Add a portfolio Benefits Register screen with:
-  - benefit line,
-  - initiative,
-  - owner,
-  - metric,
-  - baseline,
-  - target,
-  - forecast,
-  - actual,
-  - confidence,
-  - Finance validation status,
-  - evidence link,
-  - realization date.
+- Keep the UI setup guide explicit: for ACME demos, enable all dashboard/report
+  entries in Admin > Dashboard Configuration after financial setup.
 
 Priority:
 
 - Medium.
 
-### Gap 8: Board pack export is not yet first-class
+### Implemented: Bankable Plan rebaseline is governed
 
 Observation:
 
-- Initiative workbook export exists.
-- A board-ready portfolio pack export is not clearly available from the
-  dashboard/financial screens.
+- ACME4 has 10 locked bankable plans.
+- `TRN-005` has a version-2 bankable plan created by a governed rebaseline
+  request from `/financials/bankable-plan` and approval in `/pmo/governance`.
+- The public rebaseline route now creates a pending governance submission; it no
+  longer immediately changes the current bankable baseline.
 
 Why it matters:
 
-- Management and boards often need a repeatable monthly pack with consistent
-  charts, filters, and commentary.
+- Baseline changes affect Benefit Tracking, Waterline, dashboards, and board-pack
+  exports, so they need approval and an audit trail before becoming current.
 
 Recommendation:
 
-- Add a portfolio board-pack export:
-  - baseline page,
-  - value bridge,
-  - run-rate trend,
-  - top initiatives,
-  - workstream view,
-  - risks and decisions,
-  - realization status,
-  - appendix with assumptions.
+- Keep rebaseline request, approval, and version history in the maintained ACME4
+  browser E2E.
+- Consider adding a richer preview delta later: current locked value, requested
+  value, benefit delta, cost delta, and affected years before the request is
+  submitted.
+
+Priority:
+
+- Done for governed workflow; delta preview is a future enhancement.
+
+### Gap 5: Production ACME seeded data remains behind dev ACME4
+
+Observation:
+
+- The platform features are promoted to production.
+- Production ACME demo data is still not at dev ACME4 parity for the full
+  shared-cost/dependency proof.
+
+Why it matters:
+
+- Production demos may not show the complete ACME4 shared-cost and dependency
+  story unless production data is backfilled.
+
+Recommendation:
+
+- Continue tracking production seeded-data parity separately from platform
+  feature readiness.
 
 Priority:
 
@@ -298,59 +247,50 @@ Priority:
 
 ---
 
-## 4. Recommended Product Roadmap Items
+## 5. Recommended Product Roadmap Items
 
 | Priority | Improvement | Outcome |
 |---|---|---|
-| P1 | Fix clean-engine contributor drawer benefit drilldown | FY28 summary values become traceable to initiative contributors. |
-| P1 | Seed ACME gate criteria, locked bankable plans, and benefit ledger rows | ACME becomes a complete end-to-end board demo. |
-| P1 | Add Finance validation state per benefit line | Bankable and realized benefits become auditable. |
-| P2 | Add Benefits Register screen | Transformation office can manage benefits across initiatives. |
-| P2 | Add period/scenario filters and basis labels to Value Bridge | Prevents confusion between run-rate, in-year, and cumulative value. |
-| P2 | Add portfolio board-pack export | Supports repeatable steering committee and board reporting. |
-| P3 | Add realization confidence/risk-adjusted value views | Management can see gross value, risk-adjusted value, and actual value. |
-| P3 | Add ownership handoff after go-live | Benefits remain accountable after implementation ends. |
+| P1 | Add maintained browser E2E coverage for the full ACME guide | ACME setup can be regression-tested end to end without relying on manual spot checks. |
+| P1 | Add or harden bulk UI import paths for high-volume ACME data | The guide can be executed through visible tenant UI controls at production scale. |
+| P1 | Harden Benefit Tracking import for headless UI automation | The ACME4 guide runner can complete ledger import through the visible Import button without a browser-authenticated `FormData` fallback. |
+| P2 | Add dashboard-configuration checklist hints for demo tenants | Admins know why some dashboards are hidden by default and how to enable them. |
+| P2 | Continue tightening value-basis copy around run-rate, payback, allocation, and cumulative views | Prevents confusion between EBITDA run-rate, enterprise value, one-off investment, and shared-cost burden. |
+| P2 | Add rebaseline delta preview | Reviewers can compare current locked plan to requested scope before approving a new baseline. |
+| P3 | Add richer realization confidence and ownership handoff views | Management can see gross value, risk-adjusted value, actual value, and post-go-live accountability. |
 
 ---
 
-## 5. Suggested ACME Seed Enhancements
+## 6. Demo Positioning
 
-To make the ACME tenant a complete demo, add:
+Use ACME4 for the full board-ready dev demo:
 
-1. Gate criteria for all five gates.
-2. Gate 2 approval submissions for all 10 initiatives.
-3. Bankable plan snapshots for all 10 initiatives.
-4. Benefit ledger rows for FY27 and FY28 actuals.
-5. At least one rebaseline example, preferably:
-   - ENT-005 Enterprise Data Platform, because it is amber and has higher
-     implementation cost.
-6. Evidence links or assumption comments for:
-   - ENT-006 Pricing & Discount Optimization,
-   - ENT-008 Procurement Vendor Consolidation,
-   - ENT-010 AI Service Desk Automation.
-7. A board-demo meeting series linked to the portfolio and key initiatives.
-
----
-
-## 6. Demo Positioning Until Gaps Are Closed
-
-Use these screens as board-ready now:
-
+- `/dashboard`
 - `/financials`
-- `/initiatives/pipeline`
-- initiative detail **Financials** tab
-- initiative detail **Milestones**, **Risks**, **Status**, **Team**
-- `/admin` configuration screens for setup explanation
-
-Use these screens as workflow preview until ACME seed is enhanced:
-
+- `/financials/investments-payback`
+- `/financials/initiative-portfolio`
+- `/financials/benefits-register`
 - `/financials/bankable-plan`
 - `/financials/benefit-tracking`
-- `/financials/waterline`
+- `/shared-costs`
+- `/reports/control-tower`
+- `/initiatives/pipeline`
+- initiative detail tabs for Financials, Governance, Milestones, Dependencies,
+  Status, and Team
 
-Avoid claiming the following until fixed or seeded:
+ACME4 validation on 2026-06-22 confirmed:
 
-- That ACME has fully locked bankable plans.
-- That ACME has realized benefit ledger values.
-- That the FY28 contributor drawer fully explains benefit contribution.
-- That stage movement criteria are complete.
+| Area | Result |
+|---|---:|
+| Initiatives | 10 |
+| Locked bankable plans | 10 |
+| KPI rows | 11 |
+| Risk rows | 10 |
+| Milestones | 20 |
+| Dependencies | 3 |
+| Benefit ledger rows | 240 |
+| Shared-cost pools and locked runs | 4 |
+| Governed bankable-plan rebaseline | TRN-005 version 2 |
+
+Use ACME3 only when the audience specifically needs the historical `ENT-*`
+initiative-code sequence.

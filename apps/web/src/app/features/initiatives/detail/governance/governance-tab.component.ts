@@ -58,7 +58,7 @@ import { AuthService } from '../../../../core/services/auth.service';
               <div class="p-8 border-b border-[var(--t-border)] flex justify-between items-start">
                 <div>
                   <h3 class="text-xl font-bold text-[var(--t-text-primary)]">
-                    {{ activeGate().label }} Readiness Review<span class="text-[var(--t-accent)]">.</span>
+                    {{ activeSubmissionIsRebaseline() ? 'Bankable Plan Rebaseline Review' : activeGate().label + ' Readiness Review' }}<span class="text-[var(--t-accent)]">.</span>
                   </h3>
                   <p class="text-xs font-medium text-[var(--t-text-secondary)] mt-1">
                     {{ tickedCount() }} of {{ criteria().length }} criteria marked ready.
@@ -116,7 +116,7 @@ import { AuthService } from '../../../../core/services/auth.service';
                   </div>
                   <div>
                     <h4 class="font-bold text-[var(--t-text-primary)]">Pending Approval</h4>
-                    <p class="text-[10px] text-[var(--t-text-secondary)] font-bold uppercase tracking-widest">Stage Gate Review</p>
+                    <p class="text-[10px] text-[var(--t-text-secondary)] font-bold uppercase tracking-widest">{{ activeSubmissionIsRebaseline() ? 'Bankable Plan Rebaseline' : 'Stage Gate Review' }}</p>
                   </div>
                 </div>
                 
@@ -253,6 +253,10 @@ export class GovernanceTabComponent implements OnInit {
 
   isGatePassed(gate: any) {
     return this.history().some(h => h.gate_number === gate.gate_number && h.decision === 'approved');
+  }
+
+  activeSubmissionIsRebaseline() {
+    return this.activeSubmission()?.submission_type === 'bankable_plan_rebaseline';
   }
 
   isActiveGate(gate: any) {

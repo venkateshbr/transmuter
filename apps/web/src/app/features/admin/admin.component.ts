@@ -30,7 +30,7 @@ import { FormsModule } from '@angular/forms';
       <!-- Admin Navigation -->
       <div class="border-b border-[var(--t-border)]">
         <nav class="-mb-px flex space-x-8">
-          @for (tab of ['General', 'Billing', 'Data Cleanup', 'Strategic Parameters', 'Financial Configuration', 'Access Control', 'Governance Engine', 'Audit Logs']; track tab) {
+          @for (tab of ['General', 'Billing', 'Data Cleanup', 'Strategic Parameters', 'Financial Configuration', 'Dashboard Configuration', 'Access Control', 'Governance Engine', 'Audit Logs']; track tab) {
             <button
               type="button"
               (click)="activeTab = tab"
@@ -976,6 +976,48 @@ import { FormsModule } from '@angular/forms';
             </div>
           }
 
+          @if (activeTab === 'Dashboard Configuration') {
+            <div class="card p-8">
+              <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Dashboard Configuration</h3>
+                  <p class="mt-1 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Tenant menu visibility, labels, and dashboard order</p>
+                </div>
+                <button type="button" class="btn-primary px-4 py-2 text-[10px]" (click)="saveDashboardConfiguration()" aria-label="Save dashboard configuration">Save Configuration</button>
+              </div>
+              <div class="divide-y divide-[var(--t-border)] border border-[var(--t-border)]">
+                @for (dashboard of dashboardConfiguration(); track dashboard.dashboard_key) {
+                  <div class="grid gap-3 p-4 lg:grid-cols-[110px_1fr_170px_90px_120px] lg:items-end">
+                    <label class="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-[var(--t-text-primary)]">
+                      <input type="checkbox" [ngModel]="dashboard.is_enabled" (ngModelChange)="dashboard.is_enabled = $event" [attr.aria-label]="'Enable ' + dashboard.label">
+                      Enabled
+                    </label>
+                    <label class="grid gap-1">
+                      <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Label</span>
+                      <input class="input-field py-2 text-xs font-bold" [ngModel]="dashboard.label" (ngModelChange)="dashboard.label = $event" aria-label="Dashboard label">
+                    </label>
+                    <label class="grid gap-1">
+                      <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Menu Group</span>
+                      <select class="input-field py-2 text-xs" [ngModel]="dashboard.menu_group" (ngModelChange)="dashboard.menu_group = $event" aria-label="Dashboard menu group">
+                        <option value="dashboard">Dashboard menu</option>
+                        <option value="primary">Primary nav</option>
+                        <option value="hidden">Hidden</option>
+                      </select>
+                    </label>
+                    <label class="grid gap-1">
+                      <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Order</span>
+                      <input type="number" class="input-field py-2 text-xs" [ngModel]="dashboard.display_order" (ngModelChange)="dashboard.display_order = numberValue($event)" aria-label="Dashboard display order">
+                    </label>
+                    <div>
+                      <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Route</p>
+                      <p class="mt-2 truncate font-mono text-[10px] text-[var(--t-text-secondary)]">{{ dashboard.route_path }}</p>
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+
           @if (activeTab === 'Access Control') {
             <div class="card p-0 overflow-hidden">
                <table class="w-full text-left">
@@ -1179,6 +1221,7 @@ export class AdminComponent implements OnInit {
   costCategories = signal<any[]>([]);
   bridgeRows = signal<any[]>([]);
   attributeDefinitions = signal<any[]>([]);
+  dashboardConfiguration = signal<any[]>([]);
   reportingSettings = signal<any>({ fiscal_year_start_month: 1, reporting_currency: 'USD' });
   tenantBaselineYear = signal(new Date().getFullYear());
   tenantAnnualBaselineValues = signal<Record<string, string>>({});
@@ -1230,6 +1273,7 @@ export class AdminComponent implements OnInit {
     this.loadAuditLogs();
     this.loadFinancialConfiguration();
     this.loadFinancialEngineConfiguration();
+    this.loadDashboardConfiguration();
   }
 
   loadWorkstreams() {
@@ -1330,6 +1374,31 @@ export class AdminComponent implements OnInit {
       this.attributeDefinitions.set(res.attribute_definitions || []);
       this.reportingSettings.set(res.settings || { fiscal_year_start_month: 1, reporting_currency: 'USD' });
       this.loadTenantAnnualBaselines();
+    });
+  }
+
+  loadDashboardConfiguration() {
+    this.api.get<any>('/admin/dashboard-configuration').subscribe({
+      next: res => this.dashboardConfiguration.set(res.dashboards || []),
+      error: () => this.dashboardConfiguration.set([]),
+    });
+  }
+
+  saveDashboardConfiguration() {
+    const dashboards = this.dashboardConfiguration().map(item => ({
+      ...item,
+      display_order: Number(item.display_order || 0),
+      is_enabled: item.is_enabled !== false,
+      menu_group: item.menu_group || 'dashboard',
+      allowed_roles: item.allowed_roles?.length
+        ? item.allowed_roles
+        : ['transformation_office', 'initiative_owner', 'viewer'],
+      metadata: item.metadata || {},
+    }));
+    this.api.put<any>('/admin/dashboard-configuration', { dashboards }).subscribe(res => {
+      this.dashboardConfiguration.set(res.dashboards || []);
+      window.dispatchEvent(new CustomEvent('dashboard-configuration-updated'));
+      this.loadAuditLogs();
     });
   }
 

@@ -1,11 +1,12 @@
 # ACME Benefit Ledger Production Remediation
 
 This guide explains how to recreate the ACME benefit realization ledger through
-the UI after the Benefit Tracking ledger editor/import feature is deployed.
+the UI using the deployed Benefit Tracking ledger editor/import feature.
 
 ## Location
 
-Open `Dashboard > Benefit Tracking`.
+Open `Dashboard > Benefit Tracking` or navigate directly to
+`/financials/benefit-tracking`.
 
 Use:
 - `Ledger Entries` to add or edit individual rows.
@@ -19,6 +20,13 @@ payload. It contains 240 monthly rows:
 - 10 ACME initiatives.
 - 2027 and 2028.
 - 12 months per initiative per year.
+
+For ACME4, the current platform generates `TRN-001` through `TRN-010` initiative
+codes rather than the historical `ENT-*` codes in the CSV. Before importing into
+ACME4, replace `ENT-001` with `TRN-001`, `ENT-002` with `TRN-002`, and continue
+through `ENT-010` to `TRN-010`. The maintained browser runner
+`apps/web/e2e/acme4-full-demo-ui-e2e.mjs` performs this mapping automatically
+before uploading the ledger.
 
 ## Prerequisites
 
@@ -76,11 +84,13 @@ ENT-001,monthly,2028-01-01,2028-01-31,7500.0000,Seeded ACME 2028 monthly realiza
 ## Validation
 
 After import:
-1. Open `Dashboard > Benefit Tracking > Summary`.
+1. Open `Dashboard > Benefit Tracking > Summary` or
+   `/financials/benefit-tracking`.
 2. Set scope to `Portfolio`.
 3. Set granularity to `Monthly` or `Yearly`.
 4. Confirm locked baseline, realized benefit, and variance are non-zero.
-5. Set scope to `Initiative` and spot-check `ENT-001`, `ENT-005`, and `ENT-010`.
+5. Set scope to `Initiative` and spot-check `ENT-001`, `ENT-005`, and `ENT-010`
+   for legacy ACME tenants, or `TRN-001`, `TRN-005`, and `TRN-010` for ACME4.
 6. Re-upload the same CSV once to verify upsert behavior: the result should show
    updated rows rather than duplicate created rows.
 7. Run the ACME annual-baseline scenario against production.

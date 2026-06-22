@@ -6,6 +6,8 @@ import { ApiService } from '../../core/services/api.service';
 import {
   BankablePlanResponse,
   BankablePlanVersion,
+  GovernanceStatusResponse,
+  GovernanceSubmission,
   InitiativeOption,
   formatDateTime,
   formatMoney,
@@ -47,6 +49,14 @@ import {
             [attr.aria-label]="'Open editable financial scope for ' + selectedInitiativeLabel()">
             Edit scope
           </a>
+          <button
+            type="button"
+            class="btn-primary text-[10px]"
+            [disabled]="!currentPlan() || !!pendingRebaseline() || submittingRebaseline()"
+            (click)="openRebaselineModal()"
+            aria-label="Request bankable plan rebaseline">
+            Request rebaseline
+          </button>
         </div>
       </header>
 
@@ -54,6 +64,25 @@ import {
         <div class="border border-red-500/30 bg-red-500/10 p-4 text-sm font-bold text-red-500">
           {{ error() }}
         </div>
+      }
+
+      @if (pendingRebaseline()) {
+        <section class="border-l-4 border-amber-500 bg-[var(--t-surface)] p-5">
+          <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p class="text-[9px] font-black uppercase tracking-widest text-amber-600">Rebaseline request pending</p>
+              <h2 class="mt-1 text-lg font-black text-[var(--t-text-primary)]">
+                v{{ pendingRebaseline()?.requested_bankable_plan_version || 'next' }} is awaiting governance approval.
+              </h2>
+              <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--t-text-secondary)]">
+                {{ pendingRebaseline()?.commentary || 'No request reason supplied.' }}
+              </p>
+            </div>
+            <a routerLink="/pmo/governance" [queryParams]="{ status: 'pending' }" class="btn-secondary text-[10px]" aria-label="Open governance approval queue">
+              Open governance queue
+            </a>
+          </div>
+        </section>
       }
 
       <section class="grid gap-4 md:grid-cols-3">
@@ -194,6 +223,65 @@ import {
           }
         </div>
       </section>
+
+      @if (showRebaselineModal()) {
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true" aria-label="Request bankable plan rebaseline">
+          <div class="w-full max-w-2xl border border-[var(--t-border)] bg-[var(--t-surface)] p-6 shadow-2xl">
+            <div class="flex items-start justify-between gap-4 border-b border-[var(--t-border)] pb-4">
+              <div>
+                <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-accent)]">Governed baseline change</p>
+                <h2 class="mt-1 text-xl font-black text-[var(--t-text-primary)]">Request rebaseline approval</h2>
+                <p class="mt-2 text-sm leading-6 text-[var(--t-text-secondary)]">
+                  Approval will create v{{ nextRebaselineVersion() }} from the current editable financial scope. Until approved, Benefit Tracking, Waterline, dashboards, and board-pack exports continue using v{{ currentPlan()?.version }}.
+                </p>
+              </div>
+              <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="closeRebaselineModal()" aria-label="Close rebaseline request dialog">
+                Close
+              </button>
+            </div>
+
+            <div class="mt-5 grid gap-4 md:grid-cols-2">
+              <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4">
+                <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Current locked version</p>
+                <p class="mt-1 text-2xl font-black text-[var(--t-text-primary)]">v{{ currentPlan()?.version }}</p>
+                <p class="mt-2 text-sm font-bold text-[var(--t-text-secondary)]">{{ formatMoney(summary().net_value_plan) }}</p>
+              </div>
+              <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4">
+                <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Requested version</p>
+                <p class="mt-1 text-2xl font-black text-[var(--t-text-primary)]">v{{ nextRebaselineVersion() }}</p>
+                <p class="mt-2 text-sm font-bold text-[var(--t-text-secondary)]">Captured only after approval</p>
+              </div>
+            </div>
+
+            <label class="mt-5 block">
+              <span class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Reason for rebaseline</span>
+              <textarea
+                class="input-field mt-2 min-h-32 w-full text-sm"
+                [(ngModel)]="rebaselineReason"
+                aria-label="Reason for bankable plan rebaseline"
+                placeholder="Describe the approved scope, timing, assumption, or value change that requires a new baseline."></textarea>
+            </label>
+
+            @if (rebaselineError()) {
+              <p class="mt-3 text-sm font-bold text-red-500">{{ rebaselineError() }}</p>
+            }
+
+            <div class="mt-6 flex justify-end gap-3">
+              <button type="button" class="btn-secondary text-[10px]" (click)="closeRebaselineModal()" aria-label="Cancel rebaseline request">
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="btn-primary text-[10px]"
+                [disabled]="submittingRebaseline() || rebaselineReason.trim().length < 10"
+                (click)="submitRebaselineRequest()"
+                aria-label="Submit rebaseline request for governance approval">
+                Submit request
+              </button>
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `,
   styles: [`
@@ -221,8 +309,13 @@ export class BankablePlanReviewComponent implements OnInit {
   readonly selectedInitiativeStage = computed(() => initiativeStage(this.selectedInitiative()));
   readonly bankablePlan = signal<BankablePlanResponse | null>(null);
   readonly history = signal<BankablePlanVersion[]>([]);
+  readonly governance = signal<GovernanceStatusResponse | null>(null);
   readonly loading = signal(false);
   readonly error = signal<string | null>(null);
+  readonly showRebaselineModal = signal(false);
+  readonly submittingRebaseline = signal(false);
+  readonly rebaselineError = signal<string | null>(null);
+  rebaselineReason = '';
 
   readonly currentPlan = computed(() => this.bankablePlan()?.current || null);
   readonly currentSnapshot = computed(() => this.currentPlan()?.snapshot || null);
@@ -237,6 +330,11 @@ export class BankablePlanReviewComponent implements OnInit {
     const selections = snapshot?.selections;
     return (selections?.metric_keys.length || 0) + (selections?.cost_category_keys.length || 0);
   });
+  readonly pendingRebaseline = computed<GovernanceSubmission | null>(() => {
+    const rows = this.governance()?.history || [];
+    return rows.find(row => row.submission_type === 'bankable_plan_rebaseline' && row.decision === 'pending') || null;
+  });
+  readonly nextRebaselineVersion = computed(() => (this.currentPlan()?.version || 0) + 1);
 
   ngOnInit(): void {
     this.loadInitiatives();
@@ -291,6 +389,49 @@ export class BankablePlanReviewComponent implements OnInit {
         }
       },
       error: () => undefined,
+    });
+    this.loadGovernance();
+  }
+
+  openRebaselineModal(): void {
+    if (!this.currentPlan() || this.pendingRebaseline()) return;
+    this.rebaselineReason = '';
+    this.rebaselineError.set(null);
+    this.showRebaselineModal.set(true);
+  }
+
+  closeRebaselineModal(): void {
+    if (this.submittingRebaseline()) return;
+    this.showRebaselineModal.set(false);
+    this.rebaselineError.set(null);
+  }
+
+  submitRebaselineRequest(): void {
+    const initiativeId = this.selectedInitiativeId();
+    const reason = this.rebaselineReason.trim();
+    if (!initiativeId || reason.length < 10) return;
+
+    this.submittingRebaseline.set(true);
+    this.rebaselineError.set(null);
+    this.api.post<GovernanceSubmission>(`/initiatives/${initiativeId}/bankable-plan/rebaseline`, { reason }).subscribe({
+      next: () => {
+        this.submittingRebaseline.set(false);
+        this.showRebaselineModal.set(false);
+        this.loadPlan();
+      },
+      error: err => {
+        this.submittingRebaseline.set(false);
+        this.rebaselineError.set(err?.error?.detail || 'Could not submit rebaseline request.');
+      },
+    });
+  }
+
+  private loadGovernance(): void {
+    const initiativeId = this.selectedInitiativeId();
+    if (!initiativeId) return;
+    this.api.get<GovernanceStatusResponse>(`/initiatives/${initiativeId}/governance`).subscribe({
+      next: response => this.governance.set(response),
+      error: () => this.governance.set(null),
     });
   }
 }

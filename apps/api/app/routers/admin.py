@@ -5,7 +5,9 @@ from pydantic import BaseModel, Field
 
 from app.core.auth import CurrentUser, get_current_user, require_role
 from app.core.database import get_supabase_admin
+from app.domain.dashboard_config import DashboardConfigResponse, DashboardConfigUpdate
 from app.services.admin import AdminService
+from app.services.dashboard_config import DashboardConfigService
 
 router = APIRouter(
     prefix="/admin",
@@ -16,6 +18,12 @@ router = APIRouter(
 
 def _svc(current_user: Annotated[CurrentUser, Depends(get_current_user)]) -> AdminService:
     return AdminService(get_supabase_admin(), current_user.tenant_id, current_user.id)
+
+
+def _dashboard_svc(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> DashboardConfigService:
+    return DashboardConfigService(get_supabase_admin(), str(current_user.tenant_id))
 
 
 class PortfolioCleanupRequest(BaseModel):
@@ -54,6 +62,23 @@ async def get_launch_readiness(svc: Annotated[AdminService, Depends(_svc)]) -> d
 async def get_setup_status(svc: Annotated[AdminService, Depends(_svc)]) -> dict[str, object]:
     """Get first-run tenant setup checklist status."""
     return svc.get_setup_status()
+
+
+@router.get("/dashboard-configuration", response_model=DashboardConfigResponse)
+async def get_dashboard_configuration(
+    svc: Annotated[DashboardConfigService, Depends(_dashboard_svc)],
+) -> DashboardConfigResponse:
+    """Get tenant dashboard menu configuration."""
+    return svc.get_configuration()
+
+
+@router.put("/dashboard-configuration", response_model=DashboardConfigResponse)
+async def update_dashboard_configuration(
+    body: DashboardConfigUpdate,
+    svc: Annotated[DashboardConfigService, Depends(_dashboard_svc)],
+) -> DashboardConfigResponse:
+    """Update tenant dashboard menu configuration."""
+    return svc.update_configuration(body)
 
 
 @router.get("/portfolio-cleanup-preview")

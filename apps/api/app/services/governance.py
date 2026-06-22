@@ -232,6 +232,91 @@ class GovernanceService:
         )
         return submission
 
+    def submit_bankable_plan_rebaseline(
+        self,
+        initiative_id: str,
+        reason: str,
+    ) -> GateSubmissionItem:
+        financial_service = FinancialService(self._client, self._tenant_id)
+        settings = financial_service.get_governance_settings()
+        if not settings.allow_rebaseline:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Bankable plan rebaseline is disabled for this tenant.",
+            )
+        if self._user_role not in settings.rebaseline_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This role cannot request a bankable plan rebaseline.",
+            )
+
+        current = financial_service.get_current_bankable_plan(initiative_id)
+        if not current:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No bankable plan exists for this initiative.",
+            )
+
+        history = self._repo.list_submissions(initiative_id)
+        if any(
+            row.get("submission_type") == "bankable_plan_rebaseline"
+            and row.get("decision") == "pending"
+            for row in history
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This initiative already has a pending rebaseline request.",
+            )
+
+        snapshot = financial_service.get_bankable_plan_snapshot(initiative_id)
+        now = datetime.now(UTC).isoformat()
+        criteria_snapshot = [
+            {
+                "id": "rebaseline-reason",
+                "criterion_id": "rebaseline-reason",
+                "label": "Rebaseline reason documented",
+                "guidance": "Finance has documented why the approved baseline should change.",
+                "sort_order": 1,
+                "ticked": True,
+                "ticked_by": self._user_id,
+                "ticked_at": now,
+            },
+            {
+                "id": "dashboard-impact-reviewed",
+                "criterion_id": "dashboard-impact-reviewed",
+                "label": "Dashboard and board-pack impact reviewed",
+                "guidance": (
+                    "Approver understands that approval changes the current bankable "
+                    "baseline used by Benefit Tracking, Waterline, dashboards, and exports."
+                ),
+                "sort_order": 2,
+                "ticked": True,
+                "ticked_by": self._user_id,
+                "ticked_at": now,
+            },
+        ]
+        payload = {
+            "initiative_id": initiative_id,
+            "gate_number": settings.initiative_plan_lock_gate_number,
+            "submission_type": "bankable_plan_rebaseline",
+            "submitted_by_id": self._user_id,
+            "submitted_at": now,
+            "decision": "pending",
+            "commentary": reason,
+            "criteria_snapshot": criteria_snapshot,
+            "requested_bankable_plan_version": current.version + 1,
+            "requested_snapshot": snapshot.model_dump(mode="json"),
+        }
+        row = self._repo.create_submission(payload)
+        submission = self._to_submission(row)
+        self._audit_change(
+            "submit",
+            "bankable_plan_rebaseline",
+            row["id"],
+            after_data=submission.model_dump(mode="json"),
+        )
+        return submission
+
     def record_decision(self, submission_id: str, data: GateDecisionPatch) -> GateSubmissionItem:
         sub = self._repo.get_submission(submission_id)
         if not sub:
@@ -250,28 +335,36 @@ class GovernanceService:
 
         # Trigger stage transition
         if data.decision == "approved":
-            gate = self._get_gate(sub["initiative_id"], sub["gate_number"])
-            if gate:
-                self._repo.update_initiative_stage(sub["initiative_id"], gate.to_stage)
             financial_service = FinancialService(
                 self._client,
                 self._tenant_id,
             )
-            governance_settings = (
-                financial_service.get_governance_settings()
-                if hasattr(financial_service, "get_governance_settings")
-                else None
-            )
-            if governance_settings is None or (
-                governance_settings.plan_lock_on_approval
-                and sub["gate_number"] == governance_settings.initiative_plan_lock_gate_number
-            ):
-                financial_service.lock_bankable_plan_from_approval(
+            if sub.get("submission_type") == "bankable_plan_rebaseline":
+                financial_service.rebaseline_bankable_plan(
                     sub["initiative_id"],
-                    submission_id,
                     self._user_id,
-                    locked_reason=data.commentary,
+                    reason=data.commentary or sub.get("commentary"),
+                    trigger_submission_id=submission_id,
                 )
+            else:
+                gate = self._get_gate(sub["initiative_id"], sub["gate_number"])
+                if gate:
+                    self._repo.update_initiative_stage(sub["initiative_id"], gate.to_stage)
+                governance_settings = (
+                    financial_service.get_governance_settings()
+                    if hasattr(financial_service, "get_governance_settings")
+                    else None
+                )
+                if governance_settings is None or (
+                    governance_settings.plan_lock_on_approval
+                    and sub["gate_number"] == governance_settings.initiative_plan_lock_gate_number
+                ):
+                    financial_service.lock_bankable_plan_from_approval(
+                        sub["initiative_id"],
+                        submission_id,
+                        self._user_id,
+                        locked_reason=data.commentary,
+                    )
 
         submission = self._to_submission(updated)
         self._audit_change(
@@ -459,6 +552,7 @@ class GovernanceService:
             id=row["id"],
             initiative_id=row["initiative_id"],
             gate_number=row["gate_number"],
+            submission_type=row.get("submission_type") or "stage_gate",
             submitted_by_id=row["submitted_by_id"],
             submitted_by_name=(
                 submitter.get("display_name") if isinstance(submitter, dict) else None
@@ -470,4 +564,6 @@ class GovernanceService:
             decided_at=row.get("decided_at"),
             commentary=row.get("commentary"),
             criteria_snapshot=row.get("criteria_snapshot"),
+            requested_bankable_plan_version=row.get("requested_bankable_plan_version"),
+            requested_snapshot=row.get("requested_snapshot"),
         )

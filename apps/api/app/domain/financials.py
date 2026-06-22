@@ -802,6 +802,43 @@ class PortfolioInitiativePortfolioResponse(BaseModel):
     )
 
 
+class PortfolioInvestmentPaybackRow(BaseModel):
+    initiative_id: str
+    initiative_code: str | None = None
+    initiative_name: str
+    stage: str | None = None
+    workstream_name: str | None = None
+    benefits_total: str = "0"
+    recurring_costs: str = "0"
+    one_off_investment: str = "0"
+    net_run_rate_value: str = "0"
+    payback_months: str | None = None
+    payback_label: str = "N/A"
+    payback_status: Literal["immediate", "payback", "not_reached", "no_investment"] = (
+        "no_investment"
+    )
+
+
+class PortfolioInvestmentPaybackSummary(BaseModel):
+    benefits_total: str = "0"
+    recurring_costs: str = "0"
+    one_off_investment: str = "0"
+    net_run_rate_value: str = "0"
+    payback_months: str | None = None
+    payback_label: str = "N/A"
+    initiatives_with_payback: int = 0
+    initiatives_not_reached: int = 0
+
+
+class PortfolioInvestmentPaybackResponse(BaseModel):
+    value_year: int | None = None
+    scenario: str = "plan_base"
+    summary: PortfolioInvestmentPaybackSummary = Field(
+        default_factory=PortfolioInvestmentPaybackSummary
+    )
+    rows: list[PortfolioInvestmentPaybackRow] = Field(default_factory=list)
+
+
 class PortfolioBenefitsRegisterItem(BaseModel):
     initiative_id: str
     initiative_code: str | None = None
@@ -904,7 +941,7 @@ class BankablePlanResponse(BaseModel):
 
 
 class BankablePlanRebaselineRequest(BaseModel):
-    reason: str | None = None
+    reason: str = Field(..., min_length=10, max_length=1000)
 
 
 class BenefitLedgerEntryCreate(BaseModel):
