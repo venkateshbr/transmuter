@@ -34,7 +34,7 @@ GitHub tracking:
 - Issue: `#339`
 - PR: not yet opened
 - Commit:
-  - `5c2e650 feat: add configurable dashboards and payback view`
+  - `1f3f71e feat: add configurable dashboards and payback view`
 
 Runtime changes:
 - Added tenant-scoped dashboard configuration with RLS, admin controls, shell
