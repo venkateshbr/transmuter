@@ -26,6 +26,98 @@ status.
 
 ## Current Release Entries
 
+### 2026-06-23 - Governance Queue Initiative Labels and Production Launch Tenant
+
+Status: promoted to production
+
+GitHub tracking:
+- Issue: `#341`
+- PR: `#342`
+- Merge commit:
+  - `533fb7e Merge pull request #342 from venkateshbr/fix/governance-real-initiative-labels`
+
+Runtime changes:
+- PMO governance submissions now expose and display the real initiative code and
+  initiative name instead of UUID-derived fallback labels.
+- Governance repository/service responses include `initiative_code`,
+  `initiative_name`, and nested initiative metadata for both initiative history
+  and portfolio governance queue views.
+- Governance API test credentials now come from the latest launch E2E tenant or
+  explicit E2E credential environment variables, not hardcoded seeded admin
+  credentials.
+
+Local and CI validation:
+- `uv run --project apps/api pytest apps/api/tests/test_governance.py -q`
+- `uv run --project apps/api ruff check apps/api/tests/test_governance.py`
+- `uv run --project apps/api ruff format --check apps/api/tests/test_governance.py`
+- GitHub PR checks passed:
+  - Backend lint, type check, tests.
+  - Frontend lint and production build.
+  - Secret scan.
+  - Validate agent and workflow specs.
+
+Dev deployment:
+- Environment: `https://transmuter-dev.ishirock.tech`
+- Schema: `transmuter_dev`
+- Schema SQL applied: none.
+- Deployed with `infra/hostinger/deploy-change-to-dev.sh`.
+- Initial scripted validation hit the known immediate public `/health` readiness
+  race after container recreation.
+- Manual and rerun dev validation passed for local/public `/health` and
+  `/api/health`.
+
+Production promotion:
+- Environment: `https://transmuter.ishirock.tech`
+- Schema: `transmuter`
+- Promotion commit: `533fb7e`
+- Schema SQL applied: none.
+- Promoted with `CONFIRM_PROMOTE=1 infra/hostinger/promote-dev-to-prod.sh`.
+- Initial scripted validation hit the known immediate public `/health` readiness
+  race after container recreation.
+- Manual and rerun production validation passed for local/public `/health` and
+  `/api/health`.
+
+Production browser launch validation:
+- Tenant: `Acme Production Launch Demo 20260623t030517`
+- Slug: `acme-prod-launch-20260623t030517`
+- Admin email: `admin+acme-prod-launch-20260623t030517@ishirock.dev`
+- Credentials path:
+  `scratch/launch-ui-recordings/acme-prod-launch-20260623t030517/credentials.json`
+- Result path:
+  `scratch/launch-ui-recordings/acme-prod-launch-20260623t030517/result.json`
+- Resume state:
+  `scratch/launch-ui-recordings/acme-prod-launch-20260623t030517/resume-state.json`
+- Run documentation:
+  `scratch/launch-ui-recordings/acme-prod-launch-20260623t030517/run-documentation.md`
+- Walkthrough video:
+  `scratch/launch-ui-recordings/acme-prod-launch-20260623t030517/acme-launch-browser-walkthrough.mp4`
+- Validation result:
+  - Setup checklist complete.
+  - 10 initiatives.
+  - 10 locked bankable plans.
+  - 10 KPIs.
+  - 10 risks.
+  - 40 milestones.
+  - 4 shared-cost pools.
+  - FY28 net run-rate value `8350000.0020`.
+  - One-off investment `2500000.0008`.
+  - Payback months `3.5928`.
+  - Benefit ledger actuals `12053200.0020`.
+
+Operational notes:
+- Production launch was performed through the public browser UI, including
+  Stripe checkout, tenant admin setup screens, initiative workbook import,
+  financial entry, PMO governance approvals, benefit ledger import, shared-cost
+  pool setup, rebaseline approval, and dashboard walkthrough.
+- The first production browser pass failed at ENT-008 Gate 2 because the runner
+  missed the `Submit for Approval` click target. The checkpoint-aware resume
+  runner continued the same tenant from that point and completed governance.
+- Final reconciliation then surfaced missing FY27/FY28 benefit value rows on
+  already-created browser-entered benefit lines. The authenticated tenant repair
+  path temporarily disabled the plan lock, filled the missing value rows,
+  revalidated affected benefit lines, restored the lock setting, and reran final
+  dashboard reconciliation successfully.
+
 ### 2026-06-22 - Governed Bankable Plan Rebaseline
 
 Status: promoted to production
