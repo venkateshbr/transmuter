@@ -26,6 +26,48 @@ status.
 
 ## Current Release Entries
 
+### 2026-06-23 - Platform Admin Bootstrap Production Promotion
+
+Status: pending production promotion
+
+GitHub tracking:
+- Issue: `#351`
+- Related implementation issue: `#348`
+- Security review: `#349`
+- PR: not opened; operational promotion of reviewed `main` plus ignored
+  Hostinger runtime env correction.
+- Runtime code commit:
+  - `14ace8a chore: add platform admin startup bootstrap`
+
+Runtime changes:
+- Production Hostinger runtime configuration now targets
+  `venkatesh@ishirock.com` for `PLATFORM_ADMIN_EMAILS`,
+  `PLATFORM_ADMIN_BOOTSTRAP_EMAIL`, and `HOSTINGER_PLATFORM_ADMIN_EMAIL`.
+- Platform admin bootstrap remains enabled in production.
+- No production schema SQL is required.
+- No tenant-scoped table writes are required; the shared Supabase Auth user
+  already exists and has `platform_admin` app metadata.
+
+Dev validation:
+- Environment: `https://transmuter-dev.ishirock.tech`
+- Schema: `transmuter_dev`
+- Schema SQL applied: none.
+- `infra/hostinger/validate-dev.sh` passed on 2026-06-23.
+- Dev `/api/auth/login` returned `role=platform_admin` and the reserved
+  platform tenant id for the configured operator.
+
+Production pre-promotion finding:
+- Environment: `https://transmuter.ishirock.tech`
+- Schema: `transmuter`
+- Running production API container was from the 2026-06-23 03:04 UTC deployment
+  and still allowlisted `admin@ishirock.com`.
+- The same platform admin login that passed on dev returned a production 500
+  because the old container fell through to tenant-user lookup after the
+  allowlist mismatch.
+
+Production promotion:
+- Pending.
+
 ### 2026-06-23 - Governance Queue Initiative Labels and Production Launch Tenant
 
 Status: promoted to production
