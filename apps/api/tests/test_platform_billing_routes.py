@@ -142,6 +142,42 @@ async def test_platform_tenant_delete_cleans_bootstrap_financial_config_before_o
     ) < fake_admin.deleted_tables.index("organizations")
 
 
+async def test_platform_tenant_delete_cleans_bankable_plans_before_gate_submissions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id = UUID("b7a91745-5542-4aeb-8125-474e221b8f37")
+    fake_admin = _FakePlatformAdmin(
+        tenant_id=str(tenant_id),
+        slug="pilot-bankable-fk",
+        counts={
+            "bankable_plans": 1,
+            "gate_submissions": 1,
+        },
+    )
+    monkeypatch.setattr("app.routers.platform.get_supabase_admin", lambda: fake_admin)
+
+    data = await delete_tenant(
+        tenant_id,
+        DeleteTenantRequest(confirm_slug="pilot-bankable-fk"),
+        CurrentUser(
+            id=PLATFORM_TENANT_ID,
+            tenant_id=PLATFORM_TENANT_ID,
+            role="platform_admin",
+        ),
+    )
+
+    assert data["deleted_rows"]["bankable_plans"] == 1
+    assert data["deleted_rows"]["gate_submissions"] == 1
+    assert data["object_counts"]["financials"] == 1
+    assert data["object_counts"]["governance"] == 1
+    assert fake_admin.deleted_tables.index("bankable_plans") < fake_admin.deleted_tables.index(
+        "gate_submissions"
+    )
+    assert fake_admin.deleted_tables.index("gate_submissions") < fake_admin.deleted_tables.index(
+        "organizations"
+    )
+
+
 def test_billing_config_and_checkout_guards(monkeypatch: pytest.MonkeyPatch) -> None:
     config = client.get("/billing/config")
 
