@@ -89,6 +89,9 @@ replace them.
 ## Roles And Tenancy
 
 - Platform admin can view tenant signups, billing status, and delete demo tenants.
+- Current platform admin operator email is `venkatesh@ishirock.com`; API startup
+  idempotently ensures that Supabase Auth user has platform-admin app metadata
+  when `PLATFORM_ADMIN_BOOTSTRAP_ENABLED=true`.
 - Tenant admin configures tenant master data and users.
 - Supported tenant roles:
   - `transformation_office`: can see and manage all initiatives.

@@ -1,5 +1,6 @@
 from collections import defaultdict, deque
 from collections.abc import Awaitable, Callable
+from contextlib import asynccontextmanager
 from time import monotonic
 
 from fastapi import FastAPI
@@ -7,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.requests import Request
 from fastapi.responses import JSONResponse, Response
 
+from app.bootstrap.platform_admin import ensure_platform_admin_on_startup
 from app.core.config import settings
 from app.core.observability import (
     configure_observability,
@@ -42,11 +44,19 @@ from app.routers import (
     workstreams,
 )
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    ensure_platform_admin_on_startup()
+    yield
+
+
 app = FastAPI(
     title=settings.app_name,
     version=settings.version,
     docs_url="/docs" if settings.debug else None,
     redoc_url="/redoc" if settings.debug else None,
+    lifespan=lifespan,
 )
 configure_observability(app)
 
