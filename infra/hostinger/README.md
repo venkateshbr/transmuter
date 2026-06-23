@@ -82,6 +82,18 @@ This creates only platform/admin auth, one blank admin tenant, subscription
 shell data, financial configuration, and gate criteria. It does not seed
 operational tenant data.
 
+The API also runs the generalized platform-admin Auth bootstrap on every
+startup. Configure `PLATFORM_ADMIN_EMAILS`, optionally
+`PLATFORM_ADMIN_BOOTSTRAP_EMAIL`, and set `PLATFORM_ADMIN_BOOTSTRAP_PASSWORD`
+only when a missing Auth user should be created. This startup path does not seed
+tenant admins or tenant data.
+
+For a one-time Auth email rename, set `PLATFORM_ADMIN_PREVIOUS_EMAIL` and run:
+
+```bash
+uv run python scripts/rotate_platform_admin_email.py
+```
+
 ## Dev Environment
 
 The dev stack is isolated from production:

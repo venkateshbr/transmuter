@@ -40,7 +40,9 @@ Local launch gate reports:
 - Decide whether beta tenants start empty or with optional sample data.
 - Run the full real API acceptance suite and browser E2E suite in CI against a seeded test tenant.
 - Complete Prahari security review for auth, RLS, Stripe, Supabase service-role usage, and AI data masking.
-- Configure production `PLATFORM_ADMIN_EMAILS` with named operator accounts and require MFA in Supabase Auth.
+- Configure production `PLATFORM_ADMIN_EMAILS` with named operator accounts,
+  ensure the startup platform-admin Auth bootstrap points at the intended
+  operator email, and require MFA in Supabase Auth.
 
 ## Clean Financial Refactor Launch Gate
 

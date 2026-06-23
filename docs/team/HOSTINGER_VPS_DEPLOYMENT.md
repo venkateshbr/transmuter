@@ -69,6 +69,9 @@ Fill in:
 - OpenRouter / Langfuse values as needed
 - Stripe values if billing/signup should work
 - `PLATFORM_ADMIN_EMAILS`
+- `PLATFORM_ADMIN_BOOTSTRAP_EMAIL`
+- `PLATFORM_ADMIN_BOOTSTRAP_PASSWORD` if the platform admin Auth user may need
+  to be created during API startup
 - `HOSTINGER_ADMIN_PASSWORD` for one-time minimal local bootstrap, or separate
   `HOSTINGER_PLATFORM_ADMIN_PASSWORD` and `HOSTINGER_TENANT_ADMIN_PASSWORD`
 
@@ -302,6 +305,20 @@ It intentionally does not create initiatives, meetings, agenda items, attendees,
 sessions, action items, business units, workstreams, financial configuration,
 financial metrics, financial scenarios, stage gates, gate criteria, cost lines,
 risks, KPIs, or other operational tenant data.
+
+Normal API startup also runs `apps/api/app/bootstrap/platform_admin.py`, which
+ensures the configured `PLATFORM_ADMIN_BOOTSTRAP_EMAIL` exists in Supabase Auth
+with platform-admin app metadata. That startup path never creates tenant users,
+tenant admins, organizations, subscriptions, or operational tenant data.
+
+For a one-time platform-admin email rotation, run this from the checked-out API
+directory with the Hostinger environment loaded:
+
+```bash
+PLATFORM_ADMIN_PREVIOUS_EMAIL=admin@ishirock.com \
+PLATFORM_ADMIN_BOOTSTRAP_EMAIL=venkatesh@ishirock.com \
+uv run python scripts/rotate_platform_admin_email.py
+```
 
 What the script does:
 

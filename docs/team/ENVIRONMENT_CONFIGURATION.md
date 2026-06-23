@@ -145,11 +145,33 @@ core platform functionality.
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `PLATFORM_ADMIN_EMAILS` | Required for `/platform` access | Comma-separated Supabase Auth emails allowed to access tenant/billing administration. |
+| `PLATFORM_ADMIN_BOOTSTRAP_ENABLED` | Optional | When true, API startup checks the configured platform admin Supabase Auth user. Defaults to true. |
+| `PLATFORM_ADMIN_BOOTSTRAP_EMAIL` | Optional | Supabase Auth email to create or metadata-normalize at API startup. Defaults to the first `PLATFORM_ADMIN_EMAILS` entry. |
+| `PLATFORM_ADMIN_BOOTSTRAP_PASSWORD` | Required only if startup must create a missing Auth user | Temporary password used only when the platform admin Auth user is missing. Existing users are skipped or metadata-normalized without password changes. |
+| `PLATFORM_ADMIN_PREVIOUS_EMAIL` | One-time rotation only | Previous Supabase Auth email consumed by `scripts/rotate_platform_admin_email.py`; not used by API startup. |
 
 Example:
 
 ```text
-PLATFORM_ADMIN_EMAILS=admin@example.com,ops@example.com
+PLATFORM_ADMIN_EMAILS=venkatesh@ishirock.com
+PLATFORM_ADMIN_BOOTSTRAP_ENABLED=true
+PLATFORM_ADMIN_BOOTSTRAP_EMAIL=venkatesh@ishirock.com
+PLATFORM_ADMIN_BOOTSTRAP_PASSWORD=<temporary-password-if-user-is-missing>
+PLATFORM_ADMIN_PREVIOUS_EMAIL=<old-email-only-while-rotating>
+```
+
+The startup bootstrap only uses Supabase Auth admin APIs. It does not insert a
+tenant `users` row and does not seed tenants, tenant admins, subscriptions, or
+operational sample data.
+
+To rename an existing platform admin Auth user while preserving its Supabase
+Auth identity and password, run:
+
+```bash
+cd apps/api
+PLATFORM_ADMIN_PREVIOUS_EMAIL=admin@ishirock.com \
+PLATFORM_ADMIN_BOOTSTRAP_EMAIL=venkatesh@ishirock.com \
+uv run python scripts/rotate_platform_admin_email.py
 ```
 
 ## Frontend Runtime Configuration
@@ -191,7 +213,8 @@ Before local or production startup:
 - JWT secret is random and at least 32 characters.
 - Stripe keys, webhook secret, and Price IDs all come from the same Stripe mode
   (`test` or `live`), never mixed.
-- `PLATFORM_ADMIN_EMAILS` includes the intended operator emails.
+- `PLATFORM_ADMIN_EMAILS` includes the intended operator emails, and
+  `PLATFORM_ADMIN_BOOTSTRAP_EMAIL` is either blank or included in that allowlist.
 - `TRANSMUTER_API_URL` is `/api` for the production web container unless there is
   a deliberate reason to call an external API origin from the browser.
 - For production, `DEBUG=false`.

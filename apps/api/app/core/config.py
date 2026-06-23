@@ -94,6 +94,10 @@ class Settings(BaseSettings):
 
     # SaaS operator access
     platform_admin_emails: str = ""
+    platform_admin_bootstrap_enabled: bool = True
+    platform_admin_bootstrap_email: str = ""
+    platform_admin_bootstrap_password: str = ""
+    platform_admin_previous_email: str = ""
 
     @model_validator(mode="after")
     def resolve_supabase_target(self) -> "Settings":
