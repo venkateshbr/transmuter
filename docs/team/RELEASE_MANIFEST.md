@@ -68,13 +68,17 @@ Production pre-promotion finding:
 Production promotion:
 - Environment: `https://transmuter.ishirock.tech`
 - Schema: `transmuter`
-- Promotion command commit: `306e48e`
+- Initial promotion command commit: `306e48e`
+- Final production recreate command commit: `690e21f`
 - Schema SQL applied: none.
 - Promoted with `CONFIRM_PROMOTE=1 infra/hostinger/promote-dev-to-prod.sh`.
+- The same promotion command was unintentionally rerun while creating PR `#352`;
+  because commit `690e21f` is release-manifest-only, this did not change runtime
+  application code. Production validation was rerun after that final recreate.
 - The initial scripted public `/health` check hit the known immediate readiness
   404 after container recreation; `infra/hostinger/validate-prod.sh` passed on
   rerun after the stack settled.
-- Production API container started at 2026-06-23T18:40:16Z with
+- Final production API container started at 2026-06-23T18:43:12Z with
   `PLATFORM_ADMIN_EMAILS=venkatesh@ishirock.com`,
   `PLATFORM_ADMIN_BOOTSTRAP_ENABLED=true`, and
   `PLATFORM_ADMIN_BOOTSTRAP_EMAIL=venkatesh@ishirock.com`.
