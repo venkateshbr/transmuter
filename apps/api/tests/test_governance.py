@@ -71,10 +71,14 @@ def _latest_launch_credentials() -> CredentialCandidate | None:
         if result.get("status") != "passed":
             continue
         credentials_path = result.get("credentialsPath")
-        path = Path(credentials_path) if credentials_path else result_path.parent / "credentials.json"
+        path = (
+            Path(credentials_path) if credentials_path else result_path.parent / "credentials.json"
+        )
         if not path.is_absolute():
             path = REPO_ROOT / path
-        credentials = _credentials_from_file(path, f"latest passed launch run: {result_path.parent.name}")
+        credentials = _credentials_from_file(
+            path, f"latest passed launch run: {result_path.parent.name}"
+        )
         if credentials:
             return credentials
     return None
