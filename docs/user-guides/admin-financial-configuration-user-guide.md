@@ -488,6 +488,15 @@ Keep plan, forecast, and actual separate. Do not overwrite plan values with
 actuals. Use actuals to measure variance and forecast to represent the current
 view if it differs from the approved plan.
 
+When a bankable plan is locked, the approved plan lanes and planning structure
+remain fixed. Users can still enter the `actual` scenario and actual cost
+amounts in the initiative Financials tab. Those values feed the main portfolio
+actuals, plan-vs-actual variance, value bridge, and financial dashboards.
+
+Benefit Tracking is a separate realization ledger. Its actual values are
+evidence-backed realized benefits compared with the locked bankable plan; they
+do not replace the initiative Financials `actual` scenario.
+
 ---
 
 ## 8. Value Bridge Rows
@@ -962,6 +971,11 @@ Tracking also depends on bankable plan locks and actual realization ledger data.
 If plans are not locked or actual ledger rows are missing, this screen cannot
 show realization discipline.
 
+Do not use Benefit Tracking as the main source for portfolio actuals. Enter
+portfolio financial actuals in the initiative Financials tab under the `actual`
+scenario; use Benefit Tracking to record realized benefit evidence against the
+locked baseline.
+
 ### 13.6 Bankable Plan `/financials/bankable-plan`
 
 Financial configuration affects:
@@ -974,6 +988,9 @@ Financial configuration affects:
 
 If financial configuration is incomplete before a lock, the locked snapshot will
 preserve incomplete financial data. Rebaseline should be governed and auditable.
+The lock freezes approved plan values, benefit-line structure, and planned cost
+amounts. It does not freeze the initiative Financials `actual` scenario or actual
+cost amounts; those stay open for execution and reporting-period updates.
 
 ### 13.7 Waterline `/financials/waterline`
 
