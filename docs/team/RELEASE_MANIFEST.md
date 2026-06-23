@@ -28,7 +28,7 @@ status.
 
 ### 2026-06-23 - Platform Admin Bootstrap Production Promotion
 
-Status: pending production promotion
+Status: promoted to production
 
 GitHub tracking:
 - Issue: `#351`
@@ -66,7 +66,24 @@ Production pre-promotion finding:
   allowlist mismatch.
 
 Production promotion:
-- Pending.
+- Environment: `https://transmuter.ishirock.tech`
+- Schema: `transmuter`
+- Promotion command commit: `306e48e`
+- Schema SQL applied: none.
+- Promoted with `CONFIRM_PROMOTE=1 infra/hostinger/promote-dev-to-prod.sh`.
+- The initial scripted public `/health` check hit the known immediate readiness
+  404 after container recreation; `infra/hostinger/validate-prod.sh` passed on
+  rerun after the stack settled.
+- Production API container started at 2026-06-23T18:40:16Z with
+  `PLATFORM_ADMIN_EMAILS=venkatesh@ishirock.com`,
+  `PLATFORM_ADMIN_BOOTSTRAP_ENABLED=true`, and
+  `PLATFORM_ADMIN_BOOTSTRAP_EMAIL=venkatesh@ishirock.com`.
+- Production `/api/auth/login` returned `role=platform_admin`, the reserved
+  platform tenant id, and `must_change_password=false` for the configured
+  operator.
+- Browser validation against `https://transmuter.ishirock.tech/auth/login`
+  passed: the Angular app authenticated, navigated to `/platform`, and rendered
+  `Platform Control`.
 
 ### 2026-06-23 - Governance Queue Initiative Labels and Production Launch Tenant
 
