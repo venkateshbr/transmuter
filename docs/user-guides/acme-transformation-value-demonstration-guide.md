@@ -300,6 +300,12 @@ The financials tab supports:
 - assumptions on individual financial cells,
 - financial scope configuration for metrics and cost categories.
 
+After a bankable plan is locked, the planning lanes remain frozen: baseline,
+Base, High, benefit-line structure, planned costs, and the locked bankable
+snapshot. Actuals remain open. Use **Actuals** in the initiative Financials tab
+to update actual metric values and actual recurring or one-off cost amounts
+after lock.
+
 ### Benefit entry
 
 Benefit values are stored as monthly metric values. Each value has:
@@ -609,6 +615,9 @@ bankable plan concept is:
 - compare future delivery against the locked plan,
 - rebaseline only through governance.
 
+This lock is not an actuals close. Finance can continue updating Actuals
+scenario values and actual cost amounts after the approved plan is locked.
+
 ### Benefit Tracking
 
 Navigation:
@@ -625,6 +634,11 @@ It is intended for:
 - workstream or initiative rollups,
 - benefit ledger review,
 - realization status conversations.
+
+Benefit Tracking is a separate realization ledger. It captures evidence-backed
+actual benefits against the locked bankable plan, while initiative Financials
+Actuals remain the source for portfolio actuals, actual costs, and plan-vs-actual
+financial reporting.
 
 ### Waterline
 
@@ -718,7 +732,9 @@ Use precise language:
 ### Which report is the source of truth?
 
 Use **Portfolio Financials** and **Initiative Financials** for financial
-reconciliation. Use **Dashboard** and **Executive Control Tower** for executive
+reconciliation, including post-lock Actuals scenario values and actual costs.
+Use **Benefit Tracking** for realized benefit evidence against the locked
+bankable plan. Use **Dashboard** and **Executive Control Tower** for executive
 storytelling, governance, and risk context.
 
 ---

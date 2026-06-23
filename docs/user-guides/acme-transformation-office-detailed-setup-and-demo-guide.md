@@ -155,7 +155,7 @@ cadence.
 | `/financials` | Finance Lead | Transformation Office Director | Reconciles portfolio baseline, planned benefits, actuals, recurring costs, one-off investment, net run-rate value, and contributor detail. |
 | `/financials/investments-payback` | Finance Lead / Transformation Office Director | Executive Sponsor | Shows cumulative one-off investment, annual net run-rate value, and payback period by portfolio and initiative. |
 | `/financials/benefits-register` | Finance Lead / Benefits Controller | Initiative Owners, Business Benefit Owners | Shows each benefit line with plan, actual, validated amount, risk adjustment, evidence, owner, and validation status. |
-| `/financials/bankable-plan` | Finance Lead / PMO Lead | Transformation Office Director | Shows locked approved plans and rebaseline history before actual realization is tracked against them. |
+| `/financials/bankable-plan` | Finance Lead / PMO Lead | Transformation Office Director | Shows locked approved plans and rebaseline history while actual scenario values and actual costs continue to be updated separately. |
 | `/financials/benefit-tracking` | Benefits Controller | Finance Lead, Business Benefit Owners | Records and imports realized benefit ledger rows, compares actuals to locked bankable plan, and exposes variances. |
 | `/financials/waterline` | Transformation Office Director / Finance Lead | Workstream Leads | Freezes workstream targets after approval so future delivery is compared against a stable target. |
 | `/shared-costs` | Finance Lead | Transformation Office Director | Captures shared or cross-portfolio costs, defines allocation policies, and explains burdened value without hiding central costs inside one initiative. |
@@ -195,7 +195,9 @@ cadence.
 5. **Commit**: Approved initiatives are locked into bankable plans. Rebaseline
    is versioned rather than overwriting the prior approved plan.
 6. **Run**: Initiative owners update status, milestones, risks, KPIs, actions,
-   and actual financial values. PMO runs meetings and escalates blockers.
+   and actual financial values. The bankable-plan lock keeps the approved plan
+   stable, but the initiative **Financials** tab **Actuals** scenario and actual
+   cost amounts remain editable. PMO runs meetings and escalates blockers.
 7. **Realize**: Benefits controller or business benefit owner enters realized
    benefit ledger rows in `/financials/benefit-tracking`, with actual amounts
    and evidence descriptions.
@@ -217,6 +219,18 @@ There are two related but different actuals concepts:
 |---|---|---|
 | Actual financial scenario values | Initiative **Financials** tab, scenario **Actuals** | Captures actual revenue uplift, gross margin uplift, savings, and actual cost values in the same grid structure as plan. These values drive financial plan-vs-actual reporting. |
 | Benefit ledger realization rows | `/financials/benefit-tracking` | Captures realized benefit evidence against the locked bankable plan. These rows are the realization record used for locked baseline versus realized benefit tracking. |
+
+Post-lock rule:
+
+- The bankable-plan lock freezes annual baseline values, Plan Base, Plan High,
+  benefit-line structure, planned cost amounts, and the locked bankable snapshot.
+- The lock does not freeze the **Actuals** scenario or actual cost amounts in the
+  initiative **Financials** tab.
+- Benefit Tracking remains editable and importable after a bankable plan exists,
+  but it stays a separate realization ledger rather than the portfolio financial
+  actuals source.
+- Use governed rebaseline for approved-plan changes. Use a later period-close
+  control if Finance needs to lock actuals for a reporting period.
 
 Recommended control:
 
@@ -823,6 +837,10 @@ Actions:
 3. Enter or review monthly values in the grid.
 4. Click **Save Changes**.
 5. Use the cell assumption context menu to document key assumptions.
+
+After Gate 2 creates a locked bankable plan, **Base** and **High** become
+read-only. Switch to **Actuals** to update actual metric values and actual cost
+amounts without changing the approved plan.
 
 Speaker notes:
 
@@ -1736,7 +1754,9 @@ Speaker notes:
 > then track realized benefits against that locked plan. ACME has locked
 > bankable plan snapshots and benefit ledger rows, so this is now the main
 > board evidence for realized value. The Benefits Register controls validation;
-> Benefit Tracking shows actual realization against the locked baseline.
+> Benefit Tracking shows actual realization against the locked baseline. The
+> locked plan is not an actuals lock; actual scenario values and actual cost
+> amounts continue to be entered in initiative Financials.
 
 ### Close
 

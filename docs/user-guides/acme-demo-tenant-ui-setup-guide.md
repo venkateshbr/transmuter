@@ -730,6 +730,27 @@ to its current delivery stage. For the ACME demo, move initiatives to
 4. Leave Gate 5 unapproved unless you want to demonstrate fully realized
    initiatives.
 
+### 12.3 Confirm Post-Lock Financial Edit Rules
+
+After the bankable plan is locked, the approved planning structure is fixed:
+
+- annual baseline values,
+- Plan Base and Plan High scenario values,
+- benefit-line definitions,
+- planned cost amounts,
+- bankable plan snapshots.
+
+The lock does **not** freeze execution actuals. Users can still open the
+initiative **Financials** tab, switch to **Actuals**, click **Edit Details**, and
+enter:
+
+- Actual scenario metric values,
+- actual recurring cost amounts,
+- actual one-off cost amounts.
+
+Use governed rebaseline only when the approved plan itself must change. Do not
+use the Gate 2 bankable-plan lock as a period-close lock for actuals.
+
 If a tenant has approved a baseline change, run a governed bankable-plan
 rebaseline. ACME uses ENT-005/TRN-005 as the example:
 
@@ -756,6 +777,11 @@ Screen:
 
 You can enter actuals manually in **Ledger Entries** or upload them in
 **Import**.
+
+Benefit Tracking is a separate realization ledger. It records evidence-backed
+realized benefits against the locked bankable plan. It does not replace the
+initiative **Financials** tab **Actuals** scenario, which remains the source for
+portfolio financial actuals and actual cost amounts.
 
 For a tenant setup, enter the tenant's actual realization ledger rows. For a
 fast ACME UI demo, enter yearly rows:
@@ -1045,7 +1071,8 @@ Explain:
 
 > Bankable Plan freezes the approved plan. Once Gate 2 is approved, realization
 > tracking compares actuals to this locked baseline instead of chasing a moving
-> target.
+> target. The lock does not freeze actuals entry; Actuals scenario values and
+> actual cost amounts stay open for reporting-period updates.
 
 ### 15.10 Benefit Tracking `/financials/benefit-tracking`
 
@@ -1075,7 +1102,8 @@ Expected 2028 portfolio view:
 Explain:
 
 > Benefit Tracking is the actual realization layer. It shows whether approved
-> bankable value has moved into actual business results.
+> bankable value has moved into actual business results. It is separate from
+> initiative Financials actuals, which feed portfolio financial reporting.
 
 ### 15.11 Waterline `/financials/waterline`
 
@@ -1224,7 +1252,7 @@ Before presenting or handing the tenant to users, verify:
 | Why not count revenue uplift directly in EBITDA? | `/financials`, value bridge | Revenue is a commercial driver; GM uplift and savings are EBITDA-effective. |
 | Where did a benefit number come from? | Initiative Financials and Benefits Register | Benefit line, scenario, period values, evidence, and validation status. |
 | What is locked for accountability? | `/financials/bankable-plan` | Approved bankable plan snapshot after Gate 2. |
-| Are actuals tracked? | `/financials/benefit-tracking` | Ledger actuals compare realized value to locked plan. |
+| Are actuals tracked? | Initiative Financials and `/financials/benefit-tracking` | Initiative Financials Actuals feed portfolio actuals and costs; Benefit Tracking ledger actuals compare realized benefit evidence to locked plan. |
 | Which initiatives are at risk? | `/dashboard`, `/pmo/risks`, `/reports/control-tower` | Tenant-specific risk items; ACME highlights ENT-005 and ENT-009. |
 | What do Shared Costs change? | `/shared-costs`, `/reports/control-tower` | They add allocated central burden to executive reporting without changing direct initiative accountability. |
 | Why can `/financials` and Control Tower differ? | `/financials` and `/reports/control-tower` | `/financials` is direct-only by default; Control Tower can include allocated shared-cost burden. |
