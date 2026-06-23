@@ -146,7 +146,7 @@ class GovernanceRepository:
         result = (
             self._c.table("gate_submissions")
             .select(
-                "*, "
+                "*, initiatives(name, initiative_code), "
                 "submitter:users!gate_submissions_submitted_by_id_fkey(display_name), "
                 "decider:users!gate_submissions_decided_by_id_fkey(display_name)"
             )
@@ -175,7 +175,7 @@ class GovernanceRepository:
         result = (
             self._c.table("gate_submissions")
             .select(
-                "*, "
+                "*, initiatives(name, initiative_code), "
                 "submitter:users!gate_submissions_submitted_by_id_fkey(display_name), "
                 "decider:users!gate_submissions_decided_by_id_fkey(display_name)"
             )

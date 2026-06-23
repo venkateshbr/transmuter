@@ -83,6 +83,16 @@ def test_governance_lifecycle(admin_token, init_id):
     sub = resp.json()
     sub_id = sub["id"]
     assert sub["decision"] == "pending"
+    assert sub["initiative_code"].startswith("TRN-")
+    assert sub["initiative_name"] == "Governance Test"
+
+    portfolio_resp = client.get("/portfolio/governance", headers=auth(admin_token))
+    assert portfolio_resp.status_code == 200
+    portfolio_submission = next(
+        item for item in portfolio_resp.json()["submissions"] if item["id"] == sub_id
+    )
+    assert portfolio_submission["initiative_code"] == sub["initiative_code"]
+    assert portfolio_submission["initiative_name"] == "Governance Test"
 
     # 3. Decision - Try with non-admin (if possible) or just verify admin logic
     # In our seed, admin@ishirock.dev HAS transformation_office role (standard setup).

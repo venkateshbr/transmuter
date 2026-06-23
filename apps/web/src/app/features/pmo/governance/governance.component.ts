@@ -86,7 +86,7 @@ import { ActivatedRoute } from '@angular/router';
             <div class="flex-1 min-w-0">
                <div class="flex items-center gap-3 mb-1">
                  <span class="text-[10px] font-black px-2 py-0.5 rounded bg-[var(--t-accent-soft)] text-[var(--t-accent)]">
-                   TRN-{{ s.initiative_id.substring(0,3).toUpperCase() }}
+                   {{ submissionCode(s) }}
                  </span>
                  <span class="text-[10px] font-black px-2 py-0.5 rounded border border-[var(--t-border)] text-[var(--t-text-secondary)]">
                    {{ requestLabel(s) }}
@@ -94,7 +94,7 @@ import { ActivatedRoute } from '@angular/router';
                  <span class="text-xs font-bold text-[var(--t-text-secondary)] uppercase tracking-tighter italic">{{ isRebaseline(s) ? 'Pending finance baseline approval' : 'Pending Transformation Review' }}</span>
                </div>
                <h3 class="text-lg font-black text-[var(--t-text-primary)] truncate">
-                 {{ s.initiatives?.name || 'Gate submission' }}
+                 {{ submissionName(s) }}
                </h3>
                <p class="text-xs font-bold text-[var(--t-text-secondary)] uppercase tracking-tight">
                  {{ countTickedCriteria(s) }} of {{ s.criteria_snapshot?.length || 0 }} criteria ready
@@ -152,10 +152,10 @@ import { ActivatedRoute } from '@angular/router';
 
               <div class="flex gap-2">
                 @if (s.decision === 'pending' && auth.getRole() === 'transformation_office') {
-                  <button (click)="decide(s.id, 'approved')" class="w-10 h-10 rounded-xl bg-green-500 text-white flex items-center justify-center shadow-lg shadow-green-500/20 hover:scale-110 active:scale-95 transition-all">
+                  <button (click)="decide(s.id, 'approved')" [attr.aria-label]="'Approve ' + submissionLabel(s)" class="w-10 h-10 rounded-xl bg-green-500 text-white flex items-center justify-center shadow-lg shadow-green-500/20 hover:scale-110 active:scale-95 transition-all">
                     <span class="material-icons">check</span>
                   </button>
-                  <button (click)="decide(s.id, 'rejected')" class="w-10 h-10 rounded-xl bg-red-500 text-white flex items-center justify-center shadow-lg shadow-red-500/20 hover:scale-110 active:scale-95 transition-all">
+                  <button (click)="decide(s.id, 'rejected')" [attr.aria-label]="'Reject ' + submissionLabel(s)" class="w-10 h-10 rounded-xl bg-red-500 text-white flex items-center justify-center shadow-lg shadow-red-500/20 hover:scale-110 active:scale-95 transition-all">
                     <span class="material-icons">close</span>
                   </button>
                 } @else {
@@ -247,6 +247,20 @@ export class GovernanceComponent implements OnInit {
 
   isRebaseline(submission: any): boolean {
     return submission?.submission_type === 'bankable_plan_rebaseline';
+  }
+
+  submissionCode(submission: any): string {
+    return submission?.initiative_code || submission?.initiatives?.initiative_code || 'Initiative';
+  }
+
+  submissionName(submission: any): string {
+    return submission?.initiative_name || submission?.initiatives?.name || 'Gate submission';
+  }
+
+  submissionLabel(submission: any): string {
+    const code = this.submissionCode(submission);
+    const name = this.submissionName(submission);
+    return name === 'Gate submission' ? code : `${code} ${name}`;
   }
 
   requestLabel(submission: any): string {
