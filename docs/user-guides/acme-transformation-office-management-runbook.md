@@ -227,6 +227,7 @@ Outcome:
 - Approved initiatives have locked plan snapshots.
 - Rebaseline is versioned rather than silently overwriting the approved plan.
 - Management can compare actual realization to a stable baseline.
+- The lock freezes plan values and planned costs, not reporting-period actuals.
 
 ### Step 5: Run delivery
 
@@ -266,8 +267,11 @@ Screens:
 Outcome:
 
 - Actual financial values are entered in the Actuals scenario.
+- Actual cost amounts are entered in initiative Financials after lock without
+  changing planned cost amounts.
 - Realized benefit ledger rows are entered or imported.
-- Benefit Tracking compares actual realization to locked bankable plan.
+- Benefit Tracking compares realized benefit evidence to the locked bankable
+  plan and stays separate from portfolio financial actuals.
 - Finance can distinguish planned value, validated value, bankable value, and
   realized value.
 
@@ -361,8 +365,8 @@ Use these checks before a steering committee or board review:
 | Initiative baseline allocation reconciles to tenant baseline. | Finance Lead | `/financials`, initiative **Financials** tabs |
 | Benefit lines have validation status. | Finance Lead | `/financials/benefits-register` |
 | Approved plans are locked. | Finance Lead / PMO Lead | `/financials/bankable-plan` |
-| Actuals are entered for the reporting period. | Finance Lead | Initiative **Financials** tab, scenario **Actuals** |
-| Benefit ledger rows are entered or imported. | Benefits Controller | `/financials/benefit-tracking` |
+| Actuals are entered for the reporting period. | Finance Lead | Initiative **Financials** tab, scenario **Actuals**; allowed after bankable-plan lock |
+| Benefit ledger rows are entered or imported. | Benefits Controller | `/financials/benefit-tracking`; separate from initiative financial actuals |
 | Risks and actions have owners. | PMO Lead | `/pmo/risks`, `/progress/action-items` |
 | Meeting decisions are recorded. | PMO Lead | `/meetings` |
 | Board pack uses the correct year and value basis. | Finance Lead | `/financials` |
@@ -379,8 +383,11 @@ Use these checks before a steering committee or board review:
    recurring EBITDA drag.
 4. Treat the locked bankable plan as the realization baseline.
 5. Treat benefit ledger actuals as the evidence-backed realization record.
-6. Do not present draft, rejected, or unvalidated benefit lines as Finance
+6. Do not use the bankable-plan gate as an actuals period close. Actual scenario
+   values and actual cost amounts remain open until Finance defines a separate
+   close control.
+7. Do not present draft, rejected, or unvalidated benefit lines as Finance
    validated value.
-7. Do not let target changes bypass bankable-plan rebaseline governance.
-8. Use Investments & Payback for one-off investment/payback questions.
-9. Use Control Tower for decisions and Financial Overview for reconciliation.
+8. Do not let target changes bypass bankable-plan rebaseline governance.
+9. Use Investments & Payback for one-off investment/payback questions.
+10. Use Control Tower for decisions and Financial Overview for reconciliation.
