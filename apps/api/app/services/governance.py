@@ -547,10 +547,14 @@ class GovernanceService:
     def _to_submission(self, row: dict[str, Any]) -> GateSubmissionItem:
         submitter = row.get("submitter") or {}
         decider = row.get("decider") or {}
+        initiative = row.get("initiatives") if isinstance(row.get("initiatives"), dict) else {}
 
         return GateSubmissionItem(
             id=row["id"],
             initiative_id=row["initiative_id"],
+            initiative_code=initiative.get("initiative_code"),
+            initiative_name=initiative.get("name"),
+            initiatives=initiative or None,
             gate_number=row["gate_number"],
             submission_type=row.get("submission_type") or "stage_gate",
             submitted_by_id=row["submitted_by_id"],

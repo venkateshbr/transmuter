@@ -108,6 +108,9 @@ class GateDecisionPatch(BaseModel):
 class GateSubmissionItem(BaseModel):
     id: str
     initiative_id: str
+    initiative_code: str | None = None
+    initiative_name: str | None = None
+    initiatives: dict[str, Any] | None = None
     gate_number: int
     submission_type: Literal["stage_gate", "bankable_plan_rebaseline"] = "stage_gate"
     submitted_by_id: str
