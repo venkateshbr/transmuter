@@ -195,6 +195,13 @@ jobs:
           LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
           LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
         run: |
+          export JWT_SECRET="$(python3 - <<'PY'
+          import secrets
+
+          print(secrets.token_urlsafe(48))
+          PY
+          )"
+          test -n "$JWT_SECRET"
           if find ../../tests/evals -type f | grep -q .; then
             uv run pytest ../../tests/evals -v --tb=short
           else
