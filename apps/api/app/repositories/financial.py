@@ -1386,6 +1386,51 @@ class FinancialRepository:
                 saved.append(result.data[0])
         return saved
 
+    def upsert_locked_actual_cost_lines_batch(
+        self,
+        initiative_id: str,
+        rows: list[dict],  # type: ignore[type-arg]
+    ) -> list[dict]:  # type: ignore[type-arg]
+        """Update only actual amounts when the approved plan is locked."""
+        saved = []
+        now = datetime.now(UTC).isoformat()
+        for row in rows:
+            row = self._cost_line_with_engine_category(row)
+            row["tenant_id"] = self._tid
+            row["initiative_id"] = initiative_id
+            actual_amount = Decimal(str(row.get("amount_actual") or "0"))
+            existing_rows = self._find_cost_lines(initiative_id, row)
+            if existing_rows:
+                for existing in existing_rows:
+                    result = (
+                        self._c.table("financial_cost_lines")
+                        .update(
+                            {
+                                "amount_actual": row.get("amount_actual"),
+                                "updated_at": now,
+                            }
+                        )
+                        .eq("tenant_id", self._tid)
+                        .eq("id", existing["id"])
+                        .execute()
+                    )
+                    if result.data:
+                        saved.append(result.data[0])
+                continue
+            if actual_amount == 0:
+                continue
+            payload = {
+                **row,
+                "amount_plan": "0.0000",
+                "id": str(uuid4()),
+                "created_at": row.get("created_at") or now,
+                "updated_at": row.get("updated_at") or now,
+            }
+            result = self._c.table("financial_cost_lines").insert(payload).execute()
+            if result.data:
+                saved.append(result.data[0])
+        return saved
+
     def _cost_line_with_engine_category(self, data: dict) -> dict:  # type: ignore[type-arg]
         payload = dict(data)
         category = None
@@ -1551,7 +1596,7 @@ class FinancialRepository:
     def _find_cost_lines(self, initiative_id: str, row: dict) -> list[dict]:  # type: ignore[type-arg]
         query = (
             self._c.table("financial_cost_lines")
-            .select("id")
+            .select("*")
             .eq("tenant_id", self._tid)
             .eq("initiative_id", initiative_id)
             .eq("category_key", row.get("category_key", "other"))

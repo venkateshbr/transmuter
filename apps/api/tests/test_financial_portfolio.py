@@ -7,9 +7,11 @@ import pytest
 from fastapi import HTTPException
 
 from app.domain.financials import (
+    ConfigurableFinancialGridUpdate,
     CostLineCreate,
     CostLineUpdate,
     FinancialAttributeDefinition,
+    FinancialBenefitLineCreate,
     FinancialBenefitLineHandoffUpdate,
     FinancialBenefitLineValidationRequest,
     FinancialCellAssumptionUpdate,
@@ -18,6 +20,7 @@ from app.domain.financials import (
     FinancialConfigurationResponse,
     FinancialEntryUpdate,
     FinancialGridUpdate,
+    FinancialMetricValue,
     FinancialMetricValueUpdate,
     InitiativeFinancialSelections,
     PortfolioFinancialPeriod,
@@ -1284,6 +1287,175 @@ def test_financial_lock_state_blocks_after_bankable_plan_approval() -> None:
     service._repo = _LockStateRepo("in_progress", latest_plan={"id": "plan-1"})
     with pytest.raises(HTTPException) as exc:
         service._assert_financials_editable("initiative-1")
+
+    assert exc.value.status_code == 409
+
+
+class _LockedConfigurableRepo:
+    def __init__(self) -> None:
+        self.saved_values: list[dict[str, object]] = []
+        self.saved_actual_costs: list[dict[str, object]] = []
+
+    def initiative_exists(self, _initiative_id: str) -> bool:
+        return True
+
+    def get_organization_settings(self) -> dict:
+        return {"bankable_plan_governance": {"plan_lock_on_approval": True}}
+
+    def get_latest_bankable_plan(self, _initiative_id: str) -> dict[str, object] | None:
+        return {"id": "plan-1"}
+
+    def list_financial_scenarios(self) -> list[dict[str, object]]:
+        return [
+            {"id": "scenario-plan", "key": "plan_base", "kind": "plan"},
+            {"id": "scenario-actual", "key": "actual", "kind": "actual"},
+        ]
+
+    def list_metric_definitions(self) -> list[dict[str, object]]:
+        return [
+            {
+                "id": "metric-gm-uplift",
+                "key": "gm_uplift",
+                "aggregation": "sum",
+            }
+        ]
+
+    def upsert_configurable_metric_values_batch(
+        self,
+        _initiative_id: str,
+        rows: list[dict[str, object]],
+        user_id: str | None = None,
+    ) -> list[dict[str, object]]:
+        self.saved_values.extend({**row, "updated_by": user_id} for row in rows)
+        return rows
+
+    def upsert_locked_actual_cost_lines_batch(
+        self,
+        _initiative_id: str,
+        rows: list[dict[str, object]],
+    ) -> list[dict[str, object]]:
+        self.saved_actual_costs.extend(rows)
+        return rows
+
+    def create_benefit_lines_batch(
+        self,
+        _initiative_id: str,
+        _rows: list[dict[str, object]],
+        user_id: str | None = None,
+    ) -> list[dict[str, object]]:
+        raise AssertionError("benefit lines should not be created after plan lock")
+
+
+def _locked_configurable_service(repo: _LockedConfigurableRepo) -> FinancialService:
+    service = FinancialService.__new__(FinancialService)
+    service._repo = repo
+    service.get_configurable_financial_grid = lambda initiative_id: {  # type: ignore[method-assign]
+        "initiative_id": initiative_id
+    }
+    return service
+
+
+def test_locked_configurable_financials_allow_actual_values_and_actual_costs() -> None:
+    repo = _LockedConfigurableRepo()
+    service = _locked_configurable_service(repo)
+
+    result = service.update_configurable_financial_grid(
+        "initiative-1",
+        ConfigurableFinancialGridUpdate(
+            values=[
+                FinancialMetricValue(
+                    metric_definition_id="metric-gm-uplift",
+                    scenario_id="scenario-actual",
+                    year=2028,
+                    month=1,
+                    value="80.0000",
+                )
+            ],
+            cost_lines=[
+                CostLineCreate(
+                    name="Run support",
+                    category_key="software",
+                    year=2028,
+                    month=1,
+                    amount_actual="30.0000",
+                    is_recurring=True,
+                )
+            ],
+        ),
+        user_id="user-1",
+    )
+
+    assert result == {"initiative_id": "initiative-1"}
+    assert repo.saved_values == [
+        {
+            "metric_definition_id": "metric-gm-uplift",
+            "scenario_id": "scenario-actual",
+            "benefit_line_id": None,
+            "year": 2028,
+            "month": 1,
+            "value": "80.0000",
+            "status": "draft",
+            "note": None,
+            "updated_by": "user-1",
+        }
+    ]
+    assert repo.saved_actual_costs == [
+        {
+            "name": "Run support",
+            "category_key": "software",
+            "category_id": None,
+            "year": 2028,
+            "quarter": None,
+            "month": 1,
+            "amount_plan": "0.0000",
+            "amount_actual": "30.0000",
+            "is_recurring": True,
+        }
+    ]
+
+
+def test_locked_configurable_financials_reject_plan_scenario_values() -> None:
+    repo = _LockedConfigurableRepo()
+    service = _locked_configurable_service(repo)
+
+    with pytest.raises(HTTPException) as exc:
+        service.update_configurable_financial_grid(
+            "initiative-1",
+            ConfigurableFinancialGridUpdate(
+                values=[
+                    FinancialMetricValue(
+                        metric_definition_id="metric-gm-uplift",
+                        scenario_id="scenario-plan",
+                        year=2028,
+                        month=1,
+                        value="120.0000",
+                    )
+                ]
+            ),
+            user_id="user-1",
+        )
+
+    assert exc.value.status_code == 409
+    assert repo.saved_values == []
+
+
+def test_locked_configurable_financials_reject_benefit_line_changes() -> None:
+    repo = _LockedConfigurableRepo()
+    service = _locked_configurable_service(repo)
+
+    with pytest.raises(HTTPException) as exc:
+        service.update_configurable_financial_grid(
+            "initiative-1",
+            ConfigurableFinancialGridUpdate(
+                benefit_lines=[
+                    FinancialBenefitLineCreate(
+                        metric_definition_id="metric-gm-uplift",
+                        name="New locked plan line",
+                    )
+                ]
+            ),
+            user_id="user-1",
+        )
 
     assert exc.value.status_code == 409
 

@@ -591,10 +591,8 @@ class FinancialService:
         self._ensure_tenant_initiative(initiative_id)
         locked, _ = self._financial_lock_state(initiative_id)
         if locked:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Financials are locked for this initiative",
-            )
+            self._update_locked_configurable_actuals(initiative_id, data, user_id)
+            return self.get_configurable_financial_grid(initiative_id)
 
         if data.benefit_lines:
             self._repo.create_benefit_lines_batch(
@@ -661,6 +659,84 @@ class FinancialService:
             )
 
         return self.get_configurable_financial_grid(initiative_id)
+
+    def _update_locked_configurable_actuals(
+        self,
+        initiative_id: str,
+        data: ConfigurableFinancialGridUpdate,
+        user_id: str | None = None,
+    ) -> None:
+        """Persist actual lanes while preserving the approved locked plan."""
+        if data.benefit_lines:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Approved plan structure is locked; create a governed rebaseline "
+                    "to change benefit lines."
+                ),
+            )
+
+        if data.values:
+            actual_scenario_ids = self._actual_scenario_ids()
+            if not actual_scenario_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Actual scenario is not configured for this tenant.",
+                )
+            locked_values = [
+                value for value in data.values if value.scenario_id not in actual_scenario_ids
+            ]
+            if locked_values:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Approved plan values are locked; only Actuals scenario values can be updated.",
+                )
+            self._assert_no_formula_metric_values(data.values)
+            self._repo.upsert_configurable_metric_values_batch(
+                initiative_id,
+                [
+                    {
+                        "metric_definition_id": value.metric_definition_id,
+                        "scenario_id": value.scenario_id,
+                        "benefit_line_id": value.benefit_line_id,
+                        "year": value.year,
+                        "month": value.month,
+                        "value": _money(value.value),
+                        "status": value.status,
+                        "note": value.note,
+                    }
+                    for value in data.values
+                ],
+                user_id=user_id,
+            )
+
+        actual_cost_rows = []
+        for line in data.cost_lines or []:
+            if line.amount_actual is None:
+                if _dec(line.amount_plan) != Decimal("0"):
+                    raise HTTPException(
+                        status_code=status.HTTP_409_CONFLICT,
+                        detail=(
+                            "Approved plan cost values are locked; only actual cost amounts "
+                            "can be updated."
+                        ),
+                    )
+                continue
+            actual_cost_rows.append(
+                {
+                    "name": line.name,
+                    "category_key": line.category_key,
+                    "category_id": line.category_id,
+                    "year": line.year,
+                    "quarter": line.quarter,
+                    "month": line.month,
+                    "amount_plan": "0.0000",
+                    "amount_actual": _money(line.amount_actual),
+                    "is_recurring": line.is_recurring,
+                }
+            )
+        if actual_cost_rows:
+            self._repo.upsert_locked_actual_cost_lines_batch(initiative_id, actual_cost_rows)
 
     def replace_financial_grid(
         self, initiative_id: str, data: FinancialGridUpdate
@@ -4082,6 +4158,13 @@ class FinancialService:
                 "Approved plan values are locked; forecast and actual values remain editable.",
             )
         return False, None
+
+    def _actual_scenario_ids(self) -> set[str]:
+        return {
+            str(row["id"])
+            for row in self._repo.list_financial_scenarios()
+            if row.get("kind") == "actual" or row.get("key") == "actual"
+        }
 
     def _financial_mode_descriptor(
         self,

@@ -391,7 +391,7 @@ interface GridMetric {
             >
               <span class="material-icons text-sm">upload_file</span>
             </button>
-            <button class="btn-ghost py-1.5 px-4 text-[10px] flex items-center gap-2" [disabled]="isLocked()" (click)="toggleEdit()">
+            <button class="btn-ghost py-1.5 px-4 text-[10px] flex items-center gap-2" [disabled]="!canEditFinancialGrid()" (click)="toggleEdit()">
               <span class="material-icons text-sm">{{ isEditing() ? 'visibility' : 'edit' }}</span>
               {{ isEditing() ? 'View Summary' : 'Edit Details' }}
             </button>
@@ -558,7 +558,7 @@ interface GridMetric {
 
         @if (isEditing()) {
           <div class="flex justify-end mt-4">
-            <button class="btn-primary flex items-center gap-2" [disabled]="saving() || isLocked()" (click)="saveGrid()">
+            <button class="btn-primary flex items-center gap-2" [disabled]="saving() || !canSaveGrid()" (click)="saveGrid()">
               @if (saving()) {
                 <span class="material-icons animate-spin text-sm">sync</span>
                 Saving...
@@ -728,6 +728,8 @@ export class FinancialsTabComponent implements OnInit {
   ]);
 
   isLocked = computed(() => Boolean(this.grid()?.locked));
+  canEditFinancialGrid = computed(() => !this.isLocked() || this.scenario() === 'actual');
+  canSaveGrid = computed(() => this.canEditFinancialGrid());
 
   configuredMetrics = computed<GridMetric[]>(() => {
     const cleanDefinitions = this.grid()?.definitions || [];
@@ -876,6 +878,13 @@ export class FinancialsTabComponent implements OnInit {
       return selectedCosts.has(metric.costCategoryKey);
     }
     return selectedMetrics.has(metric.metricValueKey || metric.key);
+  }
+
+  private isActualMetric(metric: GridMetric): boolean {
+    return metric.actual === true
+      || metric.metricScenario === 'actual'
+      || metric.key.endsWith('_actual')
+      || metric.key.includes('_actual_');
   }
 
   private isDuplicateCustomSystemMetric(item: FinancialConfigItem, items: FinancialConfigItem[]): boolean {
@@ -1074,7 +1083,7 @@ export class FinancialsTabComponent implements OnInit {
         costCategoryKey: m.costCategoryKey,
         isRecurring: m.isRecurring,
         actual: m.actual,
-        readOnly: Boolean(m.readOnly),
+        readOnly: Boolean(m.readOnly) || (this.isLocked() && !this.isActualMetric(m)),
         formula: m.formula || null,
         benefitLineId: m.benefitLineId || null,
       };
@@ -1126,6 +1135,7 @@ export class FinancialsTabComponent implements OnInit {
 
   setScenario(next: FinancialScenario): void {
     this.scenario.set(next);
+    if (this.isLocked() && next !== 'actual') this.isEditing.set(false);
   }
 
   scenarioLabel(): string {
@@ -1133,7 +1143,7 @@ export class FinancialsTabComponent implements OnInit {
   }
 
   toggleEdit(): void {
-    if (this.isLocked()) return;
+    if (!this.canEditFinancialGrid()) return;
     this.isEditing.set(!this.isEditing());
     setTimeout(() => this.exposeAcceptanceHarness());
   }
@@ -1191,7 +1201,7 @@ export class FinancialsTabComponent implements OnInit {
   }
 
   saveGrid(): void {
-    if (this.isLocked()) return;
+    if (!this.canSaveGrid()) return;
     const hotInstance = this.hotComponent.hotInstance;
     if (!hotInstance) return;
     
