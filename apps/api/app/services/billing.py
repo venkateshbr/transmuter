@@ -186,6 +186,7 @@ class BillingProvisioningService:
         billing_interval: str = "month",
     ) -> dict[str, Any]:
         plan = select_billing_plan(planned_user_count, billing_interval)
+        self._assert_signup_email_available(admin_email)
         org = self._ensure_pending_organization(
             name=organization_name,
             slug=organization_slug,
@@ -218,6 +219,23 @@ class BillingProvisioningService:
         )
         intent = result.data[0]
         return {"intent": intent, "organization": org, "plan": plan, "plan_record": plan_record}
+
+    def mark_checkout_failed(self, signup_intent_id: str, detail: str) -> None:
+        if not signup_intent_id:
+            return
+        intent = self._get_signup_intent(signup_intent_id)
+        if not intent:
+            return
+        self._client.table("signup_intents").update(
+            {
+                "status": "provisioning_failed",
+                "metadata": {
+                    **(intent.get("metadata") or {}),
+                    "provisioning_error": detail,
+                },
+                "updated_at": datetime.now(UTC).isoformat(),
+            }
+        ).eq("id", signup_intent_id).execute()
 
     def mark_checkout_created(
         self,
@@ -656,6 +674,26 @@ class BillingProvisioningService:
             }
         )
         return str(response.user.id)
+
+    def _assert_signup_email_available(self, email: str) -> None:
+        normalized = str(self._email(email))
+        existing_user = (
+            self._client.table("users")
+            .select("id, tenant_id")
+            .eq("email", normalized)
+            .maybe_single()
+            .execute()
+        )
+        if existing_user and existing_user.data:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Initial admin email already belongs to an existing workspace",
+            )
+        if self._find_auth_user_id(normalized):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Initial admin email already has an account. Sign in or use another email.",
+            )
 
     def _find_auth_user_id(self, email: str) -> str | None:
         page = 1

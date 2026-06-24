@@ -42,7 +42,7 @@ type Persona = 'management' | 'investor' | 'owner';
               >{{ option.label }}</button>
             }
           </div>
-          <input class="input-field w-28 py-2 text-xs" type="number" [ngModel]="targetYear()" (ngModelChange)="targetYear.set($event); load()" aria-label="Target year">
+          <input class="input-field w-28 py-2 text-xs" type="number" [ngModel]="effectiveTargetYear()" (ngModelChange)="setTargetYear($event)" aria-label="Target year">
           <a routerLink="/shared-costs" class="btn-secondary text-[10px]">Shared Costs</a>
         </div>
       </header>
@@ -100,7 +100,7 @@ type Persona = 'management' | 'investor' | 'owner';
             @for (item of data()?.needs_attention || []; track item.initiative_id + item.reason) {
               <div class="p-4">
                 <p class="text-xs font-black text-[var(--t-text-primary)]">{{ item.reason }}</p>
-                <p class="mt-1 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">{{ item.initiative_id }}</p>
+                <p class="mt-1 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">{{ initiativeAttentionLabel(item) }}</p>
               </div>
             } @empty {
               <div class="p-6 text-sm text-[var(--t-text-secondary)]">No control-tower exceptions for the selected view.</div>
@@ -167,7 +167,7 @@ export class ExecutiveControlTowerComponent implements OnInit {
   private readonly api = inject(ApiService);
   data = signal<any | null>(null);
   persona = signal<Persona>('management');
-  targetYear = signal<number | null>(new Date().getFullYear());
+  targetYear = signal<number | null>(null);
   financialMode = computed<FinancialModeDescriptor>(() => resolveFinancialMode(this.data()?.financial_mode, this.data()?.value_bridge, this.data()?.summary, this.data()));
   showActuals = computed(() => financialModeUsesActuals(this.financialMode()) || Boolean(this.data()?.value_bridge?.benefits_actual || this.data()?.value_bridge?.net_actual || this.data()?.initiatives?.some?.((row: any) => row?.benefits_actual !== undefined || row?.total_burdened_costs_actual !== undefined || row?.net_after_allocation_actual !== undefined)));
   readonly personas: { id: Persona; label: string }[] = [
@@ -228,6 +228,23 @@ export class ExecutiveControlTowerComponent implements OnInit {
     this.load();
   }
 
+  setTargetYear(value: string | number | null): void {
+    const parsed = Number(value);
+    this.targetYear.set(Number.isFinite(parsed) && parsed > 0 ? parsed : null);
+    this.load();
+  }
+
+  effectiveTargetYear(): number | null {
+    return this.targetYear() ?? this.data()?.selected_year ?? null;
+  }
+
+  initiativeAttentionLabel(item: any): string {
+    const code = String(item?.initiative_code || '').trim();
+    const name = String(item?.initiative_name || '').trim();
+    if (code && name) return `${code} · ${name}`;
+    return code || name || String(item?.initiative_id || '');
+  }
+
   load(): void {
     const route = this.persona() === 'owner'
       ? '/reports/owner-cockpit'
@@ -236,7 +253,12 @@ export class ExecutiveControlTowerComponent implements OnInit {
         : '/reports/executive-control-tower';
     const params: Record<string, string | number> = {};
     if (this.targetYear()) params['target_year'] = this.targetYear() as number;
-    this.api.get<any>(route, params).subscribe(res => this.data.set(res));
+    this.api.get<any>(route, params).subscribe(res => {
+      this.data.set(res);
+      if (this.targetYear() === null && res?.selected_year) {
+        this.targetYear.set(Number(res.selected_year));
+      }
+    });
   }
 
   formatMoney(value: string | number | null | undefined): string {

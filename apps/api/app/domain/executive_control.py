@@ -445,6 +445,8 @@ class ReportFilterParams(BaseModel):
 
 class ReportResponse(BaseModel):
     persona: Literal["owner", "management", "investor"]
+    selected_year: int | None = None
+    available_years: list[int] = Field(default_factory=list)
     summary: dict[str, Any]
     value_bridge: dict[str, str]
     cost_allocation: dict[str, str]

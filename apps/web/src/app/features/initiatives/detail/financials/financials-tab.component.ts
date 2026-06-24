@@ -404,6 +404,16 @@ interface GridMetric {
             {{ grid()?.lock_reason || 'Changes require transformation office approval.' }}
           </div>
         }
+        @if (financialMessage()) {
+          <div class="mb-4 border border-[var(--t-green)] bg-[var(--t-surface-raised)] px-4 py-3 text-sm font-bold text-[var(--t-green)]">
+            {{ financialMessage() }}
+          </div>
+        }
+        @if (financialError()) {
+          <div class="mb-4 border border-[var(--t-red)] bg-[var(--t-surface-raised)] px-4 py-3 text-sm font-bold text-[var(--t-red)]">
+            {{ financialError() }}
+          </div>
+        }
 
         @if (!isLocked() && benefitMetricDefinitions().length) {
           <div class="mb-4 grid gap-3 border bg-[var(--t-surface-raised)] p-4 lg:grid-cols-[180px_1fr_120px_140px_120px_140px_140px_auto]" style="border-color:var(--t-border)">
@@ -481,10 +491,11 @@ interface GridMetric {
                     }
                   </div>
                   <div class="flex flex-wrap justify-start gap-2 lg:justify-end">
-                    <button type="button" class="btn-ghost px-3 py-2 text-[10px]" [disabled]="isLocked() || saving()" (click)="submitBenefitLine(line)" aria-label="Submit benefit line to Finance">Submit</button>
-                    <button type="button" class="btn-secondary px-3 py-2 text-[10px]" [disabled]="isLocked() || saving()" (click)="validateBenefitLine(line)" aria-label="Validate benefit line">Validate</button>
-                    <button type="button" class="btn-ghost px-3 py-2 text-[10px]" [disabled]="isLocked() || saving()" (click)="rejectBenefitLine(line)" aria-label="Reject benefit line">Reject</button>
-                    <button type="button" class="btn-ghost px-3 py-2 text-[10px]" [disabled]="isLocked() || saving()" (click)="updateBenefitLineRisk(line)" aria-label="Update benefit line risk">Risk</button>
+                    <button type="button" class="btn-ghost px-3 py-2 text-[10px]" [disabled]="saving()" (click)="submitBenefitLine(line)" aria-label="Submit benefit line to Finance">Submit</button>
+                    <button type="button" class="btn-secondary px-3 py-2 text-[10px]" [disabled]="saving()" (click)="validateBenefitLine(line)" aria-label="Validate benefit line">Validate</button>
+                    <button type="button" class="btn-ghost px-3 py-2 text-[10px]" [disabled]="saving()" (click)="rejectBenefitLine(line)" aria-label="Reject benefit line">Reject</button>
+                    <button type="button" class="btn-ghost px-3 py-2 text-[10px]" [disabled]="saving()" (click)="updateBenefitLineRisk(line)" aria-label="Update benefit line risk">Risk</button>
+                    <button type="button" class="btn-ghost px-3 py-2 text-[10px] text-[var(--t-red)]" [disabled]="isLocked() || saving()" (click)="deleteBenefitLine(line)" aria-label="Delete benefit line">Delete</button>
                   </div>
                 </div>
               }
@@ -535,6 +546,46 @@ interface GridMetric {
             </label>
             <div class="flex items-end">
               <button type="button" class="btn-secondary px-4 py-2 text-[10px]" [disabled]="!canGenerateCostLine()" (click)="generateCostLine()" aria-label="Generate cost line">Add Cost</button>
+            </div>
+          </div>
+        }
+
+        @if (costLines().length) {
+          <div class="mb-4 border bg-[var(--t-surface-raised)]" style="border-color:var(--t-border)">
+            <div class="flex items-center justify-between border-b px-4 py-3" style="border-color:var(--t-border)">
+              <div>
+                <p class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-tertiary)">Cost Lines</p>
+                <p class="mt-1 text-sm font-black" style="color:var(--t-text-primary)">{{ costLines().length }} planned and actual rows</p>
+              </div>
+            </div>
+            <div class="max-h-80 overflow-y-auto">
+              <table class="w-full text-left text-xs">
+                <thead class="sticky top-0 bg-[var(--t-surface)]">
+                  <tr>
+                    <th class="px-4 py-3 text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Line</th>
+                    <th class="px-4 py-3 text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Period</th>
+                    <th class="px-4 py-3 text-right text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Plan</th>
+                    <th class="px-4 py-3 text-right text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Actual</th>
+                    <th class="px-4 py-3 text-right text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Action</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-[var(--t-border)]">
+                  @for (line of costLines(); track line.id) {
+                    <tr>
+                      <td class="px-4 py-3">
+                        <p class="font-black" style="color:var(--t-text-primary)">{{ line.name }}</p>
+                        <p class="mt-1 uppercase tracking-widest" style="color:var(--t-text-tertiary)">{{ line.category_key }}</p>
+                      </td>
+                      <td class="px-4 py-3 font-bold" style="color:var(--t-text-secondary)">{{ costLinePeriod(line) }}</td>
+                      <td class="px-4 py-3 text-right font-bold" style="color:var(--t-text-primary)">{{ formatMoney(line.amount_plan) }}</td>
+                      <td class="px-4 py-3 text-right font-bold" style="color:var(--t-text-primary)">{{ line.amount_actual ? formatMoney(line.amount_actual) : '-' }}</td>
+                      <td class="px-4 py-3 text-right">
+                        <button type="button" class="btn-ghost px-3 py-2 text-[10px] text-[var(--t-red)]" [disabled]="isLocked() || saving()" (click)="deleteCostLine(line)" aria-label="Delete cost line">Delete</button>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
             </div>
           </div>
         }
@@ -648,6 +699,8 @@ export class FinancialsTabComponent implements OnInit {
   saving = signal(false);
   exporting = signal(false);
   importing = signal(false);
+  financialMessage = signal<string | null>(null);
+  financialError = signal<string | null>(null);
   grid = signal<FinancialGrid | null>(null);
   valueBridge = signal<any | null>(null);
   assumptions = signal<CellAssumption[]>([]);
@@ -1754,6 +1807,7 @@ export class FinancialsTabComponent implements OnInit {
   }
 
   canGenerateCostLine(): boolean {
+    if (this.saving() || this.isLocked()) return false;
     if (!this.newCostLineCategoryKey() || !this.newCostLineName().trim()) return false;
     if (this.newCostLineAmount() === null || !this.newCostLineStartMonth()) return false;
     if (this.newCostLinePhasingMode() === 'spread' && !this.newCostLineEndMonth()) return false;
@@ -1761,7 +1815,7 @@ export class FinancialsTabComponent implements OnInit {
   }
 
   generateCostLine(): void {
-    if (!this.canGenerateCostLine() || this.isLocked()) return;
+    if (!this.canGenerateCostLine()) return;
     const start = this.parseMonthInput(this.newCostLineStartMonth());
     const end = this.newCostLinePhasingMode() === 'spread'
       ? this.parseMonthInput(this.newCostLineEndMonth())
@@ -1782,6 +1836,7 @@ export class FinancialsTabComponent implements OnInit {
       amount_actual: lane === 'actual' ? value.toString() : null,
       is_recurring: this.newCostLineRecurring(),
     }));
+    this.clearFinancialFeedback();
     this.saving.set(true);
     this.api.put<FinancialGrid>(`/initiatives/${this.initiativeId}/financials`, {
       values: [],
@@ -1798,16 +1853,18 @@ export class FinancialsTabComponent implements OnInit {
         this.newCostLineStartMonth.set('');
         this.newCostLineEndMonth.set('');
         this.saving.set(false);
+        this.financialMessage.set(`${costLines.length} cost line${costLines.length === 1 ? '' : 's'} added.`);
         this._loadData();
       },
-      error: () => {
+      error: err => {
         this.saving.set(false);
-        alert('Failed to generate cost line.');
+        this.financialError.set(this.financialErrorMessage(err, 'Failed to add cost line.'));
       },
     });
   }
 
   canAddBenefitLine(): boolean {
+    if (this.saving() || this.isLocked()) return false;
     if (!this.newBenefitLineMetricId() || !this.newBenefitLineName().trim()) return false;
     if (this.newBenefitLinePhasingMode() === 'manual') return true;
     if (this.newBenefitLineAmount() === null || !this.newBenefitLineStartMonth()) return false;
@@ -1816,16 +1873,15 @@ export class FinancialsTabComponent implements OnInit {
   }
 
   addBenefitLine(): void {
-    if (!this.canAddBenefitLine() || this.isLocked()) return;
+    if (!this.canAddBenefitLine()) return;
     const metricDefinitionId = this.newBenefitLineMetricId();
     const name = this.newBenefitLineName().trim();
     const confidence = this.newBenefitLineConfidence();
     const displayOrder = (this.grid()?.benefit_lines || []).length + 1;
     const phasingMode = this.newBenefitLinePhasingMode();
+    this.clearFinancialFeedback();
     this.saving.set(true);
-    this.api.put<FinancialGrid>(`/initiatives/${this.initiativeId}/financials`, {
-      values: [],
-      benefit_lines: [{
+    this.api.post<FinancialBenefitLine>(`/initiatives/${this.initiativeId}/financials/benefit-lines`, {
         metric_definition_id: metricDefinitionId,
         name,
         description: null,
@@ -1841,37 +1897,34 @@ export class FinancialsTabComponent implements OnInit {
         attributes: {},
         show_in_summary: true,
         display_order: displayOrder,
-      }],
     }).subscribe({
-      next: grid => {
-        const createdLine = (grid.benefit_lines || [])
-          .filter(line => line.metric_definition_id === metricDefinitionId && line.name === name)
-          .sort((a, b) => Number(b.display_order || 0) - Number(a.display_order || 0))[0];
-        const generatedValues = createdLine ? this.generatedBenefitLineValues(createdLine.id) : [];
+      next: createdLine => {
+        const generatedValues = this.generatedBenefitLineValues(createdLine.id);
         if (!generatedValues.length) {
-          this.finishBenefitLineAdd(grid);
+          this.finishBenefitLineAdd('Benefit line added.');
           return;
         }
         this.api.put<FinancialGrid>(`/initiatives/${this.initiativeId}/financials`, {
           values: generatedValues,
         }).subscribe({
-          next: updatedGrid => this.finishBenefitLineAdd(updatedGrid),
-          error: () => {
+          next: () => this.finishBenefitLineAdd('Benefit line added with phased values.'),
+          error: err => {
             this.saving.set(false);
-            alert('Benefit line was created, but phased values could not be generated.');
+            this.financialError.set(
+              this.financialErrorMessage(err, 'Benefit line was created, but phased values could not be generated.'),
+            );
             this._loadData();
           },
         });
       },
-      error: () => {
+      error: err => {
         this.saving.set(false);
-        alert('Failed to add benefit line.');
+        this.financialError.set(this.financialErrorMessage(err, 'Failed to add benefit line.'));
       },
     });
   }
 
-  private finishBenefitLineAdd(grid: FinancialGrid): void {
-    this.grid.set(grid);
+  private finishBenefitLineAdd(message: string): void {
     this.newBenefitLineMetricId.set('');
     this.newBenefitLineName.set('');
     this.newBenefitLineConfidence.set(null);
@@ -1880,6 +1933,7 @@ export class FinancialsTabComponent implements OnInit {
     this.newBenefitLineStartMonth.set('');
     this.newBenefitLineEndMonth.set('');
     this.saving.set(false);
+    this.financialMessage.set(message);
     this._loadData();
   }
 
@@ -1903,7 +1957,7 @@ export class FinancialsTabComponent implements OnInit {
   }
 
   updateBenefitLineRisk(line: FinancialBenefitLine): void {
-    if (this.isLocked()) return;
+    if (this.saving()) return;
     const risk = window.prompt('Risk rating: low, medium, or high', line.risk_rating || 'medium');
     if (risk === null) return;
     const normalizedRisk = risk.trim().toLowerCase();
@@ -1918,6 +1972,7 @@ export class FinancialsTabComponent implements OnInit {
       alert('Risk adjustment percent must be between 0 and 100.');
       return;
     }
+    this.clearFinancialFeedback();
     this.saving.set(true);
     this.api.put<FinancialBenefitLine>(`/initiatives/${this.initiativeId}/financials/benefit-lines/${line.id}/handoff`, {
       risk_rating: normalizedRisk,
@@ -1925,16 +1980,20 @@ export class FinancialsTabComponent implements OnInit {
       handoff_status: line.handoff_status || 'owner_assigned',
       comment: 'Updated benefit risk and handoff metadata.',
     }).subscribe({
-      next: () => this._loadData(),
-      error: () => {
+      next: () => {
         this.saving.set(false);
-        alert('Failed to update benefit risk.');
+        this.financialMessage.set('Benefit risk updated.');
+        this._loadData();
+      },
+      error: err => {
+        this.saving.set(false);
+        this.financialError.set(this.financialErrorMessage(err, 'Failed to update benefit risk.'));
       },
     });
   }
 
   private transitionBenefitLine(line: FinancialBenefitLine, action: 'submit' | 'validate' | 'reject'): void {
-    if (this.isLocked()) return;
+    if (this.saving()) return;
     const comment = window.prompt(
       action === 'reject' ? 'Rejection reason' : 'Finance comment',
       line.validation_comment || '',
@@ -1946,16 +2005,63 @@ export class FinancialsTabComponent implements OnInit {
       ? window.prompt('Evidence label', line.evidence_label || 'Finance evidence')
       : '';
     if (evidenceLabel === null) return;
+    this.clearFinancialFeedback();
     this.saving.set(true);
     this.api.post<FinancialBenefitLine>(`/initiatives/${this.initiativeId}/financials/benefit-lines/${line.id}/${action}`, {
       comment: comment || null,
       evidence_url: evidenceUrl || null,
       evidence_label: evidenceLabel || null,
     }).subscribe({
-      next: () => this._loadData(),
-      error: () => {
+      next: () => {
         this.saving.set(false);
-        alert('Failed to update benefit validation status.');
+        this.financialMessage.set('Benefit validation status updated.');
+        this._loadData();
+      },
+      error: err => {
+        this.saving.set(false);
+        this.financialError.set(this.financialErrorMessage(err, 'Failed to update benefit validation status.'));
+      },
+    });
+  }
+
+  costLinePeriod(line: CostLine): string {
+    if (line.month) return `${line.year}-${String(line.month).padStart(2, '0')}`;
+    if (line.quarter) return `${line.year} Q${line.quarter}`;
+    return `${line.year}`;
+  }
+
+  deleteBenefitLine(line: FinancialBenefitLine): void {
+    if (this.isLocked() || this.saving()) return;
+    if (!window.confirm(`Delete benefit line "${line.name}"?`)) return;
+    this.clearFinancialFeedback();
+    this.saving.set(true);
+    this.api.delete<void>(`/initiatives/${this.initiativeId}/financials/benefit-lines/${line.id}`).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.financialMessage.set('Benefit line deleted.');
+        this._loadData();
+      },
+      error: err => {
+        this.saving.set(false);
+        this.financialError.set(this.financialErrorMessage(err, 'Failed to delete benefit line.'));
+      },
+    });
+  }
+
+  deleteCostLine(line: CostLine): void {
+    if (this.isLocked() || this.saving()) return;
+    if (!window.confirm(`Delete cost line "${line.name}" for ${this.costLinePeriod(line)}?`)) return;
+    this.clearFinancialFeedback();
+    this.saving.set(true);
+    this.api.delete<void>(`/initiatives/${this.initiativeId}/financials/cost-lines/${line.id}`).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.financialMessage.set('Cost line deleted.');
+        this._loadData();
+      },
+      error: err => {
+        this.saving.set(false);
+        this.financialError.set(this.financialErrorMessage(err, 'Failed to delete cost line.'));
       },
     });
   }
@@ -1982,6 +2088,16 @@ export class FinancialsTabComponent implements OnInit {
       value: value.toString(),
       status: 'draft',
     }));
+  }
+
+  private clearFinancialFeedback(): void {
+    this.financialMessage.set(null);
+    this.financialError.set(null);
+  }
+
+  private financialErrorMessage(err: unknown, fallback: string): string {
+    const detail = (err as { error?: { detail?: unknown } })?.error?.detail;
+    return typeof detail === 'string' && detail.trim() ? detail : fallback;
   }
 
   openAssumptionForSelection(selection: any): void {

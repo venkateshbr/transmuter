@@ -537,17 +537,27 @@ class ExecutiveControlService:
                 if (row.get("shared_cost_allocation_runs") or {}).get("status", "completed")
                 in {"locked", "posted", "completed"}
             ]
-        if filters.target_year:
-            entries = [row for row in entries if row.get("year") == filters.target_year]
-            costs = [row for row in costs if row.get("year") == filters.target_year]
+        available_years = sorted(
+            {
+                int(year)
+                for year in [
+                    *[row.get("year") for row in entries],
+                    *[row.get("year") for row in costs],
+                    *[self._allocation_year(row) for row in allocations],
+                ]
+                if year is not None
+            }
+        )
+        selected_year = (
+            filters.target_year
+            if filters.target_year is not None
+            else (available_years[-1] if available_years else None)
+        )
+        if selected_year:
+            entries = [row for row in entries if row.get("year") == selected_year]
+            costs = [row for row in costs if row.get("year") == selected_year]
             allocations = [
-                row
-                for row in allocations
-                if (
-                    (row.get("shared_cost_allocation_runs") or {}).get("period_start")
-                    or f"{(row.get('shared_cost_pools') or {}).get('year')}-01-01"
-                )[:4]
-                == str(filters.target_year)
+                row for row in allocations if self._allocation_year(row) == selected_year
             ]
         dependencies = self.list_dependencies(current_user, filters=filters).rollups
         value_bridge = self._value_bridge(entries, costs, allocations)
@@ -564,6 +574,8 @@ class ExecutiveControlService:
         }
         return ReportResponse(
             persona=persona,  # type: ignore[arg-type]
+            selected_year=selected_year,
+            available_years=available_years,
             summary=summary,
             value_bridge=value_bridge,
             cost_allocation={
@@ -1655,6 +1667,17 @@ class ExecutiveControlService:
         dependencies: InitiativeDependencyRollups,
     ) -> list[dict[str, Any]]:
         attention: list[dict[str, Any]] = []
+        initiative_lookup = {row["id"]: row for row in initiatives}
+
+        def attention_item(initiative_id: str, reason: str) -> dict[str, Any]:
+            initiative = initiative_lookup.get(initiative_id) or {}
+            return {
+                "initiative_id": initiative_id,
+                "initiative_code": initiative.get("initiative_code"),
+                "initiative_name": initiative.get("name"),
+                "reason": reason,
+            }
+
         actual_ids = {
             row["initiative_id"]
             for row in entries
@@ -1667,20 +1690,32 @@ class ExecutiveControlService:
         for row in initiatives:
             iid = row["id"]
             if iid not in actual_ids and row.get("stage") == "in_progress":
-                attention.append({"initiative_id": iid, "reason": "Missing actuals"})
+                attention.append(attention_item(iid, "Missing actuals"))
             if row.get("realization_status") == "at_risk":
-                attention.append({"initiative_id": iid, "reason": "Value realization at risk"})
+                attention.append(attention_item(iid, "Value realization at risk"))
             if (
                 by_init_alloc[iid] > Decimal("0")
                 and row.get("benefit_confidence")
                 and _dec(row["benefit_confidence"]) < Decimal("50")
             ):
-                attention.append(
-                    {"initiative_id": iid, "reason": "Low confidence with allocated shared cost"}
-                )
-        for item in dependencies.blocked_initiatives:
-            attention.append({"initiative_id": item.id, "reason": "Blocked by active dependency"})
+                attention.append(attention_item(iid, "Low confidence with allocated shared cost"))
+        for blocked in dependencies.blocked_initiatives:
+            attention.append(attention_item(blocked.id, "Blocked by active dependency"))
         return attention
+
+    @staticmethod
+    def _allocation_year(row: dict) -> int | None:  # type: ignore[type-arg]
+        period_start = (row.get("shared_cost_allocation_runs") or {}).get("period_start")
+        if period_start:
+            try:
+                return int(str(period_start)[:4])
+            except ValueError:
+                return None
+        pool_year = (row.get("shared_cost_pools") or {}).get("year")
+        try:
+            return int(pool_year) if pool_year is not None else None
+        except (TypeError, ValueError):
+            return None
 
     def _initiative_report_rows(
         self,
