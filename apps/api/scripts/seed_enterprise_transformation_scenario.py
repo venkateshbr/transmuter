@@ -71,6 +71,8 @@ def ensure_org(client: Client) -> str:
         "bankable_plan_governance": {
             "approval_required": True,
             "approved_plan_only": True,
+            "initiative_plan_lock_gate_number": 3,
+            "plan_lock_on_approval": True,
             "baseline_lock_gate_number": 2,
             "baseline_lock_on_approval": True,
         },
@@ -1356,7 +1358,7 @@ def insert_bankable_plan_and_realization_demo(
             "ticked_at": now(),
         }
         for row in gate_criteria
-        if row["gate_number"] == 2
+        if row["gate_number"] == 3
     ]
     submission_rows = []
     submission_ids: dict[str, str] = {}
@@ -1368,13 +1370,13 @@ def insert_bankable_plan_and_realization_demo(
                 "id": submission_id,
                 "tenant_id": tenant_id,
                 "initiative_id": initiative_id,
-                "gate_number": 2,
+                "gate_number": 3,
                 "submitted_by_id": user_id,
                 "submitted_at": now(),
                 "decision": "approved",
                 "decided_by_id": user_id,
                 "decided_at": now(),
-                "commentary": "Seeded ACME Gate 2 approval for bankable plan lock.",
+                "commentary": "Seeded ACME Gate 3 approval for bankable plan lock.",
                 "criteria_snapshot": criteria_snapshot,
             }
         )
@@ -1385,7 +1387,7 @@ def insert_bankable_plan_and_realization_demo(
             initiative_id,
             submission_ids[code],
             user_id,
-            locked_reason="Seeded Gate 2 approval for ACME board-demo bankable plan.",
+            locked_reason="Seeded Gate 3 approval for ACME board-demo bankable plan.",
         )
     service.rebaseline_bankable_plan(
         initiative_ids["ENT-005"],

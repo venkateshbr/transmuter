@@ -272,6 +272,25 @@ class FinancialRepository:
         result = self._c.table("financial_benefit_lines").insert(payload).execute()
         return result.data or []
 
+    def create_benefit_line(
+        self,
+        initiative_id: str,
+        row: dict,  # type: ignore[type-arg]
+        user_id: str | None = None,
+    ) -> dict:  # type: ignore[type-arg]
+        rows = self.create_benefit_lines_batch(initiative_id, [row], user_id=user_id)
+        return rows[0] if rows else {}
+
+    def delete_benefit_line(self, initiative_id: str, benefit_line_id: str) -> None:
+        (
+            self._c.table("financial_benefit_lines")
+            .delete()
+            .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
+            .eq("id", benefit_line_id)
+            .execute()
+        )
+
     def upsert_configurable_metric_values_batch(
         self,
         initiative_id: str,

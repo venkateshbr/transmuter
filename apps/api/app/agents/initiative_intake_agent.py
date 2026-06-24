@@ -266,6 +266,7 @@ def deterministic_intake_suggestions(
                         quarter=1,
                         value_base="70.0000" if kpi.unit == "%" else str(base_value),
                         value_high="90.0000" if kpi.unit == "%" else str(high_value),
+                        value_actual="70.0000" if kpi.unit == "%" else str(base_value),
                     )
                 ],
             )

@@ -19,6 +19,7 @@ from app.domain.financials import (
     FinancialConfigItem,
     FinancialConfigurationResponse,
     FinancialEntryUpdate,
+    FinancialGovernanceSettings,
     FinancialGridUpdate,
     FinancialMetricValue,
     FinancialMetricValueUpdate,
@@ -1137,6 +1138,12 @@ class _InitiativeBoundMutationRepo:
     def initiative_exists(self, initiative_id: str) -> bool:
         return initiative_id == "initiative-1"
 
+    def get_organization_settings(self) -> dict:
+        return {"bankable_plan_governance": {"plan_lock_on_approval": True}}
+
+    def get_latest_bankable_plan(self, _initiative_id: str) -> dict[str, object] | None:
+        return None
+
     def update_cost_line(self, initiative_id: str, cost_line_id: str, data: dict) -> dict:
         self.calls.append(("update_cost_line", initiative_id, cost_line_id))
         return {
@@ -1201,6 +1208,53 @@ def test_nested_financial_mutations_bind_rows_to_url_initiative() -> None:
     ]
 
 
+class _BenefitLineDeleteRepo:
+    def __init__(self, locked: bool) -> None:
+        self.locked = locked
+        self.deleted: list[tuple[str, str]] = []
+
+    def initiative_exists(self, initiative_id: str) -> bool:
+        return initiative_id == "initiative-1"
+
+    def get_organization_settings(self) -> dict:
+        return {"bankable_plan_governance": {"plan_lock_on_approval": True}}
+
+    def get_latest_bankable_plan(self, _initiative_id: str) -> dict[str, object] | None:
+        return {"id": "plan-1"} if self.locked else None
+
+    def get_benefit_line(self, _initiative_id: str, _benefit_line_id: str) -> dict:
+        return {
+            "id": "benefit-1",
+            "initiative_id": "initiative-1",
+            "metric_definition_id": "metric-1",
+            "name": "Benefit line",
+            "show_in_summary": True,
+            "display_order": 1,
+        }
+
+    def delete_benefit_line(self, initiative_id: str, benefit_line_id: str) -> None:
+        self.deleted.append((initiative_id, benefit_line_id))
+
+
+def test_benefit_line_delete_requires_unlocked_financials() -> None:
+    service = FinancialService.__new__(FinancialService)
+    unlocked_repo = _BenefitLineDeleteRepo(locked=False)
+    service._repo = unlocked_repo
+
+    service.delete_benefit_line("initiative-1", "benefit-1")
+
+    assert unlocked_repo.deleted == [("initiative-1", "benefit-1")]
+
+    locked_repo = _BenefitLineDeleteRepo(locked=True)
+    service._repo = locked_repo
+
+    with pytest.raises(HTTPException) as exc:
+        service.delete_benefit_line("initiative-1", "benefit-1")
+
+    assert exc.value.status_code == 409
+    assert locked_repo.deleted == []
+
+
 class _PlannedWindowRepo:
     def get_initiative_period(self, _initiative_id: str) -> dict:
         return {
@@ -1258,6 +1312,10 @@ def test_financial_grid_normalization_moves_values_to_first_planned_month() -> N
     assert (cost.year, cost.month, cost.amount_plan) == (2026, 4, 100)
     metric = (normalized.metric_values or [])[0]
     assert (metric.year, metric.month, metric.value_base) == (2026, 4, 3)
+
+
+def test_financial_governance_default_locks_initiative_plan_at_gate_3() -> None:
+    assert FinancialGovernanceSettings().initiative_plan_lock_gate_number == 3
 
 
 class _LockStateRepo:

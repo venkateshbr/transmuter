@@ -413,7 +413,7 @@ def _seed_bankable_plan_governance(client: Client, tenant_id: str) -> None:
     settings = (org.data or {}).get("settings") or {}
     settings["bankable_plan_governance"] = {
         **(settings.get("bankable_plan_governance") or {}),
-        "initiative_plan_lock_gate_number": 2,
+        "initiative_plan_lock_gate_number": 3,
         "plan_lock_on_approval": True,
         "allow_rebaseline": True,
         "rebaseline_roles": ["transformation_office"],
@@ -704,14 +704,14 @@ def _seed_bankable_plan_locks(
             .select("id")
             .eq("tenant_id", tenant_id)
             .eq("initiative_id", iid)
-            .eq("gate_number", 2)
+            .eq("gate_number", 3)
             .eq("decision", "approved")
             .execute()
         )
         submission_payload = {
             "tenant_id": tenant_id,
             "initiative_id": iid,
-            "gate_number": 2,
+            "gate_number": 3,
             "submitted_by_id": owner_user_id,
             "submitted_at": approved_at.isoformat(),
             "decision": "approved",
@@ -814,7 +814,7 @@ def _seed_workstream_target_locks(
             ),
             "lock_date": lock_date.isoformat(),
             "settings": {
-                "initiative_plan_lock_gate_number": 2,
+                "initiative_plan_lock_gate_number": 3,
                 "plan_lock_on_approval": True,
                 "allow_rebaseline": True,
                 "rebaseline_roles": ["transformation_office"],

@@ -1060,6 +1060,103 @@ import { FormsModule } from '@angular/forms';
                 <div class="card p-8">
                   <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
                     <div>
+                      <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Bankable Plan Governance</h3>
+                      <p class="mt-1 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Configure the approval gate that locks initiative financial plans</p>
+                    </div>
+                    <button
+                      type="button"
+                      (click)="saveFinancialGovernance()"
+                      [disabled]="financialGovernanceSaving()"
+                      aria-label="Save bankable plan governance settings"
+                      class="btn-primary px-4 py-2 text-[10px]">
+                      {{ financialGovernanceSaving() ? 'Saving...' : 'Save Settings' }}
+                    </button>
+                  </div>
+
+                  @if (financialGovernanceMessage()) {
+                    <div class="mb-4 border p-3 text-sm font-bold text-[var(--t-green)]" style="border-color: color-mix(in srgb, var(--t-green) 35%, transparent); background: color-mix(in srgb, var(--t-green) 10%, transparent);">
+                      {{ financialGovernanceMessage() }}
+                    </div>
+                  }
+                  @if (financialGovernanceError()) {
+                    <div class="mb-4 border p-3 text-sm font-bold text-[var(--t-red)]" style="border-color: color-mix(in srgb, var(--t-red) 35%, transparent); background: color-mix(in srgb, var(--t-red) 10%, transparent);">
+                      {{ financialGovernanceError() }}
+                    </div>
+                  }
+
+                  <div class="grid gap-5 lg:grid-cols-2">
+                    <section class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-5">
+                      <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">Initiative Plan Lock</p>
+                      <label class="mt-4 grid gap-1">
+                        <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Lock Gate Number</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="10"
+                          class="input-field py-2 text-xs"
+                          [ngModel]="financialGovernance().initiative_plan_lock_gate_number"
+                          (ngModelChange)="updateFinancialGovernanceNumber('initiative_plan_lock_gate_number', $event)"
+                          aria-label="Bankable plan lock gate number">
+                      </label>
+                      <label class="mt-4 flex items-center gap-3 text-xs font-bold text-[var(--t-text-primary)]">
+                        <input
+                          type="checkbox"
+                          [checked]="financialGovernance().plan_lock_on_approval"
+                          (change)="updateFinancialGovernanceBoolean('plan_lock_on_approval', $any($event.target).checked)"
+                          aria-label="Lock plan on gate approval">
+                        Lock the bankable plan when this gate is approved
+                      </label>
+                    </section>
+
+                    <section class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-5">
+                      <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">Baseline And Rebaseline</p>
+                      <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                        <label class="grid gap-1">
+                          <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Baseline Lock Gate</span>
+                          <input
+                            type="number"
+                            min="1"
+                            max="10"
+                            class="input-field py-2 text-xs"
+                            [ngModel]="financialGovernance().baseline_lock_gate_number"
+                            (ngModelChange)="updateFinancialGovernanceNumber('baseline_lock_gate_number', $event)"
+                            aria-label="Annual baseline lock gate number">
+                        </label>
+                        <label class="grid gap-1">
+                          <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Rebaseline Roles</span>
+                          <input
+                            class="input-field py-2 text-xs font-mono"
+                            [ngModel]="rolesText(financialGovernance().rebaseline_roles)"
+                            (ngModelChange)="updateFinancialGovernanceRoles($event)"
+                            aria-label="Rebaseline roles"
+                            placeholder="transformation_office">
+                        </label>
+                      </div>
+                      <div class="mt-4 grid gap-3 sm:grid-cols-2">
+                        <label class="flex items-center gap-3 text-xs font-bold text-[var(--t-text-primary)]">
+                          <input
+                            type="checkbox"
+                            [checked]="financialGovernance().baseline_lock_on_approval"
+                            (change)="updateFinancialGovernanceBoolean('baseline_lock_on_approval', $any($event.target).checked)"
+                            aria-label="Lock annual baseline on gate approval">
+                          Lock annual baseline on approval
+                        </label>
+                        <label class="flex items-center gap-3 text-xs font-bold text-[var(--t-text-primary)]">
+                          <input
+                            type="checkbox"
+                            [checked]="financialGovernance().allow_rebaseline"
+                            (change)="updateFinancialGovernanceBoolean('allow_rebaseline', $any($event.target).checked)"
+                            aria-label="Allow governed rebaseline">
+                          Allow governed rebaseline
+                        </label>
+                      </div>
+                    </section>
+                  </div>
+                </div>
+
+                <div class="card p-8">
+                  <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
+                    <div>
                       <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Stage Gates</h3>
                       <p class="mt-1 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Configure tenant stage transitions, approval rules, and movement criteria</p>
                     </div>
@@ -1124,7 +1221,7 @@ import { FormsModule } from '@angular/forms';
 
                             <div class="grid gap-3 border border-dashed border-[var(--t-border)] p-3 sm:grid-cols-[1fr_auto]">
                               <input type="text" [ngModel]="newCriterionForGate(gate.gate_number)" (ngModelChange)="setNewCriterionForGate(gate.gate_number, $event)" (keyup.enter)="addCriterion(gate.gate_number)" aria-label="New gate criterion" placeholder="Add movement criterion..." class="input-field py-2 text-xs">
-                              <button type="button" (click)="addCriterion(gate.gate_number)" [disabled]="!newCriterionForGate(gate.gate_number).trim()" aria-label="Create gate criterion" class="btn-primary px-4 py-2 text-[10px]">Add Rule</button>
+                              <button type="button" (click)="addCriterion(gate.gate_number)" [disabled]="!newCriterionForGate(gate.gate_number).trim() || criterionSavingForGate(gate.gate_number)" aria-label="Create gate criterion" class="btn-primary px-4 py-2 text-[10px]">{{ criterionSavingForGate(gate.gate_number) ? 'Adding...' : 'Add Rule' }}</button>
                             </div>
                           </div>
                         </div>
@@ -1223,6 +1320,22 @@ export class AdminComponent implements OnInit {
   attributeDefinitions = signal<any[]>([]);
   dashboardConfiguration = signal<any[]>([]);
   reportingSettings = signal<any>({ fiscal_year_start_month: 1, reporting_currency: 'USD' });
+  financialGovernance = signal<any>({
+    initiative_plan_lock_gate_number: 3,
+    plan_lock_on_approval: true,
+    baseline_lock_gate_number: 2,
+    baseline_lock_on_approval: true,
+    allow_rebaseline: true,
+    rebaseline_roles: ['transformation_office'],
+    workstream_lock_cadence: 'one_off',
+    initiative_inclusion_cutoff: 'approved_at_lte_lock_date',
+    valuation_method: 'run_rate',
+    locked_value_basis: 'net_run_rate',
+    workstream_target_versioning: true,
+  });
+  financialGovernanceSaving = signal(false);
+  financialGovernanceMessage = signal<string | null>(null);
+  financialGovernanceError = signal<string | null>(null);
   tenantBaselineYear = signal(new Date().getFullYear());
   tenantAnnualBaselineValues = signal<Record<string, string>>({});
 
@@ -1235,6 +1348,7 @@ export class AdminComponent implements OnInit {
   newCriterionG1 = signal('');
   newCriterionG2 = signal('');
   newCriteriaByGate = signal<Record<number, string>>({});
+  criteriaSavingByGate = signal<Record<number, boolean>>({});
   newMetricNames = signal<Record<string, string>>({});
   newCostCategoryNames = signal<Record<string, string>>({});
 
@@ -1273,6 +1387,7 @@ export class AdminComponent implements OnInit {
     this.loadAuditLogs();
     this.loadFinancialConfiguration();
     this.loadFinancialEngineConfiguration();
+    this.loadFinancialGovernance();
     this.loadDashboardConfiguration();
   }
 
@@ -1381,6 +1496,70 @@ export class AdminComponent implements OnInit {
     this.api.get<any>('/admin/dashboard-configuration').subscribe({
       next: res => this.dashboardConfiguration.set(res.dashboards || []),
       error: () => this.dashboardConfiguration.set([]),
+    });
+  }
+
+  loadFinancialGovernance() {
+    this.financialGovernanceError.set(null);
+    this.api.get<any>('/admin/financial-governance').subscribe({
+      next: res => this.financialGovernance.set({
+        ...this.financialGovernance(),
+        ...res,
+        rebaseline_roles: this.normalizeConfigList(res?.rebaseline_roles).length
+          ? this.normalizeConfigList(res?.rebaseline_roles)
+          : ['transformation_office'],
+      }),
+      error: err => this.financialGovernanceError.set(err.error?.detail || 'Could not load bankable plan governance settings'),
+    });
+  }
+
+  updateFinancialGovernanceNumber(field: 'initiative_plan_lock_gate_number' | 'baseline_lock_gate_number', value: number | string) {
+    const parsed = Math.max(1, Math.min(10, this.numberValue(value)));
+    this.financialGovernance.update(settings => ({ ...settings, [field]: parsed }));
+  }
+
+  updateFinancialGovernanceBoolean(field: 'plan_lock_on_approval' | 'baseline_lock_on_approval' | 'allow_rebaseline' | 'workstream_target_versioning', checked: boolean) {
+    this.financialGovernance.update(settings => ({ ...settings, [field]: Boolean(checked) }));
+  }
+
+  updateFinancialGovernanceRoles(value: string) {
+    this.financialGovernance.update(settings => ({
+      ...settings,
+      rebaseline_roles: this.splitRoles(value),
+    }));
+  }
+
+  saveFinancialGovernance() {
+    if (this.financialGovernanceSaving()) return;
+    const settings = this.financialGovernance();
+    this.financialGovernanceSaving.set(true);
+    this.financialGovernanceMessage.set(null);
+    this.financialGovernanceError.set(null);
+    this.api.put<any>('/admin/financial-governance', {
+      initiative_plan_lock_gate_number: Number(settings.initiative_plan_lock_gate_number || 3),
+      plan_lock_on_approval: settings.plan_lock_on_approval !== false,
+      baseline_lock_gate_number: Number(settings.baseline_lock_gate_number || 2),
+      baseline_lock_on_approval: settings.baseline_lock_on_approval !== false,
+      allow_rebaseline: settings.allow_rebaseline !== false,
+      rebaseline_roles: this.normalizeConfigList(settings.rebaseline_roles).length
+        ? this.normalizeConfigList(settings.rebaseline_roles)
+        : ['transformation_office'],
+      workstream_lock_cadence: settings.workstream_lock_cadence || 'one_off',
+      initiative_inclusion_cutoff: settings.initiative_inclusion_cutoff || 'approved_at_lte_lock_date',
+      valuation_method: settings.valuation_method || 'run_rate',
+      locked_value_basis: settings.locked_value_basis || 'net_run_rate',
+      workstream_target_versioning: settings.workstream_target_versioning !== false,
+    }).subscribe({
+      next: res => {
+        this.financialGovernance.set(res);
+        this.financialGovernanceSaving.set(false);
+        this.financialGovernanceMessage.set('Bankable plan governance settings saved.');
+        this.loadAuditLogs();
+      },
+      error: err => {
+        this.financialGovernanceSaving.set(false);
+        this.financialGovernanceError.set(err.error?.detail || 'Could not save bankable plan governance settings');
+      },
     });
   }
 
@@ -2121,7 +2300,8 @@ export class AdminComponent implements OnInit {
 
   addCriterion(gate: number) {
     const label = this.newCriterionForGate(gate).trim();
-    if (!label) return;
+    if (!label || this.criterionSavingForGate(gate)) return;
+    this.criteriaSavingByGate.update(current => ({ ...current, [gate]: true }));
     const criterion_id = this.uniqueCriterionKey(gate, label);
     this.api.post('/admin/governance/gate-criteria', {
       gate_number: gate,
@@ -2129,10 +2309,20 @@ export class AdminComponent implements OnInit {
       criterion_id,
       is_active: true,
       sort_order: this.gateCriteria().filter(c => c.gate_number === gate).length + 1
-    }).subscribe(() => {
-      this.loadGateCriteria();
-      this.setNewCriterionForGate(gate, '');
+    }).subscribe({
+      next: () => {
+        this.criteriaSavingByGate.update(current => ({ ...current, [gate]: false }));
+        this.loadGateCriteria();
+        this.setNewCriterionForGate(gate, '');
+      },
+      error: () => {
+        this.criteriaSavingByGate.update(current => ({ ...current, [gate]: false }));
+      },
     });
+  }
+
+  criterionSavingForGate(gate: number): boolean {
+    return Boolean(this.criteriaSavingByGate()[gate]);
   }
 
   toggleCriterion(c: any) {

@@ -44,6 +44,8 @@ interface BreakdownRow {
 
 interface PortfolioFinancialsResponse {
   granularity: Granularity;
+  selected_year?: number | null;
+  available_years?: number[];
   summary: SummaryCard[];
   periods: PeriodRow[];
   broader_period_totals: PeriodRow[];
@@ -227,7 +229,7 @@ interface ValueBridgeResponse {
             (click)="showActuals.set(!showActuals())">
             Actuals {{ actualsAvailable() ? (showActuals() ? 'On' : 'Off') : 'Unavailable' }}
           </button>
-          <input class="input-field w-28 py-2 text-xs" type="number" [ngModel]="year()" (ngModelChange)="setYear($event)" aria-label="Filter financial year">
+          <input class="input-field w-28 py-2 text-xs" type="number" [ngModel]="effectiveYear()" (ngModelChange)="setYear($event)" aria-label="Filter financial year">
           <input class="input-field w-40 py-2 text-xs" type="date" [ngModel]="asOfDate()" (ngModelChange)="setAsOfDate($event)" aria-label="Plan as-of date">
           <select class="input-field w-52 py-2 text-xs" [ngModel]="stage()" (ngModelChange)="setStage($event)" aria-label="Filter stage">
             <option value="">All stages</option>
@@ -309,7 +311,7 @@ interface ValueBridgeResponse {
           <div class="flex items-start justify-between gap-4">
             <div>
               <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">In-year value</p>
-              <h2 class="mt-1 text-lg font-black text-[var(--t-text-primary)]">{{ year() || 'All years' }}</h2>
+              <h2 class="mt-1 text-lg font-black text-[var(--t-text-primary)]">{{ effectiveYear() || 'All years' }}</h2>
             </div>
             <span class="border border-[var(--t-border)] px-2 py-1 text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">
               {{ selectedStageLabel() }}
@@ -679,7 +681,7 @@ export class PortfolioFinancialsComponent implements OnInit {
   tenantAnnualBaselines = signal<AnnualBaselineValue[]>([]);
   stageGateDefinitions = signal<StageGateDefinition[]>([]);
   granularity = signal<Granularity>('monthly');
-  year = signal<number | null>(new Date().getFullYear());
+  year = signal<number | null>(null);
   categoryKey = signal('');
   stage = signal('');
   asOfDate = signal('');
@@ -722,6 +724,10 @@ export class PortfolioFinancialsComponent implements OnInit {
     if (this.showBenefits()) return summary;
     return summary.filter(card => !['benefits', 'net_value'].includes(card.key));
   });
+
+  effectiveYear(): number | null {
+    return this.year() ?? this.response()?.selected_year ?? null;
+  }
 
   ngOnInit(): void {
     this.api.get<FinancialConfiguration>('/financial-engine-configuration').subscribe({
@@ -780,9 +786,14 @@ export class PortfolioFinancialsComponent implements OnInit {
     if (this.categoryKey()) params.set('category_key', this.categoryKey());
     if (this.stage()) params.set('stage', this.stage());
     this.api.get<PortfolioFinancialsResponse>(`/portfolio/financials?${params.toString()}`)
-      .subscribe(res => this.response.set(res));
-    this.loadValueRamp();
-    this.loadValueBridge();
+      .subscribe(res => {
+        this.response.set(res);
+        if (this.year() === null && res.selected_year) {
+          this.year.set(res.selected_year);
+        }
+        this.loadValueRamp();
+        this.loadValueBridge();
+      });
   }
 
   loadValueRamp(): void {
