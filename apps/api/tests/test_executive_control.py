@@ -481,9 +481,13 @@ def test_management_report_reconciles_allocated_costs() -> None:
 
 
 def test_allocation_year_ignores_malformed_period_metadata() -> None:
-    assert ExecutiveControlService._allocation_year(
-        {"shared_cost_allocation_runs": {"period_start": "not-a-date"}}
-    ) is None
-    assert ExecutiveControlService._allocation_year(
-        {"shared_cost_pools": {"year": "bad-year"}}
-    ) is None
+    assert (
+        ExecutiveControlService._allocation_year(
+            {"shared_cost_allocation_runs": {"period_start": "not-a-date"}}
+        )
+        is None
+    )
+    assert (
+        ExecutiveControlService._allocation_year({"shared_cost_pools": {"year": "bad-year"}})
+        is None
+    )

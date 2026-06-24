@@ -557,9 +557,7 @@ class ExecutiveControlService:
             entries = [row for row in entries if row.get("year") == selected_year]
             costs = [row for row in costs if row.get("year") == selected_year]
             allocations = [
-                row
-                for row in allocations
-                if self._allocation_year(row) == selected_year
+                row for row in allocations if self._allocation_year(row) == selected_year
             ]
         dependencies = self.list_dependencies(current_user, filters=filters).rollups
         value_bridge = self._value_bridge(entries, costs, allocations)

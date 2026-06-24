@@ -2743,7 +2743,9 @@ class FinancialService:
                 if row.get("year") is not None
             }
         )
-        selected_year = year if year is not None else (available_years[-1] if available_years else None)
+        selected_year = (
+            year if year is not None else (available_years[-1] if available_years else None)
+        )
         entries = [
             row for row in all_entries if selected_year is None or row.get("year") == selected_year
         ]
@@ -5464,7 +5466,9 @@ class FinancialService:
             )
         }
         all_values = [
-            row for row in self._repo.get_all_metric_values() if row.get("initiative_id") in initiatives
+            row
+            for row in self._repo.get_all_metric_values()
+            if row.get("initiative_id") in initiatives
         ]
         all_costs = [
             row
@@ -5473,13 +5477,11 @@ class FinancialService:
             and (not category_key or row.get("category_key", "other") == category_key)
         ]
         available_years = sorted(
-            {
-                int(row["year"])
-                for row in [*all_values, *all_costs]
-                if row.get("year") is not None
-            }
+            {int(row["year"]) for row in [*all_values, *all_costs] if row.get("year") is not None}
         )
-        selected_year = year if year is not None else (available_years[-1] if available_years else None)
+        selected_year = (
+            year if year is not None else (available_years[-1] if available_years else None)
+        )
         values = self._values_with_formula_metrics(
             [
                 row
@@ -5493,9 +5495,7 @@ class FinancialService:
             ],
         )
         costs = [
-            row
-            for row in all_costs
-            if selected_year is None or row.get("year") == selected_year
+            row for row in all_costs if selected_year is None or row.get("year") == selected_year
         ]
         period_keys = {
             self._clean_portfolio_period_key(row, granularity) for row in [*values, *costs]
