@@ -28,7 +28,7 @@ status.
 
 ### 2026-06-24 - Platform Findings Remediation
 
-Status: merged; pending production promotion
+Status: promoted to production; authenticated production tenant validation pending
 
 GitHub tracking:
 - Issue: `#354`
@@ -120,9 +120,18 @@ Schema SQL required for production:
 Production promotion:
 - Environment: `https://transmuter.ishirock.tech`
 - Schema: `transmuter`
-- Promotion commit: pending
+- Promotion commit: `d75df08`
 - Schema SQL applied: none.
-- Validation result: pending
+- Promoted with `CONFIRM_PROMOTE=1 infra/hostinger/promote-dev-to-prod.sh`.
+- Initial scripted validation hit the known immediate public `/health` readiness
+  race after container recreation.
+- Rerun production validation passed for local/public `/health` and
+  `/api/health`.
+- Authenticated production tenant browser validation remains pending because the
+  latest local launch tenant credentials returned `401 Invalid credentials`, no
+  other valid production tenant credentials were found in local launch artifacts,
+  and platform-admin bootstrap credentials are not configured in
+  `infra/hostinger/.env`.
 
 Operational notes:
 - Legacy `apps/web/e2e/real-ui-acceptance.mjs` was attempted against dev and
@@ -131,6 +140,9 @@ Operational notes:
 - `apps/api/scripts/seed_dev.py` is stale against the current schema because it
   expects `workstreams.business_unit_id`; current enterprise seeding uses the
   join-table model and passed.
+- Do not close issue `#354` until authenticated production tenant workflow
+  validation is completed with fresh credentials or an approved production
+  validation tenant.
 
 ### 2026-06-23 - Governance Queue Initiative Labels and Production Launch Tenant
 
