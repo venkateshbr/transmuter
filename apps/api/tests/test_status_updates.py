@@ -79,6 +79,9 @@ def test_status_update_crud_and_submission(admin_token: str, init_id: str) -> No
     submitted = resp.json()
     assert submitted["is_draft"] is False
     assert submitted["submitted_at"] is not None
+    resp = client.get(f"/initiatives/{init_id}", headers=auth(admin_token))
+    assert resp.status_code == 200
+    assert resp.json()["rag_status"] == "green"
 
     # 6. Draft should now be None
     resp = client.get(f"/initiatives/{init_id}/status-updates/draft", headers=auth(admin_token))

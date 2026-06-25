@@ -65,6 +65,7 @@ class StatusUpdateService:
 
         payload = data.model_dump(exclude_none=True)
         row = self._repo.create(initiative_id, self._user_id, payload)
+        self._sync_headline_rag_for_submitted(row)
         return self._to_item(row)
 
     def patch_update(self, update_id: str, data: StatusUpdatePatch) -> StatusUpdateItem:
@@ -78,6 +79,7 @@ class StatusUpdateService:
             patch["submitted_at"] = datetime.now(UTC).isoformat()
 
         row = self._repo.update(update_id, patch)
+        self._sync_headline_rag_for_submitted(row)
         return self._to_item(row)
 
     def submit_update(self, update_id: str) -> StatusUpdateItem:
@@ -100,6 +102,14 @@ class StatusUpdateService:
                 detail="Status update not found",
             )
         return row
+
+    def _sync_headline_rag_for_submitted(self, row: dict[str, Any]) -> None:
+        if not row or row.get("is_draft"):
+            return
+        initiative_id = row.get("initiative_id")
+        rag_status = row.get("rag_status")
+        if initiative_id and rag_status:
+            self._repo.update_initiative_rag(str(initiative_id), str(rag_status))
 
     def list_recent_updates(self) -> list[StatusUpdateItem]:
         rows = self._repo.list_recent_updates()

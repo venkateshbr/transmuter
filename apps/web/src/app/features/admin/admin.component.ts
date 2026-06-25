@@ -475,6 +475,12 @@ import { FormsModule } from '@angular/forms';
           }
 
           @if (activeTab === 'Strategic Parameters') {
+            @if (strategicParameterMessage()) {
+              <p class="mb-4 text-xs font-bold text-emerald-600">{{ strategicParameterMessage() }}</p>
+            }
+            @if (strategicParameterError()) {
+              <p class="mb-4 text-xs font-bold text-red-500">{{ strategicParameterError() }}</p>
+            }
             <div class="grid gap-6 xl:grid-cols-2">
               <!-- Workstreams CRUD -->
               <div class="card p-8">
@@ -506,9 +512,9 @@ import { FormsModule } from '@angular/forms';
                       <div class="w-8 h-8 rounded-lg bg-[var(--t-surface-raised)] flex items-center justify-center text-[var(--t-text-tertiary)]">
                         <span class="material-icons text-sm">add</span>
                       </div>
-                      <input type="text" [ngModel]="newWorkstreamName()" (ngModelChange)="newWorkstreamName.set($event)" (keyup.enter)="addWorkstream()" aria-label="New workstream name" placeholder="Type new workstream name..." class="bg-transparent border-none outline-none text-sm text-[var(--t-text-primary)] min-w-0 w-full">
+                      <input type="text" [ngModel]="newWorkstreamName()" (ngModelChange)="newWorkstreamName.set($event)" (keyup.enter)="addWorkstream()" [disabled]="workstreamSaving()" aria-label="New workstream name" placeholder="Type new workstream name..." class="bg-transparent border-none outline-none text-sm text-[var(--t-text-primary)] min-w-0 w-full">
                     </div>
-                    <button type="button" (click)="addWorkstream()" [disabled]="!newWorkstreamName().trim()" aria-label="Create workstream" class="text-[var(--t-accent)] font-black text-[10px] uppercase tracking-widest disabled:cursor-not-allowed disabled:opacity-40">Create</button>
+                    <button type="button" (click)="addWorkstream()" [disabled]="!newWorkstreamName().trim() || workstreamSaving()" aria-label="Create workstream" class="text-[var(--t-accent)] font-black text-[10px] uppercase tracking-widest disabled:cursor-not-allowed disabled:opacity-40">{{ workstreamSaving() ? 'Saving...' : 'Create' }}</button>
                   </div>
                 </div>
               </div>
@@ -543,10 +549,10 @@ import { FormsModule } from '@angular/forms';
                       <div class="w-8 h-8 rounded-lg bg-[var(--t-surface-raised)] flex items-center justify-center text-[var(--t-text-tertiary)]">
                         <span class="material-icons text-sm">add</span>
                       </div>
-                      <input type="text" [ngModel]="newBusinessUnitName()" (ngModelChange)="newBusinessUnitName.set($event)" (keyup.enter)="addBusinessUnit()" aria-label="New business unit name" placeholder="Type new segment name..." class="bg-transparent border-none outline-none text-sm text-[var(--t-text-primary)] min-w-[200px]">
+                      <input type="text" [ngModel]="newBusinessUnitName()" (ngModelChange)="newBusinessUnitName.set($event)" (keyup.enter)="addBusinessUnit()" [disabled]="businessUnitSaving()" aria-label="New business unit name" placeholder="Type new segment name..." class="bg-transparent border-none outline-none text-sm text-[var(--t-text-primary)] min-w-[200px]">
                     </div>
                     @if (newBusinessUnitName()) {
-                      <button type="button" (click)="addBusinessUnit()" aria-label="Create business unit" class="text-[var(--t-accent)] font-black text-[10px] uppercase tracking-widest">Create</button>
+                      <button type="button" (click)="addBusinessUnit()" [disabled]="businessUnitSaving()" aria-label="Create business unit" class="text-[var(--t-accent)] font-black text-[10px] uppercase tracking-widest disabled:cursor-not-allowed disabled:opacity-40">{{ businessUnitSaving() ? 'Saving...' : 'Create' }}</button>
                     }
                   </div>
                 </div>
@@ -566,7 +572,7 @@ import { FormsModule } from '@angular/forms';
                         <div class="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center text-sky-500">
                           <span class="material-icons text-sm">public</span>
                         </div>
-                        <input type="text" [ngModel]="market" (ngModelChange)="updateMarket($index, $event)" (blur)="saveStrategicParameterConfig()" aria-label="Market name" class="bg-transparent border-none outline-none font-bold text-sm text-[var(--t-text-primary)] min-w-0 w-full">
+                                    <input type="text" [ngModel]="market" (ngModelChange)="updateMarket($index, $event)" (blur)="saveStrategicParameterConfig()" [disabled]="strategicParameterSaving()" aria-label="Market name" class="bg-transparent border-none outline-none font-bold text-sm text-[var(--t-text-primary)] min-w-0 w-full">
                       </div>
                       <button type="button" (click)="deleteMarket($index)" aria-label="Delete market" class="btn-ghost p-2 text-red-500/60 hover:text-red-500 hover:bg-red-500/10">
                         <span class="material-icons text-sm">delete</span>
@@ -581,7 +587,7 @@ import { FormsModule } from '@angular/forms';
                       </div>
                       <input type="text" [ngModel]="newMarketName()" (ngModelChange)="newMarketName.set($event)" (keyup.enter)="addMarket()" aria-label="New market name" placeholder="Type new market name..." class="bg-transparent border-none outline-none text-sm text-[var(--t-text-primary)] min-w-0 w-full">
                     </div>
-                    <button type="button" (click)="addMarket()" [disabled]="!newMarketName().trim()" aria-label="Create market" class="text-[var(--t-accent)] font-black text-[10px] uppercase tracking-widest disabled:cursor-not-allowed disabled:opacity-40">Create</button>
+                                <button type="button" (click)="addMarket()" [disabled]="!newMarketName().trim() || strategicParameterSaving()" aria-label="Create market" class="text-[var(--t-accent)] font-black text-[10px] uppercase tracking-widest disabled:cursor-not-allowed disabled:opacity-40">{{ strategicParameterSaving() ? 'Saving...' : 'Create' }}</button>
                   </div>
                 </div>
               </div>
@@ -600,7 +606,7 @@ import { FormsModule } from '@angular/forms';
                         <div class="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-500">
                           <span class="material-icons text-sm">category</span>
                         </div>
-                        <input type="text" [ngModel]="theme" (ngModelChange)="updateTheme($index, $event)" (blur)="saveStrategicParameterConfig()" aria-label="Theme name" class="bg-transparent border-none outline-none font-bold text-sm text-[var(--t-text-primary)] min-w-0 w-full">
+                                    <input type="text" [ngModel]="theme" (ngModelChange)="updateTheme($index, $event)" (blur)="saveStrategicParameterConfig()" [disabled]="strategicParameterSaving()" aria-label="Theme name" class="bg-transparent border-none outline-none font-bold text-sm text-[var(--t-text-primary)] min-w-0 w-full">
                       </div>
                       <button type="button" (click)="deleteTheme($index)" aria-label="Delete theme" class="btn-ghost p-2 text-red-500/60 hover:text-red-500 hover:bg-red-500/10">
                         <span class="material-icons text-sm">delete</span>
@@ -615,7 +621,7 @@ import { FormsModule } from '@angular/forms';
                       </div>
                       <input type="text" [ngModel]="newThemeName()" (ngModelChange)="newThemeName.set($event)" (keyup.enter)="addTheme()" aria-label="New theme name" placeholder="Type new theme name..." class="bg-transparent border-none outline-none text-sm text-[var(--t-text-primary)] min-w-0 w-full">
                     </div>
-                    <button type="button" (click)="addTheme()" [disabled]="!newThemeName().trim()" aria-label="Create theme" class="text-[var(--t-accent)] font-black text-[10px] uppercase tracking-widest disabled:cursor-not-allowed disabled:opacity-40">Create</button>
+                                <button type="button" (click)="addTheme()" [disabled]="!newThemeName().trim() || strategicParameterSaving()" aria-label="Create theme" class="text-[var(--t-accent)] font-black text-[10px] uppercase tracking-widest disabled:cursor-not-allowed disabled:opacity-40">{{ strategicParameterSaving() ? 'Saving...' : 'Create' }}</button>
                   </div>
                 </div>
               </div>
@@ -634,7 +640,7 @@ import { FormsModule } from '@angular/forms';
                         <div class="w-8 h-8 rounded-lg bg-[var(--t-accent-soft)] flex items-center justify-center text-[var(--t-accent)]">
                           <span class="material-icons text-sm">sell</span>
                         </div>
-                        <input type="text" [ngModel]="tag" (ngModelChange)="updateTag($index, $event)" (blur)="saveStrategicParameterConfig()" aria-label="Tag name" class="bg-transparent border-none outline-none font-bold text-sm text-[var(--t-text-primary)] min-w-0 w-full">
+                                    <input type="text" [ngModel]="tag" (ngModelChange)="updateTag($index, $event)" (blur)="saveStrategicParameterConfig()" [disabled]="strategicParameterSaving()" aria-label="Tag name" class="bg-transparent border-none outline-none font-bold text-sm text-[var(--t-text-primary)] min-w-0 w-full">
                       </div>
                       <button type="button" (click)="deleteTag($index)" aria-label="Delete tag" class="btn-ghost p-2 text-red-500/60 hover:text-red-500 hover:bg-red-500/10">
                         <span class="material-icons text-sm">delete</span>
@@ -649,7 +655,7 @@ import { FormsModule } from '@angular/forms';
                       </div>
                       <input type="text" [ngModel]="newTagName()" (ngModelChange)="newTagName.set($event)" (keyup.enter)="addTag()" aria-label="New tag name" placeholder="Type new tag name..." class="bg-transparent border-none outline-none text-sm text-[var(--t-text-primary)] min-w-0 w-full">
                     </div>
-                    <button type="button" (click)="addTag()" [disabled]="!newTagName().trim()" aria-label="Create tag" class="text-[var(--t-accent)] font-black text-[10px] uppercase tracking-widest disabled:cursor-not-allowed disabled:opacity-40">Create</button>
+                                <button type="button" (click)="addTag()" [disabled]="!newTagName().trim() || strategicParameterSaving()" aria-label="Create tag" class="text-[var(--t-accent)] font-black text-[10px] uppercase tracking-widest disabled:cursor-not-allowed disabled:opacity-40">{{ strategicParameterSaving() ? 'Saving...' : 'Create' }}</button>
                   </div>
                 </div>
               </div>
@@ -664,22 +670,44 @@ import { FormsModule } from '@angular/forms';
                     <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Financial Metric Engine</h3>
                     <p class="mt-1 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Tenant-owned metrics, scenarios, currency, and fiscal calendar</p>
                   </div>
-                  <div class="flex flex-wrap items-center gap-3">
+                  <div class="flex flex-wrap items-end gap-3">
                     <label class="grid gap-1">
                       <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Currency</span>
-                      <input class="input-field w-24 py-2 text-xs uppercase" [ngModel]="reportingSettings().reporting_currency" (ngModelChange)="updateReportingCurrency($event)" maxlength="3" aria-label="Reporting currency">
+                      <input class="input-field w-24 py-2 text-xs uppercase" [ngModel]="reportingSettings().reporting_currency" (ngModelChange)="updateReportingCurrency($event)" [disabled]="reportingSettingsSaving()" maxlength="3" aria-label="Reporting currency">
                     </label>
                     <label class="grid gap-1">
                       <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Fiscal Start</span>
-                      <select class="input-field w-36 py-2 text-xs" [ngModel]="reportingSettings().fiscal_year_start_month" (ngModelChange)="updateFiscalStartMonth($event)" aria-label="Fiscal year start month">
+                      <select class="input-field w-36 py-2 text-xs" [ngModel]="reportingSettings().fiscal_year_start_month" (ngModelChange)="updateFiscalStartMonth($event)" [disabled]="reportingSettingsSaving()" aria-label="Fiscal year start month">
                         @for (month of fiscalMonths; track month.value) {
                           <option [ngValue]="month.value">{{ month.label }}</option>
                         }
                       </select>
                     </label>
-                    <button type="button" class="btn-primary px-4 py-2 text-[10px]" (click)="saveReportingSettings()" aria-label="Save reporting settings">Save Settings</button>
+                    <label class="grid gap-1">
+                      <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Inflation Mode</span>
+                      <select class="input-field w-44 py-2 text-xs" [ngModel]="reportingSettings().recurring_cost_inflation_mode || 'manual_entry'" (ngModelChange)="updateInflationMode($event)" [disabled]="reportingSettingsSaving()" aria-label="Recurring cost inflation mode">
+                        <option value="manual_entry">Manual Entry</option>
+                        <option value="optional_per_line">Optional Per Line</option>
+                        <option value="default_on">Default On</option>
+                      </select>
+                    </label>
+                    <label class="grid gap-1">
+                      <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Default Inflation %</span>
+                      <input type="number" min="0" max="100" step="0.01" class="input-field w-32 py-2 text-xs" [ngModel]="reportingSettings().default_annual_inflation_rate_pct || 0" (ngModelChange)="updateDefaultInflationRate($event)" [disabled]="reportingSettingsSaving() || reportingSettings().recurring_cost_inflation_mode === 'manual_entry'" aria-label="Default annual recurring cost inflation percent">
+                    </label>
+                    <label class="flex items-center gap-2 pb-2 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">
+                      <input type="checkbox" [checked]="reportingSettings().allow_cost_line_inflation_override !== false" (change)="updateAllowInflationOverride($any($event.target).checked)" [disabled]="reportingSettingsSaving() || reportingSettings().recurring_cost_inflation_mode === 'manual_entry'" aria-label="Allow cost line inflation override">
+                      Line Override
+                    </label>
+                    <button type="button" class="btn-primary px-4 py-2 text-[10px]" [disabled]="reportingSettingsSaving()" (click)="saveReportingSettings()" aria-label="Save reporting settings">{{ reportingSettingsSaving() ? 'Saving...' : 'Save Settings' }}</button>
                   </div>
                 </div>
+                @if (reportingSettingsMessage()) {
+                  <p class="mb-4 text-xs font-bold text-emerald-600">{{ reportingSettingsMessage() }}</p>
+                }
+                @if (reportingSettingsError()) {
+                  <p class="mb-4 text-xs font-bold text-red-500">{{ reportingSettingsError() }}</p>
+                }
 
                 <div class="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
                   <section class="border border-[var(--t-border)]">
@@ -1319,7 +1347,16 @@ export class AdminComponent implements OnInit {
   bridgeRows = signal<any[]>([]);
   attributeDefinitions = signal<any[]>([]);
   dashboardConfiguration = signal<any[]>([]);
-  reportingSettings = signal<any>({ fiscal_year_start_month: 1, reporting_currency: 'USD' });
+  reportingSettings = signal<any>({
+    fiscal_year_start_month: 1,
+    reporting_currency: 'USD',
+    recurring_cost_inflation_mode: 'manual_entry',
+    default_annual_inflation_rate_pct: '0.0000',
+    allow_cost_line_inflation_override: true,
+  });
+  reportingSettingsSaving = signal(false);
+  reportingSettingsMessage = signal<string | null>(null);
+  reportingSettingsError = signal<string | null>(null);
   financialGovernance = signal<any>({
     initiative_plan_lock_gate_number: 3,
     plan_lock_on_approval: true,
@@ -1345,6 +1382,11 @@ export class AdminComponent implements OnInit {
   newMarketName = signal('');
   newThemeName = signal('');
   newTagName = signal('');
+  workstreamSaving = signal(false);
+  businessUnitSaving = signal(false);
+  strategicParameterSaving = signal(false);
+  strategicParameterMessage = signal<string | null>(null);
+  strategicParameterError = signal<string | null>(null);
   newCriterionG1 = signal('');
   newCriterionG2 = signal('');
   newCriteriaByGate = signal<Record<number, string>>({});
@@ -1353,6 +1395,7 @@ export class AdminComponent implements OnInit {
   newCostCategoryNames = signal<Record<string, string>>({});
 
   private readonly defaultTags = ['automation', 'offshoring', 'commercial', 'other'];
+  private strategicParameterSaveQueued = false;
   readonly fiscalMonths = [
     { value: 1, label: 'January' },
     { value: 2, label: 'February' },
@@ -1487,7 +1530,14 @@ export class AdminComponent implements OnInit {
       this.costCategories.set(res.cost_categories || []);
       this.bridgeRows.set(res.bridge_rows || []);
       this.attributeDefinitions.set(res.attribute_definitions || []);
-      this.reportingSettings.set(res.settings || { fiscal_year_start_month: 1, reporting_currency: 'USD' });
+      this.reportingSettings.set({
+        fiscal_year_start_month: 1,
+        reporting_currency: 'USD',
+        recurring_cost_inflation_mode: 'manual_entry',
+        default_annual_inflation_rate_pct: '0.0000',
+        allow_cost_line_inflation_override: true,
+        ...(res.settings || {}),
+      });
       this.loadTenantAnnualBaselines();
     });
   }
@@ -1592,13 +1642,26 @@ export class AdminComponent implements OnInit {
   }
 
   addWorkstream() {
+    if (this.workstreamSaving()) return;
     const name = this.newWorkstreamName().trim();
     if (!name) return;
+    this.workstreamSaving.set(true);
+    this.strategicParameterMessage.set(null);
+    this.strategicParameterError.set(null);
     this.api.post('/workstreams', {
       name,
-    }).subscribe(() => {
-      this.loadWorkstreams();
-      this.newWorkstreamName.set('');
+    }).subscribe({
+      next: () => {
+        this.workstreamSaving.set(false);
+        this.loadWorkstreams();
+        this.loadAuditLogs();
+        this.newWorkstreamName.set('');
+        this.strategicParameterMessage.set('Workstream saved.');
+      },
+      error: err => {
+        this.workstreamSaving.set(false);
+        this.strategicParameterError.set(err.error?.detail || 'Could not save workstream.');
+      },
     });
   }
 
@@ -1621,11 +1684,24 @@ export class AdminComponent implements OnInit {
   }
 
   addBusinessUnit() {
+    if (this.businessUnitSaving()) return;
     const name = this.newBusinessUnitName().trim();
     if (!name) return;
-    this.api.post('/business-units', { name }).subscribe(() => {
-      this.loadBusinessUnits();
-      this.newBusinessUnitName.set('');
+    this.businessUnitSaving.set(true);
+    this.strategicParameterMessage.set(null);
+    this.strategicParameterError.set(null);
+    this.api.post('/business-units', { name }).subscribe({
+      next: () => {
+        this.businessUnitSaving.set(false);
+        this.loadBusinessUnits();
+        this.loadAuditLogs();
+        this.newBusinessUnitName.set('');
+        this.strategicParameterMessage.set('Business unit saved.');
+      },
+      error: err => {
+        this.businessUnitSaving.set(false);
+        this.strategicParameterError.set(err.error?.detail || 'Could not save business unit.');
+      },
     });
   }
 
@@ -1707,6 +1783,10 @@ export class AdminComponent implements OnInit {
   }
 
   saveStrategicParameterConfig() {
+    if (this.strategicParameterSaving()) {
+      this.strategicParameterSaveQueued = true;
+      return;
+    }
     const current = this.settings();
     const currentSettings = current.settings || {};
     const strategicParameters = currentSettings.strategic_parameters || {};
@@ -1720,13 +1800,29 @@ export class AdminComponent implements OnInit {
       },
     };
 
+    this.strategicParameterSaving.set(true);
+    this.strategicParameterMessage.set(null);
+    this.strategicParameterError.set(null);
     this.api.put('/admin/settings', {
       name: current.name,
       logo_url: current.logo_url,
       settings: nextSettings,
-    }).subscribe(() => {
-      this.loadSettings();
-      this.loadAuditLogs();
+    }).subscribe({
+      next: () => {
+        this.strategicParameterSaving.set(false);
+        this.loadSettings();
+        this.loadAuditLogs();
+        this.strategicParameterMessage.set('Strategic parameters saved.');
+        if (this.strategicParameterSaveQueued) {
+          this.strategicParameterSaveQueued = false;
+          this.saveStrategicParameterConfig();
+        }
+      },
+      error: err => {
+        this.strategicParameterSaving.set(false);
+        this.strategicParameterSaveQueued = false;
+        this.strategicParameterError.set(err.error?.detail || 'Could not save strategic parameters.');
+      },
     });
   }
 
@@ -1765,14 +1861,58 @@ export class AdminComponent implements OnInit {
     this.reportingSettings.update(settings => ({ ...settings, fiscal_year_start_month: this.numberValue(value) }));
   }
 
+  updateInflationMode(value: string) {
+    const mode = ['manual_entry', 'optional_per_line', 'default_on'].includes(value) ? value : 'manual_entry';
+    this.reportingSettings.update(settings => ({
+      ...settings,
+      recurring_cost_inflation_mode: mode,
+      default_annual_inflation_rate_pct: mode === 'manual_entry'
+        ? '0.0000'
+        : settings.default_annual_inflation_rate_pct || '0.0000',
+    }));
+  }
+
+  updateDefaultInflationRate(value: string | number) {
+    const parsed = Number(value);
+    const rate = Number.isFinite(parsed) ? Math.max(0, Math.min(100, parsed)) : 0;
+    this.reportingSettings.update(settings => ({ ...settings, default_annual_inflation_rate_pct: rate }));
+  }
+
+  updateAllowInflationOverride(checked: boolean) {
+    this.reportingSettings.update(settings => ({ ...settings, allow_cost_line_inflation_override: Boolean(checked) }));
+  }
+
   saveReportingSettings() {
+    if (this.reportingSettingsSaving()) return;
     const settings = this.reportingSettings();
+    this.reportingSettingsSaving.set(true);
+    this.reportingSettingsMessage.set(null);
+    this.reportingSettingsError.set(null);
     this.api.put('/admin/financial-engine/reporting-settings', {
       fiscal_year_start_month: Number(settings.fiscal_year_start_month || 1),
       reporting_currency: String(settings.reporting_currency || 'USD').toUpperCase().slice(0, 3),
-    }).subscribe(() => {
-      this.loadFinancialEngineConfiguration();
-      this.loadAuditLogs();
+      recurring_cost_inflation_mode: settings.recurring_cost_inflation_mode || 'manual_entry',
+      default_annual_inflation_rate_pct: Number(settings.default_annual_inflation_rate_pct || 0),
+      allow_cost_line_inflation_override: settings.allow_cost_line_inflation_override !== false,
+    }).subscribe({
+      next: res => {
+        this.reportingSettingsSaving.set(false);
+        this.reportingSettings.set({
+          fiscal_year_start_month: 1,
+          reporting_currency: 'USD',
+          recurring_cost_inflation_mode: 'manual_entry',
+          default_annual_inflation_rate_pct: '0.0000',
+          allow_cost_line_inflation_override: true,
+          ...(res || {}),
+        });
+        this.reportingSettingsMessage.set('Financial settings saved.');
+        this.loadFinancialEngineConfiguration();
+        this.loadAuditLogs();
+      },
+      error: err => {
+        this.reportingSettingsSaving.set(false);
+        this.reportingSettingsError.set(err.error?.detail || 'Could not save financial settings.');
+      },
     });
   }
 

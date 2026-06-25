@@ -63,7 +63,13 @@ interface FinancialGrid {
   baseline?: InitiativeAnnualBaseline | null;
   benefit_lines?: FinancialBenefitLine[];
   values?: ConfigurableMetricValue[];
-  settings?: { fiscal_year_start_month: number; reporting_currency: string };
+  settings?: {
+    fiscal_year_start_month: number;
+    reporting_currency: string;
+    recurring_cost_inflation_mode?: 'manual_entry' | 'optional_per_line' | 'default_on';
+    default_annual_inflation_rate_pct?: string | number;
+    allow_cost_line_inflation_override?: boolean;
+  };
   entries: FinancialEntry[];
   metric_values: FinancialMetricValue[];
   selections: InitiativeFinancialSelections;
@@ -171,6 +177,8 @@ interface CostLine {
   amount_plan: string;
   amount_actual: string | null;
   is_recurring: boolean;
+  inflation_enabled?: boolean;
+  annual_inflation_rate_pct?: string | number | null;
 }
 
 interface CostLineListResponse {
@@ -416,7 +424,7 @@ interface GridMetric {
         }
 
         @if (!isLocked() && benefitMetricDefinitions().length) {
-          <div class="mb-4 grid gap-3 border bg-[var(--t-surface-raised)] p-4 lg:grid-cols-[180px_1fr_120px_140px_120px_140px_140px_auto]" style="border-color:var(--t-border)">
+          <div class="mb-4 grid gap-3 border bg-[var(--t-surface-raised)] p-4 lg:grid-cols-[180px_1fr_110px_120px_110px_110px_110px_130px_130px_auto]" style="border-color:var(--t-border)">
             <label class="grid gap-1">
               <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Benefit Metric</span>
               <select class="input-field py-2 text-xs" [ngModel]="newBenefitLineMetricId()" (ngModelChange)="newBenefitLineMetricId.set($event)" aria-label="Benefit line metric">
@@ -443,8 +451,16 @@ interface GridMetric {
               </select>
             </label>
             <label class="grid gap-1">
-              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Amount</span>
-              <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineAmount()" (ngModelChange)="newBenefitLineAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line phased amount">
+              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Base</span>
+              <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineBaseAmount()" (ngModelChange)="newBenefitLineBaseAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line base amount">
+            </label>
+            <label class="grid gap-1">
+              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">High</span>
+              <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineHighAmount()" (ngModelChange)="newBenefitLineHighAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line high amount">
+            </label>
+            <label class="grid gap-1">
+              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Actual</span>
+              <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineActualAmount()" (ngModelChange)="newBenefitLineActualAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line actual amount">
             </label>
             <label class="grid gap-1">
               <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Start</span>
@@ -471,10 +487,11 @@ interface GridMetric {
             </div>
             <div class="mt-4 grid gap-3">
               @for (line of grid()?.benefit_lines || []; track line.id) {
-                <div class="grid gap-3 border border-[var(--t-border)] bg-[var(--t-surface)] p-3 lg:grid-cols-[1fr_auto] lg:items-center">
-                  <div>
-                    <p class="text-sm font-black" style="color:var(--t-text-primary)">{{ line.name }}</p>
-                    <p class="mt-1 text-[9px] font-black uppercase tracking-widest" [class.text-emerald-600]="line.validation_status === 'finance_validated'" [class.text-red-500]="line.validation_status === 'rejected'" [class.text-[var(--t-accent)]]="line.validation_status === 'submitted'" [class.text-[var(--t-text-tertiary)]]="!line.validation_status || line.validation_status === 'draft'">
+                            <div class="grid gap-3 border border-[var(--t-border)] bg-[var(--t-surface)] p-3 lg:grid-cols-[1fr_auto] lg:items-center">
+                              <div>
+                                <p class="text-sm font-black" style="color:var(--t-text-primary)">{{ line.name }}</p>
+                                <p class="mt-1 text-[10px] font-bold" style="color:var(--t-text-tertiary)">{{ benefitLineDescriptor(line) }}</p>
+                                <p class="mt-1 text-[9px] font-black uppercase tracking-widest" [class.text-emerald-600]="line.validation_status === 'finance_validated'" [class.text-red-500]="line.validation_status === 'rejected'" [class.text-[var(--t-accent)]]="line.validation_status === 'submitted'" [class.text-[var(--t-text-tertiary)]]="!line.validation_status || line.validation_status === 'draft'">
                       {{ benefitValidationLabel(line.validation_status) }}
                       @if (line.risk_rating) {
                         <span> · {{ line.risk_rating }} risk</span>
@@ -489,22 +506,50 @@ interface GridMetric {
                     @if (line.evidence_url) {
                       <a [href]="line.evidence_url" target="_blank" rel="noopener" class="mt-1 inline-block text-xs font-bold underline" style="color:var(--t-accent)">{{ line.evidence_label || 'Evidence' }}</a>
                     }
-                  </div>
-                  <div class="flex flex-wrap justify-start gap-2 lg:justify-end">
-                    <button type="button" class="btn-ghost px-3 py-2 text-[10px]" [disabled]="saving()" (click)="submitBenefitLine(line)" aria-label="Submit benefit line to Finance">Submit</button>
-                    <button type="button" class="btn-secondary px-3 py-2 text-[10px]" [disabled]="saving()" (click)="validateBenefitLine(line)" aria-label="Validate benefit line">Validate</button>
-                    <button type="button" class="btn-ghost px-3 py-2 text-[10px]" [disabled]="saving()" (click)="rejectBenefitLine(line)" aria-label="Reject benefit line">Reject</button>
-                    <button type="button" class="btn-ghost px-3 py-2 text-[10px]" [disabled]="saving()" (click)="updateBenefitLineRisk(line)" aria-label="Update benefit line risk">Risk</button>
-                    <button type="button" class="btn-ghost px-3 py-2 text-[10px] text-[var(--t-red)]" [disabled]="isLocked() || saving()" (click)="deleteBenefitLine(line)" aria-label="Delete benefit line">Delete</button>
-                  </div>
-                </div>
+                              </div>
+                              <div class="flex flex-wrap justify-start gap-2 lg:justify-end">
+                                @if (canSubmitBenefitLine(line)) {
+                                  <button type="button" class="btn-ghost px-3 py-2 text-[10px]" [disabled]="saving()" (click)="openBenefitAction(line, 'submit')" aria-label="Submit benefit line to Finance">Submit</button>
+                                }
+                                @if (canValidateBenefitLine(line)) {
+                                  <button type="button" class="btn-secondary px-3 py-2 text-[10px]" [disabled]="saving()" (click)="openBenefitAction(line, 'validate')" aria-label="Validate benefit line">Validate</button>
+                                }
+                                @if (canRejectBenefitLine(line)) {
+                                  <button type="button" class="btn-ghost px-3 py-2 text-[10px]" [disabled]="saving()" (click)="openBenefitAction(line, 'reject')" aria-label="Reject benefit line">Reject</button>
+                                }
+                                <button type="button" class="btn-ghost px-3 py-2 text-[10px]" [disabled]="saving()" (click)="updateBenefitLineRisk(line)" aria-label="Update benefit line risk">Risk</button>
+                                @if (canDeleteBenefitLine(line)) {
+                                  <button type="button" class="btn-ghost px-3 py-2 text-[10px] text-[var(--t-red)]" [disabled]="saving()" (click)="deleteBenefitLine(line)" aria-label="Delete benefit line">Delete</button>
+                                }
+                              </div>
+                              @if (activeBenefitAction()?.line?.id === line.id) {
+                                <div class="grid gap-3 border-t border-[var(--t-border)] pt-3 lg:col-span-2 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end">
+                                  <label class="grid gap-1">
+                                    <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">{{ activeBenefitAction()?.action === 'reject' ? 'Rejection Reason' : 'Comment' }}</span>
+                                    <textarea rows="2" class="input-field py-2 text-xs" [ngModel]="benefitActionComment()" (ngModelChange)="benefitActionComment.set($event)" aria-label="Benefit validation comment"></textarea>
+                                  </label>
+                                  <label class="grid gap-1">
+                                    <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Evidence URL</span>
+                                    <input class="input-field py-2 text-xs" [ngModel]="benefitActionEvidenceUrl()" (ngModelChange)="benefitActionEvidenceUrl.set($event)" aria-label="Benefit validation evidence URL">
+                                  </label>
+                                  <label class="grid gap-1">
+                                    <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Evidence Label</span>
+                                    <input class="input-field py-2 text-xs" [ngModel]="benefitActionEvidenceLabel()" (ngModelChange)="benefitActionEvidenceLabel.set($event)" aria-label="Benefit validation evidence label">
+                                  </label>
+                                  <div class="flex gap-2">
+                                    <button type="button" class="btn-primary px-3 py-2 text-[10px]" [disabled]="!canConfirmBenefitAction() || saving()" (click)="confirmBenefitAction()" aria-label="Confirm benefit validation action">Confirm</button>
+                                    <button type="button" class="btn-ghost px-3 py-2 text-[10px]" [disabled]="saving()" (click)="cancelBenefitAction()" aria-label="Cancel benefit validation action">Cancel</button>
+                                  </div>
+                                </div>
+                              }
+                            </div>
               }
             </div>
           </div>
         }
 
         @if (!isLocked() && costCategoryDefinitions().length) {
-          <div class="mb-4 grid gap-3 border bg-[var(--t-surface-raised)] p-4 lg:grid-cols-[180px_1fr_100px_110px_120px_140px_140px_auto]" style="border-color:var(--t-border)">
+                      <div class="mb-4 grid gap-3 border bg-[var(--t-surface-raised)] p-4 lg:grid-cols-[160px_1fr_90px_100px_110px_115px_100px_120px_120px_auto]" style="border-color:var(--t-border)">
             <label class="grid gap-1">
               <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Cost Category</span>
               <select class="input-field py-2 text-xs" [ngModel]="newCostLineCategoryKey()" (ngModelChange)="setCostLineCategory($event)" aria-label="Cost line category">
@@ -536,6 +581,16 @@ interface GridMetric {
               <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Amount</span>
               <input type="number" class="input-field py-2 text-xs" [ngModel]="newCostLineAmount()" (ngModelChange)="newCostLineAmount.set(numberValueOrNullUnbounded($event))" aria-label="Cost line amount">
             </label>
+            @if (costInflationControlsVisible()) {
+              <label class="flex items-end gap-2 pb-2 text-[10px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">
+                <input type="checkbox" [checked]="newCostLineInflationChecked()" (change)="setCostLineInflationEnabled($any($event.target).checked)" [disabled]="!costInflationOverrideAllowed() && costInflationMode() === 'default_on'" aria-label="Apply recurring cost inflation">
+                Inflate
+              </label>
+              <label class="grid gap-1">
+                <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Infl. %</span>
+                <input type="number" min="0" max="100" step="0.01" class="input-field py-2 text-xs" [ngModel]="newCostLineInflationRateValue()" (ngModelChange)="setCostLineInflationRate($event)" [disabled]="!newCostLineInflationChecked() || !costInflationOverrideAllowed()" aria-label="Recurring cost annual inflation percent">
+              </label>
+            }
             <label class="grid gap-1">
               <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Start</span>
               <input type="month" class="input-field py-2 text-xs" [ngModel]="newCostLineStartMonth()" (ngModelChange)="newCostLineStartMonth.set($event)" aria-label="Cost line start month">
@@ -715,7 +770,9 @@ export class FinancialsTabComponent implements OnInit {
   newBenefitLineName = signal('');
   newBenefitLineConfidence = signal<number | null>(null);
   newBenefitLinePhasingMode = signal<'manual' | 'one_off' | 'spread'>('manual');
-  newBenefitLineAmount = signal<number | null>(null);
+  newBenefitLineBaseAmount = signal<number | null>(null);
+  newBenefitLineHighAmount = signal<number | null>(null);
+  newBenefitLineActualAmount = signal<number | null>(null);
   newBenefitLineStartMonth = signal('');
   newBenefitLineEndMonth = signal('');
   newCostLineCategoryKey = signal('');
@@ -724,8 +781,14 @@ export class FinancialsTabComponent implements OnInit {
   newCostLineRecurring = signal(true);
   newCostLinePhasingMode = signal<'one_off' | 'spread'>('spread');
   newCostLineAmount = signal<number | null>(null);
+  newCostLineInflationEnabled = signal<boolean | null>(null);
+  newCostLineInflationRate = signal<number | null>(null);
   newCostLineStartMonth = signal('');
   newCostLineEndMonth = signal('');
+  activeBenefitAction = signal<{ line: FinancialBenefitLine; action: 'submit' | 'validate' | 'reject' } | null>(null);
+  benefitActionComment = signal('');
+  benefitActionEvidenceUrl = signal('');
+  benefitActionEvidenceLabel = signal('');
   readonly scenarios: { id: FinancialScenario; label: string }[] = [
     { id: 'base', label: 'Base' },
     { id: 'high', label: 'High' },
@@ -899,6 +962,10 @@ export class FinancialsTabComponent implements OnInit {
   });
 
   selectedScenarioDefinition(): FinancialScenarioDefinition | null {
+    return this.scenarioDefinitionFor(this.scenario());
+  }
+
+  scenarioDefinitionFor(scenario: FinancialScenario): FinancialScenarioDefinition | null {
     const scenarios = (this.grid()?.scenarios || []).filter(item => item.is_active !== false);
     const keyByScenario: Record<FinancialScenario, string[]> = {
       baseline: ['baseline'],
@@ -906,10 +973,10 @@ export class FinancialsTabComponent implements OnInit {
       high: ['plan_high', 'high'],
       actual: ['actual'],
     };
-    const preferredKeys = keyByScenario[this.scenario()];
+    const preferredKeys = keyByScenario[scenario];
     return scenarios.find(item => preferredKeys.includes(item.key))
-      || (this.scenario() === 'base' ? scenarios.find(item => item.kind === 'plan' && item.is_primary) : null)
-      || scenarios.find(item => item.kind === (this.scenario() === 'actual' ? 'actual' : this.scenario() === 'baseline' ? 'baseline' : 'plan'))
+      || (scenario === 'base' ? scenarios.find(item => item.kind === 'plan' && item.is_primary) : null)
+      || scenarios.find(item => item.kind === (scenario === 'actual' ? 'actual' : scenario === 'baseline' ? 'baseline' : 'plan'))
       || scenarios[0]
       || null;
   }
@@ -1800,10 +1867,46 @@ export class FinancialsTabComponent implements OnInit {
     const category = this.costCategoryDefinitions().find(item => item.key === value);
     if (category?.rollup_type === 'one_off_cost') this.newCostLineRecurring.set(false);
     if (category?.rollup_type === 'recurring_cost') this.newCostLineRecurring.set(true);
+    this.newCostLineInflationEnabled.set(null);
+    this.newCostLineInflationRate.set(null);
   }
 
   setCostLinePhasingMode(value: string): void {
     this.newCostLinePhasingMode.set(value === 'one_off' ? 'one_off' : 'spread');
+  }
+
+  costInflationMode(): 'manual_entry' | 'optional_per_line' | 'default_on' {
+    return this.grid()?.settings?.recurring_cost_inflation_mode || 'manual_entry';
+  }
+
+  costInflationOverrideAllowed(): boolean {
+    return this.grid()?.settings?.allow_cost_line_inflation_override !== false;
+  }
+
+  costInflationControlsVisible(): boolean {
+    return this.newCostLineRecurring()
+      && this.newCostLineLane() === 'plan'
+      && this.costInflationMode() !== 'manual_entry';
+  }
+
+  newCostLineInflationChecked(): boolean {
+    if (!this.costInflationControlsVisible()) return false;
+    if (this.newCostLineInflationEnabled() !== null) return this.newCostLineInflationEnabled() === true;
+    return this.costInflationMode() === 'default_on';
+  }
+
+  newCostLineInflationRateValue(): number {
+    if (this.newCostLineInflationRate() !== null) return this.newCostLineInflationRate() || 0;
+    return this.parseMoney(this.grid()?.settings?.default_annual_inflation_rate_pct || '0');
+  }
+
+  setCostLineInflationEnabled(checked: boolean): void {
+    this.newCostLineInflationEnabled.set(Boolean(checked));
+  }
+
+  setCostLineInflationRate(value: string | number): void {
+    const parsed = Number(value);
+    this.newCostLineInflationRate.set(Number.isFinite(parsed) ? Math.max(0, Math.min(100, parsed)) : 0);
   }
 
   canGenerateCostLine(): boolean {
@@ -1826,16 +1929,24 @@ export class FinancialsTabComponent implements OnInit {
     if (!months.length) return;
     const value = this.newCostLinePhasingMode() === 'spread' ? amount / months.length : amount;
     const lane = this.newCostLineLane();
-    const costLines = months.map(period => ({
-      name: this.newCostLineName().trim(),
-      category_key: this.newCostLineCategoryKey(),
-      year: period.year,
-      month: period.month,
-      quarter: null,
-      amount_plan: lane === 'plan' ? value.toString() : '0',
-      amount_actual: lane === 'actual' ? value.toString() : null,
-      is_recurring: this.newCostLineRecurring(),
-    }));
+                const costLines = months.map(period => ({
+                  name: this.newCostLineName().trim(),
+                  category_key: this.newCostLineCategoryKey(),
+                  year: period.year,
+                  month: period.month,
+                  quarter: null,
+                  amount_plan: lane === 'plan' ? value.toString() : '0',
+                  amount_actual: lane === 'actual' ? value.toString() : null,
+                  is_recurring: this.newCostLineRecurring(),
+                  ...(this.costInflationControlsVisible()
+                    ? {
+                        inflation_enabled: this.newCostLineInflationChecked(),
+                        annual_inflation_rate_pct: this.newCostLineInflationChecked()
+                          ? this.newCostLineInflationRateValue()
+                          : 0,
+                      }
+                    : {}),
+                }));
     this.clearFinancialFeedback();
     this.saving.set(true);
     this.api.put<FinancialGrid>(`/initiatives/${this.initiativeId}/financials`, {
@@ -1847,10 +1958,12 @@ export class FinancialsTabComponent implements OnInit {
         this.newCostLineCategoryKey.set('');
         this.newCostLineName.set('');
         this.newCostLineLane.set('plan');
-        this.newCostLineRecurring.set(true);
-        this.newCostLinePhasingMode.set('spread');
-        this.newCostLineAmount.set(null);
-        this.newCostLineStartMonth.set('');
+                    this.newCostLineRecurring.set(true);
+                    this.newCostLinePhasingMode.set('spread');
+                    this.newCostLineAmount.set(null);
+                    this.newCostLineInflationEnabled.set(null);
+                    this.newCostLineInflationRate.set(null);
+                    this.newCostLineStartMonth.set('');
         this.newCostLineEndMonth.set('');
         this.saving.set(false);
         this.financialMessage.set(`${costLines.length} cost line${costLines.length === 1 ? '' : 's'} added.`);
@@ -1867,9 +1980,17 @@ export class FinancialsTabComponent implements OnInit {
     if (this.saving() || this.isLocked()) return false;
     if (!this.newBenefitLineMetricId() || !this.newBenefitLineName().trim()) return false;
     if (this.newBenefitLinePhasingMode() === 'manual') return true;
-    if (this.newBenefitLineAmount() === null || !this.newBenefitLineStartMonth()) return false;
+    if (!this.hasBenefitLineScenarioAmount() || !this.newBenefitLineStartMonth()) return false;
     if (this.newBenefitLinePhasingMode() === 'spread' && !this.newBenefitLineEndMonth()) return false;
     return true;
+  }
+
+  private hasBenefitLineScenarioAmount(): boolean {
+    return [
+      this.newBenefitLineBaseAmount(),
+      this.newBenefitLineHighAmount(),
+      this.newBenefitLineActualAmount(),
+    ].some(value => value !== null);
   }
 
   addBenefitLine(): void {
@@ -1888,12 +2009,14 @@ export class FinancialsTabComponent implements OnInit {
         impact_type: 'recurring',
         timing: null,
         confidence,
-        phasing: {
-          mode: phasingMode,
-          amount: this.newBenefitLineAmount(),
-          start_month: this.newBenefitLineStartMonth() || null,
-          end_month: this.newBenefitLineEndMonth() || null,
-        },
+                    phasing: {
+                      mode: phasingMode,
+                      base_amount: this.newBenefitLineBaseAmount(),
+                      high_amount: this.newBenefitLineHighAmount(),
+                      actual_amount: this.newBenefitLineActualAmount(),
+                      start_month: this.newBenefitLineStartMonth() || null,
+                      end_month: this.newBenefitLineEndMonth() || null,
+                    },
         attributes: {},
         show_in_summary: true,
         display_order: displayOrder,
@@ -1929,7 +2052,9 @@ export class FinancialsTabComponent implements OnInit {
     this.newBenefitLineName.set('');
     this.newBenefitLineConfidence.set(null);
     this.newBenefitLinePhasingMode.set('manual');
-    this.newBenefitLineAmount.set(null);
+    this.newBenefitLineBaseAmount.set(null);
+    this.newBenefitLineHighAmount.set(null);
+    this.newBenefitLineActualAmount.set(null);
     this.newBenefitLineStartMonth.set('');
     this.newBenefitLineEndMonth.set('');
     this.saving.set(false);
@@ -1944,16 +2069,49 @@ export class FinancialsTabComponent implements OnInit {
     return 'Draft';
   }
 
+  benefitLineDescriptor(line: FinancialBenefitLine): string {
+    const metric = (this.grid()?.definitions || []).find(item => item.id === line.metric_definition_id);
+    const values = (this.grid()?.values || []).filter(value =>
+      value.benefit_line_id === line.id && this.parseMoney(value.value) !== 0
+    );
+    const scenarioLabels = [...new Set(values.map(value => {
+      const scenario = (this.grid()?.scenarios || []).find(item => item.id === value.scenario_id);
+      return scenario?.label || scenario?.key || 'Scenario';
+    }))];
+    return [
+      metric?.label || 'Benefit metric',
+      scenarioLabels.length ? scenarioLabels.join(', ') : 'No scenario values',
+    ].join(' · ');
+  }
+
+  canSubmitBenefitLine(line: FinancialBenefitLine): boolean {
+    const status = line.validation_status || 'draft';
+    return !this.isLocked() && (status === 'draft' || status === 'rejected');
+  }
+
+  canValidateBenefitLine(line: FinancialBenefitLine): boolean {
+    return !this.isLocked() && line.validation_status === 'submitted';
+  }
+
+  canRejectBenefitLine(line: FinancialBenefitLine): boolean {
+    return !this.isLocked() && line.validation_status === 'submitted';
+  }
+
+  canDeleteBenefitLine(line: FinancialBenefitLine): boolean {
+    const status = line.validation_status || 'draft';
+    return !this.isLocked() && (status === 'draft' || status === 'rejected');
+  }
+
   submitBenefitLine(line: FinancialBenefitLine): void {
-    this.transitionBenefitLine(line, 'submit');
+    this.openBenefitAction(line, 'submit');
   }
 
   validateBenefitLine(line: FinancialBenefitLine): void {
-    this.transitionBenefitLine(line, 'validate');
+    this.openBenefitAction(line, 'validate');
   }
 
   rejectBenefitLine(line: FinancialBenefitLine): void {
-    this.transitionBenefitLine(line, 'reject');
+    this.openBenefitAction(line, 'reject');
   }
 
   updateBenefitLineRisk(line: FinancialBenefitLine): void {
@@ -1992,28 +2150,42 @@ export class FinancialsTabComponent implements OnInit {
     });
   }
 
-  private transitionBenefitLine(line: FinancialBenefitLine, action: 'submit' | 'validate' | 'reject'): void {
+  openBenefitAction(line: FinancialBenefitLine, action: 'submit' | 'validate' | 'reject'): void {
     if (this.saving()) return;
-    const comment = window.prompt(
-      action === 'reject' ? 'Rejection reason' : 'Finance comment',
-      line.validation_comment || '',
-    );
-    if (comment === null) return;
-    const evidenceUrl = window.prompt('Evidence URL', line.evidence_url || '');
-    if (evidenceUrl === null) return;
-    const evidenceLabel = evidenceUrl
-      ? window.prompt('Evidence label', line.evidence_label || 'Finance evidence')
-      : '';
-    if (evidenceLabel === null) return;
+    this.activeBenefitAction.set({ line, action });
+    this.benefitActionComment.set(action === 'reject' ? (line.rejection_reason || '') : (line.validation_comment || ''));
+    this.benefitActionEvidenceUrl.set(line.evidence_url || '');
+    this.benefitActionEvidenceLabel.set(line.evidence_label || '');
+  }
+
+  cancelBenefitAction(): void {
+    if (this.saving()) return;
+    this.activeBenefitAction.set(null);
+    this.benefitActionComment.set('');
+    this.benefitActionEvidenceUrl.set('');
+    this.benefitActionEvidenceLabel.set('');
+  }
+
+  canConfirmBenefitAction(): boolean {
+    const active = this.activeBenefitAction();
+    if (!active) return false;
+    if (active.action === 'reject') return Boolean(this.benefitActionComment().trim());
+    return true;
+  }
+
+  confirmBenefitAction(): void {
+    const active = this.activeBenefitAction();
+    if (!active || !this.canConfirmBenefitAction() || this.saving()) return;
     this.clearFinancialFeedback();
     this.saving.set(true);
-    this.api.post<FinancialBenefitLine>(`/initiatives/${this.initiativeId}/financials/benefit-lines/${line.id}/${action}`, {
-      comment: comment || null,
-      evidence_url: evidenceUrl || null,
-      evidence_label: evidenceLabel || null,
+    this.api.post<FinancialBenefitLine>(`/initiatives/${this.initiativeId}/financials/benefit-lines/${active.line.id}/${active.action}`, {
+      comment: this.benefitActionComment().trim() || null,
+      evidence_url: this.benefitActionEvidenceUrl().trim() || null,
+      evidence_label: this.benefitActionEvidenceLabel().trim() || null,
     }).subscribe({
       next: () => {
         this.saving.set(false);
+        this.cancelBenefitAction();
         this.financialMessage.set('Benefit validation status updated.');
         this._loadData();
       },
@@ -2031,7 +2203,7 @@ export class FinancialsTabComponent implements OnInit {
   }
 
   deleteBenefitLine(line: FinancialBenefitLine): void {
-    if (this.isLocked() || this.saving()) return;
+    if (!this.canDeleteBenefitLine(line) || this.saving()) return;
     if (!window.confirm(`Delete benefit line "${line.name}"?`)) return;
     this.clearFinancialFeedback();
     this.saving.set(true);
@@ -2069,25 +2241,35 @@ export class FinancialsTabComponent implements OnInit {
   private generatedBenefitLineValues(benefitLineId: string): any[] {
     const mode = this.newBenefitLinePhasingMode();
     if (mode === 'manual') return [];
-    const scenario = this.selectedScenarioDefinition();
-    const amount = this.newBenefitLineAmount();
     const start = this.parseMonthInput(this.newBenefitLineStartMonth());
     const end = mode === 'spread'
       ? this.parseMonthInput(this.newBenefitLineEndMonth())
       : start;
-    if (!scenario || amount === null || !start || !end) return [];
+    if (!start || !end) return [];
     const months = this.monthRange(start, end);
     if (!months.length) return [];
-    const value = mode === 'spread' ? amount / months.length : amount;
-    return months.map(period => ({
-      metric_definition_id: this.newBenefitLineMetricId(),
-      scenario_id: scenario.id,
-      benefit_line_id: benefitLineId,
-      year: period.year,
-      month: period.month,
-      value: value.toString(),
-      status: 'draft',
-    }));
+    const scenarioAmounts: Array<{ scenario: FinancialScenario; amount: number | null }> = [
+      { scenario: 'base', amount: this.newBenefitLineBaseAmount() },
+      { scenario: 'high', amount: this.newBenefitLineHighAmount() },
+      { scenario: 'actual', amount: this.newBenefitLineActualAmount() },
+    ];
+    const values: any[] = [];
+    for (const item of scenarioAmounts) {
+      if (item.amount === null) continue;
+      const scenario = this.scenarioDefinitionFor(item.scenario);
+      if (!scenario) continue;
+      const value = mode === 'spread' ? item.amount / months.length : item.amount;
+      values.push(...months.map(period => ({
+        metric_definition_id: this.newBenefitLineMetricId(),
+        scenario_id: scenario.id,
+        benefit_line_id: benefitLineId,
+        year: period.year,
+        month: period.month,
+        value: value.toString(),
+        status: 'draft',
+      })));
+    }
+    return values;
   }
 
   private clearFinancialFeedback(): void {

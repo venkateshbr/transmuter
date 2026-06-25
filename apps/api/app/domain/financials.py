@@ -48,6 +48,7 @@ FinancialAttributeValueType = Literal[
 ]
 FinancialBenefitValidationStatus = Literal["draft", "submitted", "finance_validated", "rejected"]
 FinancialBenefitValidationEventType = Literal["submit", "validate", "reject", "handoff_update"]
+RecurringCostInflationMode = Literal["manual_entry", "optional_per_line", "default_on"]
 FinancialBenefitHandoffStatus = Literal[
     "not_started", "owner_assigned", "handoff_ready", "handoff_complete"
 ]
@@ -94,11 +95,17 @@ class FinancialGovernanceSettingsUpdate(BaseModel):
 class FinancialReportingSettings(BaseModel):
     fiscal_year_start_month: int = Field(1, ge=1, le=12)
     reporting_currency: str = Field("USD", min_length=3, max_length=3)
+    recurring_cost_inflation_mode: RecurringCostInflationMode = "manual_entry"
+    default_annual_inflation_rate_pct: Decimal = Field(Decimal("0"), ge=0, le=100)
+    allow_cost_line_inflation_override: bool = True
 
 
 class FinancialReportingSettingsUpdate(BaseModel):
     fiscal_year_start_month: int | None = Field(None, ge=1, le=12)
     reporting_currency: str | None = Field(None, min_length=3, max_length=3)
+    recurring_cost_inflation_mode: RecurringCostInflationMode | None = None
+    default_annual_inflation_rate_pct: Decimal | None = Field(None, ge=0, le=100)
+    allow_cost_line_inflation_override: bool | None = None
 
 
 class AnnualBaselineMetricValue(BaseModel):
@@ -593,6 +600,8 @@ class CostLineCreate(BaseModel):
     amount_plan: Decimal = Decimal("0")
     amount_actual: Decimal | None = None
     is_recurring: bool = False
+    inflation_enabled: bool | None = None
+    annual_inflation_rate_pct: Decimal | None = Field(None, ge=0, le=100)
 
 
 class CostLineUpdate(BaseModel):
@@ -605,6 +614,8 @@ class CostLineUpdate(BaseModel):
     amount_plan: Decimal | None = None
     amount_actual: Decimal | None = None
     is_recurring: bool | None = None
+    inflation_enabled: bool | None = None
+    annual_inflation_rate_pct: Decimal | None = Field(None, ge=0, le=100)
 
 
 class CostLineItem(BaseModel):
@@ -619,6 +630,8 @@ class CostLineItem(BaseModel):
     amount_plan: str = "0"
     amount_actual: str | None = None
     is_recurring: bool = False
+    inflation_enabled: bool = False
+    annual_inflation_rate_pct: str = "0"
 
 
 class PortfolioFinancialSummaryCard(BaseModel):

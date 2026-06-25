@@ -728,7 +728,7 @@ async def update_tenant_annual_baselines(
 async def update_financial_reporting_settings(
     body: FinancialReportingSettingsUpdate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
-    svc: Annotated[FinancialService, Depends(_svc)],
+    svc: Annotated[FinancialService, Depends(_admin_svc)],
 ) -> FinancialReportingSettings:
     assert_can_manage_initiatives(current_user)
     return svc.update_reporting_settings(body)

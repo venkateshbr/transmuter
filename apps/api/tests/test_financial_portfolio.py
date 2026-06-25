@@ -23,6 +23,7 @@ from app.domain.financials import (
     FinancialGridUpdate,
     FinancialMetricValue,
     FinancialMetricValueUpdate,
+    FinancialReportingSettingsUpdate,
     InitiativeFinancialSelections,
     PortfolioFinancialPeriod,
 )
@@ -990,6 +991,62 @@ def test_engine_configuration_includes_attribute_definitions() -> None:
     assert response.attribute_definitions[0].options == ["Digital", "Operations"]
 
 
+class _ReportingSettingsRepo(_AttributeDefinitionRepo):
+    def __init__(self, persist_reporting: bool = True) -> None:
+        super().__init__()
+        self.persist_reporting = persist_reporting
+        self.reporting = {"fiscal_year_start_month": 1, "reporting_currency": "USD"}
+        self.org_settings = {
+            "financial_engine": {
+                "recurring_cost_inflation_mode": "manual_entry",
+                "default_annual_inflation_rate_pct": "0.0000",
+                "allow_cost_line_inflation_override": True,
+            }
+        }
+
+    def get_reporting_settings(self) -> dict:
+        return dict(self.reporting)
+
+    def update_reporting_settings(self, data: dict) -> dict:
+        if self.persist_reporting:
+            self.reporting.update(data)
+        return dict(self.reporting)
+
+    def get_organization_settings(self) -> dict:
+        return dict(self.org_settings)
+
+    def update_organization_settings(self, settings: dict) -> dict:
+        self.org_settings = settings
+        return {"settings": self.org_settings}
+
+
+def test_reporting_settings_update_verifies_persisted_values() -> None:
+    service = FinancialService.__new__(FinancialService)
+    service._repo = _ReportingSettingsRepo()
+
+    response = service.update_reporting_settings(
+        FinancialReportingSettingsUpdate(
+            fiscal_year_start_month=4,
+            reporting_currency="gbp",
+            recurring_cost_inflation_mode="optional_per_line",
+            default_annual_inflation_rate_pct="3.0000",
+        )
+    )
+
+    assert response.fiscal_year_start_month == 4
+    assert response.reporting_currency == "GBP"
+    assert response.recurring_cost_inflation_mode == "optional_per_line"
+    assert response.default_annual_inflation_rate_pct == Decimal("3.0000")
+
+    service._repo = _ReportingSettingsRepo(persist_reporting=False)
+    with pytest.raises(HTTPException) as exc:
+        service.update_reporting_settings(
+            FinancialReportingSettingsUpdate(fiscal_year_start_month=4)
+        )
+
+    assert exc.value.status_code == 500
+
+
 def test_attribute_definition_create_normalizes_options() -> None:
     repo = _AttributeDefinitionRepo()
     service = FinancialService.__new__(FinancialService)
@@ -1209,8 +1266,9 @@ def test_nested_financial_mutations_bind_rows_to_url_initiative() -> None:
 
 
 class _BenefitLineDeleteRepo:
-    def __init__(self, locked: bool) -> None:
+    def __init__(self, locked: bool, validation_status: str = "draft") -> None:
         self.locked = locked
+        self.validation_status = validation_status
         self.deleted: list[tuple[str, str]] = []
 
     def initiative_exists(self, initiative_id: str) -> bool:
@@ -1228,6 +1286,7 @@ class _BenefitLineDeleteRepo:
             "initiative_id": "initiative-1",
             "metric_definition_id": "metric-1",
             "name": "Benefit line",
+            "validation_status": self.validation_status,
             "show_in_summary": True,
             "display_order": 1,
         }
@@ -1253,6 +1312,19 @@ def test_benefit_line_delete_requires_unlocked_financials() -> None:
 
     assert exc.value.status_code == 409
     assert locked_repo.deleted == []
+
+
+def test_benefit_line_delete_blocks_submitted_and_validated_lines() -> None:
+    service = FinancialService.__new__(FinancialService)
+    for validation_status in ("submitted", "finance_validated"):
+        repo = _BenefitLineDeleteRepo(locked=False, validation_status=validation_status)
+        service._repo = repo
+
+        with pytest.raises(HTTPException) as exc:
+            service.delete_benefit_line("initiative-1", "benefit-1")
+
+        assert exc.value.status_code == 409
+        assert repo.deleted == []
 
 
 class _PlannedWindowRepo:
@@ -1312,6 +1384,200 @@ def test_financial_grid_normalization_moves_values_to_first_planned_month() -> N
     assert (cost.year, cost.month, cost.amount_plan) == (2026, 4, 100)
     metric = (normalized.metric_values or [])[0]
     assert (metric.year, metric.month, metric.value_base) == (2026, 4, 3)
+
+
+class _InflationSettingsRepo:
+    def __init__(
+        self,
+        mode: str = "manual_entry",
+        default_rate: str = "0.0000",
+        allow_override: bool = True,
+    ) -> None:
+        self.mode = mode
+        self.default_rate = default_rate
+        self.allow_override = allow_override
+
+    def get_reporting_settings(self) -> dict:
+        return {"fiscal_year_start_month": 1, "reporting_currency": "USD"}
+
+    def get_organization_settings(self) -> dict:
+        return {
+            "financial_engine": {
+                "recurring_cost_inflation_mode": self.mode,
+                "default_annual_inflation_rate_pct": self.default_rate,
+                "allow_cost_line_inflation_override": self.allow_override,
+            }
+        }
+
+
+def test_manual_inflation_mode_rejects_platform_inflation() -> None:
+    service = FinancialService.__new__(FinancialService)
+    service._repo = _InflationSettingsRepo(mode="manual_entry")
+
+    with pytest.raises(HTTPException) as exc:
+        service._prepare_cost_line_payloads(
+            [
+                CostLineCreate(
+                    name="Managed service",
+                    category_key="software",
+                    year=2026,
+                    amount_plan="100.0000",
+                    is_recurring=True,
+                    inflation_enabled=True,
+                    annual_inflation_rate_pct="3.0000",
+                )
+            ]
+        )
+
+    assert exc.value.status_code == 400
+
+
+def test_optional_per_line_inflation_compounds_recurring_costs_by_year() -> None:
+    service = FinancialService.__new__(FinancialService)
+    service._repo = _InflationSettingsRepo(mode="optional_per_line")
+
+    rows = service._prepare_cost_line_payloads(
+        [
+            CostLineCreate(
+                name="Managed service",
+                category_key="software",
+                year=2026,
+                month=1,
+                amount_plan="100.0000",
+                is_recurring=True,
+                inflation_enabled=True,
+                annual_inflation_rate_pct="3.0000",
+            ),
+            CostLineCreate(
+                name="Managed service",
+                category_key="software",
+                year=2027,
+                month=1,
+                amount_plan="100.0000",
+                is_recurring=True,
+                inflation_enabled=True,
+                annual_inflation_rate_pct="3.0000",
+            ),
+        ]
+    )
+
+    assert [row["amount_plan"] for row in rows] == ["100.0000", "103.0000"]
+    assert all(row["inflation_enabled"] is True for row in rows)
+
+
+def test_default_on_inflation_uses_tenant_default_without_override() -> None:
+    service = FinancialService.__new__(FinancialService)
+    service._repo = _InflationSettingsRepo(
+        mode="default_on",
+        default_rate="2.5000",
+        allow_override=False,
+    )
+
+    rows = service._prepare_cost_line_payloads(
+        [
+            CostLineCreate(
+                name="Managed service",
+                category_key="software",
+                year=2026,
+                amount_plan="200.0000",
+                is_recurring=True,
+            ),
+            CostLineCreate(
+                name="Managed service",
+                category_key="software",
+                year=2027,
+                amount_plan="200.0000",
+                is_recurring=True,
+            ),
+        ]
+    )
+
+    assert [row["amount_plan"] for row in rows] == ["200.0000", "205.0000"]
+    assert {row["annual_inflation_rate_pct"] for row in rows} == {"2.5000"}
+
+
+class _InflationCostLineUpdateRepo(_InflationSettingsRepo):
+    def __init__(
+        self,
+        *,
+        existing_recurring: bool,
+        existing_inflation: bool,
+        mode: str = "manual_entry",
+        default_rate: str = "0.0000",
+        allow_override: bool = True,
+    ) -> None:
+        super().__init__(mode=mode, default_rate=default_rate, allow_override=allow_override)
+        self.patch: dict[str, object] = {}
+        self.row: dict[str, object] = {
+            "id": "cost-1",
+            "initiative_id": "initiative-1",
+            "name": "Managed service",
+            "category_key": "software",
+            "category_id": None,
+            "year": 2026,
+            "quarter": None,
+            "month": 1,
+            "amount_plan": "100.0000",
+            "amount_actual": None,
+            "is_recurring": existing_recurring,
+            "inflation_enabled": existing_inflation,
+            "annual_inflation_rate_pct": "3.0000" if existing_inflation else "0.0000",
+        }
+
+    def get_cost_line(self, _initiative_id: str, _cost_line_id: str) -> dict[str, object]:
+        return dict(self.row)
+
+    def update_cost_line(
+        self,
+        _initiative_id: str,
+        _cost_line_id: str,
+        patch: dict[str, object],
+    ) -> dict[str, object]:
+        self.patch = patch
+        self.row.update(patch)
+        return dict(self.row)
+
+
+def test_cost_line_update_clears_inflation_when_line_becomes_non_recurring() -> None:
+    repo = _InflationCostLineUpdateRepo(existing_recurring=True, existing_inflation=True)
+    service = FinancialService.__new__(FinancialService)
+    service._repo = repo
+    service._ensure_tenant_initiative = lambda _initiative_id: None
+    service._assert_financials_editable = lambda _initiative_id: None
+
+    line = service.update_cost_line(
+        "initiative-1",
+        "cost-1",
+        CostLineUpdate(is_recurring=False),
+    )
+
+    assert repo.patch["inflation_enabled"] is False
+    assert repo.patch["annual_inflation_rate_pct"] == "0.0000"
+    assert line.inflation_enabled is False
+
+
+def test_cost_line_update_applies_default_inflation_when_line_becomes_recurring() -> None:
+    repo = _InflationCostLineUpdateRepo(
+        existing_recurring=False,
+        existing_inflation=False,
+        mode="default_on",
+        default_rate="2.5000",
+        allow_override=False,
+    )
+    service = FinancialService.__new__(FinancialService)
+    service._repo = repo
+    service._ensure_tenant_initiative = lambda _initiative_id: None
+    service._assert_financials_editable = lambda _initiative_id: None
+
+    line = service.update_cost_line(
+        "initiative-1",
+        "cost-1",
+        CostLineUpdate(is_recurring=True),
+    )
+
+    assert repo.patch["inflation_enabled"] is True
+    assert repo.patch["annual_inflation_rate_pct"] == "2.5000"
+    assert line.inflation_enabled is True
 
 
 def test_financial_governance_default_locks_initiative_plan_at_gate_3() -> None:
@@ -1468,6 +1734,8 @@ def test_locked_configurable_financials_allow_actual_values_and_actual_costs() -
             "amount_plan": "0.0000",
             "amount_actual": "30.0000",
             "is_recurring": True,
+            "inflation_enabled": False,
+            "annual_inflation_rate_pct": "0.0000",
         }
     ]
 
@@ -1824,6 +2092,9 @@ def test_existing_out_of_window_costs_are_migrated_once_to_first_planned_month()
             "amount_plan": "25.0000",
             "amount_actual": None,
             "is_recurring": False,
+            "category_id": None,
+            "inflation_enabled": False,
+            "annual_inflation_rate_pct": "0.0000",
         }
     ]
 
@@ -1883,6 +2154,7 @@ class _BenefitValidationRepo:
             "metric_definition_id": "m1",
             "name": "Run-rate value",
             "confidence": "80.00",
+            "validation_status": "submitted",
             "show_in_summary": True,
             "display_order": 1,
         }
@@ -1940,6 +2212,32 @@ def test_benefit_line_validation_transition_records_audit_event() -> None:
     assert repo.patch["validated_by"] == "user-1"
     assert repo.events[0]["event_type"] == "validate"
     assert repo.events[0]["comment"] == "Tied to finance model"
+
+
+def test_benefit_line_validation_rejects_invalid_transitions_and_missing_reason() -> None:
+    repo = _BenefitValidationRepo()
+    service = FinancialService.__new__(FinancialService)
+    service._repo = repo
+
+    repo.line["validation_status"] = "finance_validated"
+    with pytest.raises(HTTPException) as exc:
+        service.submit_benefit_line_for_validation(
+            "i1",
+            "bl1",
+            FinancialBenefitLineValidationRequest(comment="Resubmit"),
+            "user-1",
+        )
+    assert exc.value.status_code == 409
+
+    repo.line["validation_status"] = "submitted"
+    with pytest.raises(HTTPException) as exc:
+        service.reject_benefit_line(
+            "i1",
+            "bl1",
+            FinancialBenefitLineValidationRequest(comment="  "),
+            "user-1",
+        )
+    assert exc.value.status_code == 422
 
 
 def test_benefit_line_handoff_rejects_owner_outside_current_tenant() -> None:

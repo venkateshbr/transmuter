@@ -89,6 +89,15 @@ class StatusUpdateRepository:
             return self.get(result.data[0]["id"]) or result.data[0]
         return {}
 
+    def update_initiative_rag(self, initiative_id: str, rag_status: str) -> None:
+        (
+            self._c.table("initiatives")
+            .update({"rag_status": rag_status, "updated_at": datetime.now(UTC).isoformat()})
+            .eq("tenant_id", self._tid)
+            .eq("id", initiative_id)
+            .execute()
+        )
+
     def delete(self, update_id: str) -> None:
         (
             self._c.table("status_updates")
