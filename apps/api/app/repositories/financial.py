@@ -460,13 +460,20 @@ class FinancialRepository:
         return (result.data or {}).get("settings") or {}
 
     def update_organization_settings(self, settings: dict) -> dict:  # type: ignore[type-arg]
-        result = (
+        (
             self._c.table("organizations")
             .update({"settings": settings, "updated_at": datetime.now(UTC).isoformat()})
             .eq("id", self._tid)
             .execute()
         )
-        return result.data[0] if result.data else {"settings": settings}
+        result = (
+            self._c.table("organizations")
+            .select("settings")
+            .eq("id", self._tid)
+            .maybe_single()
+            .execute()
+        )
+        return result.data or {}
 
     def list_workstreams(self) -> list[dict]:  # type: ignore[type-arg]
         result = (
@@ -796,6 +803,18 @@ class FinancialRepository:
         data["initiative_id"] = initiative_id
         result = self._c.table("financial_cost_lines").insert(data).execute()
         return result.data[0]
+
+    def get_cost_line(self, initiative_id: str, cost_line_id: str) -> dict | None:  # type: ignore[type-arg]
+        result = (
+            self._c.table("financial_cost_lines")
+            .select("*")
+            .eq("tenant_id", self._tid)
+            .eq("initiative_id", initiative_id)
+            .eq("id", cost_line_id)
+            .maybe_single()
+            .execute()
+        )
+        return result.data if result and result.data else None
 
     def update_cost_line(
         self,
@@ -1149,8 +1168,8 @@ class FinancialRepository:
 
     def update_reporting_settings(self, data: dict) -> dict:  # type: ignore[type-arg]
         payload = {**data, "updated_at": datetime.now(UTC).isoformat()}
-        result = self._c.table("organizations").update(payload).eq("id", self._tid).execute()
-        return result.data[0] if result.data else payload
+        self._c.table("organizations").update(payload).eq("id", self._tid).execute()
+        return self.get_reporting_settings()
 
     def create_metric_definition(
         self,

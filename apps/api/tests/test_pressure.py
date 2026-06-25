@@ -11,6 +11,7 @@ from app.domain.pressure import (
     _self_status,
     _slack_penalty,
 )
+from app.repositories.initiative import InitiativeRepository
 
 
 def _ms(
@@ -142,3 +143,12 @@ def test_self_status():
 
     # Overdue -> 0.5
     assert _self_status(_ms("overdue"), today) == Decimal("0.5")
+
+
+def test_initiative_count_treats_past_due_incomplete_milestone_as_overdue():
+    assert InitiativeRepository._milestone_is_overdue(
+        {"status": "not_started", "planned_end": "2026-01-01"}
+    )
+    assert not InitiativeRepository._milestone_is_overdue(
+        {"status": "complete", "planned_end": "2026-01-01"}
+    )

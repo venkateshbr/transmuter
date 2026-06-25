@@ -157,6 +157,11 @@ def _money(val: object) -> str:
     return format(_dec(val).quantize(Decimal("0.0001")), "f")
 
 
+def _pct(val: object) -> str:
+    """Serialise a percentage Decimal with stable database precision."""
+    return format(_dec(val).quantize(Decimal("0.0001")), "f")
+
+
 # Fields that exist on financial_entries for the new uplift model
 _ENTRY_FIELDS = [
     "revenue_uplift_base",
@@ -534,20 +539,7 @@ class FinancialService:
         # Process cost lines if present
         if data.cost_lines:
             cost_rows = []
-            for cl in data.cost_lines:
-                row = {
-                    "name": cl.name,
-                    "category_key": cl.category_key,
-                    "category_id": cl.category_id,
-                    "year": cl.year,
-                    "quarter": cl.quarter,
-                    "month": cl.month,
-                    "amount_plan": _money(cl.amount_plan),
-                    "amount_actual": _money(cl.amount_actual)
-                    if cl.amount_actual is not None
-                    else None,
-                    "is_recurring": cl.is_recurring,
-                }
+            for row in self._prepare_cost_line_payloads(data.cost_lines):
                 if locked:
                     existing = existing_costs.get(self._cost_period_key(row))
                     if not existing:
@@ -621,22 +613,7 @@ class FinancialService:
         if data.cost_lines:
             self._repo.upsert_cost_lines_batch(
                 initiative_id,
-                [
-                    {
-                        "name": line.name,
-                        "category_key": line.category_key,
-                        "category_id": line.category_id,
-                        "year": line.year,
-                        "quarter": line.quarter,
-                        "month": line.month,
-                        "amount_plan": _money(line.amount_plan),
-                        "amount_actual": _money(line.amount_actual)
-                        if line.amount_actual is not None
-                        else None,
-                        "is_recurring": line.is_recurring,
-                    }
-                    for line in data.cost_lines
-                ],
+                self._prepare_cost_line_payloads(data.cost_lines),
             )
 
         if data.values:
@@ -712,7 +689,11 @@ class FinancialService:
             )
 
         actual_cost_rows = []
-        for line in data.cost_lines or []:
+        for line, prepared in zip(
+            data.cost_lines or [],
+            self._prepare_cost_line_payloads(data.cost_lines or []),
+            strict=True,
+        ):
             if line.amount_actual is None:
                 if _dec(line.amount_plan) != Decimal("0"):
                     raise HTTPException(
@@ -725,15 +706,20 @@ class FinancialService:
                 continue
             actual_cost_rows.append(
                 {
-                    "name": line.name,
-                    "category_key": line.category_key,
-                    "category_id": line.category_id,
-                    "year": line.year,
-                    "quarter": line.quarter,
-                    "month": line.month,
+                    "name": prepared["name"],
+                    "category_key": prepared["category_key"],
+                    "category_id": prepared.get("category_id"),
+                    "year": prepared["year"],
+                    "quarter": prepared.get("quarter"),
+                    "month": prepared.get("month"),
                     "amount_plan": "0.0000",
                     "amount_actual": _money(line.amount_actual),
-                    "is_recurring": line.is_recurring,
+                    "is_recurring": prepared["is_recurring"],
+                    "inflation_enabled": prepared.get("inflation_enabled", False),
+                    "annual_inflation_rate_pct": prepared.get(
+                        "annual_inflation_rate_pct",
+                        "0.0000",
+                    ),
                 }
             )
         if actual_cost_rows:
@@ -769,21 +755,10 @@ class FinancialService:
     def create_cost_line(self, initiative_id: str, data: CostLineCreate) -> CostLineItem:
         self._ensure_tenant_initiative(initiative_id)
         self._assert_financials_editable(initiative_id)
+        payload = self._prepare_cost_line_payloads([data])[0]
         row = self._repo.create_cost_line(
             initiative_id,
-            {
-                "name": data.name,
-                "category_key": data.category_key,
-                "category_id": data.category_id,
-                "year": data.year,
-                "quarter": data.quarter,
-                "month": data.month,
-                "amount_plan": _money(data.amount_plan),
-                "amount_actual": _money(data.amount_actual)
-                if data.amount_actual is not None
-                else None,
-                "is_recurring": data.is_recurring,
-            },
+            payload,
         )
         return self._to_cost_line(row)
 
@@ -794,6 +769,10 @@ class FinancialService:
         data: CostLineUpdate,
     ) -> CostLineItem:
         self._ensure_tenant_initiative(initiative_id)
+        existing = getattr(self._repo, "get_cost_line", lambda _i, _c: None)(
+            initiative_id,
+            cost_line_id,
+        )
         patch: dict[str, object] = {}
         for field in (
             "name",
@@ -807,6 +786,25 @@ class FinancialService:
             val = getattr(data, field)
             if val is not None:
                 patch[field] = val
+        settings = self._financial_reporting_settings()
+        if (
+            data.is_recurring is not None
+            or data.inflation_enabled is not None
+            or data.annual_inflation_rate_pct is not None
+        ):
+            is_recurring = (
+                data.is_recurring
+                if data.is_recurring is not None
+                else bool((existing or {}).get("is_recurring"))
+            )
+            enabled, rate = self._resolve_cost_inflation(
+                is_recurring=is_recurring is True,
+                requested_enabled=data.inflation_enabled,
+                requested_rate=data.annual_inflation_rate_pct,
+                settings=settings,
+            )
+            patch["inflation_enabled"] = enabled
+            patch["annual_inflation_rate_pct"] = _pct(rate)
         if data.amount_plan is not None:
             patch["amount_plan"] = _money(data.amount_plan)
         if data.amount_actual is not None:
@@ -864,6 +862,15 @@ class FinancialService:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Benefit line not found",
+            )
+        validation_status = existing.get("validation_status") or "draft"
+        if validation_status in {"submitted", "finance_validated"}:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Submitted or finance-validated benefit lines cannot be deleted. "
+                    "Use a governed reversal or rebaseline flow."
+                ),
             )
         self._repo.delete_benefit_line(initiative_id, benefit_line_id)
 
@@ -1004,7 +1011,7 @@ class FinancialService:
         return FinancialConfigurationResponse(groups=groups, items=items)
 
     def get_engine_configuration(self) -> FinancialEngineConfigurationResponse:
-        settings_row = getattr(self._repo, "get_reporting_settings", lambda: {})()
+        settings = self._financial_reporting_settings()
         return FinancialEngineConfigurationResponse(
             definitions=[
                 self._to_metric_definition(row)
@@ -1026,10 +1033,7 @@ class FinancialService:
                 self._to_attribute_definition(row)
                 for row in getattr(self._repo, "list_financial_attribute_definitions", lambda: [])()
             ],
-            settings=FinancialReportingSettings(
-                fiscal_year_start_month=settings_row.get("fiscal_year_start_month") or 1,
-                reporting_currency=settings_row.get("reporting_currency") or "USD",
-            ),
+            settings=settings,
         )
 
     def update_reporting_settings(
@@ -1037,14 +1041,59 @@ class FinancialService:
         data: FinancialReportingSettingsUpdate,
     ) -> FinancialReportingSettings:
         patch = data.model_dump(exclude_none=True)
-        if not patch:
-            settings_row = self._repo.get_reporting_settings()
+        reporting_patch: dict[str, object] = {}
+        engine_patch: dict[str, object] = {}
+        if "fiscal_year_start_month" in patch:
+            reporting_patch["fiscal_year_start_month"] = patch["fiscal_year_start_month"]
+        if "reporting_currency" in patch:
+            currency = str(patch["reporting_currency"] or "").upper()
+            if len(currency) != 3 or not currency.isalpha():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Reporting currency must be a 3-letter code.",
+                )
+            reporting_patch["reporting_currency"] = currency
+        for key in (
+            "recurring_cost_inflation_mode",
+            "default_annual_inflation_rate_pct",
+            "allow_cost_line_inflation_override",
+        ):
+            if key in patch:
+                engine_patch[key] = patch[key]
+
+        if reporting_patch:
+            persisted_reporting = self._repo.update_reporting_settings(reporting_patch)
+            for key, expected in reporting_patch.items():
+                if persisted_reporting.get(key) != expected:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Reporting settings could not be persisted.",
+                    )
+        elif not engine_patch:
+            persisted_reporting = self._repo.get_reporting_settings()
         else:
-            settings_row = self._repo.update_reporting_settings(patch)
-        return FinancialReportingSettings(
-            fiscal_year_start_month=settings_row.get("fiscal_year_start_month") or 1,
-            reporting_currency=settings_row.get("reporting_currency") or "USD",
-        )
+            persisted_reporting = self._repo.get_reporting_settings()
+
+        if engine_patch:
+            org_settings = self._repo.get_organization_settings()
+            financial_engine = org_settings.get("financial_engine") or {}
+            if not isinstance(financial_engine, dict):
+                financial_engine = {}
+            next_engine = {**financial_engine}
+            for key, value in engine_patch.items():
+                next_engine[key] = _pct(value) if isinstance(value, Decimal) else value
+            org_settings["financial_engine"] = next_engine
+            persisted = self._repo.update_organization_settings(org_settings)
+            persisted_settings = persisted.get("settings") or org_settings
+            persisted_engine = persisted_settings.get("financial_engine") or {}
+            for key, expected in next_engine.items():
+                if persisted_engine.get(key) != expected:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Financial engine settings could not be persisted.",
+                    )
+
+        return self._financial_reporting_settings(persisted_reporting)
 
     def create_metric_definition(
         self,
@@ -1199,6 +1248,35 @@ class FinancialService:
         payload = data.model_dump(mode="json", exclude_none=True)
         payload["attributes"] = payload.get("attributes") or {}
         return payload
+
+    def _financial_reporting_settings(
+        self,
+        reporting_row: dict[str, object] | None = None,
+    ) -> FinancialReportingSettings:
+        if reporting_row is None:
+            reporting_row = getattr(self._repo, "get_reporting_settings", lambda: {})()
+        org_settings = getattr(self._repo, "get_organization_settings", lambda: {})()
+        engine_settings = (
+            org_settings.get("financial_engine") if isinstance(org_settings, dict) else {}
+        )
+        if not isinstance(engine_settings, dict):
+            engine_settings = {}
+        return FinancialReportingSettings(
+            fiscal_year_start_month=int(reporting_row.get("fiscal_year_start_month") or 1),
+            reporting_currency=str(reporting_row.get("reporting_currency") or "USD").upper(),
+            recurring_cost_inflation_mode=engine_settings.get(
+                "recurring_cost_inflation_mode",
+                "manual_entry",
+            ),
+            default_annual_inflation_rate_pct=_dec(
+                engine_settings.get("default_annual_inflation_rate_pct") or "0"
+            ),
+            allow_cost_line_inflation_override=engine_settings.get(
+                "allow_cost_line_inflation_override",
+                True,
+            )
+            is not False,
+        )
 
     def get_governance_settings(self) -> FinancialGovernanceSettings:
         settings = self._repo.get_organization_settings()
@@ -3778,10 +3856,32 @@ class FinancialService:
         user_id: str,
     ) -> FinancialBenefitLine:
         self._ensure_tenant_initiative(initiative_id)
-        if not self._repo.get_benefit_line(initiative_id, benefit_line_id):
+        existing = self._repo.get_benefit_line(initiative_id, benefit_line_id)
+        if not existing:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Benefit line not found",
+            )
+        current_status = existing.get("validation_status") or "draft"
+        allowed_transitions: dict[str, set[str]] = {
+            "submit": {"draft", "rejected"},
+            "validate": {"submitted"},
+            "reject": {"submitted"},
+        }
+        if current_status not in allowed_transitions.get(event_type, set()):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "message": "Benefit validation action is not allowed from the current status.",
+                    "current_status": current_status,
+                    "allowed_actions": self._allowed_benefit_validation_actions(current_status),
+                },
+            )
+        comment = data.comment.strip() if data.comment else None
+        if event_type == "reject" and not comment:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Rejection reason is required.",
             )
         now = datetime.now(UTC).isoformat()
         patch: dict[str, object | None] = {
@@ -3794,7 +3894,9 @@ class FinancialService:
                 {
                     "submitted_at": now,
                     "submitted_by": user_id,
-                    "validation_comment": data.comment,
+                    "validated_at": None,
+                    "validated_by": None,
+                    "validation_comment": comment,
                     "rejection_reason": None,
                 }
             )
@@ -3803,7 +3905,7 @@ class FinancialService:
                 {
                     "validated_at": now,
                     "validated_by": user_id,
-                    "validation_comment": data.comment,
+                    "validation_comment": comment,
                     "rejection_reason": None,
                 }
             )
@@ -3812,8 +3914,8 @@ class FinancialService:
                 {
                     "validated_at": now,
                     "validated_by": user_id,
-                    "validation_comment": data.comment,
-                    "rejection_reason": data.comment,
+                    "validation_comment": comment,
+                    "rejection_reason": comment,
                 }
             )
         row = self._repo.update_benefit_line(
@@ -3827,11 +3929,20 @@ class FinancialService:
             benefit_line_id,
             event_type=event_type,
             user_id=user_id,
-            comment=data.comment,
+            comment=comment,
             evidence_url=data.evidence_url,
             evidence_label=data.evidence_label,
+            metadata={"from_status": current_status, "to_status": status_value},
         )
         return self._to_benefit_line(row)
+
+    @staticmethod
+    def _allowed_benefit_validation_actions(current_status: str) -> list[str]:
+        if current_status in {"draft", "rejected"}:
+            return ["submit"]
+        if current_status == "submitted":
+            return ["validate", "reject"]
+        return []
 
     def _record_benefit_line_event(
         self,
@@ -4615,7 +4726,7 @@ class FinancialService:
         if normalized.cost_lines:
             self._repo.upsert_cost_lines_batch(
                 initiative_id,
-                [self._cost_line_write_payload(cost) for cost in normalized.cost_lines],
+                self._prepare_cost_line_payloads(normalized.cost_lines),
             )
         if normalized.metric_values:
             self._repo.upsert_metric_values_batch(
@@ -4660,6 +4771,8 @@ class FinancialService:
             "amount_plan": row.get("amount_plan") or "0",
             "amount_actual": row.get("amount_actual"),
             "is_recurring": bool(row.get("is_recurring")),
+            "inflation_enabled": bool(row.get("inflation_enabled")),
+            "annual_inflation_rate_pct": row.get("annual_inflation_rate_pct"),
         }
 
     @staticmethod
@@ -4688,18 +4801,140 @@ class FinancialService:
             row[field_name] = _money(value) if value is not None else None
         return row
 
-    @staticmethod
-    def _cost_line_write_payload(cost: CostLineCreate) -> dict[str, object]:
+    def _prepare_cost_line_payloads(
+        self,
+        cost_lines: list[CostLineCreate],
+    ) -> list[dict[str, object]]:
+        settings = self._financial_reporting_settings()
+        rows: list[dict[str, object]] = []
+        group_first_year: dict[tuple[str, str, str | None], int] = {}
+        for cost in cost_lines:
+            row = self._cost_line_write_payload(cost, settings)
+            rows.append(row)
+            if row["is_recurring"] and row["inflation_enabled"]:
+                key = (
+                    str(row["name"]),
+                    str(row["category_key"]),
+                    str(row.get("category_id") or ""),
+                )
+                year = int(row["year"])
+                group_first_year[key] = min(year, group_first_year.get(key, year))
+
+        for row in rows:
+            if not row["is_recurring"] or not row["inflation_enabled"]:
+                continue
+            key = (
+                str(row["name"]),
+                str(row["category_key"]),
+                str(row.get("category_id") or ""),
+            )
+            first_year = group_first_year.get(key, int(row["year"]))
+            year_offset = max(0, int(row["year"]) - first_year)
+            if year_offset <= 0:
+                continue
+            rate = _dec(row["annual_inflation_rate_pct"]) / Decimal("100")
+            factor = (Decimal("1") + rate) ** year_offset
+            row["amount_plan"] = _money(_dec(row["amount_plan"]) * factor)
+        return rows
+
+    def _cost_line_write_payload(
+        self,
+        cost: CostLineCreate,
+        settings: FinancialReportingSettings | None = None,
+    ) -> dict[str, object]:
+        settings = settings or self._financial_reporting_settings()
+        inflation_enabled, annual_rate = self._resolve_cost_inflation(
+            is_recurring=cost.is_recurring,
+            requested_enabled=cost.inflation_enabled,
+            requested_rate=cost.annual_inflation_rate_pct,
+            settings=settings,
+        )
         return {
             "name": cost.name,
             "category_key": cost.category_key,
+            "category_id": cost.category_id,
             "year": cost.year,
             "quarter": cost.quarter,
             "month": cost.month,
             "amount_plan": _money(cost.amount_plan),
             "amount_actual": _money(cost.amount_actual) if cost.amount_actual is not None else None,
             "is_recurring": cost.is_recurring,
+            "inflation_enabled": inflation_enabled,
+            "annual_inflation_rate_pct": _pct(annual_rate),
         }
+
+    def _resolve_cost_inflation(
+        self,
+        *,
+        is_recurring: bool,
+        requested_enabled: bool | None,
+        requested_rate: Decimal | None,
+        settings: FinancialReportingSettings,
+    ) -> tuple[bool, Decimal]:
+        if not is_recurring:
+            if requested_enabled or (requested_rate is not None and _dec(requested_rate) != 0):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Inflation can only be applied to recurring cost lines.",
+                )
+            return False, Decimal("0")
+
+        mode = settings.recurring_cost_inflation_mode
+        default_rate = _dec(settings.default_annual_inflation_rate_pct)
+        requested_rate_value = _dec(requested_rate) if requested_rate is not None else None
+
+        if mode == "manual_entry":
+            if requested_enabled or (
+                requested_rate_value is not None and requested_rate_value != 0
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Recurring cost inflation is disabled for this tenant.",
+                )
+            return False, Decimal("0")
+
+        if mode == "optional_per_line":
+            enabled = requested_enabled is True
+            if not enabled:
+                if requested_rate_value is not None and requested_rate_value != 0:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Enable inflation before setting a recurring cost inflation rate.",
+                    )
+                return False, Decimal("0")
+            rate = requested_rate_value if requested_rate_value is not None else default_rate
+            if (
+                not settings.allow_cost_line_inflation_override
+                and requested_rate_value is not None
+                and requested_rate_value != default_rate
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Per-line inflation overrides are disabled for this tenant.",
+                )
+            return True, rate
+
+        rate = default_rate
+        if settings.allow_cost_line_inflation_override and requested_rate_value is not None:
+            rate = requested_rate_value
+        elif (
+            not settings.allow_cost_line_inflation_override
+            and requested_rate_value is not None
+            and requested_rate_value != default_rate
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Per-line inflation overrides are disabled for this tenant.",
+            )
+        enabled = requested_enabled is not False
+        if requested_enabled is False:
+            if settings.allow_cost_line_inflation_override:
+                return False, Decimal("0")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Per-line inflation overrides are disabled for this tenant.",
+            )
+        return enabled, rate
 
     @staticmethod
     def _metric_value_write_payload(metric: FinancialMetricValueUpdate) -> dict[str, object]:
@@ -4785,12 +5020,15 @@ class FinancialService:
                 {
                     "name": cost.name,
                     "category_key": cost.category_key,
+                    "category_id": cost.category_id,
                     "year": year,
                     "month": month,
                     "quarter": quarter,
                     "amount_plan": Decimal("0"),
                     "amount_actual": None,
                     "is_recurring": cost.is_recurring,
+                    "inflation_enabled": cost.inflation_enabled,
+                    "annual_inflation_rate_pct": cost.annual_inflation_rate_pct,
                 },
             )
             current["amount_plan"] = _dec(current.get("amount_plan")) + _dec(cost.amount_plan)
@@ -4798,6 +5036,10 @@ class FinancialService:
                 current["amount_actual"] = _dec(current.get("amount_actual")) + _dec(
                     cost.amount_actual
                 )
+            if cost.inflation_enabled:
+                current["inflation_enabled"] = True
+            if cost.annual_inflation_rate_pct is not None:
+                current["annual_inflation_rate_pct"] = cost.annual_inflation_rate_pct
 
         return FinancialGridUpdate(
             entries=[FinancialEntryUpdate(**row) for row in entry_map.values()],
@@ -6809,6 +7051,8 @@ class FinancialService:
                 _dec(row["amount_actual"]) if row.get("amount_actual") is not None else None
             ),
             is_recurring=row.get("is_recurring", False),
+            inflation_enabled=row.get("inflation_enabled", False),
+            annual_inflation_rate_pct=_pct(row.get("annual_inflation_rate_pct") or "0"),
         )
 
     @staticmethod

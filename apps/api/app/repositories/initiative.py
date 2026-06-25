@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
-from datetime import UTC
+from datetime import UTC, date
 from uuid import UUID, uuid4
 
 from supabase import Client
@@ -185,7 +185,7 @@ class InitiativeRepository:
         """Fetch aggregate counts for the detail page header."""
         ms = (
             self._c.table("milestones")
-            .select("id, status", count="exact")
+            .select("id, status, planned_end", count="exact")
             .eq("initiative_id", initiative_id)
             .execute()
         )
@@ -214,12 +214,27 @@ class InitiativeRepository:
         return {
             "milestones_total": ms.count or 0,
             "milestones_complete": sum(1 for m in milestones if m["status"] == "complete"),
-            "milestones_overdue": sum(1 for m in milestones if m["status"] == "overdue"),
+            "milestones_overdue": sum(1 for m in milestones if self._milestone_is_overdue(m)),
             "kpis_total": kpis.count or 0,
             "risks_open": risks.count or 0,
             "risks_high": sum(1 for r in risk_rows if r["rating"] == "high"),
             "status_updates_total": sus.count or 0,
         }
+
+    @staticmethod
+    def _milestone_is_overdue(row: dict) -> bool:  # type: ignore[type-arg]
+        status_value = row.get("status")
+        if status_value == "complete":
+            return False
+        if status_value == "overdue":
+            return True
+        planned_end = row.get("planned_end")
+        if not planned_end:
+            return False
+        try:
+            return date.fromisoformat(str(planned_end)) < date.today()
+        except ValueError:
+            return False
 
     def create(self, data: dict) -> dict:  # type: ignore[type-arg]
         result = self._c.table("initiatives").insert(data).execute()
