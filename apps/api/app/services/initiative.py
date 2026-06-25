@@ -28,7 +28,7 @@ from app.domain.initiatives import (
     InitiativeUpdate,
     PressureBreakdown,
 )
-from app.domain.kpis import KPICreate
+from app.domain.kpis import KPICreate, KPIEntryUpsert
 from app.domain.milestones import MilestoneCreate
 from app.domain.risks import RiskCreate
 from app.domain.status_updates import StatusUpdateCreate
@@ -637,7 +637,11 @@ class InitiativeService:
         for kpi in [item for item in suggestions.kpis if item.accepted]:
             created_kpi = kpi_service.create_kpi(initiative_id, self._as_kpi_create(kpi))
             if kpi.entries:
-                kpi_service.upsert_entries(initiative_id, created_kpi.id, kpi.entries)
+                kpi_service.upsert_entries(
+                    initiative_id,
+                    created_kpi.id,
+                    self._kpi_entries_with_initial_actuals(kpi.entries),
+                )
 
         risk_service = RiskService(self._client, self._tenant_id)
         for risk in [item for item in suggestions.risks if item.accepted]:
@@ -747,6 +751,18 @@ class InitiativeService:
         fields = {"name", "type", "category", "frequency", "unit"}
         raw = data.model_dump(include=fields) if hasattr(data, "model_dump") else data
         return KPICreate.model_validate(raw)
+
+    @staticmethod
+    def _kpi_entries_with_initial_actuals(entries: list[KPIEntryUpsert]) -> list[KPIEntryUpsert]:
+        normalized: list[KPIEntryUpsert] = []
+        for entry in entries:
+            if entry.value_actual is not None:
+                normalized.append(entry)
+                continue
+            normalized.append(
+                entry.model_copy(update={"value_actual": entry.value_base or entry.value_high})
+            )
+        return normalized
 
     @staticmethod
     def _as_risk_create(data: object) -> RiskCreate:

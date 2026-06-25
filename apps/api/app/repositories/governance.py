@@ -26,6 +26,20 @@ class GovernanceRepository:
     def upsert_criterion(self, data: dict[str, Any]) -> dict[str, Any]:
         payload = {**data, "tenant_id": self._tid}
         if not payload.get("id"):
+            existing = (
+                self._c.table("gate_criteria")
+                .select("id")
+                .eq("tenant_id", self._tid)
+                .eq("gate_number", payload["gate_number"])
+                .eq("criterion_id", payload["criterion_id"])
+                .maybe_single()
+                .execute()
+            )
+            if existing and existing.data:
+                payload["id"] = existing.data["id"]
+            else:
+                payload["id"] = str(uuid4())
+        if payload.get("id") is None:
             payload["id"] = str(uuid4())
         result = self._c.table("gate_criteria").upsert(payload).execute()
         return result.data[0] if result.data else {}

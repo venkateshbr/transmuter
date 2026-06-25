@@ -55,7 +55,7 @@ const DASHBOARD_FILTER_STATE_KEY = 'transmuter.filters.dashboard';
               & Strategic Yield Dashboard<span class="text-[var(--t-blue-light)]">.</span>
             </h1>
             <p class="text-sm font-medium opacity-80 mt-4 max-w-xl leading-relaxed">
-              Real-time synchronization across {{ data()?.summary?.total_initiatives }} strategic workstreams. 
+              Real-time synchronization across {{ data()?.summary?.total_initiatives }} strategic initiatives.
               The current portfolio health score is <span class="font-black text-green-300">{{ getHealthScore() }}%</span> with 
               <span class="font-black text-amber-300">{{ data()?.summary?.pending_approvals }} pending gate decisions</span>.
             </p>
@@ -112,7 +112,7 @@ const DASHBOARD_FILTER_STATE_KEY = 'transmuter.filters.dashboard';
           <p class="text-xs font-bold uppercase tracking-widest text-[var(--t-text-tertiary)] mb-1">Total Initiatives</p>
           <p class="text-3xl font-bold text-[var(--t-text-primary)]">{{ data()?.summary?.total_initiatives || 0 }}</p>
           <p class="text-xs text-[var(--t-text-secondary)] mt-2 flex items-center gap-1">
-            <span class="text-green-500">↑ 2</span> from last week
+            Current portfolio
           </p>
         </a>
         <a
@@ -762,7 +762,7 @@ const DASHBOARD_FILTER_STATE_KEY = 'transmuter.filters.dashboard';
                   @for (item of executiveNeedsAttention(); track item.reason + item.initiative_id) {
                     <a routerLink="/reports/control-tower" class="block p-4 hover:bg-[var(--t-surface-raised)]" (click)="closeExecutiveBrief()">
                       <p class="text-sm font-black text-[var(--t-text-primary)]">{{ item.reason }}</p>
-                      <p class="mt-1 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">{{ item.initiative_id }}</p>
+                      <p class="mt-1 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">{{ executiveAttentionLabel(item) }}</p>
                     </a>
                   } @empty {
                     <p class="p-6 text-sm font-semibold text-[var(--t-text-secondary)]">No executive exceptions for the selected view.</p>
@@ -1310,7 +1310,7 @@ export class DashboardComponent implements OnInit {
           ${this.exportTable('Summary', this.executiveBriefCards().map(row => [row.label, row.value]))}
           ${this.exportTable('Value Position', this.executiveValueRows().map(row => [row.label, this.formatCurrency(row.value)]))}
           ${this.exportTable('Dependency Risk', this.dependencyRiskRows().map(row => [row.label, row.value]))}
-          ${this.exportTable('Needs Attention', this.executiveNeedsAttention().map(row => [row.reason, row.initiative_id]))}
+          ${this.exportTable('Needs Attention', this.executiveNeedsAttention().map(row => [row.reason, this.executiveAttentionLabel(row)]))}
           ${this.exportTable('Initiative Burdening', this.initiativeBurdeningRows().map((row: any) => [
             `${row.initiative_code || ''} ${row.name || ''}`.trim(),
             row.rag_status || '',
@@ -1369,7 +1369,7 @@ export class DashboardComponent implements OnInit {
           </div>
           ${this.exportTable('Value Position', this.executiveValueRows().map(row => [row.label, this.formatCurrency(row.value)]))}
           ${this.exportTable('Dependency Risk', this.dependencyRiskRows().map(row => [row.label, row.value]))}
-          ${this.exportTable('Needs Attention', this.executiveNeedsAttention().map(row => [row.reason, row.initiative_id]))}
+          ${this.exportTable('Needs Attention', this.executiveNeedsAttention().map(row => [row.reason, this.executiveAttentionLabel(row)]))}
           ${this.exportTable('Initiative Burdening', this.initiativeBurdeningRows().map((row: any) => [
             `${row.initiative_code || ''} ${row.name || ''}`.trim(),
             row.rag_status || '',
@@ -1648,7 +1648,14 @@ export class DashboardComponent implements OnInit {
     this.selectedMatrixCell.set(null);
   }
 
-  executiveNeedsAttention(): Array<{ reason: string; initiative_id: string }> {
+  executiveNeedsAttention(): Array<{ reason: string; initiative_id: string; initiative_code?: string; initiative_name?: string }> {
     return this.executiveReport()?.needs_attention || [];
+  }
+
+  executiveAttentionLabel(item: { initiative_id?: string; initiative_code?: string; initiative_name?: string }): string {
+    const code = String(item.initiative_code || '').trim();
+    const name = String(item.initiative_name || '').trim();
+    if (code && name) return `${code} · ${name}`;
+    return code || name || String(item.initiative_id || '');
   }
 }

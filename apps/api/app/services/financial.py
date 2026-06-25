@@ -46,6 +46,7 @@ from app.domain.financials import (
     CostLineUpdate,
     FinancialAttributeDefinition,
     FinancialBenefitLine,
+    FinancialBenefitLineCreate,
     FinancialBenefitLineHandoffUpdate,
     FinancialBenefitLineValidationEvent,
     FinancialBenefitLineValidationRequest,
@@ -767,6 +768,7 @@ class FinancialService:
 
     def create_cost_line(self, initiative_id: str, data: CostLineCreate) -> CostLineItem:
         self._ensure_tenant_initiative(initiative_id)
+        self._assert_financials_editable(initiative_id)
         row = self._repo.create_cost_line(
             initiative_id,
             {
@@ -814,7 +816,56 @@ class FinancialService:
 
     def delete_cost_line(self, initiative_id: str, cost_line_id: str) -> None:
         self._ensure_tenant_initiative(initiative_id)
+        self._assert_financials_editable(initiative_id)
         self._repo.delete_cost_line(initiative_id, cost_line_id)
+
+    # ── Benefit lines ────────────────────────────────────────────────────────
+
+    def create_benefit_line(
+        self,
+        initiative_id: str,
+        data: FinancialBenefitLineCreate,
+        user_id: str | None = None,
+    ) -> FinancialBenefitLine:
+        self._ensure_tenant_initiative(initiative_id)
+        self._assert_financials_editable(initiative_id)
+        row = self._repo.create_benefit_line(
+            initiative_id,
+            {
+                "metric_definition_id": data.metric_definition_id,
+                "name": data.name,
+                "description": data.description,
+                "impact_type": data.impact_type,
+                "timing": data.timing,
+                "confidence": _money(data.confidence) if data.confidence is not None else None,
+                "phasing": data.phasing,
+                "attributes": data.attributes,
+                "show_in_summary": data.show_in_summary,
+                "display_order": data.display_order,
+                "evidence_url": data.evidence_url,
+                "evidence_label": data.evidence_label,
+                "realization_owner_id": data.realization_owner_id,
+                "handoff_status": data.handoff_status,
+                "handoff_due_date": data.handoff_due_date.isoformat()
+                if data.handoff_due_date
+                else None,
+                "risk_rating": data.risk_rating,
+                "risk_adjustment_pct": _money(data.risk_adjustment_pct),
+            },
+            user_id=user_id,
+        )
+        return self._to_benefit_line(row)
+
+    def delete_benefit_line(self, initiative_id: str, benefit_line_id: str) -> None:
+        self._ensure_tenant_initiative(initiative_id)
+        self._assert_financials_editable(initiative_id)
+        existing = self._repo.get_benefit_line(initiative_id, benefit_line_id)
+        if not existing:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Benefit line not found",
+            )
+        self._repo.delete_benefit_line(initiative_id, benefit_line_id)
 
     # -- Benefit-line validation ---------------------------------------------
 
@@ -2669,27 +2720,49 @@ class FinancialService:
                 tag=tag,
                 category_key=category_key,
             )
-        entries = [
+        all_entries = [
             row
             for row in self._reporting_rows(raw_entries)
-            if row.get("initiative_id") in initiatives and (year is None or row.get("year") == year)
+            if row.get("initiative_id") in initiatives
         ]
-        costs = [
+        all_costs = [
             row
             for row in self._reporting_cost_lines(self._repo.get_all_cost_lines())
             if row.get("initiative_id") in initiatives
-            and (year is None or row.get("year") == year)
             and (not category_key or row.get("category_key", "other") == category_key)
+        ]
+        all_metric_values = [
+            row
+            for row in self._reporting_metric_values(self._repo.get_all_metric_values())
+            if row.get("initiative_id") in initiatives
+        ]
+        available_years = sorted(
+            {
+                int(row["year"])
+                for row in [*all_entries, *all_costs, *all_metric_values]
+                if row.get("year") is not None
+            }
+        )
+        selected_year = (
+            year if year is not None else (available_years[-1] if available_years else None)
+        )
+        entries = [
+            row for row in all_entries if selected_year is None or row.get("year") == selected_year
+        ]
+        costs = [
+            row for row in all_costs if selected_year is None or row.get("year") == selected_year
         ]
         metric_values = [
             row
-            for row in self._reporting_metric_values(self._repo.get_all_metric_values())
-            if row.get("initiative_id") in initiatives and (year is None or row.get("year") == year)
+            for row in all_metric_values
+            if selected_year is None or row.get("year") == selected_year
         ]
         config = self.get_configuration()
         response = self._compute_portfolio_financials(
             entries, costs, metric_values, config, granularity
         )
+        response.selected_year = selected_year
+        response.available_years = available_years
         response.financial_mode = self._financial_mode_descriptor(
             "",
             entries,
@@ -5392,12 +5465,28 @@ class FinancialService:
                 tags=tags,
             )
         }
+        all_values = [
+            row
+            for row in self._repo.get_all_metric_values()
+            if row.get("initiative_id") in initiatives
+        ]
+        all_costs = [
+            row
+            for row in self._repo.get_all_cost_lines()
+            if row.get("initiative_id") in initiatives
+            and (not category_key or row.get("category_key", "other") == category_key)
+        ]
+        available_years = sorted(
+            {int(row["year"]) for row in [*all_values, *all_costs] if row.get("year") is not None}
+        )
+        selected_year = (
+            year if year is not None else (available_years[-1] if available_years else None)
+        )
         values = self._values_with_formula_metrics(
             [
                 row
-                for row in self._repo.get_all_metric_values()
-                if row.get("initiative_id") in initiatives
-                and (year is None or row.get("year") == year)
+                for row in all_values
+                if selected_year is None or row.get("year") == selected_year
             ],
             [
                 row
@@ -5406,11 +5495,7 @@ class FinancialService:
             ],
         )
         costs = [
-            row
-            for row in self._repo.get_all_cost_lines()
-            if row.get("initiative_id") in initiatives
-            and (year is None or row.get("year") == year)
-            and (not category_key or row.get("category_key", "other") == category_key)
+            row for row in all_costs if selected_year is None or row.get("year") == selected_year
         ]
         period_keys = {
             self._clean_portfolio_period_key(row, granularity) for row in [*values, *costs]
@@ -5449,6 +5534,8 @@ class FinancialService:
         summary_totals = self._compute_clean_summary(values, costs)
         return PortfolioFinancialsResponse(
             granularity=granularity,
+            selected_year=selected_year,
+            available_years=available_years,
             summary=[
                 PortfolioFinancialSummaryCard(
                     key="benefits",

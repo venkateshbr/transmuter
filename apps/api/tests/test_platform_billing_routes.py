@@ -9,6 +9,7 @@ from urllib.parse import parse_qs
 from uuid import UUID
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.core.auth import CurrentUser, get_current_user
@@ -140,6 +141,42 @@ async def test_platform_tenant_delete_cleans_bootstrap_financial_config_before_o
     assert fake_admin.deleted_tables.index(
         "financial_config_groups"
     ) < fake_admin.deleted_tables.index("organizations")
+
+
+async def test_platform_tenant_delete_cleans_bankable_plans_before_gate_submissions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tenant_id = UUID("b7a91745-5542-4aeb-8125-474e221b8f37")
+    fake_admin = _FakePlatformAdmin(
+        tenant_id=str(tenant_id),
+        slug="pilot-bankable-fk",
+        counts={
+            "bankable_plans": 1,
+            "gate_submissions": 1,
+        },
+    )
+    monkeypatch.setattr("app.routers.platform.get_supabase_admin", lambda: fake_admin)
+
+    data = await delete_tenant(
+        tenant_id,
+        DeleteTenantRequest(confirm_slug="pilot-bankable-fk"),
+        CurrentUser(
+            id=PLATFORM_TENANT_ID,
+            tenant_id=PLATFORM_TENANT_ID,
+            role="platform_admin",
+        ),
+    )
+
+    assert data["deleted_rows"]["bankable_plans"] == 1
+    assert data["deleted_rows"]["gate_submissions"] == 1
+    assert data["object_counts"]["financials"] == 1
+    assert data["object_counts"]["governance"] == 1
+    assert fake_admin.deleted_tables.index("bankable_plans") < fake_admin.deleted_tables.index(
+        "gate_submissions"
+    )
+    assert fake_admin.deleted_tables.index("gate_submissions") < fake_admin.deleted_tables.index(
+        "organizations"
+    )
 
 
 def test_billing_config_and_checkout_guards(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -369,6 +406,51 @@ def test_checkout_completion_waits_for_unpaid_session(monkeypatch: pytest.Monkey
     assert fake_service.provisioned_session is None
 
 
+def test_checkout_completion_surfaces_hard_provisioning_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_123")
+
+    fake_service = _FakeBillingProvisioningService()
+    fake_service.provisioning_error = HTTPException(
+        status_code=409,
+        detail="Initial admin email already belongs to an existing workspace",
+    )
+    fake_stripe = _FakeStripeAsyncClient(
+        response_payload={
+            "id": "cs_test_123",
+            "status": "complete",
+            "payment_status": "paid",
+            "customer": "cus_test_123",
+            "subscription": "sub_test_123",
+            "metadata": {"signup_intent_id": "intent_test_123"},
+        }
+    )
+    monkeypatch.setattr(
+        "app.routers.billing.BillingProvisioningService", lambda client: fake_service
+    )
+    monkeypatch.setattr("app.routers.billing.httpx.AsyncClient", lambda timeout: fake_stripe)
+
+    response = client.post(
+        "/billing/checkout-completion",
+        json={"session_id": "cs_test_123"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "received": True,
+        "checkout_status": "complete",
+        "payment_status": "paid",
+        "provisioning_status": "failed",
+        "error_detail": "Initial admin email already belongs to an existing workspace",
+        "login_ready": False,
+    }
+    assert fake_service.failed_checkout == {
+        "signup_intent_id": "intent_test_123",
+        "detail": "Initial admin email already belongs to an existing workspace",
+    }
+
+
 def test_billing_portal_session_resolves_return_url_from_request_origin(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -414,6 +496,8 @@ def test_billing_portal_session_resolves_return_url_from_request_origin(
 class _FakeBillingProvisioningService:
     def __init__(self) -> None:
         self.provisioned_session: dict[str, object] | None = None
+        self.provisioning_error: HTTPException | None = None
+        self.failed_checkout: dict[str, object] | None = None
         self.stripe_price_id = "price_test_123"
 
     def create_signup_intent(self, **kwargs: object) -> dict[str, object]:
@@ -431,7 +515,15 @@ class _FakeBillingProvisioningService:
     def mark_checkout_created(self, **kwargs: object) -> None:
         self.last_mark_checkout_created = kwargs  # type: ignore[attr-defined]
 
+    def mark_checkout_failed(self, signup_intent_id: str, detail: str) -> None:
+        self.failed_checkout = {
+            "signup_intent_id": signup_intent_id,
+            "detail": detail,
+        }
+
     def provision_checkout_session(self, session: dict[str, object]) -> dict[str, object]:
+        if self.provisioning_error:
+            raise self.provisioning_error
         self.provisioned_session = session
         return {
             "provisioning_status": "provisioned",

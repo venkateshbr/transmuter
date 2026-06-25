@@ -68,6 +68,7 @@ class CheckoutCompletionResponse(BaseModel):
     checkout_status: str | None = None
     payment_status: str | None = None
     provisioning_status: str
+    error_detail: str | None = None
     login_ready: bool = False
     tenant_id: str | None = None
     organization_slug: str | None = None
@@ -189,7 +190,11 @@ async def create_checkout_session(
     return CheckoutSessionResponse(checkout_url=data["url"], session_id=data["id"])
 
 
-@router.post("/checkout-completion", response_model=CheckoutCompletionResponse)
+@router.post(
+    "/checkout-completion",
+    response_model=CheckoutCompletionResponse,
+    response_model_exclude_none=True,
+)
 async def complete_checkout_session(body: CheckoutCompletionRequest) -> CheckoutCompletionResponse:
     if not settings.stripe_secret_key:
         raise HTTPException(
@@ -233,9 +238,22 @@ async def complete_checkout_session(body: CheckoutCompletionRequest) -> Checkout
             detail="Checkout session is not linked to a signup intent",
         )
 
-    provisioning = BillingProvisioningService(get_supabase_admin()).provision_checkout_session(
-        session
-    )
+    provisioning_service = BillingProvisioningService(get_supabase_admin())
+    try:
+        provisioning = provisioning_service.provision_checkout_session(session)
+    except HTTPException as exc:
+        provisioning_service.mark_checkout_failed(
+            str((session.get("metadata") or {}).get("signup_intent_id") or ""),
+            str(exc.detail or "Workspace provisioning failed."),
+        )
+        return CheckoutCompletionResponse(
+            received=True,
+            checkout_status=checkout_status,
+            payment_status=payment_status,
+            provisioning_status="failed",
+            error_detail=str(exc.detail or "Workspace provisioning failed."),
+            login_ready=False,
+        )
     return CheckoutCompletionResponse(
         received=True,
         checkout_status=checkout_status,

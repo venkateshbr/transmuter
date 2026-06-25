@@ -214,7 +214,7 @@ const PEOPLE_FILTER_STATE_KEY = 'transmuter.filters.people.directory';
                   class="px-3 py-3 text-[10px] font-black uppercase tracking-widest"
                   [ngClass]="inviteMode() === 'invite' ? 'bg-[var(--t-primary)] text-white' : ''"
                   aria-label="Send invite mode">
-                  Send Invite
+                  Invite Link
                 </button>
                 <button
                   type="button"
@@ -222,7 +222,7 @@ const PEOPLE_FILTER_STATE_KEY = 'transmuter.filters.people.directory';
                   class="border-l border-[var(--t-border)] px-3 py-3 text-[10px] font-black uppercase tracking-widest"
                   [ngClass]="inviteMode() === 'create' ? 'bg-[var(--t-primary)] text-white' : ''"
                   aria-label="Create user mode">
-                  Create User
+                  Temp Password
                 </button>
               </div>
               <input [(ngModel)]="inviteForm.email" class="input-field w-full" placeholder="email@company.com" aria-label="Invite email" />
@@ -269,8 +269,9 @@ const PEOPLE_FILTER_STATE_KEY = 'transmuter.filters.people.directory';
               <button
                 (click)="inviteMode() === 'create' ? createUser() : createInvite()"
                 class="btn-primary h-11 w-full"
+                [disabled]="inviteSubmitting() || !canSubmitInvite()"
                 [attr.aria-label]="inviteMode() === 'create' ? 'Create user' : 'Send invite'">
-                {{ inviteMode() === 'create' ? 'Create User' : 'Send Invite' }}
+                {{ inviteSubmitting() ? 'Submitting...' : (inviteMode() === 'create' ? 'Create User' : 'Send Invite') }}
               </button>
             </div>
           </div>
@@ -453,6 +454,7 @@ export class PeopleComponent implements OnInit {
   inviteMode = signal<'invite' | 'create'>('invite');
   inviteResult = signal<any | null>(null);
   inviteError = signal<string | null>(null);
+  inviteSubmitting = signal(false);
   userAccessResult = signal<any | null>(null);
   userAccessError = signal<string | null>(null);
   showTemporaryPassword = signal(false);
@@ -602,8 +604,11 @@ export class PeopleComponent implements OnInit {
   }
 
   createInvite() {
+    if (!this.validateInviteForm()) return;
+    if (this.inviteSubmitting()) return;
     this.inviteError.set(null);
     this.inviteResult.set(null);
+    this.inviteSubmitting.set(true);
     this.api.post<any>('/invites', {
       email: this.inviteForm.email,
       display_name: this.inviteForm.display_name,
@@ -621,15 +626,22 @@ export class PeopleComponent implements OnInit {
         this.loadPeople();
         this.loadPendingPeople();
         this.loadInvites();
+        this.inviteSubmitting.set(false);
       },
-      error: err => this.inviteError.set(this.formatApiError(err)),
+      error: err => {
+        this.inviteSubmitting.set(false);
+        this.inviteError.set(this.formatApiError(err));
+      },
     });
   }
 
   createUser() {
     if (!this.inviteForm.temporary_password) this.generateTemporaryPassword();
+    if (!this.validateInviteForm()) return;
+    if (this.inviteSubmitting()) return;
     this.inviteError.set(null);
     this.inviteResult.set(null);
+    this.inviteSubmitting.set(true);
     this.api.post<any>('/users', this.inviteForm).subscribe({
       next: user => {
         this.showInvite.set(false);
@@ -638,9 +650,37 @@ export class PeopleComponent implements OnInit {
         this.loadPendingPeople();
         this.loadInvites();
         this.openProfile(user);
+        this.inviteSubmitting.set(false);
       },
-      error: err => this.inviteError.set(this.formatApiError(err)),
+      error: err => {
+        this.inviteSubmitting.set(false);
+        this.inviteError.set(this.formatApiError(err));
+      },
     });
+  }
+
+  canSubmitInvite(): boolean {
+    const email = this.inviteForm.email.trim();
+    const name = this.inviteForm.display_name.trim();
+    if (!email || !name) return false;
+    if (this.inviteMode() === 'create' && this.inviteForm.temporary_password.length < 12) {
+      return false;
+    }
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  }
+
+  private validateInviteForm(): boolean {
+    if (this.canSubmitInvite()) return true;
+    if (!this.inviteForm.email.trim()) {
+      this.inviteError.set('Email is required.');
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(this.inviteForm.email.trim())) {
+      this.inviteError.set('Enter a valid email address.');
+    } else if (!this.inviteForm.display_name.trim()) {
+      this.inviteError.set('Display name is required.');
+    } else {
+      this.inviteError.set('Temporary password must be at least 12 characters.');
+    }
+    return false;
   }
 
   resendInvite(invite: any) {
@@ -724,6 +764,7 @@ export class PeopleComponent implements OnInit {
   private resetInviteForm() {
     this.inviteError.set(null);
     this.inviteResult.set(null);
+    this.inviteSubmitting.set(false);
     this.inviteForm = {
       email: '',
       display_name: '',

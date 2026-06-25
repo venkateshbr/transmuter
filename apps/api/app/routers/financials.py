@@ -36,6 +36,7 @@ from app.domain.financials import (
     CostLineUpdate,
     FinancialAttributeDefinition,
     FinancialBenefitLine,
+    FinancialBenefitLineCreate,
     FinancialBenefitLineHandoffUpdate,
     FinancialBenefitLineValidationEvent,
     FinancialBenefitLineValidationRequest,
@@ -142,6 +143,35 @@ async def update_financials(
     """Upsert the configurable monthly financial grid for an initiative."""
     assert_can_manage_initiatives(current_user)
     return svc.update_configurable_financial_grid(initiative_id, body, str(current_user.id))
+
+
+@router.post(
+    "/initiatives/{initiative_id}/financials/benefit-lines",
+    response_model=FinancialBenefitLine,
+    status_code=201,
+)
+async def create_benefit_line(
+    initiative_id: str,
+    body: FinancialBenefitLineCreate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> FinancialBenefitLine:
+    assert_can_manage_initiatives(current_user)
+    return svc.create_benefit_line(initiative_id, body, str(current_user.id))
+
+
+@router.delete(
+    "/initiatives/{initiative_id}/financials/benefit-lines/{benefit_line_id}",
+    status_code=204,
+)
+async def delete_benefit_line(
+    initiative_id: str,
+    benefit_line_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> None:
+    assert_can_manage_initiatives(current_user)
+    svc.delete_benefit_line(initiative_id, benefit_line_id)
 
 
 @router.post(

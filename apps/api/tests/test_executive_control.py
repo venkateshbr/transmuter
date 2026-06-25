@@ -470,3 +470,24 @@ def test_management_report_reconciles_allocated_costs() -> None:
     assert report.value_bridge["allocated_costs_plan"] == "400.0000"
     assert report.value_bridge["net_after_allocation_plan"] == "-10.0000"
     assert report.dependency_risk.critical_path_risk == 1
+
+    default_year_report = service.management_report(user, ReportFilterParams())
+    assert default_year_report.selected_year == 2026
+    assert default_year_report.available_years == [2026]
+    assert any(
+        item["initiative_code"] == "TRN-002" and item["initiative_name"] == "Commercial rollout"
+        for item in default_year_report.needs_attention
+    )
+
+
+def test_allocation_year_ignores_malformed_period_metadata() -> None:
+    assert (
+        ExecutiveControlService._allocation_year(
+            {"shared_cost_allocation_runs": {"period_start": "not-a-date"}}
+        )
+        is None
+    )
+    assert (
+        ExecutiveControlService._allocation_year({"shared_cost_pools": {"year": "bad-year"}})
+        is None
+    )

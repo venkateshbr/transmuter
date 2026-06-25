@@ -26,6 +26,124 @@ status.
 
 ## Current Release Entries
 
+### 2026-06-24 - Platform Findings Remediation
+
+Status: promoted to production; authenticated production tenant validation pending
+
+GitHub tracking:
+- Issue: `#354`
+- PR: `#355`
+- Merge commit:
+  - `b405442 Fix platform financial and onboarding gaps`
+
+Runtime changes:
+- Added benefit-line create/delete APIs and UI delete controls, with delete
+  still blocked once financials are locked.
+- Cost-line create/delete now respects locked financials; benefit-line Finance
+  submit/validate/reject/risk actions remain available after lock.
+- Signup intent creation pre-validates initial admin email availability before
+  Stripe checkout session creation.
+- Checkout completion now marks and surfaces hard provisioning failures instead
+  of presenting them as indefinite pending setup.
+- People invite/create-user modal now validates required input and locks the
+  submit action while the request is in flight.
+- Portfolio Financials and Control Tower default to the latest year with data
+  and return selected/available years.
+- Control Tower and Dashboard attention rows display initiative code/name
+  instead of raw UUID-only labels.
+- Shared-cost weight-based rules validate structured weights before preview or
+  post.
+- KPI suggestions now seed an initial actual value so KPI performance can
+  compute.
+- Gate criteria upsert now reuses existing tenant/gate/criterion rows.
+- Bankable plan governance is configurable in Admin and defaults initiative
+  bankable lock to Gate 3 while annual baseline lock remains Gate 2.
+
+Local and CI validation:
+- `cd apps/api && uv run ruff format --check app tests`
+- `cd apps/api && uv run ruff check app tests`
+- `cd apps/api && uv run pytest tests/test_platform_billing_routes.py tests/test_financial_portfolio.py tests/test_executive_control.py tests/test_workstream_target_locks.py -q`
+- `cd apps/web && npm run build`
+- `cd apps/web && ./node_modules/.bin/tsc --noEmit -p tsconfig.app.json`
+- `cd apps/web && ./node_modules/.bin/ngc -p tsconfig.app.json`
+- GitHub PR checks passed:
+  - Backend lint, type check, tests.
+  - Frontend lint and production build.
+  - Secret scan.
+  - Validate agent and workflow specs.
+
+Dev deployment:
+- Environment: `https://transmuter-dev.ishirock.tech`
+- Schema: `transmuter_dev`
+- Schema SQL applied: none.
+- Deployed with `infra/hostinger/deploy-change-to-dev.sh`.
+- Initial scripted public validation hit the known immediate `/health` 404
+  readiness race after container recreation.
+- Rerun dev validation passed for local/public `/health` and `/api/health`.
+- Current enterprise scenario seed passed in dev:
+  - 10 initiatives.
+  - 10 locked bankable plans.
+  - Benefit ledger seeded.
+  - 4 shared-cost pools.
+- ACME full-demo browser validation passed:
+  - 10 initiatives.
+  - 10 locked bankable plans.
+  - 10 KPIs.
+  - 10 risks.
+  - 40 milestones.
+  - 3 dependencies.
+  - Benefit ledger actuals `12053200.0020`.
+  - 4 shared-cost pools.
+  - Rebaseline version `2`.
+- Targeted public dev API validation confirmed:
+  - `/admin/financial-governance` returns initiative plan lock Gate 3 and
+    baseline lock Gate 2.
+  - `/portfolio/financials` defaults to selected year `2028` with available
+    years `[2026, 2027, 2028]`.
+  - `/reports/executive-control-tower` defaults to selected year `2028` and
+    attention rows include initiative labels.
+  - Locked initiative financial grid has benefit and cost lines.
+  - Benefit submit after lock returns `200`.
+
+Prahari review:
+- Required because the change touches billing/provisioning and user-management
+  flows.
+- Review note posted on PR `#355`.
+- No merge-blocking security findings: financial mutations retain
+  transformation-office RBAC and tenant/initiative scoping; checkout failure
+  details are bounded to signup/provisioning state; no new external PII or
+  secret flows were introduced.
+
+Schema SQL required for production:
+- None.
+
+Production promotion:
+- Environment: `https://transmuter.ishirock.tech`
+- Schema: `transmuter`
+- Promotion commit: `d75df08`
+- Schema SQL applied: none.
+- Promoted with `CONFIRM_PROMOTE=1 infra/hostinger/promote-dev-to-prod.sh`.
+- Initial scripted validation hit the known immediate public `/health` readiness
+  race after container recreation.
+- Rerun production validation passed for local/public `/health` and
+  `/api/health`.
+- Authenticated production tenant browser validation remains pending because the
+  latest local launch tenant credentials returned `401 Invalid credentials`, no
+  other valid production tenant credentials were found in local launch artifacts,
+  and platform-admin bootstrap credentials are not configured in
+  `infra/hostinger/.env`.
+
+Operational notes:
+- Legacy `apps/web/e2e/real-ui-acceptance.mjs` was attempted against dev and
+  failed on a stale `seed_dev.py` assumption around admin cost category
+  configuration.
+- `apps/api/scripts/seed_dev.py` is stale against the current schema because it
+  expects `workstreams.business_unit_id`; current enterprise seeding uses the
+  join-table model and passed.
+- Do not close issue `#354` until authenticated production tenant workflow
+  validation is completed with fresh credentials or an approved production
+  validation tenant.
+
 ### 2026-06-23 - Platform Admin Bootstrap Production Promotion
 
 Status: promoted to production
@@ -34,7 +152,8 @@ GitHub tracking:
 - Issue: `#351`
 - Related implementation issue: `#348`
 - Security review: `#349`
-- PR: not opened; operational promotion of reviewed `main` plus ignored
+- Documentation PR: `#352`
+- Runtime promotion was operational against reviewed `main` plus ignored
   Hostinger runtime env correction.
 - Runtime code commit:
   - `14ace8a chore: add platform admin startup bootstrap`

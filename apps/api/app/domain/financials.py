@@ -64,7 +64,7 @@ class FinancialModeDescriptor(BaseModel):
 
 
 class FinancialGovernanceSettings(BaseModel):
-    initiative_plan_lock_gate_number: int = Field(1, ge=1, le=10)
+    initiative_plan_lock_gate_number: int = Field(3, ge=1, le=10)
     plan_lock_on_approval: bool = True
     baseline_lock_gate_number: int = Field(2, ge=1, le=10)
     baseline_lock_on_approval: bool = True
@@ -731,6 +731,8 @@ class PortfolioFinancialContributorsResponse(BaseModel):
 
 class PortfolioFinancialsResponse(BaseModel):
     granularity: PortfolioGranularity
+    selected_year: int | None = None
+    available_years: list[int] = Field(default_factory=list)
     summary: list[PortfolioFinancialSummaryCard]
     periods: list[PortfolioFinancialPeriod]
     broader_period_totals: list[PortfolioFinancialPeriod]

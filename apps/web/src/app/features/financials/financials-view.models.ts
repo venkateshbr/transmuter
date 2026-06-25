@@ -319,6 +319,8 @@ export interface WorkstreamOption {
 export interface FinancialGovernanceSettings {
   initiative_plan_lock_gate_number: number;
   plan_lock_on_approval: boolean;
+  baseline_lock_gate_number?: number;
+  baseline_lock_on_approval?: boolean;
   allow_rebaseline: boolean;
   rebaseline_roles: string[];
   workstream_lock_cadence: 'one_off' | 'annual' | 'cycle_based';

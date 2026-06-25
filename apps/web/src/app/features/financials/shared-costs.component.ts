@@ -538,11 +538,16 @@ const DEFAULT_REPORTING_SETTINGS: SharedCostReportingSettings = {
                             Configured percentage total: {{ configuredPercentageTotal(rule) }}%
                           </div>
                         }
+                        @if (weightValidationMessage(rule)) {
+                          <div class="border-t border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs font-bold text-amber-700 dark:text-amber-200">
+                            {{ weightValidationMessage(rule) }}
+                          </div>
+                        }
                       </div>
                     }
 
                     <div class="flex flex-wrap gap-2">
-                      <button class="btn-secondary gap-2 text-[10px]" type="button" (click)="previewRule()" [disabled]="previewing()" aria-label="Preview shared cost allocation">
+                      <button class="btn-secondary gap-2 text-[10px]" type="button" (click)="previewRule()" [disabled]="previewing() || !canPreviewSelectedRule()" aria-label="Preview shared cost allocation">
                         <lucide-icon [img]="eyeIcon" [size]="14"></lucide-icon>
                         Preview Allocation
                       </button>
@@ -917,6 +922,12 @@ export class SharedCostsComponent implements OnInit {
     const pool = this.selectedPool();
     const rule = this.selectedRule();
     if (!pool || !rule) return;
+    const validationMessage = this.weightValidationMessage(rule);
+    if (validationMessage) {
+      this.error.set(validationMessage);
+      return;
+    }
+    this.error.set('');
     this.previewing.set(true);
     this.preview.set(null);
     this.api.post<AllocationPreview>(`/shared-cost-pools/${pool.id}/allocation-runs/preview`, {
@@ -939,6 +950,11 @@ export class SharedCostsComponent implements OnInit {
     const pool = this.selectedPool();
     const rule = this.selectedRule();
     if (!pool || !rule) return;
+    const validationMessage = this.weightValidationMessage(rule);
+    if (validationMessage) {
+      this.error.set(validationMessage);
+      return;
+    }
     this.posting.set(true);
     this.api.post<AllocationRun>(`/shared-cost-pools/${pool.id}/allocation-runs`, {
       rule_id: rule.id,
@@ -1071,6 +1087,36 @@ export class SharedCostsComponent implements OnInit {
     return rule.structured_weights
       .reduce((total, row) => total + this.parseMoney(row.percentage), 0)
       .toFixed(4);
+  }
+
+  canPreviewSelectedRule(): boolean {
+    const rule = this.selectedRule();
+    return Boolean(rule && !this.weightValidationMessage(rule));
+  }
+
+  weightValidationMessage(rule: AllocationRule): string | null {
+    if (!this.requiresWeights(rule.allocation_method)) return null;
+    const weights = rule.structured_weights || [];
+    if (!weights.length) {
+      return `${this.methodLabel(rule.allocation_method)} requires structured weight rows before preview.`;
+    }
+    if (rule.allocation_method === 'fixed_percentage') {
+      const total = weights.reduce((sum, row) => sum + this.parseMoney(row.percentage), 0);
+      return Math.abs(total - 100) <= 0.0001
+        ? null
+        : `Fixed percentage weights must total 100%. Current total is ${total.toFixed(4)}%.`;
+    }
+    if (rule.allocation_method === 'manual_amount') {
+      const total = weights.reduce((sum, row) => sum + this.parseMoney(row.manual_amount), 0);
+      const poolAmount = this.parseMoney(this.selectedPool()?.amount_plan);
+      if (total <= 0) return 'Manual amount weights must total more than zero.';
+      if (poolAmount > 0 && Math.abs(total - poolAmount) > 0.01) {
+        return `Manual amount weights must match the pool plan amount. Current total is ${this.formatMoney(total)}.`;
+      }
+      return null;
+    }
+    const total = weights.reduce((sum, row) => sum + this.parseMoney(row.weight_value), 0);
+    return total > 0 ? null : 'Structured weights must total more than zero.';
   }
 
   allocationPercent(pool: SharedCostPool): number {
