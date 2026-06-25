@@ -144,6 +144,70 @@ Operational notes:
   validation is completed with fresh credentials or an approved production
   validation tenant.
 
+### 2026-06-23 - Platform Admin Bootstrap Production Promotion
+
+Status: promoted to production
+
+GitHub tracking:
+- Issue: `#351`
+- Related implementation issue: `#348`
+- Security review: `#349`
+- Documentation PR: `#352`
+- Runtime promotion was operational against reviewed `main` plus ignored
+  Hostinger runtime env correction.
+- Runtime code commit:
+  - `14ace8a chore: add platform admin startup bootstrap`
+
+Runtime changes:
+- Production Hostinger runtime configuration now targets
+  `venkatesh@ishirock.com` for `PLATFORM_ADMIN_EMAILS`,
+  `PLATFORM_ADMIN_BOOTSTRAP_EMAIL`, and `HOSTINGER_PLATFORM_ADMIN_EMAIL`.
+- Platform admin bootstrap remains enabled in production.
+- No production schema SQL is required.
+- No tenant-scoped table writes are required; the shared Supabase Auth user
+  already exists and has `platform_admin` app metadata.
+
+Dev validation:
+- Environment: `https://transmuter-dev.ishirock.tech`
+- Schema: `transmuter_dev`
+- Schema SQL applied: none.
+- `infra/hostinger/validate-dev.sh` passed on 2026-06-23.
+- Dev `/api/auth/login` returned `role=platform_admin` and the reserved
+  platform tenant id for the configured operator.
+
+Production pre-promotion finding:
+- Environment: `https://transmuter.ishirock.tech`
+- Schema: `transmuter`
+- Running production API container was from the 2026-06-23 03:04 UTC deployment
+  and still allowlisted `admin@ishirock.com`.
+- The same platform admin login that passed on dev returned a production 500
+  because the old container fell through to tenant-user lookup after the
+  allowlist mismatch.
+
+Production promotion:
+- Environment: `https://transmuter.ishirock.tech`
+- Schema: `transmuter`
+- Initial promotion command commit: `306e48e`
+- Final production recreate command commit: `690e21f`
+- Schema SQL applied: none.
+- Promoted with `CONFIRM_PROMOTE=1 infra/hostinger/promote-dev-to-prod.sh`.
+- The same promotion command was unintentionally rerun while creating PR `#352`;
+  because commit `690e21f` is release-manifest-only, this did not change runtime
+  application code. Production validation was rerun after that final recreate.
+- The initial scripted public `/health` check hit the known immediate readiness
+  404 after container recreation; `infra/hostinger/validate-prod.sh` passed on
+  rerun after the stack settled.
+- Final production API container started at 2026-06-23T18:43:12Z with
+  `PLATFORM_ADMIN_EMAILS=venkatesh@ishirock.com`,
+  `PLATFORM_ADMIN_BOOTSTRAP_ENABLED=true`, and
+  `PLATFORM_ADMIN_BOOTSTRAP_EMAIL=venkatesh@ishirock.com`.
+- Production `/api/auth/login` returned `role=platform_admin`, the reserved
+  platform tenant id, and `must_change_password=false` for the configured
+  operator.
+- Browser validation against `https://transmuter.ishirock.tech/auth/login`
+  passed: the Angular app authenticated, navigated to `/platform`, and rendered
+  `Platform Control`.
+
 ### 2026-06-23 - Governance Queue Initiative Labels and Production Launch Tenant
 
 Status: promoted to production
