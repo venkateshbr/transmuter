@@ -465,54 +465,58 @@ interface GridMetric {
 
         @if (financialsView() === 'entry') {
           @if (!isLocked() && benefitMetricDefinitions().length) {
-            <div class="mb-4 grid gap-3 border bg-[var(--t-surface-raised)] p-4 lg:grid-cols-[180px_1fr_110px_120px_110px_110px_110px_130px_130px_auto]" style="border-color:var(--t-border)">
-              <label class="grid gap-1">
-                <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Benefit Metric</span>
-                <select class="input-field py-2 text-xs" [ngModel]="newBenefitLineMetricId()" (ngModelChange)="newBenefitLineMetricId.set($event)" aria-label="Benefit line metric">
-                  <option value="">Select metric</option>
-                  @for (metric of benefitMetricDefinitions(); track metric.id) {
-                    <option [value]="metric.id">{{ metric.label }}</option>
-                  }
-                </select>
-              </label>
-              <label class="grid gap-1">
-                <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Named Benefit Line</span>
-                <input class="input-field py-2 text-xs font-bold" [ngModel]="newBenefitLineName()" (ngModelChange)="newBenefitLineName.set($event)" aria-label="Benefit line name" placeholder="Revenue uplift from improved retention">
-              </label>
-              <label class="grid gap-1">
-                <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Confidence %</span>
-                <input type="number" min="0" max="100" class="input-field py-2 text-xs" [ngModel]="newBenefitLineConfidence()" (ngModelChange)="newBenefitLineConfidence.set(numberValueOrNull($event))" aria-label="Benefit line confidence">
-              </label>
-              <label class="grid gap-1">
-                <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Phasing</span>
-                <select class="input-field py-2 text-xs" [ngModel]="newBenefitLinePhasingMode()" (ngModelChange)="setBenefitLinePhasingMode($event)" aria-label="Benefit line phasing mode">
-                  <option value="manual">Manual</option>
-                  <option value="one_off">One-off</option>
-                  <option value="spread">Spread</option>
-                </select>
-              </label>
-              <label class="grid gap-1">
-                <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Base</span>
-                <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineBaseAmount()" (ngModelChange)="newBenefitLineBaseAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line base amount">
-              </label>
-              <label class="grid gap-1">
-                <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">High</span>
-                <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineHighAmount()" (ngModelChange)="newBenefitLineHighAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line high amount">
-              </label>
-              <label class="grid gap-1">
-                <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Actual</span>
-                <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineActualAmount()" (ngModelChange)="newBenefitLineActualAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line actual amount">
-              </label>
-              <label class="grid gap-1">
-                <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Start</span>
-                <input type="month" class="input-field py-2 text-xs" [ngModel]="newBenefitLineStartMonth()" (ngModelChange)="newBenefitLineStartMonth.set($event)" aria-label="Benefit line start month">
-              </label>
-              <label class="grid gap-1">
-                <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">End</span>
-                <input type="month" class="input-field py-2 text-xs" [ngModel]="newBenefitLineEndMonth()" (ngModelChange)="newBenefitLineEndMonth.set($event)" [disabled]="newBenefitLinePhasingMode() !== 'spread'" aria-label="Benefit line end month">
-              </label>
-              <div class="flex items-end">
-                <button type="button" class="btn-primary px-4 py-2 text-[10px]" [disabled]="!canAddBenefitLine()" (click)="addBenefitLine()" aria-label="Add benefit line">Add Line</button>
+            <div class="mb-4 grid gap-4 border bg-[var(--t-surface-raised)] p-4" style="border-color:var(--t-border)" data-testid="benefit-line-entry-form">
+              <div class="grid gap-3 xl:grid-cols-[220px_minmax(360px,1fr)_120px_140px] lg:grid-cols-[200px_minmax(320px,1fr)_120px_140px] md:grid-cols-2">
+                <label class="grid gap-1">
+                  <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Benefit Metric</span>
+                  <select class="input-field py-2 text-xs" [ngModel]="newBenefitLineMetricId()" (ngModelChange)="newBenefitLineMetricId.set($event)" aria-label="Benefit line metric">
+                    <option value="">Select metric</option>
+                    @for (metric of benefitMetricDefinitions(); track metric.id) {
+                      <option [value]="metric.id">{{ metric.label }}</option>
+                    }
+                  </select>
+                </label>
+                <label class="grid gap-1 md:col-span-2 lg:col-span-1">
+                  <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Named Benefit Line</span>
+                  <input class="input-field min-w-0 py-2 text-xs font-bold" [ngModel]="newBenefitLineName()" (ngModelChange)="newBenefitLineName.set($event)" aria-label="Benefit line name" placeholder="Revenue uplift from improved retention">
+                </label>
+                <label class="grid gap-1">
+                  <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Confidence %</span>
+                  <input type="number" min="0" max="100" class="input-field py-2 text-xs" [ngModel]="newBenefitLineConfidence()" (ngModelChange)="newBenefitLineConfidence.set(numberValueOrNull($event))" aria-label="Benefit line confidence">
+                </label>
+                <label class="grid gap-1">
+                  <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Phasing</span>
+                  <select class="input-field py-2 text-xs" [ngModel]="newBenefitLinePhasingMode()" (ngModelChange)="setBenefitLinePhasingMode($event)" aria-label="Benefit line phasing mode">
+                    <option value="manual">Manual</option>
+                    <option value="one_off">One-off</option>
+                    <option value="spread">Spread</option>
+                  </select>
+                </label>
+              </div>
+              <div class="grid gap-3 xl:grid-cols-[minmax(120px,1fr)_minmax(120px,1fr)_minmax(120px,1fr)_minmax(145px,1fr)_minmax(145px,1fr)_120px] lg:grid-cols-[repeat(3,minmax(120px,1fr))_repeat(2,minmax(145px,1fr))_120px] md:grid-cols-3">
+                <label class="grid gap-1">
+                  <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Base</span>
+                  <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineBaseAmount()" (ngModelChange)="newBenefitLineBaseAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line base amount">
+                </label>
+                <label class="grid gap-1">
+                  <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">High</span>
+                  <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineHighAmount()" (ngModelChange)="newBenefitLineHighAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line high amount">
+                </label>
+                <label class="grid gap-1">
+                  <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Actual</span>
+                  <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineActualAmount()" (ngModelChange)="newBenefitLineActualAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line actual amount">
+                </label>
+                <label class="grid gap-1">
+                  <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Start</span>
+                  <input type="month" class="input-field py-2 text-xs" [ngModel]="newBenefitLineStartMonth()" (ngModelChange)="newBenefitLineStartMonth.set($event)" aria-label="Benefit line start month">
+                </label>
+                <label class="grid gap-1">
+                  <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">End</span>
+                  <input type="month" class="input-field py-2 text-xs" [ngModel]="newBenefitLineEndMonth()" (ngModelChange)="newBenefitLineEndMonth.set($event)" [disabled]="newBenefitLinePhasingMode() !== 'spread'" aria-label="Benefit line end month">
+                </label>
+                <div class="flex items-end md:col-span-3 lg:col-span-1">
+                  <button type="button" class="btn-primary w-full px-4 py-2 text-[10px]" [disabled]="!canAddBenefitLine()" (click)="addBenefitLine()" aria-label="Add benefit line">Add Line</button>
+                </div>
               </div>
             </div>
           }
