@@ -28,7 +28,7 @@ status.
 
 ### 2026-06-26 - Initiative Financials Entry and Validation Layout
 
-Status: ready for production promotion from Hostinger dev
+Status: promoted to production
 
 GitHub tracking:
 - Issue: `#360`
@@ -38,6 +38,7 @@ GitHub tracking:
 - Commits:
   - `1a8287f feat: split initiative financials validation view`
   - `26219ca fix: improve benefit line entry layout`
+  - `aefa8cf fix: improve benefit line entry layout`
 
 Runtime changes:
 - Split initiative Financials into local `Entry` and `Finance Validation` views.
@@ -70,7 +71,19 @@ Schema SQL required for production:
 - None.
 
 Production promotion:
-- Pending.
+- Environment: `https://transmuter.ishirock.tech`
+- Schema: `transmuter`
+- Promotion commit: `aefa8cf`
+- Schema SQL applied: none.
+- Promoted with `CONFIRM_PROMOTE=1 infra/hostinger/promote-dev-to-prod.sh`.
+- Initial scripted public validation hit the known immediate `/health` 404
+  readiness race after container recreation.
+- Rerun production validation passed for local/public `/health` and
+  `/api/health`.
+- Production frontend bundle confirmed: `main-FOI5MWNI.js`,
+  `styles-HKGS6SFL.css`.
+- Production lazy chunk confirmed both `financials-view-entry` and
+  `benefit-line-entry-form` markers in `chunk-HTR5K3C2.js`.
 
 Operational notes:
 - No database or API changes are included.
