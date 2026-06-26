@@ -270,6 +270,22 @@ async function clickTab(page, text) {
   `);
 }
 
+async function clickFinancialsView(page, view) {
+  const selector = view === 'validation' ? '[data-testid="financials-view-validation"]' : '[data-testid="financials-view-entry"]';
+  await waitFor(() => evalJs(page, `document.querySelector(${JSON.stringify(selector)}) !== null`), `financials ${view} view tab`);
+  await evalJs(page, `
+    (() => {
+      const button = document.querySelector(${JSON.stringify(selector)});
+      if (!button) throw new Error('Missing financials view tab: ' + ${JSON.stringify(view)});
+      button.click();
+      return true;
+    })()
+  `);
+  await waitFor(() => evalJs(page, `
+    document.querySelector(${JSON.stringify(selector)})?.getAttribute('aria-selected') === 'true'
+  `), `financials ${view} view selected`);
+}
+
 async function openAdminTab(page, tab) {
   await navigate(page, '/admin');
   await waitFor(() => evalJs(page, "document.body.innerText.includes('Control Center')"), 'admin page');
@@ -358,7 +374,14 @@ async function validateBenefitButtonStates(page) {
   await navigate(page, `/initiatives/${initiative.id}`);
   await waitFor(() => evalJs(page, "document.body.innerText.includes('Accounting System Implementation')"), 'Pinnacle initiative detail');
   await clickTab(page, 'Financials');
-  await waitFor(() => evalJs(page, "document.body.innerText.toLowerCase().includes('finance validation')"), 'finance validation section');
+  await waitFor(() => evalJs(page, "document.querySelector('[data-testid=\"financials-view-entry\"]')?.getAttribute('aria-selected') === 'true'"), 'financials entry view');
+  const entryControlsHidden = await evalJs(page, `
+    document.querySelector('button[aria-label="Update benefit line risk"]') === null
+      && document.querySelector('[data-testid="financial-validation-panel"]') === null
+  `);
+  assert(entryControlsHidden, 'Finance validation controls should not be visible in the Entry view');
+  await clickFinancialsView(page, 'validation');
+  await waitFor(() => evalJs(page, "document.querySelector('[data-testid=\"financial-validation-panel\"]') !== null"), 'finance validation section');
   const cards = await visibleBenefitCards(page);
   assert(cards.length >= 1, 'Expected visible benefit-line finance validation cards');
   const validated = cards.filter(card => card.text.toLowerCase().includes('finance validated'));
@@ -374,12 +397,103 @@ async function validateBenefitButtonStates(page) {
   return { cards: cards.length, validated: validated.length, submitted: submitted.length };
 }
 
+async function validatePinnacleFinancialGridScenarioRows(page) {
+  const initiative = await findInitiative(page, 'CoSec Workflow Automation');
+  await navigate(page, `/initiatives/${initiative.id}`);
+  await waitFor(() => evalJs(page, "document.body.innerText.includes('CoSec Workflow Automation')"), 'Pinnacle PIN-002 initiative detail');
+  await clickTab(page, 'Financials');
+  await waitFor(() => evalJs(page, "document.body.innerText.includes('Initiative Financials')"), 'initiative financials grid');
+
+  const grid = await browserFetch(page, `/initiatives/${initiative.id}/financials`);
+  const costSavings = (grid.definitions ?? []).find(item => item.key === 'cost_savings');
+  const base = scenarioByKind(grid.scenarios ?? [], 'plan', ['plan_base', 'base']);
+  const high = scenarioByKind(grid.scenarios ?? [], 'plan', ['plan_high', 'high']);
+  const actual = scenarioByKind(grid.scenarios ?? [], 'actual', ['actual']);
+  assert(costSavings && base && high && actual, 'Missing PIN-002 cost savings metric/scenario definitions');
+  const valueFor = scenario => (grid.values ?? [])
+    .filter(item => item.metric_definition_id === costSavings.id && item.scenario_id === scenario.id)
+    .reduce((sum, item) => sum + Number(item.value || 0), 0);
+  assert(valueFor(base) === 3_600_000, `Expected PIN-002 base savings 3.6M, got ${valueFor(base)}`);
+  assert(valueFor(high) === 4_500_000, `Expected PIN-002 high savings 4.5M, got ${valueFor(high)}`);
+
+  const gridLabels = [
+    `Cost Savings (${base.label})`,
+    `Cost Savings (${high.label})`,
+    `Cost Savings (${actual.label})`,
+    'Recurring Costs (Plan)',
+    'Recurring Costs (Actual)',
+    'One-off Costs (Plan)',
+    'One-off Costs (Actual)',
+  ];
+  const labelPresence = () => evalJs(page, `
+    (async () => {
+      const labels = ${JSON.stringify(gridLabels)};
+      const found = Object.fromEntries(labels.map(label => [label, false]));
+      const container = document.querySelector('.handsontable-container');
+      const holder = container?.querySelector('.wtHolder') || container;
+      if (!container || !holder) return labels.map(label => [label, false]);
+      const maxScroll = Math.max(holder.scrollHeight - holder.clientHeight, 0);
+      const step = Math.max(Math.floor(holder.clientHeight * 0.75), 160);
+      for (let top = 0; top <= maxScroll + step; top += step) {
+        holder.scrollTop = Math.min(top, maxScroll);
+        holder.dispatchEvent(new Event('scroll', { bubbles: true }));
+        await new Promise(resolve => setTimeout(resolve, 80));
+        const text = container.innerText || '';
+        for (const label of labels) {
+          if (text.includes(label)) found[label] = true;
+        }
+        if (labels.every(label => found[label])) break;
+      }
+      holder.scrollTop = 0;
+      holder.dispatchEvent(new Event('scroll', { bubbles: true }));
+      return labels.map(label => [label, found[label]]);
+    })()
+  `);
+  const missingLabels = presence => presence.filter(([, present]) => !present).map(([label]) => label);
+  await waitFor(async () => missingLabels(await labelPresence()).length === 0, 'all financial scenario and cost grid labels');
+  const beforePresence = await labelPresence();
+
+  const clickCardScenario = label => evalJs(page, `
+    (() => {
+      const root = document.querySelector('[data-testid="financial-scenario-toggle"]');
+      if (!root) throw new Error('Missing financial card scenario toggle');
+      const button = [...root.querySelectorAll('button')]
+        .find(item => item.textContent.trim() === ${JSON.stringify(label)});
+      if (!button) throw new Error('Missing card scenario button: ' + ${JSON.stringify(label)});
+      button.click();
+      return true;
+    })()
+  `);
+  await clickCardScenario('High');
+  await waitFor(() => evalJs(page, `
+    (() => [...document.querySelectorAll('[data-testid="financial-scenario-toggle"] button')]
+      .some(button => button.textContent.trim() === 'High' && button.getAttribute('aria-pressed') === 'true'))()
+  `), 'High card scenario selected');
+  const highPresence = await labelPresence();
+  await clickCardScenario('Actuals');
+  await waitFor(() => evalJs(page, `
+    (() => [...document.querySelectorAll('[data-testid="financial-scenario-toggle"] button')]
+      .some(button => button.textContent.trim() === 'Actuals' && button.getAttribute('aria-pressed') === 'true'))()
+  `), 'Actuals card scenario selected');
+  const actualPresence = await labelPresence();
+  assert(missingLabels(highPresence).length === 0, `Grid labels missing after High card toggle: ${missingLabels(highPresence).join(', ')}`);
+  assert(missingLabels(actualPresence).length === 0, `Grid labels missing after Actuals card toggle: ${missingLabels(actualPresence).join(', ')}`);
+
+  return {
+    initiative: initiative.name,
+    baseSavings: valueFor(base),
+    highSavings: valueFor(high),
+    labels: gridLabels,
+  };
+}
+
 async function rejectSubmittedBenefitWithReasonAndRestore(page) {
   const initiative = await findInitiative(page, 'AI Customer Support Automation');
   await navigate(page, `/initiatives/${initiative.id}`);
   await waitFor(() => evalJs(page, "document.body.innerText.includes('AI Customer Support Automation')"), 'Stellar initiative detail');
   await clickTab(page, 'Financials');
-  await waitFor(() => evalJs(page, "document.body.innerText.toLowerCase().includes('finance validation')"), 'Stellar finance validation section');
+  await clickFinancialsView(page, 'validation');
+  await waitFor(() => evalJs(page, "document.querySelector('[data-testid=\"financial-validation-panel\"]') !== null"), 'Stellar finance validation section');
   let before = await browserFetch(page, `/initiatives/${initiative.id}/financials`);
   for (const stale of (before.benefit_lines ?? []).filter(item =>
     item.validation_status === 'rejected'
@@ -685,6 +799,13 @@ async function main() {
       return;
     }
 
+    if (process.env.TRANSMUTER_RUNBOOK_SECTION === 'financial-grid') {
+      await login(page, tenants.pinnacle);
+      results.pinnacleFinancialGrid = await validatePinnacleFinancialGridScenarioRows(page);
+      console.log(JSON.stringify({ status: 'passed', results }, null, 2));
+      return;
+    }
+
     results.reportingSettings = {};
     for (const [slug, tenant] of Object.entries(tenants)) {
       await login(page, tenant);
@@ -707,6 +828,7 @@ async function main() {
 
     await login(page, tenants.pinnacle);
     results.benefitButtonStates = await validateBenefitButtonStates(page);
+    results.pinnacleFinancialGrid = await validatePinnacleFinancialGridScenarioRows(page);
     results.rapidWorkstreamAdd = await validateRapidWorkstreamAdd(page);
 
     await login(page, tenants.stellar);

@@ -187,6 +187,7 @@ interface CostLineListResponse {
 }
 
 type FinancialScenario = 'baseline' | 'base' | 'high' | 'actual';
+type FinancialsView = 'entry' | 'validation';
 
 interface ValueBridgeCase {
   revenue_uplift: string;
@@ -399,7 +400,7 @@ interface GridMetric {
             >
               <span class="material-icons text-sm">upload_file</span>
             </button>
-            <button class="btn-ghost py-1.5 px-4 text-[10px] flex items-center gap-2" [disabled]="!canEditFinancialGrid()" (click)="toggleEdit()">
+            <button class="btn-ghost py-1.5 px-4 text-[10px] flex items-center gap-2" [disabled]="financialsView() !== 'entry' || !canEditFinancialGrid()" (click)="toggleEdit()">
               <span class="material-icons text-sm">{{ isEditing() ? 'visibility' : 'edit' }}</span>
               {{ isEditing() ? 'View Summary' : 'Edit Details' }}
             </button>
@@ -423,132 +424,100 @@ interface GridMetric {
           </div>
         }
 
-        @if (!isLocked() && benefitMetricDefinitions().length) {
-          <div class="mb-4 grid gap-3 border bg-[var(--t-surface-raised)] p-4 lg:grid-cols-[180px_1fr_110px_120px_110px_110px_110px_130px_130px_auto]" style="border-color:var(--t-border)">
-            <label class="grid gap-1">
-              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Benefit Metric</span>
-              <select class="input-field py-2 text-xs" [ngModel]="newBenefitLineMetricId()" (ngModelChange)="newBenefitLineMetricId.set($event)" aria-label="Benefit line metric">
-                <option value="">Select metric</option>
-                @for (metric of benefitMetricDefinitions(); track metric.id) {
-                  <option [value]="metric.id">{{ metric.label }}</option>
-                }
-              </select>
-            </label>
-            <label class="grid gap-1">
-              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Named Benefit Line</span>
-              <input class="input-field py-2 text-xs font-bold" [ngModel]="newBenefitLineName()" (ngModelChange)="newBenefitLineName.set($event)" aria-label="Benefit line name" placeholder="Revenue uplift from improved retention">
-            </label>
-            <label class="grid gap-1">
-              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Confidence %</span>
-              <input type="number" min="0" max="100" class="input-field py-2 text-xs" [ngModel]="newBenefitLineConfidence()" (ngModelChange)="newBenefitLineConfidence.set(numberValueOrNull($event))" aria-label="Benefit line confidence">
-            </label>
-            <label class="grid gap-1">
-              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Phasing</span>
-              <select class="input-field py-2 text-xs" [ngModel]="newBenefitLinePhasingMode()" (ngModelChange)="setBenefitLinePhasingMode($event)" aria-label="Benefit line phasing mode">
-                <option value="manual">Manual</option>
-                <option value="one_off">One-off</option>
-                <option value="spread">Spread</option>
-              </select>
-            </label>
-            <label class="grid gap-1">
-              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Base</span>
-              <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineBaseAmount()" (ngModelChange)="newBenefitLineBaseAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line base amount">
-            </label>
-            <label class="grid gap-1">
-              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">High</span>
-              <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineHighAmount()" (ngModelChange)="newBenefitLineHighAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line high amount">
-            </label>
-            <label class="grid gap-1">
-              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Actual</span>
-              <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineActualAmount()" (ngModelChange)="newBenefitLineActualAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line actual amount">
-            </label>
-            <label class="grid gap-1">
-              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Start</span>
-              <input type="month" class="input-field py-2 text-xs" [ngModel]="newBenefitLineStartMonth()" (ngModelChange)="newBenefitLineStartMonth.set($event)" aria-label="Benefit line start month">
-            </label>
-            <label class="grid gap-1">
-              <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">End</span>
-              <input type="month" class="input-field py-2 text-xs" [ngModel]="newBenefitLineEndMonth()" (ngModelChange)="newBenefitLineEndMonth.set($event)" [disabled]="newBenefitLinePhasingMode() !== 'spread'" aria-label="Benefit line end month">
-            </label>
-            <div class="flex items-end">
-              <button type="button" class="btn-primary px-4 py-2 text-[10px]" [disabled]="!canAddBenefitLine()" (click)="addBenefitLine()" aria-label="Add benefit line">Add Line</button>
-            </div>
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3 border-y border-[var(--t-border)] py-3">
+          <div
+            class="inline-flex border bg-[var(--t-surface-raised)]"
+            style="border-color:var(--t-border)"
+            role="tablist"
+            aria-label="Financials workspace view"
+            data-testid="financials-local-tabs"
+          >
+            <button
+              type="button"
+              role="tab"
+              class="h-9 border-r px-4 text-[10px] font-black uppercase tracking-widest transition-colors"
+              style="border-color:var(--t-border)"
+              [style.background]="financialsView() === 'entry' ? 'var(--t-surface)' : 'transparent'"
+              [style.color]="financialsView() === 'entry' ? 'var(--t-primary)' : 'var(--t-text-secondary)'"
+              [attr.aria-selected]="financialsView() === 'entry'"
+              data-testid="financials-view-entry"
+              (click)="setFinancialsView('entry')"
+            >
+              Entry
+            </button>
+            <button
+              type="button"
+              role="tab"
+              class="h-9 px-4 text-[10px] font-black uppercase tracking-widest transition-colors"
+              [style.background]="financialsView() === 'validation' ? 'var(--t-surface)' : 'transparent'"
+              [style.color]="financialsView() === 'validation' ? 'var(--t-primary)' : 'var(--t-text-secondary)'"
+              [attr.aria-selected]="financialsView() === 'validation'"
+              data-testid="financials-view-validation"
+              (click)="setFinancialsView('validation')"
+            >
+              Finance Validation
+            </button>
           </div>
-        }
+          <span class="text-[10px] font-black uppercase tracking-widest" style="color:var(--t-text-tertiary)">
+            {{ financialsView() === 'entry' ? 'Modeling and data entry' : 'Finance review workflow' }}
+          </span>
+        </div>
 
-        @if ((grid()?.benefit_lines || []).length) {
-          <div class="mb-4 border bg-[var(--t-surface-raised)] p-4" style="border-color:var(--t-border)">
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p class="text-[10px] font-black uppercase tracking-widest" style="color:var(--t-accent)">Finance Validation</p>
-                <h3 class="mt-1 text-sm font-black" style="color:var(--t-text-primary)">Benefit lines</h3>
+        @if (financialsView() === 'entry') {
+          @if (!isLocked() && benefitMetricDefinitions().length) {
+            <div class="mb-4 grid gap-3 border bg-[var(--t-surface-raised)] p-4 lg:grid-cols-[180px_1fr_110px_120px_110px_110px_110px_130px_130px_auto]" style="border-color:var(--t-border)">
+              <label class="grid gap-1">
+                <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Benefit Metric</span>
+                <select class="input-field py-2 text-xs" [ngModel]="newBenefitLineMetricId()" (ngModelChange)="newBenefitLineMetricId.set($event)" aria-label="Benefit line metric">
+                  <option value="">Select metric</option>
+                  @for (metric of benefitMetricDefinitions(); track metric.id) {
+                    <option [value]="metric.id">{{ metric.label }}</option>
+                  }
+                </select>
+              </label>
+              <label class="grid gap-1">
+                <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Named Benefit Line</span>
+                <input class="input-field py-2 text-xs font-bold" [ngModel]="newBenefitLineName()" (ngModelChange)="newBenefitLineName.set($event)" aria-label="Benefit line name" placeholder="Revenue uplift from improved retention">
+              </label>
+              <label class="grid gap-1">
+                <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Confidence %</span>
+                <input type="number" min="0" max="100" class="input-field py-2 text-xs" [ngModel]="newBenefitLineConfidence()" (ngModelChange)="newBenefitLineConfidence.set(numberValueOrNull($event))" aria-label="Benefit line confidence">
+              </label>
+              <label class="grid gap-1">
+                <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Phasing</span>
+                <select class="input-field py-2 text-xs" [ngModel]="newBenefitLinePhasingMode()" (ngModelChange)="setBenefitLinePhasingMode($event)" aria-label="Benefit line phasing mode">
+                  <option value="manual">Manual</option>
+                  <option value="one_off">One-off</option>
+                  <option value="spread">Spread</option>
+                </select>
+              </label>
+              <label class="grid gap-1">
+                <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Base</span>
+                <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineBaseAmount()" (ngModelChange)="newBenefitLineBaseAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line base amount">
+              </label>
+              <label class="grid gap-1">
+                <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">High</span>
+                <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineHighAmount()" (ngModelChange)="newBenefitLineHighAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line high amount">
+              </label>
+              <label class="grid gap-1">
+                <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Actual</span>
+                <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineActualAmount()" (ngModelChange)="newBenefitLineActualAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line actual amount">
+              </label>
+              <label class="grid gap-1">
+                <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Start</span>
+                <input type="month" class="input-field py-2 text-xs" [ngModel]="newBenefitLineStartMonth()" (ngModelChange)="newBenefitLineStartMonth.set($event)" aria-label="Benefit line start month">
+              </label>
+              <label class="grid gap-1">
+                <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">End</span>
+                <input type="month" class="input-field py-2 text-xs" [ngModel]="newBenefitLineEndMonth()" (ngModelChange)="newBenefitLineEndMonth.set($event)" [disabled]="newBenefitLinePhasingMode() !== 'spread'" aria-label="Benefit line end month">
+              </label>
+              <div class="flex items-end">
+                <button type="button" class="btn-primary px-4 py-2 text-[10px]" [disabled]="!canAddBenefitLine()" (click)="addBenefitLine()" aria-label="Add benefit line">Add Line</button>
               </div>
-              <a routerLink="/financials/benefits-register" class="btn-ghost px-3 py-2 text-[10px]">Open Register</a>
             </div>
-            <div class="mt-4 grid gap-3">
-              @for (line of grid()?.benefit_lines || []; track line.id) {
-                            <div class="grid gap-3 border border-[var(--t-border)] bg-[var(--t-surface)] p-3 lg:grid-cols-[1fr_auto] lg:items-center">
-                              <div>
-                                <p class="text-sm font-black" style="color:var(--t-text-primary)">{{ line.name }}</p>
-                                <p class="mt-1 text-[10px] font-bold" style="color:var(--t-text-tertiary)">{{ benefitLineDescriptor(line) }}</p>
-                                <p class="mt-1 text-[9px] font-black uppercase tracking-widest" [class.text-emerald-600]="line.validation_status === 'finance_validated'" [class.text-red-500]="line.validation_status === 'rejected'" [class.text-[var(--t-accent)]]="line.validation_status === 'submitted'" [class.text-[var(--t-text-tertiary)]]="!line.validation_status || line.validation_status === 'draft'">
-                      {{ benefitValidationLabel(line.validation_status) }}
-                      @if (line.risk_rating) {
-                        <span> · {{ line.risk_rating }} risk</span>
-                      }
-                      @if (line.risk_adjustment_pct) {
-                        <span> · {{ line.risk_adjustment_pct }}% risk adjusted</span>
-                      }
-                    </p>
-                    @if (line.validation_comment || line.rejection_reason) {
-                      <p class="mt-1 text-xs font-bold" style="color:var(--t-text-secondary)">{{ line.rejection_reason || line.validation_comment }}</p>
-                    }
-                    @if (line.evidence_url) {
-                      <a [href]="line.evidence_url" target="_blank" rel="noopener" class="mt-1 inline-block text-xs font-bold underline" style="color:var(--t-accent)">{{ line.evidence_label || 'Evidence' }}</a>
-                    }
-                              </div>
-                              <div class="flex flex-wrap justify-start gap-2 lg:justify-end">
-                                @if (canSubmitBenefitLine(line)) {
-                                  <button type="button" class="btn-ghost px-3 py-2 text-[10px]" [disabled]="saving()" (click)="openBenefitAction(line, 'submit')" aria-label="Submit benefit line to Finance">Submit</button>
-                                }
-                                @if (canValidateBenefitLine(line)) {
-                                  <button type="button" class="btn-secondary px-3 py-2 text-[10px]" [disabled]="saving()" (click)="openBenefitAction(line, 'validate')" aria-label="Validate benefit line">Validate</button>
-                                }
-                                @if (canRejectBenefitLine(line)) {
-                                  <button type="button" class="btn-ghost px-3 py-2 text-[10px]" [disabled]="saving()" (click)="openBenefitAction(line, 'reject')" aria-label="Reject benefit line">Reject</button>
-                                }
-                                <button type="button" class="btn-ghost px-3 py-2 text-[10px]" [disabled]="saving()" (click)="updateBenefitLineRisk(line)" aria-label="Update benefit line risk">Risk</button>
-                                @if (canDeleteBenefitLine(line)) {
-                                  <button type="button" class="btn-ghost px-3 py-2 text-[10px] text-[var(--t-red)]" [disabled]="saving()" (click)="deleteBenefitLine(line)" aria-label="Delete benefit line">Delete</button>
-                                }
-                              </div>
-                              @if (activeBenefitAction()?.line?.id === line.id) {
-                                <div class="grid gap-3 border-t border-[var(--t-border)] pt-3 lg:col-span-2 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end">
-                                  <label class="grid gap-1">
-                                    <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">{{ activeBenefitAction()?.action === 'reject' ? 'Rejection Reason' : 'Comment' }}</span>
-                                    <textarea rows="2" class="input-field py-2 text-xs" [ngModel]="benefitActionComment()" (ngModelChange)="benefitActionComment.set($event)" aria-label="Benefit validation comment"></textarea>
-                                  </label>
-                                  <label class="grid gap-1">
-                                    <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Evidence URL</span>
-                                    <input class="input-field py-2 text-xs" [ngModel]="benefitActionEvidenceUrl()" (ngModelChange)="benefitActionEvidenceUrl.set($event)" aria-label="Benefit validation evidence URL">
-                                  </label>
-                                  <label class="grid gap-1">
-                                    <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Evidence Label</span>
-                                    <input class="input-field py-2 text-xs" [ngModel]="benefitActionEvidenceLabel()" (ngModelChange)="benefitActionEvidenceLabel.set($event)" aria-label="Benefit validation evidence label">
-                                  </label>
-                                  <div class="flex gap-2">
-                                    <button type="button" class="btn-primary px-3 py-2 text-[10px]" [disabled]="!canConfirmBenefitAction() || saving()" (click)="confirmBenefitAction()" aria-label="Confirm benefit validation action">Confirm</button>
-                                    <button type="button" class="btn-ghost px-3 py-2 text-[10px]" [disabled]="saving()" (click)="cancelBenefitAction()" aria-label="Cancel benefit validation action">Cancel</button>
-                                  </div>
-                                </div>
-                              }
-                            </div>
-              }
-            </div>
-          </div>
-        }
+          }
 
-        @if (!isLocked() && costCategoryDefinitions().length) {
+          @if (!isLocked() && costCategoryDefinitions().length) {
                       <div class="mb-4 grid gap-3 border bg-[var(--t-surface-raised)] p-4 lg:grid-cols-[160px_1fr_90px_100px_110px_115px_100px_120px_120px_auto]" style="border-color:var(--t-border)">
             <label class="grid gap-1">
               <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Cost Category</span>
@@ -675,9 +644,86 @@ interface GridMetric {
             </button>
           </div>
         }
+        } @else {
+          <div class="border bg-[var(--t-surface-raised)] p-4" style="border-color:var(--t-border)" data-testid="financial-validation-panel">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p class="text-[10px] font-black uppercase tracking-widest" style="color:var(--t-accent)">Finance Validation</p>
+                <h3 class="mt-1 text-sm font-black" style="color:var(--t-text-primary)">Benefit lines</h3>
+              </div>
+              <a routerLink="/financials/benefits-register" class="btn-ghost px-3 py-2 text-[10px]">Open Register</a>
+            </div>
+            @if ((grid()?.benefit_lines || []).length) {
+              <div class="mt-4 grid gap-3">
+                @for (line of grid()?.benefit_lines || []; track line.id) {
+                  <div class="grid gap-3 border border-[var(--t-border)] bg-[var(--t-surface)] p-3 lg:grid-cols-[1fr_auto] lg:items-center">
+                    <div>
+                      <p class="text-sm font-black" style="color:var(--t-text-primary)">{{ line.name }}</p>
+                      <p class="mt-1 text-[10px] font-bold" style="color:var(--t-text-tertiary)">{{ benefitLineDescriptor(line) }}</p>
+                      <p class="mt-1 text-[9px] font-black uppercase tracking-widest" [class.text-emerald-600]="line.validation_status === 'finance_validated'" [class.text-red-500]="line.validation_status === 'rejected'" [class.text-[var(--t-accent)]]="line.validation_status === 'submitted'" [class.text-[var(--t-text-tertiary)]]="!line.validation_status || line.validation_status === 'draft'">
+                        {{ benefitValidationLabel(line.validation_status) }}
+                        @if (line.risk_rating) {
+                          <span> · {{ line.risk_rating }} risk</span>
+                        }
+                        @if (line.risk_adjustment_pct) {
+                          <span> · {{ line.risk_adjustment_pct }}% risk adjusted</span>
+                        }
+                      </p>
+                      @if (line.validation_comment || line.rejection_reason) {
+                        <p class="mt-1 text-xs font-bold" style="color:var(--t-text-secondary)">{{ line.rejection_reason || line.validation_comment }}</p>
+                      }
+                      @if (line.evidence_url) {
+                        <a [href]="line.evidence_url" target="_blank" rel="noopener" class="mt-1 inline-block text-xs font-bold underline" style="color:var(--t-accent)">{{ line.evidence_label || 'Evidence' }}</a>
+                      }
+                    </div>
+                    <div class="flex flex-wrap justify-start gap-2 lg:justify-end">
+                      @if (canSubmitBenefitLine(line)) {
+                        <button type="button" class="btn-ghost px-3 py-2 text-[10px]" [disabled]="saving()" (click)="openBenefitAction(line, 'submit')" aria-label="Submit benefit line to Finance">Submit</button>
+                      }
+                      @if (canValidateBenefitLine(line)) {
+                        <button type="button" class="btn-secondary px-3 py-2 text-[10px]" [disabled]="saving()" (click)="openBenefitAction(line, 'validate')" aria-label="Validate benefit line">Validate</button>
+                      }
+                      @if (canRejectBenefitLine(line)) {
+                        <button type="button" class="btn-ghost px-3 py-2 text-[10px]" [disabled]="saving()" (click)="openBenefitAction(line, 'reject')" aria-label="Reject benefit line">Reject</button>
+                      }
+                      <button type="button" class="btn-ghost px-3 py-2 text-[10px]" [disabled]="saving()" (click)="updateBenefitLineRisk(line)" aria-label="Update benefit line risk">Risk</button>
+                      @if (canDeleteBenefitLine(line)) {
+                        <button type="button" class="btn-ghost px-3 py-2 text-[10px] text-[var(--t-red)]" [disabled]="saving()" (click)="deleteBenefitLine(line)" aria-label="Delete benefit line">Delete</button>
+                      }
+                    </div>
+                    @if (activeBenefitAction()?.line?.id === line.id) {
+                      <div class="grid gap-3 border-t border-[var(--t-border)] pt-3 lg:col-span-2 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end">
+                        <label class="grid gap-1">
+                          <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">{{ activeBenefitAction()?.action === 'reject' ? 'Rejection Reason' : 'Comment' }}</span>
+                          <textarea rows="2" class="input-field py-2 text-xs" [ngModel]="benefitActionComment()" (ngModelChange)="benefitActionComment.set($event)" aria-label="Benefit validation comment"></textarea>
+                        </label>
+                        <label class="grid gap-1">
+                          <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Evidence URL</span>
+                          <input class="input-field py-2 text-xs" [ngModel]="benefitActionEvidenceUrl()" (ngModelChange)="benefitActionEvidenceUrl.set($event)" aria-label="Benefit validation evidence URL">
+                        </label>
+                        <label class="grid gap-1">
+                          <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Evidence Label</span>
+                          <input class="input-field py-2 text-xs" [ngModel]="benefitActionEvidenceLabel()" (ngModelChange)="benefitActionEvidenceLabel.set($event)" aria-label="Benefit validation evidence label">
+                        </label>
+                        <div class="flex gap-2">
+                          <button type="button" class="btn-primary px-3 py-2 text-[10px]" [disabled]="!canConfirmBenefitAction() || saving()" (click)="confirmBenefitAction()" aria-label="Confirm benefit validation action">Confirm</button>
+                          <button type="button" class="btn-ghost px-3 py-2 text-[10px]" [disabled]="saving()" (click)="cancelBenefitAction()" aria-label="Cancel benefit validation action">Cancel</button>
+                        </div>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+            } @else {
+              <div class="mt-4 border border-[var(--t-border)] bg-[var(--t-surface)] p-4">
+                <p class="text-sm font-bold" style="color:var(--t-text-secondary)">No benefit lines are available for finance validation.</p>
+              </div>
+            }
+          </div>
+        }
       </div>
 
-      @if (assumptions().length) {
+      @if (financialsView() === 'entry' && assumptions().length) {
         <div class="card p-6" data-testid="financial-assumptions-list">
           <div class="flex items-center justify-between mb-4">
             <h3 class="text-base font-bold" style="color:var(--t-text-primary)">Cell Assumptions<span style="color:var(--t-accent)">.</span></h3>
@@ -699,7 +745,7 @@ interface GridMetric {
         </div>
       }
 
-      @if (assumptionEditor()) {
+      @if (financialsView() === 'entry' && assumptionEditor()) {
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div class="w-full max-w-md rounded-xl border bg-[var(--t-surface)] p-5 shadow-xl" style="border-color:var(--t-border)">
             <div class="flex items-start justify-between gap-4 mb-4">
@@ -766,6 +812,7 @@ export class FinancialsTabComponent implements OnInit {
   costLines = signal<CostLine[]>([]);
   isEditing = signal(false);
   scenario = signal<FinancialScenario>('base');
+  financialsView = signal<FinancialsView>('entry');
   newBenefitLineMetricId = signal('');
   newBenefitLineName = signal('');
   newBenefitLineConfidence = signal<number | null>(null);
@@ -844,13 +891,13 @@ export class FinancialsTabComponent implements OnInit {
   ]);
 
   isLocked = computed(() => Boolean(this.grid()?.locked));
-  canEditFinancialGrid = computed(() => !this.isLocked() || this.scenario() === 'actual');
+  canEditFinancialGrid = computed(() => !this.isLocked() || this.hasActualScenarioDefinition());
   canSaveGrid = computed(() => this.canEditFinancialGrid());
 
   configuredMetrics = computed<GridMetric[]>(() => {
     const cleanDefinitions = this.grid()?.definitions || [];
-    const cleanScenario = this.selectedScenarioDefinition();
-    if (cleanDefinitions.length && cleanScenario) {
+    const cleanScenarios = this.gridScenarioDefinitions();
+    if (cleanDefinitions.length && cleanScenarios.length) {
       const benefitLines = this.grid()?.benefit_lines || [];
       const baselineMetricKeys = this.baselineMetricKeys(cleanDefinitions);
       const metricRows = cleanDefinitions
@@ -861,19 +908,21 @@ export class FinancialsTabComponent implements OnInit {
             .filter(line => line.metric_definition_id === definition.id && line.show_in_summary !== false)
             .sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0) || a.name.localeCompare(b.name));
           const lines = matchingLines.length ? matchingLines : [null];
-          return lines.map(line => ({
-            category: this.metricCategoryLabel(definition),
-            label: `${line ? `${line.name} / ` : ''}${definition.label} (${cleanScenario.label})${definition.aggregation === 'formula' ? ' - computed' : ''}`,
-            key: `metric_${definition.id}_${cleanScenario.id}_${line?.id || 'default'}`,
-            source: 'metric_value' as const,
-            metricDefinitionId: definition.id,
-            benefitLineId: line?.id || null,
-            scenarioId: cleanScenario.id,
-            metricValueKey: definition.key,
-            metricScenario: this.scenario(),
-            readOnly: definition.aggregation === 'formula',
-            formula: definition.aggregation === 'formula' ? definition.formula || null : null,
-          }));
+          return lines.flatMap(line =>
+            cleanScenarios.map(cleanScenario => ({
+              category: this.metricCategoryLabel(definition),
+              label: `${line ? `${line.name} / ` : ''}${definition.label} (${cleanScenario.definition.label})${definition.aggregation === 'formula' ? ' - computed' : ''}`,
+              key: `metric_${definition.id}_${cleanScenario.definition.id}_${line?.id || 'default'}`,
+              source: 'metric_value' as const,
+              metricDefinitionId: definition.id,
+              benefitLineId: line?.id || null,
+              scenarioId: cleanScenario.definition.id,
+              metricValueKey: definition.key,
+              metricScenario: cleanScenario.scenario,
+              readOnly: definition.aggregation === 'formula',
+              formula: definition.aggregation === 'formula' ? definition.formula || null : null,
+            })),
+          );
         });
       const costRows: GridMetric[] = [
         { category: 'Costs', label: 'Recurring Costs (Plan)', key: 'costs_recurring_plan', source: 'cost_line', isRecurring: true, actual: false },
@@ -961,10 +1010,6 @@ export class FinancialsTabComponent implements OnInit {
     return configured;
   });
 
-  selectedScenarioDefinition(): FinancialScenarioDefinition | null {
-    return this.scenarioDefinitionFor(this.scenario());
-  }
-
   scenarioDefinitionFor(scenario: FinancialScenario): FinancialScenarioDefinition | null {
     const scenarios = (this.grid()?.scenarios || []).filter(item => item.is_active !== false);
     const keyByScenario: Record<FinancialScenario, string[]> = {
@@ -979,6 +1024,43 @@ export class FinancialsTabComponent implements OnInit {
       || scenarios.find(item => item.kind === (scenario === 'actual' ? 'actual' : scenario === 'baseline' ? 'baseline' : 'plan'))
       || scenarios[0]
       || null;
+  }
+
+  private hasActualScenarioDefinition(): boolean {
+    return (this.grid()?.scenarios || []).some(item =>
+      item.is_active !== false
+      && (item.kind === 'actual' || item.key.toLowerCase().includes('actual')),
+    );
+  }
+
+  private gridScenarioDefinitions(): Array<{ definition: FinancialScenarioDefinition; scenario: FinancialScenario }> {
+    return (this.grid()?.scenarios || [])
+      .filter(item => item.is_active !== false && item.kind !== 'baseline')
+      .map(definition => ({
+        definition,
+        scenario: this.metricScenarioForDefinition(definition),
+      }))
+      .filter(item => item.scenario !== 'baseline')
+      .sort((a, b) =>
+        this.gridScenarioOrder(a.definition, a.scenario) - this.gridScenarioOrder(b.definition, b.scenario)
+        || a.definition.label.localeCompare(b.definition.label),
+      );
+  }
+
+  private metricScenarioForDefinition(definition: FinancialScenarioDefinition): FinancialScenario {
+    const key = definition.key.toLowerCase();
+    if (definition.kind === 'actual' || key.includes('actual')) return 'actual';
+    if (key.includes('high')) return 'high';
+    if (key.includes('base') || definition.is_primary) return 'base';
+    if (definition.kind === 'baseline') return 'baseline';
+    return definition.kind === 'plan' ? 'base' : 'high';
+  }
+
+  private gridScenarioOrder(definition: FinancialScenarioDefinition, scenario: FinancialScenario): number {
+    if (scenario === 'base') return definition.is_primary ? 10 : 19;
+    if (scenario === 'high') return 20;
+    if (scenario === 'actual') return 30;
+    return 40;
   }
 
   metricCategoryLabel(definition: FinancialMetricDefinition): string {
@@ -1201,6 +1283,10 @@ export class FinancialsTabComponent implements OnInit {
         key: m.key,
         source: m.source,
         costCategoryKey: m.costCategoryKey,
+        metricDefinitionId: m.metricDefinitionId,
+        metricValueKey: m.metricValueKey,
+        metricScenario: m.metricScenario,
+        scenarioId: m.scenarioId,
         isRecurring: m.isRecurring,
         actual: m.actual,
         readOnly: Boolean(m.readOnly) || (this.isLocked() && !this.isActualMetric(m)),
@@ -1255,7 +1341,21 @@ export class FinancialsTabComponent implements OnInit {
 
   setScenario(next: FinancialScenario): void {
     this.scenario.set(next);
-    if (this.isLocked() && next !== 'actual') this.isEditing.set(false);
+  }
+
+  setFinancialsView(next: FinancialsView): void {
+    if (next === this.financialsView() || this.saving()) return;
+    if (this.isEditing()) {
+      this.financialError.set('Save or exit detailed edit mode before switching financials views.');
+      return;
+    }
+    this.financialsView.set(next);
+    if (next === 'entry') {
+      this.cancelBenefitAction();
+      setTimeout(() => this.exposeAcceptanceHarness());
+    } else {
+      this.closeAssumptionEditor();
+    }
   }
 
   scenarioLabel(): string {
