@@ -487,37 +487,52 @@ interface GridMetric {
                 <label class="grid gap-1">
                   <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Phasing</span>
                   <select class="input-field py-2 text-xs" [ngModel]="newBenefitLinePhasingMode()" (ngModelChange)="setBenefitLinePhasingMode($event)" aria-label="Benefit line phasing mode">
-                    <option value="manual">Manual</option>
-                    <option value="one_off">One-off</option>
                     <option value="spread">Spread</option>
+                    <option value="one_off">One-off</option>
+                    <option value="manual">Manual</option>
                   </select>
                 </label>
               </div>
-              <div class="grid gap-3 xl:grid-cols-[minmax(120px,1fr)_minmax(120px,1fr)_minmax(120px,1fr)_minmax(145px,1fr)_minmax(145px,1fr)_120px] lg:grid-cols-[repeat(3,minmax(120px,1fr))_repeat(2,minmax(145px,1fr))_120px] md:grid-cols-3">
-                <label class="grid gap-1">
-                  <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Base</span>
-                  <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineBaseAmount()" (ngModelChange)="newBenefitLineBaseAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line base amount">
-                </label>
-                <label class="grid gap-1">
-                  <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">High</span>
-                  <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineHighAmount()" (ngModelChange)="newBenefitLineHighAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line high amount">
-                </label>
-                <label class="grid gap-1">
-                  <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Actual</span>
-                  <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineActualAmount()" (ngModelChange)="newBenefitLineActualAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line actual amount">
-                </label>
-                <label class="grid gap-1">
-                  <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Start</span>
-                  <input type="month" class="input-field py-2 text-xs" [ngModel]="newBenefitLineStartMonth()" (ngModelChange)="newBenefitLineStartMonth.set($event)" aria-label="Benefit line start month">
-                </label>
-                <label class="grid gap-1">
-                  <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">End</span>
-                  <input type="month" class="input-field py-2 text-xs" [ngModel]="newBenefitLineEndMonth()" (ngModelChange)="newBenefitLineEndMonth.set($event)" [disabled]="newBenefitLinePhasingMode() !== 'spread'" aria-label="Benefit line end month">
-                </label>
-                <div class="flex items-end md:col-span-3 lg:col-span-1">
+              <p class="border-l-4 border-[var(--t-accent)] bg-[var(--t-surface)] px-3 py-2 text-xs font-bold" style="color:var(--t-text-secondary)" data-testid="benefit-line-phasing-help">
+                {{ benefitLinePhasingHelpText() }}
+              </p>
+              @if (newBenefitLinePhasingMode() === 'manual') {
+                <div class="grid gap-3 md:grid-cols-[1fr_160px] md:items-end">
+                  <div class="border bg-[var(--t-surface)] p-3" style="border-color:var(--t-border)" data-testid="benefit-line-manual-note">
+                    <p class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-tertiary)">Line-only mode</p>
+                    <p class="mt-1 text-xs font-bold" style="color:var(--t-text-secondary)">Manual creates the named benefit line without generated monthly values. Enter Base, High, and Actual values directly in the financial grid.</p>
+                  </div>
                   <button type="button" class="btn-primary w-full px-4 py-2 text-[10px]" [disabled]="!canAddBenefitLine()" (click)="addBenefitLine()" aria-label="Add benefit line">Add Line</button>
                 </div>
-              </div>
+              } @else {
+                <div class="grid gap-3 xl:grid-cols-[minmax(120px,1fr)_minmax(120px,1fr)_minmax(120px,1fr)_minmax(145px,1fr)_minmax(145px,1fr)_120px] lg:grid-cols-[repeat(3,minmax(120px,1fr))_repeat(2,minmax(145px,1fr))_120px] md:grid-cols-3">
+                  <label class="grid gap-1">
+                    <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Base</span>
+                    <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineBaseAmount()" (ngModelChange)="newBenefitLineBaseAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line base amount">
+                  </label>
+                  <label class="grid gap-1">
+                    <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">High</span>
+                    <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineHighAmount()" (ngModelChange)="newBenefitLineHighAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line high amount">
+                  </label>
+                  <label class="grid gap-1">
+                    <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Actual</span>
+                    <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineActualAmount()" (ngModelChange)="newBenefitLineActualAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line actual amount">
+                  </label>
+                  <label class="grid gap-1">
+                    <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Start</span>
+                    <input type="month" class="input-field py-2 text-xs" [ngModel]="newBenefitLineStartMonth()" (ngModelChange)="newBenefitLineStartMonth.set($event)" aria-label="Benefit line start month">
+                  </label>
+                  @if (newBenefitLinePhasingMode() === 'spread') {
+                    <label class="grid gap-1">
+                      <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">End</span>
+                      <input type="month" class="input-field py-2 text-xs" [ngModel]="newBenefitLineEndMonth()" (ngModelChange)="newBenefitLineEndMonth.set($event)" aria-label="Benefit line end month">
+                    </label>
+                  }
+                  <div class="flex items-end md:col-span-3 lg:col-span-1">
+                    <button type="button" class="btn-primary w-full px-4 py-2 text-[10px]" [disabled]="!canAddBenefitLine()" (click)="addBenefitLine()" aria-label="Add benefit line">Add Line</button>
+                  </div>
+                </div>
+              }
             </div>
           }
 
@@ -820,7 +835,7 @@ export class FinancialsTabComponent implements OnInit {
   newBenefitLineMetricId = signal('');
   newBenefitLineName = signal('');
   newBenefitLineConfidence = signal<number | null>(null);
-  newBenefitLinePhasingMode = signal<'manual' | 'one_off' | 'spread'>('manual');
+  newBenefitLinePhasingMode = signal<'manual' | 'one_off' | 'spread'>('spread');
   newBenefitLineBaseAmount = signal<number | null>(null);
   newBenefitLineHighAmount = signal<number | null>(null);
   newBenefitLineActualAmount = signal<number | null>(null);
@@ -1957,9 +1972,21 @@ export class FinancialsTabComponent implements OnInit {
   setBenefitLinePhasingMode(value: string): void {
     if (value === 'one_off' || value === 'spread') {
       this.newBenefitLinePhasingMode.set(value);
+      if (value === 'one_off') this.newBenefitLineEndMonth.set('');
       return;
     }
     this.newBenefitLinePhasingMode.set('manual');
+  }
+
+  benefitLinePhasingHelpText(): string {
+    const mode = this.newBenefitLinePhasingMode();
+    if (mode === 'manual') {
+      return 'Manual creates the benefit line only; enter values directly in the financial grid.';
+    }
+    if (mode === 'one_off') {
+      return 'One-off posts the entered Base, High, and Actual amounts to the selected Start month only.';
+    }
+    return 'Spread distributes the entered Base, High, and Actual amounts evenly from Start through End month.';
   }
 
   setCostLineLane(value: string): void {
@@ -2104,6 +2131,16 @@ export class FinancialsTabComponent implements OnInit {
     const confidence = this.newBenefitLineConfidence();
     const displayOrder = (this.grid()?.benefit_lines || []).length + 1;
     const phasingMode = this.newBenefitLinePhasingMode();
+    const phasing = phasingMode === 'manual'
+      ? { mode: phasingMode }
+      : {
+          mode: phasingMode,
+          base_amount: this.newBenefitLineBaseAmount(),
+          high_amount: this.newBenefitLineHighAmount(),
+          actual_amount: this.newBenefitLineActualAmount(),
+          start_month: this.newBenefitLineStartMonth() || null,
+          end_month: phasingMode === 'spread' ? this.newBenefitLineEndMonth() || null : null,
+        };
     this.clearFinancialFeedback();
     this.saving.set(true);
     this.api.post<FinancialBenefitLine>(`/initiatives/${this.initiativeId}/financials/benefit-lines`, {
@@ -2113,14 +2150,7 @@ export class FinancialsTabComponent implements OnInit {
         impact_type: 'recurring',
         timing: null,
         confidence,
-                    phasing: {
-                      mode: phasingMode,
-                      base_amount: this.newBenefitLineBaseAmount(),
-                      high_amount: this.newBenefitLineHighAmount(),
-                      actual_amount: this.newBenefitLineActualAmount(),
-                      start_month: this.newBenefitLineStartMonth() || null,
-                      end_month: this.newBenefitLineEndMonth() || null,
-                    },
+        phasing,
         attributes: {},
         show_in_summary: true,
         display_order: displayOrder,
@@ -2155,7 +2185,7 @@ export class FinancialsTabComponent implements OnInit {
     this.newBenefitLineMetricId.set('');
     this.newBenefitLineName.set('');
     this.newBenefitLineConfidence.set(null);
-    this.newBenefitLinePhasingMode.set('manual');
+    this.newBenefitLinePhasingMode.set('spread');
     this.newBenefitLineBaseAmount.set(null);
     this.newBenefitLineHighAmount.set(null);
     this.newBenefitLineActualAmount.set(null);
