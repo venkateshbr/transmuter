@@ -26,6 +26,58 @@ status.
 
 ## Current Release Entries
 
+### 2026-06-26 - Initiative Financials Entry and Validation Layout
+
+Status: ready for production promotion from Hostinger dev
+
+GitHub tracking:
+- Issue: `#360`
+- PR: `#361`
+- Issue: `#362`
+- PR: `#363`
+- Commits:
+  - `1a8287f feat: split initiative financials validation view`
+  - `26219ca fix: improve benefit line entry layout`
+
+Runtime changes:
+- Split initiative Financials into local `Entry` and `Finance Validation` views.
+- Kept summary cards, scenario toggle, and annual baseline above the local
+  Financials workspace split.
+- Kept benefit entry, cost entry, cost lines, financial grid, save action, and
+  assumptions in `Entry`.
+- Moved benefit validation cards/actions and the Open Register link into
+  `Finance Validation`.
+- Updated the benefit-line add form into a responsive two-row layout so Named
+  Benefit Line remains editable and Add Line no longer overlaps the End date.
+
+Dev deployment:
+- Environment: `https://transmuter-dev.ishirock.tech`
+- Schema: `transmuter_dev`
+- Schema SQL applied: none.
+- Deployed with `infra/hostinger/deploy-change-to-dev.sh`.
+- Initial scripted public validation hit the known immediate `/health` 404
+  readiness race after container recreation.
+- Rerun dev validation passed for local/public `/health` and `/api/health`.
+- Browser validation against Pinnacle initiative
+  `a129a5a6-d05d-470f-b07e-86505cd6d3a4` confirmed:
+  - local `Entry` and `Finance Validation` tabs render in dev;
+  - `Entry` is selected by default;
+  - validation controls are hidden in `Entry`;
+  - the benefit-line form has no internal horizontal overflow and Add Line does
+    not overlap at `1440`, `1280`, `1024`, `900`, `768`, and `390px`.
+
+Schema SQL required for production:
+- None.
+
+Production promotion:
+- Pending.
+
+Operational notes:
+- No database or API changes are included.
+- The broader mobile initiative detail page still has existing horizontal
+  overflow from surrounding initiative/financial grid chrome; this entry only
+  remediates the benefit-line form overflow.
+
 ### 2026-06-24 - Platform Findings Remediation
 
 Status: promoted to production; authenticated production tenant validation pending
