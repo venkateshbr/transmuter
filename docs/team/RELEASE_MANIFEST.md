@@ -26,6 +26,66 @@ status.
 
 ## Current Release Entries
 
+### 2026-06-29 - Wizard Financial Scope Cleanup
+
+Status: dev validated; production promotion pending
+
+GitHub tracking:
+- Issue: `#367`
+- PR: `#368`
+- Commits:
+  - `9a64511 feat: remove wizard financial suggestions (#367)`
+  - `a1b7b99 test: isolate real UI financial acceptance data (#367)`
+
+Runtime changes:
+- Removed financial metric, cost category, annual baseline, and financial AI
+  suggestion controls from the Create Initiative wizard.
+- Added a narrative-only initiative intake endpoint and Generate Narrative
+  action for summary, context/problem, value logic, and dependencies.
+- Kept planning suggestions limited to KPIs, risks, and milestones; intake
+  create ignores financial entries and cost lines even if old clients send them.
+- Scoped Initiative Financials grid rows, benefit lines, and Add Line options
+  to the initiative's configured financial scope.
+- Prevented duplicate visible benefit lines for the same scoped benefit metric.
+
+Local validation:
+- `cd apps/api && uv run --extra dev ruff check app/agents/initiative_intake_agent.py app/domain/initiative_intake.py app/routers/initiatives.py app/services/financial.py app/services/initiative.py tests/test_initiative_intake_agent.py tests/test_financial_portfolio.py tests/test_initiative_setup_gate.py tests/test_real_route_coverage.py tests/acceptance/test_real_api_sample_data.py`
+- `cd apps/api && uv run --extra dev ruff format --check app/agents/initiative_intake_agent.py app/domain/initiative_intake.py app/routers/initiatives.py app/services/financial.py app/services/initiative.py tests/test_initiative_intake_agent.py tests/test_financial_portfolio.py tests/test_initiative_setup_gate.py tests/test_real_route_coverage.py tests/acceptance/test_real_api_sample_data.py`
+- `cd apps/api && uv run --extra dev pytest tests/test_initiative_intake_agent.py tests/test_financial_portfolio.py tests/test_initiative_setup_gate.py -q`: 53 passed.
+- `cd apps/web && node --check e2e/real-ui-acceptance.mjs`
+- `cd apps/web && node --check e2e/runbook-remediation-validation.mjs`
+- `cd apps/web && npm run build`
+- `cd apps/web && npx ng test --watch=false --include src/app/features/initiatives/create/create-initiative.component.spec.ts`: 2 passed.
+
+Known local validation note:
+- `tests/test_real_route_coverage.py` is blocked in this environment before the
+  changed intake route assertions by an existing login/admin-client fixture path:
+  `app/routers/auth.py:320 AttributeError: NoneType object has no attribute data`.
+
+Dev deployment:
+- Environment: `https://transmuter-dev.ishirock.tech`
+- Schema: `transmuter_dev`
+- Schema SQL applied: none.
+- Deployed with `infra/hostinger/deploy-change-to-dev.sh`.
+- Initial scripted validation hit the known immediate public `/health` 404
+  readiness race after container recreation.
+- Rerun `infra/hostinger/validate-dev.sh` passed for local/public `/health` and
+  `/api/health`.
+- Real dev API validation passed:
+  - `RUN_REAL_ACCEPTANCE=1 TRANSMUTER_API_BASE_URL=https://transmuter-dev.ishirock.tech/api TRANSMUTER_E2E_EMAIL=admin@acme3-transformation.dev TRANSMUTER_E2E_PASSWORD=... uv run --extra dev pytest tests/acceptance/test_real_api_sample_data.py::test_real_api_initiative_intake_hitl_create_flow -q`
+- Real dev browser validation passed:
+  - `CHROME_BIN=/usr/bin/chromium-browser TRANSMUTER_UI_BASE_URL=https://transmuter-dev.ishirock.tech TRANSMUTER_API_BASE_URL=https://transmuter-dev.ishirock.tech/api TRANSMUTER_E2E_EMAIL=admin@acme3-transformation.dev TRANSMUTER_E2E_PASSWORD=... CHROME_DEBUG_PORT=9338 node e2e/real-ui-acceptance.mjs`
+
+Prahari review:
+- Required because the change touches the initiative intake agent path.
+- Review note posted on PR `#368`; no merge-blocking security findings.
+
+Schema SQL required for production:
+- None.
+
+Production promotion:
+- Pending merge and production promotion.
+
 ### 2026-06-26 - Initiative Financials Entry and Validation Layout
 
 Status: promoted to production
