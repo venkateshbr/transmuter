@@ -632,12 +632,38 @@ Recommended roles:
 | `executive_sponsor` | Read-only executive portfolio, financial, and control-tower views. |
 | `viewer` | Read-only management portfolio and dashboard access. |
 
+Demo user matrix:
+
+| Demo user | Email pattern | Role | Scope to configure |
+|---|---|---|---|
+| Priya Raman | `acme-to-<run>@acme-transformation.dev` | `transformation_office` | Full tenant and portfolio control. Use this persona for the end-to-end setup and management narrative. |
+| Jordan Lee | `acme-admin-<run>@acme-transformation.dev` | `tenant_admin` | Tenant setup, people, access control, dimensions, dashboard configuration, and billing portal. |
+| Maya Patel | `acme-pmo-<run>@acme-transformation.dev` | `pmo_lead` | Governance, gates, meetings, actions, milestones, risks, KPIs, and cadence. |
+| Omar Haddad | `acme-finance-<run>@acme-transformation.dev` | `finance_lead` | Financial configuration, shared costs, benefit validation, actuals, bankable plan, and benefit tracking. |
+| Lena Ortiz | `acme-workstream-<run>@acme-transformation.dev` | `workstream_lead` | Assign to Automation, Commercial Growth, Procurement & Supply Chain, and Offshoring when the demo needs one workstream lead to see all ACME workstreams. |
+| Ethan Brooks | `acme-owner-<run>@acme-transformation.dev` | `initiative_owner` | Assign as owner for at least ENT-006, ENT-008, and ENT-010 so the persona can maintain master data, execution evidence, and financial assumptions on owned initiatives. |
+| Sofia Chen | `acme-benefit-<run>@acme-transformation.dev` | `business_benefit_owner` | Use on Benefits Register and Benefit Tracking for realization evidence, sustainment notes, and ledger updates. |
+| Daniel Wright | `acme-exec-<run>@acme-transformation.dev` | `executive_sponsor` | Read-only executive portfolio, financial, and Control Tower review. |
+| Nora Singh | `acme-viewer-<run>@acme-transformation.dev` | `viewer` | Read-only management portfolio and dashboard review. |
+
 Actions:
 
-1. Open **People** to create or invite users.
-2. Assign each operating-model role according to the accountability table in
+1. Open **People** as the initial administrator, transformation office user, or
+   tenant administrator.
+2. Click **Add User** to open the **Add Platform User** modal.
+3. Select **Temp Password** / **Create User**. Do not use invite links for the
+   ACME role walkthrough; the demo needs deterministic users that can log in
+   immediately.
+4. Create each user in the matrix with a controlled temporary password for the
+   demo environment.
+5. Assign each operating-model role according to the accountability table in
    section 4.
-3. Use **Admin > Access Control** to review user status and role assignment.
+6. Assign workstream scope to the Workstream Lead in the People modal.
+7. Assign initiative ownership on the relevant initiative master-data screens
+   for the Initiative Owner.
+8. Use **Admin > Access Control** to review user status and role assignment.
+9. Log in once as each persona and confirm the role-specific navigation and
+   permissions described in section 4.
 
 Speaker notes:
 

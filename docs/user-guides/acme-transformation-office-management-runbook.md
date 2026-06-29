@@ -46,6 +46,7 @@ The management outcome is a single version of the truth for:
 | Initiative Owner | Maintains initiative delivery data, assumptions, evidence, status, risks, KPIs, and actions. | `/initiatives/:id` |
 | Business Benefit Owner | Confirms realized value is embedded in operations and sustainable. | `/financials/benefit-tracking`, `/financials/benefits-register`, initiative **Summary** tab |
 | Tenant Administrator | Maintains users, roles, dimensions, tenant setup, and access. | `/admin`, `/people` |
+| Management Viewer | Reviews dashboards and management reports without changing data. | `/dashboard`, `/financials`, `/reports/control-tower`, `/initiatives/pipeline` |
 
 ---
 
