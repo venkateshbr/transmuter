@@ -444,6 +444,7 @@ async function main() {
     const acceptanceCategoryLabel = `UI Acceptance Category ${Date.now()}`;
     let acceptanceCategoryKey = null;
     let acceptanceCategoryId = null;
+    let acceptanceCategoryInitiativeId = null;
     let acceptanceCostLineId = null;
     try {
       await page.send('Page.navigate', { url: `${uiBaseUrl}/admin` });
@@ -512,8 +513,15 @@ async function main() {
       }, 'admin-created financial category persisted', 20_000);
       assert(acceptanceCategoryKey, 'Created financial category key was not found');
 
-      const categoryInitiativeId = (await api('/initiatives')).items[0].id;
-      const categoryCost = await api(`/initiatives/${categoryInitiativeId}/financials/cost-lines`, {
+      const categoryInitiative = await api('/initiatives', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: `UI Acceptance Cost Category Initiative ${Date.now()}`,
+          priority: 'medium',
+        }),
+      });
+      acceptanceCategoryInitiativeId = categoryInitiative.id;
+      const categoryCost = await api(`/initiatives/${acceptanceCategoryInitiativeId}/financials/cost-lines`, {
         method: 'POST',
         body: JSON.stringify({
           name: `UI Acceptance Categorized Cost ${Date.now()}`,
@@ -551,11 +559,11 @@ async function main() {
         20_000,
       );
     } finally {
-      if (acceptanceCostLineId) {
-        const categoryInitiatives = await api('/initiatives').catch(() => ({ items: [] }));
-        await Promise.all((categoryInitiatives.items || []).map(item =>
-          api(`/initiatives/${item.id}/financials/cost-lines/${acceptanceCostLineId}`, { method: 'DELETE' }).catch(() => null)
-        ));
+      if (acceptanceCostLineId && acceptanceCategoryInitiativeId) {
+        await api(`/initiatives/${acceptanceCategoryInitiativeId}/financials/cost-lines/${acceptanceCostLineId}`, { method: 'DELETE' }).catch(() => null);
+      }
+      if (acceptanceCategoryInitiativeId) {
+        await api(`/initiatives/${acceptanceCategoryInitiativeId}`, { method: 'DELETE' }).catch(() => null);
       }
       await api('/admin/financial-configuration', {
         method: 'PUT',
@@ -1799,13 +1807,27 @@ async function main() {
     }
 
     const initiatives = await api('/initiatives');
-    let financialInitiativeId = initiatives.items[0].id;
+    let financialInitiativeId = null;
+    let financialAcceptanceInitiativeCreated = false;
     for (const item of initiatives.items) {
       const candidateFinancials = await api(`/initiatives/${item.id}/financials`);
       if (!candidateFinancials.locked) {
         financialInitiativeId = item.id;
         break;
       }
+    }
+    if (!financialInitiativeId) {
+      const financialAcceptanceInitiative = await api('/initiatives', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: `UI Acceptance Financial Grid Initiative ${Date.now()}`,
+          priority: 'medium',
+          planned_start: '2026-01-01',
+          planned_end: '2026-12-31',
+        }),
+      });
+      financialInitiativeId = financialAcceptanceInitiative.id;
+      financialAcceptanceInitiativeCreated = true;
     }
     const financialInitiative = await api(`/initiatives/${financialInitiativeId}`);
     const financialBefore = await api(`/initiatives/${financialInitiativeId}/financials`);
@@ -2206,6 +2228,9 @@ async function main() {
             }),
           }).catch(() => null);
         }));
+      if (financialAcceptanceInitiativeCreated) {
+        await api(`/initiatives/${financialInitiativeId}`, { method: 'DELETE' }).catch(() => null);
+      }
     }
 
     await page.close();
