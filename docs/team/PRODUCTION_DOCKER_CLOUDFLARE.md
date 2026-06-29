@@ -48,9 +48,15 @@ http://api:8001
 
 Current Hostinger/Traefik route:
 
-| Public hostname | Local service |
+| Public hostname | VPS loopback service |
 | --- | --- |
 | `transmuter.ishirock.tech` | `http://localhost:4301` |
+
+Hostinger deployments are now run remotely through
+`infra/hostinger/deploy-prod.sh` or
+`CONFIRM_PROMOTE=1 infra/hostinger/promote-dev-to-prod.sh`. The local
+production-image commands above are for developer or VPS-loopback diagnostics,
+not the normal public deployment path.
 
 The app normally uses the same-origin `/api` proxy. A separate public API
 hostname is optional for debugging but is not part of the current production

@@ -184,11 +184,15 @@ The production frontend image writes runtime API configuration from
 | --- | --- | --- | --- |
 | `TRANSMUTER_API_URL` | Optional | `/api` | API base URL used by the Angular app at runtime. In the production web container, nginx proxies `/api` to `http://api:8001` on the Docker network. |
 
-For the current Hostinger production deployment:
+For a local production-image run:
 
 ```bash
 docker compose -f infra/docker-compose.prod.yml --env-file .env up -d
 ```
+
+For the current Hostinger production deployment, use the remote API workflow in
+`docs/team/HOSTINGER_VPS_DEPLOYMENT.md` and `infra/hostinger/README.md`; do not
+assume this command is running on the Hostinger VPS.
 
 ## E2E And Acceptance Test Variables
 

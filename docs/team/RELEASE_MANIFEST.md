@@ -24,6 +24,17 @@ status.
 6. After production validation, update the entry with promotion time, validation
    result, and any operational notes.
 
+Deployment note:
+- Hostinger deploy commands default to remote VPS Docker Manager API mode. Set
+  `HOSTINGER_API_TOKEN` or `HAPI_API_TOKEN`, `HOSTINGER_VPS_ID`, and
+  either the current VPS-local image mode
+  (`HOSTINGER_ALLOW_LOCAL_IMAGE_TAGS=1`, `TRANSMUTER_IMAGE_PULL_POLICY=never`)
+  or explicit registry-backed `TRANSMUTER_API_IMAGE` / `TRANSMUTER_WEB_IMAGE`
+  values in the ignored Hostinger env files or operator environment.
+- Dev and production remain separate Docker Compose projects on the same
+  Hostinger VPS. Use `HOSTINGER_DEPLOY_MODE=local` only for legacy commands run
+  directly on the VPS.
+
 ## Current Release Entries
 
 ### 2026-06-29 - Wizard Financial Scope Cleanup

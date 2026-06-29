@@ -20,6 +20,12 @@ Options:
                    transmuter before deploying. Repeat for multiple files.
   --skip-validate  Deploy only; skip local/public health checks.
 
+Deployment:
+  Default deploy mode is remote Hostinger VPS Docker Manager API. Dev and
+  production are separate Docker Compose projects on the same VPS.
+  Set HOSTINGER_DEPLOY_MODE=local only when running directly on the VPS.
+  Schema SQL helpers require a database URL reachable from this machine.
+
 Merge and pull the reviewed production commit before running this command.
 USAGE
 }

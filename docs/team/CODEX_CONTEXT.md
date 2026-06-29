@@ -33,10 +33,22 @@ replace them.
     `DATABASE_LOCAL_URL` search path `transmuter,public,extensions`; Cloud remains
     the fallback/demo target.
   - Hostinger deployment runbook: `docs/team/HOSTINGER_VPS_DEPLOYMENT.md`.
-  - Hostinger deployment root on the VPS: `/docker/transmuter`.
-  - Hostinger staged compose file on the VPS: `/docker/transmuter/docker-compose.yml`.
-  - Hostinger source compose template in the repo: `docker-compose.hostinger.yml`.
+  - Legacy Hostinger local-mode deployment root on the VPS:
+    `/docker/transmuter`.
+  - Legacy Hostinger local-mode staged compose file on the VPS:
+    `/docker/transmuter/docker-compose.yml`.
+  - Legacy Hostinger local-mode source compose template in the repo:
+    `docker-compose.hostinger.yml`.
+  - Hostinger API compose template in the repo:
+    `docker-compose.hostinger.api.yml`.
   - Hostinger deploy script: `infra/hostinger/deploy.sh`.
+  - Hostinger deploys default to remote VPS Docker Manager API mode. Legacy
+    on-VPS staged bundle deploys are still available with
+    `HOSTINGER_DEPLOY_MODE=local`.
+  - Standard remote deployment shell environment:
+    `HAPI_API_TOKEN=<token> HOSTINGER_VPS_ID=1695814
+    HOSTINGER_REUSE_REMOTE_ENV=1 HOSTINGER_ALLOW_LOCAL_IMAGE_TAGS=1
+    TRANSMUTER_IMAGE_PULL_POLICY=never`.
   - Default dev deployment command for every feature/fix:
     `infra/hostinger/deploy-change-to-dev.sh`.
   - If a feature/fix includes database changes, apply explicit SQL to the dev
@@ -46,6 +58,9 @@ replace them.
     `transmuter-dev-hostinger`, images `transmuter-api:hostinger-dev` /
     `transmuter-web:hostinger-dev`, host bind `127.0.0.1:4302`, and Supabase
     schema `transmuter_dev`.
+  - Dev and production remain on the same Hostinger VPS. They are separate
+    Docker Compose projects with different image tags, Traefik hostnames, host
+    binds, and Supabase schemas.
   - Production promotion command is
     `CONFIRM_PROMOTE=1 infra/hostinger/promote-dev-to-prod.sh`; if schema SQL is
     required, pass `--schema path/to/change.sql` so it applies to production
@@ -55,11 +70,14 @@ replace them.
     commit, dev validation, schema SQL, and production validation result.
   - Cloud-to-local Supabase schema migration script:
     `infra/hostinger/migrate_supabase_schema_to_transmuter.sh`.
-  - When the user asks to build and test, deploy through
-    `infra/hostinger/deploy.sh` and validate the real public domain
-    `https://transmuter.ishirock.tech` unless they explicitly ask for local-only
-    validation.
-  - Post-deploy validation should include `https://transmuter.ishirock.tech/health`,
+  - Feature/fix validation deploys should go to dev through
+    `infra/hostinger/deploy-change-to-dev.sh` and validate
+    `https://transmuter-dev.ishirock.tech` unless the user explicitly asks for
+    production.
+  - Production promotion requires review/merge and explicit approval, then
+    `CONFIRM_PROMOTE=1 infra/hostinger/promote-dev-to-prod.sh`.
+  - Production post-deploy validation should include
+    `https://transmuter.ishirock.tech/health`,
     `https://transmuter.ishirock.tech/api/health`, login through the browser,
     and the touched real workflows on the public domain.
   - Hostinger `worker` is opt-in via Compose profile `worker`. The current
