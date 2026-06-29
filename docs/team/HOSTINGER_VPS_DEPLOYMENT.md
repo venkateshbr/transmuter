@@ -1,6 +1,6 @@
 # Hostinger VPS Deployment Runbook
 
-Last updated: 2026-06-12
+Last updated: 2026-06-29
 
 ## Target
 
@@ -9,19 +9,45 @@ Last updated: 2026-06-12
 - Primary domain: `ishirock.tech`
 - Public app hostname: `https://transmuter.ishirock.tech`
 - Supabase API domain: `https://supabase.ishirock.tech`
-- Deployment directory on VPS: `/docker/transmuter`
-- Dev deployment directory on VPS: `/docker/transmuter-dev`
-- Staged compose file on VPS: `/docker/transmuter/docker-compose.yml`
-- Source compose template in repo: `docker-compose.hostinger.yml`
+- Legacy local-mode deployment directory on VPS: `/docker/transmuter`
+- Legacy local-mode dev deployment directory on VPS: `/docker/transmuter-dev`
+- Legacy local-mode staged compose file on VPS:
+  `/docker/transmuter/docker-compose.yml`
+- Legacy local-mode source compose template in repo:
+  `docker-compose.hostinger.yml`
+- Hostinger API compose template in repo: `docker-compose.hostinger.api.yml`
 - Deployment script in repo: `infra/hostinger/deploy.sh`
 - Schema migration script in repo: `infra/hostinger/migrate_supabase_schema_to_transmuter.sh`
 - Dev schema clone script in repo: `infra/hostinger/clone_schema_to_dev.sh`
 
-## Bundle Model
+## Deployment Model
 
-The Hostinger deployment is a *staged bundle*, not a full repository clone.
+Dev and production are separate Docker Compose projects on the same Hostinger
+VPS. They differ by project name, image tags, host bind, Supabase schema, and
+Traefik hostname:
 
-`infra/hostinger/deploy.sh` copies only the required repo subsets to the VPS:
+| Environment | Project | Hostname | Web bind | Images | Schema |
+| --- | --- | --- | --- | --- | --- |
+| Production | `transmuter-hostinger` | `transmuter.ishirock.tech` | `127.0.0.1:4301` | prod API/web tags | `transmuter` |
+| Dev | `transmuter-dev-hostinger` | `transmuter-dev.ishirock.tech` | `127.0.0.1:4302` | dev API/web tags | `transmuter_dev` |
+
+The default deployment mode is remote Hostinger VPS Docker Manager API:
+
+- `infra/hostinger/deploy.sh` sends `docker-compose.hostinger.api.yml` and a
+  generated environment payload to Hostinger's API.
+- The API compose template is image-only. It does not include `build:` blocks
+  because the Hostinger API cannot receive this repository's source bundle.
+- Images must already exist on the VPS with
+  `HOSTINGER_ALLOW_LOCAL_IMAGE_TAGS=1` and `TRANSMUTER_IMAGE_PULL_POLICY=never`,
+  or be pushed to a registry the VPS can pull. The deploy script can build and
+  push registry images first with `HOSTINGER_BUILD_AND_PUSH_IMAGES=1`.
+
+The legacy VPS-local deployment remains available with
+`HOSTINGER_DEPLOY_MODE=local`. That path is a *staged bundle*, not a full
+repository clone.
+
+In legacy local mode, `infra/hostinger/deploy.sh` copies only the required repo
+subsets to the VPS:
 
 - `apps/api/`
 - `apps/web/`
@@ -30,7 +56,7 @@ The Hostinger deployment is a *staged bundle*, not a full repository clone.
 - `docker-compose.hostinger.yml` staged as `/docker/transmuter/docker-compose.yml`
 - `infra/hostinger/.env` staged as `/docker/transmuter/.env`
 
-The dev bundle uses the same model with `infra/hostinger/.env.dev` staged to
+The dev legacy bundle uses the same model with `infra/hostinger/.env.dev` staged to
 `/docker/transmuter-dev/.env`.
 
 ## Traefik Routing
@@ -46,7 +72,19 @@ The API is not publicly exposed; `/api` is proxied by the web nginx container on
 
 ## Environment Preparation
 
-Create the local deployment env file from the template:
+For ordinary remote redeploys, prefer reusing the existing Hostinger Docker
+project environment and exporting only the deployment control values:
+
+```bash
+export HAPI_API_TOKEN='<hostinger-api-token>'
+export HOSTINGER_VPS_ID=1695814
+export HOSTINGER_REUSE_REMOTE_ENV=1
+export HOSTINGER_ALLOW_LOCAL_IMAGE_TAGS=1
+export TRANSMUTER_IMAGE_PULL_POLICY=never
+```
+
+If a command needs local runtime/database secrets, create the ignored deployment
+env file from the template:
 
 ```bash
 cp infra/hostinger/.env.example infra/hostinger/.env
@@ -54,6 +92,20 @@ cp infra/hostinger/.env.example infra/hostinger/.env
 
 Fill in:
 
+- `HOSTINGER_DEPLOY_MODE=api`
+- `HOSTINGER_API_TOKEN` or exported `HAPI_API_TOKEN`
+- `HOSTINGER_VPS_ID` for the shared Hostinger VPS
+- `TRANSMUTER_API_IMAGE` and `TRANSMUTER_WEB_IMAGE` for the selected
+  environment. Current operational values are VPS-local image tags:
+  `transmuter-api:hostinger`, `transmuter-web:hostinger`,
+  `transmuter-api:hostinger-dev`, and `transmuter-web:hostinger-dev`.
+- `HOSTINGER_ALLOW_LOCAL_IMAGE_TAGS=1` and
+  `TRANSMUTER_IMAGE_PULL_POLICY=never` when using the current VPS-local image
+  tags.
+- optional image build/push values:
+  `HOSTINGER_BUILD_AND_PUSH_IMAGES`, `HOSTINGER_DOCKER_REGISTRY`,
+  `HOSTINGER_DOCKER_USERNAME`, `HOSTINGER_DOCKER_PASSWORD`, and
+  `HOSTINGER_IMAGE_PLATFORM`
 - `SUPABASE_TARGET` (`local` for Hostinger primary, `cloud` for fallback/demo)
 - `SUPABASE_LOCAL_URL`
 - `SUPABASE_LOCAL_ANON_KEY`
@@ -124,22 +176,29 @@ Production wrapper:
 To run the schema migration on the VPS immediately before restarting containers:
 
 ```bash
-RUN_DB_SCHEMA_MIGRATION=1 ./infra/hostinger/deploy.sh
+HOSTINGER_DEPLOY_MODE=local RUN_DB_SCHEMA_MIGRATION=1 ./infra/hostinger/deploy.sh
 ```
+
+API mode cannot stage source or run arbitrary migration scripts on the VPS. For
+code deploys, use existing VPS-local image tags or registry images. For SQL
+changes, pass SQL files to
+`deploy-change-to-dev.sh` or `promote-dev-to-prod.sh`; the database URL used by
+`apply-schema-sql.sh` must be reachable from the machine running the command.
+Use legacy local mode only for one-off VPS-local migration operations.
 
 ## Hostinger Dev Environment
 
 The dev environment is separate from production:
 
 - Public app hostname: `https://transmuter-dev.ishirock.tech`
-- Dev bundle root: `/docker/transmuter-dev`
+- Legacy local-mode dev bundle root: `/docker/transmuter-dev`
 - Dev compose project: `transmuter-dev-hostinger`
 - Dev images: `transmuter-api:hostinger-dev`, `transmuter-web:hostinger-dev`
 - Dev web bind: `127.0.0.1:4302`
 - Dev Traefik router/service: `transmuter-dev-web`
 - Dev Supabase schema: `transmuter_dev`
 
-Create the dev env file:
+Create the dev env file only when local runtime/database secrets are needed:
 
 ```bash
 cp infra/hostinger/.env.dev.example infra/hostinger/.env.dev
@@ -162,7 +221,9 @@ PGRST_DB_SCHEMAS=transmuter_dev,transmuter,public,graphql_public
 PGRST_DB_EXTRA_SEARCH_PATH=transmuter_dev,transmuter,public,extensions
 ```
 
-Refresh dev schema from current production app schema/data:
+Refresh dev schema from current production app schema/data. This requires a
+local `.env.dev` or exported database clone URL reachable from the operator
+machine:
 
 ```bash
 ./infra/hostinger/deploy-change-to-dev.sh --refresh-schema
@@ -196,6 +257,9 @@ Validate dev:
 ```bash
 ./infra/hostinger/validate-dev.sh
 ```
+
+By default validation checks the public dev hostname only. When running directly
+on the VPS, add `VALIDATE_LOCAL=1` to also check `127.0.0.1:4302`.
 
 Promotion rule:
 
@@ -279,6 +343,10 @@ git checkout v0.4.0
 ./infra/hostinger/deploy.sh
 ```
 
+For remote rollback, use the standard Hostinger API deployment environment
+variables. Legacy local-mode rollback is available only when operating directly
+on the VPS with `HOSTINGER_DEPLOY_MODE=local`.
+
 If the schema migration has already been applied, rollback also requires
 restoring the target Supabase database from a pre-refactor backup. Code rollback
 alone does not reverse destructive table truncation or clean-model schema
@@ -322,6 +390,19 @@ uv run python scripts/rotate_platform_admin_email.py
 
 What the script does:
 
+In API mode:
+
+1. Loads the ignored environment file, or reuses the existing Hostinger Docker
+   project environment when `HOSTINGER_REUSE_REMOTE_ENV=1`.
+2. References existing VPS-local images, or optionally builds and pushes the
+   configured API and web registry images.
+3. Sends `docker-compose.hostinger.api.yml` and generated environment variables
+   to Hostinger's VPS Docker Manager API for the selected Compose project.
+4. Waits for the Hostinger action to complete and prints the project/container
+   summary.
+
+In legacy local mode:
+
 1. Creates `/docker/transmuter` on the VPS.
 2. Syncs only the required repo subsets.
 3. Copies `infra/hostinger/.env` to `/docker/transmuter/.env`.
@@ -332,7 +413,7 @@ What the script does:
 
 ## Validation
 
-On the VPS:
+On the VPS, these loopback checks are available for legacy local-mode diagnosis:
 
 ```bash
 cd /docker/transmuter
@@ -380,8 +461,13 @@ https://transmuter.ishirock.tech/api/billing/webhook
 ## SRE Notes
 
 - Do not treat `/docker/transmuter` as a source checkout.
-- Keep the compose file at the bundle root as `docker-compose.yml`.
-- The deploy script sets the remote `.env` to mode `600` after copying it.
+- Keep the compose file at the bundle root as `docker-compose.yml` only for
+  legacy local-mode deploys.
+- The deploy script sets the remote `.env` to mode `600` after copying it only
+  in legacy local mode.
+- For API mode, do not rely on source files being present on the VPS. Use the
+  existing VPS-local image tags with pull disabled, or switch to registry-backed
+  images explicitly.
 - Do not expose the API publicly unless there is a specific debugging need.
 - Do not commit secrets or copy them into repo-tracked files.
 - If the bundle is manually refreshed, refresh only the changed repo subsets rather than cloning the full repository.

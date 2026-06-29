@@ -101,6 +101,10 @@ deterministic sample data.
 
 ## Production Docker Build
 
+This section is for local production-image testing or direct Docker operation.
+For the public Hostinger VPS deployment, use the remote API commands in
+[Hostinger Remote Deployment](#hostinger-remote-deployment).
+
 Production uses two images:
 
 - `transmuter-api:prod`, exposed on host port `8001`
@@ -120,7 +124,7 @@ If Docker is installed at `/usr/local/bin/docker`, use:
 /usr/local/bin/docker compose -f infra/docker-compose.prod.yml build
 ```
 
-### Start Or Recreate The Production Stack
+### Start Or Recreate The Local Production Stack
 
 ```bash
 docker compose -f infra/docker-compose.prod.yml --env-file .env up -d
@@ -146,7 +150,7 @@ docker compose -f infra/docker-compose.prod.yml build api
 docker compose -f infra/docker-compose.prod.yml up -d api
 ```
 
-### Check Production Container Status
+### Check Local Production Container Status
 
 ```bash
 docker compose -f infra/docker-compose.prod.yml ps
@@ -162,7 +166,59 @@ curl -fsS https://transmuter.ishirock.tech/health
 curl -fsS https://transmuter.ishirock.tech/api/health
 ```
 
-### Stop Production Stack
+## Hostinger Remote Deployment
+
+Hostinger deployments are run remotely through the Hostinger VPS Docker Manager
+API. Dev and production are separate Docker Compose projects on the same VPS:
+
+- Dev: `transmuter-dev-hostinger`, `https://transmuter-dev.ishirock.tech`,
+  images `transmuter-api:hostinger-dev` / `transmuter-web:hostinger-dev`
+- Production: `transmuter-hostinger`, `https://transmuter.ishirock.tech`,
+  images `transmuter-api:hostinger` / `transmuter-web:hostinger`
+
+Set the shared remote deployment environment once in the shell:
+
+```bash
+export HAPI_API_TOKEN='<hostinger-api-token>'
+export HOSTINGER_VPS_ID=1695814
+export HOSTINGER_REUSE_REMOTE_ENV=1
+export HOSTINGER_ALLOW_LOCAL_IMAGE_TAGS=1
+export TRANSMUTER_IMAGE_PULL_POLICY=never
+```
+
+Deploy to dev:
+
+```bash
+./infra/hostinger/deploy-change-to-dev.sh
+./infra/hostinger/validate-dev.sh
+```
+
+Deploy to dev with SQL:
+
+```bash
+./infra/hostinger/deploy-change-to-dev.sh --schema path/to/change.sql
+./infra/hostinger/validate-dev.sh
+```
+
+Promote to production after merge and approval:
+
+```bash
+CONFIRM_PROMOTE=1 ./infra/hostinger/promote-dev-to-prod.sh
+./infra/hostinger/validate-prod.sh
+```
+
+Redeploy production with the current production images:
+
+```bash
+./infra/hostinger/deploy-prod.sh
+./infra/hostinger/validate-prod.sh
+```
+
+Do not commit Hostinger API tokens or runtime secrets. The legacy on-VPS staged
+bundle path remains available only for one-off operations with
+`HOSTINGER_DEPLOY_MODE=local`.
+
+### Stop Local Production Stack
 
 ```bash
 docker compose -f infra/docker-compose.prod.yml --env-file .env down

@@ -22,6 +22,12 @@ Options:
   --refresh-schema  Reset transmuter_dev from production transmuter before applying schema files.
   --skip-validate   Deploy only; skip local/public health checks.
 
+Deployment:
+  Default deploy mode is remote Hostinger VPS Docker Manager API. Dev and
+  production are separate Docker Compose projects on the same VPS.
+  Set HOSTINGER_DEPLOY_MODE=local only when running directly on the VPS.
+  Schema SQL helpers require a database URL reachable from this machine.
+
 Temporary TLS workaround:
   ALLOW_INSECURE_TLS=1 ./infra/hostinger/deploy-change-to-dev.sh
 USAGE

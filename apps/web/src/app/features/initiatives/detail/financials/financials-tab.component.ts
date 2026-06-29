@@ -480,7 +480,7 @@ interface GridMetric {
                 </label>
                 <label class="grid gap-1 md:col-span-2 lg:col-span-1">
                   <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Named Benefit Line</span>
-                  <input class="input-field min-w-0 py-2 text-xs font-bold" [ngModel]="newBenefitLineName()" (ngModelChange)="newBenefitLineName.set($event)" aria-label="Benefit line name" placeholder="Revenue uplift from improved retention">
+                  <input class="input-field min-w-0 py-2 text-xs font-bold" [ngModel]="newBenefitLineName()" (ngModelChange)="newBenefitLineName.set($event)" aria-label="Benefit line name" placeholder="..">
                 </label>
                 <label class="grid gap-1">
                   <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Confidence %</span>
@@ -561,7 +561,7 @@ interface GridMetric {
             </label>
             <label class="grid gap-1">
               <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Cost Line</span>
-              <input class="input-field py-2 text-xs font-bold" [ngModel]="newCostLineName()" (ngModelChange)="newCostLineName.set($event)" aria-label="Cost line name" placeholder="Implementation support">
+              <input class="input-field py-2 text-xs font-bold" [ngModel]="newCostLineName()" (ngModelChange)="newCostLineName.set($event)" aria-label="Cost line name" placeholder="..">
             </label>
             <label class="grid gap-1">
               <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Lane</span>
