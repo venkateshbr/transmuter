@@ -17,9 +17,14 @@ from app.agents.initiative_intake_agent import (
     scan_risk_patterns,
     suggest_kpis,
 )
-from app.core.auth import CurrentUser, RequireAdmin, get_current_user
+from app.core.auth import CurrentUser, get_current_user
 from app.core.database import get_supabase_request_client
-from app.core.rbac import assert_can_manage_initiatives, assert_can_view_initiative
+from app.core.rbac import (
+    assert_can_manage_initiative_execution,
+    assert_can_manage_initiative_master_data,
+    assert_can_manage_initiatives,
+    assert_can_view_initiative,
+)
 from app.domain.initiative_context import InitiativeContextPullResult
 from app.domain.initiative_intake import (
     InitiativeFieldExtractionRequest,
@@ -231,8 +236,11 @@ async def get_initiative(
 @router.get("/{initiative_id}/export")
 async def export_initiative_workbook(
     initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
     svc: Annotated[InitiativeService, Depends(_svc)],
 ) -> Response:
+    assert_can_view_initiative(client, current_user, initiative_id)
     workbook = svc.export_initiative_workbook(initiative_id)
     return Response(
         content=workbook,
@@ -262,9 +270,10 @@ async def update_initiative(
     initiative_id: str,
     body: InitiativeUpdate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
     svc: Annotated[InitiativeService, Depends(_svc)],
 ) -> InitiativeDetail:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_master_data(client, current_user, initiative_id)
     return svc.update_initiative(initiative_id, body)
 
 
@@ -310,10 +319,11 @@ async def update_initiative_summary(
     initiative_id: str,
     body: dict,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
     svc: Annotated[InitiativeService, Depends(_svc)],
 ):
     """Persist closure narrative fields on the initiative record."""
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_execution(client, current_user, initiative_id)
     update_data = {}
     if "final_summary" in body:
         update_data["summary"] = body["final_summary"]
@@ -327,12 +337,14 @@ async def update_initiative_summary(
     return await get_initiative_summary(initiative_id, current_user, svc)
 
 
-# ── Delete (TO only) ──────────────────────────────────────────────────────────
+# ── Delete ───────────────────────────────────────────────────────────────────
 
 
-@router.delete("/{initiative_id}", status_code=204, dependencies=[RequireAdmin])
+@router.delete("/{initiative_id}", status_code=204)
 async def delete_initiative(
     initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[InitiativeService, Depends(_svc)],
 ) -> None:
+    assert_can_manage_initiatives(current_user)
     svc.delete_initiative(initiative_id)

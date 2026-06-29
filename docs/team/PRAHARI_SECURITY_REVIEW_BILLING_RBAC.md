@@ -56,15 +56,23 @@ Latest verifier result:
 
 ### RBAC Database Constraint
 
-Status: fixed
+Status: superseded by operating-model RBAC
 
-The `users.role` database constraint now matches the approved launch roles:
+The launch-era three-role constraint has been replaced by the Transformation
+Office operating model. The accepted tenant roles are now:
 
 - `transformation_office`
+- `tenant_admin`
+- `pmo_lead`
+- `finance_lead`
+- `workstream_lead`
 - `initiative_owner`
+- `business_benefit_owner`
+- `executive_sponsor`
 - `viewer`
 
-Legacy `workstream_lead` users in Supabase were mapped to `initiative_owner`.
+RBAC is now enforced through API capability helpers and matching RLS helper
+functions rather than one-off role checks.
 
 ### Production Price ID Visibility
 

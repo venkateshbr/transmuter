@@ -25,15 +25,14 @@ status.
    result, and any operational notes.
 
 Deployment note:
-- Hostinger deploy commands default to remote VPS Docker Manager API mode. Set
-  `HOSTINGER_API_TOKEN` or `HAPI_API_TOKEN`, `HOSTINGER_VPS_ID`, and
-  either the current VPS-local image mode
-  (`HOSTINGER_ALLOW_LOCAL_IMAGE_TAGS=1`, `TRANSMUTER_IMAGE_PULL_POLICY=never`)
-  or explicit registry-backed `TRANSMUTER_API_IMAGE` / `TRANSMUTER_WEB_IMAGE`
-  values in the ignored Hostinger env files or operator environment.
+- Hostinger deploy commands use the remote VPS Docker project API. The API
+  fetches the pushed GitHub commit and `docker-compose.hostinger.yml`, then
+  builds/recreates the selected Docker project on the VPS.
+- Keep `HOSTINGER_API_KEY` or `HOSTINGER_API_TOKEN` and `HOSTINGER_VPS_ID` in an
+  ignored local `.env`, `infra/hostinger/.env`, `infra/hostinger/.env.dev`, or
+  the operator shell.
 - Dev and production remain separate Docker Compose projects on the same
-  Hostinger VPS. Use `HOSTINGER_DEPLOY_MODE=local` only for legacy commands run
-  directly on the VPS.
+  Hostinger VPS. `infra/hostinger/deploy.sh` is legacy VPS-local fallback only.
 
 ## Current Release Entries
 

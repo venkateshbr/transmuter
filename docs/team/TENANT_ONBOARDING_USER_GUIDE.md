@@ -15,16 +15,23 @@ Use this guide if you are:
 
 - A tenant administrator setting up a new transformation office.
 - A transformation office user configuring workstreams, financial metrics, stage gates, and initiative taxonomy.
+- PMO, finance, workstream, and benefit owners running the transformation operating cadence.
 - An initiative owner creating initiatives and maintaining milestones, KPIs, risks, status updates, and financial values.
-- A viewer interpreting dashboards and portfolio reports.
+- An executive sponsor or viewer interpreting dashboards and portfolio reports.
 
 Roles used in the platform:
 
 | Role | Typical user | Capabilities |
 |---|---|---|
-| `transformation_office` | PMO / transformation office / tenant admin | Configure tenant setup, create and edit initiatives, manage financials, gates, users, meetings, and portfolio reporting. |
-| `initiative_owner` | Initiative lead | Maintain owned initiatives, progress, risks, KPIs, milestones, and status updates where permitted. |
-| `viewer` | Sponsor / leadership / read-only stakeholder | View initiatives, dashboards, portfolio reports, financials, risks, and KPIs. |
+| `transformation_office` | Transformation Office Director / value office | Full tenant and portfolio permissions. |
+| `tenant_admin` | Tenant administrator | Manage users, access, tenant setup, dimensions, dashboard configuration, governance configuration, and billing portal access. |
+| `pmo_lead` | PMO lead / governance manager | Manage governance, meetings, actions, milestones, risks, KPIs, and program cadence. |
+| `finance_lead` | Finance lead / benefits controller | Manage financial configuration, initiative financials, benefit validation, shared costs, bankable plans, actuals, and benefit tracking. |
+| `workstream_lead` | Workstream lead | View assigned workstream initiatives and maintain execution evidence for that workstream. |
+| `initiative_owner` | Initiative lead | Maintain owned initiative master data, progress, risks, KPIs, milestones, status, and financial assumptions. |
+| `business_benefit_owner` | Business benefit owner | Maintain realization evidence, sustainment notes, and benefit ledger updates. |
+| `executive_sponsor` | Sponsor / CEO / CFO | Read-only executive portfolio, financial, and control-tower views. |
+| `viewer` | Read-only stakeholder | View initiatives, dashboards, portfolio reports, financials, risks, and KPIs. |
 | `platform_admin` | Transmuter operator | Manage tenants and platform-level administration. This is not a normal tenant user. |
 
 ## 2. New Tenant Onboarding Flow
@@ -303,9 +310,15 @@ Recommended operating model:
 
 | User type | Role |
 |---|---|
-| Transformation office members | `transformation_office` |
+| Transformation office director | `transformation_office` |
+| Tenant access/setup administrator | `tenant_admin` |
+| PMO / governance lead | `pmo_lead` |
+| Finance / benefits controller | `finance_lead` |
+| Workstream leads | `workstream_lead` |
 | Initiative leads | `initiative_owner` |
-| Steering committee / executives | `viewer` |
+| Business benefit owners | `business_benefit_owner` |
+| Steering committee / executives | `executive_sponsor` |
+| Read-only management viewers | `viewer` |
 
 Assign owners and group owners on initiatives so dashboards, meetings, and status reporting have accountable people.
 

@@ -10,7 +10,8 @@ from supabase import Client
 from app.core.auth import CurrentUser, get_current_user
 from app.core.database import get_supabase_request_client
 from app.core.rbac import (
-    assert_can_manage_initiatives,
+    assert_can_manage_initiative_execution,
+    assert_can_manage_milestone_execution,
     assert_can_view_initiative,
     assert_can_view_milestone,
     assert_can_view_portfolio,
@@ -110,8 +111,9 @@ async def create_milestone(
     body: MilestoneCreate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MilestoneService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> MilestoneDetail:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_execution(client, current_user, initiative_id)
     return svc.create_milestone(initiative_id, body)
 
 
@@ -124,8 +126,9 @@ async def update_milestone(
     body: MilestoneUpdate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MilestoneService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> MilestoneDetail:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_milestone_execution(client, current_user, milestone_id)
     return svc.update_milestone(milestone_id, body)
 
 
@@ -134,8 +137,9 @@ async def delete_milestone(
     milestone_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MilestoneService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> None:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_milestone_execution(client, current_user, milestone_id)
     svc.delete_milestone(milestone_id)
 
 
@@ -152,8 +156,9 @@ async def add_checklist_item(
     body: ChecklistItemCreate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MilestoneService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> ChecklistItem:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_milestone_execution(client, current_user, milestone_id)
     return svc.add_checklist_item(milestone_id, body)
 
 
@@ -167,8 +172,9 @@ async def toggle_checklist(
     body: ChecklistToggle,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MilestoneService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> ChecklistItem:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_milestone_execution(client, current_user, milestone_id)
     return svc.toggle_checklist(
         milestone_id,
         item_id,
@@ -185,8 +191,9 @@ async def delete_checklist_item(
     item_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MilestoneService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> None:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_milestone_execution(client, current_user, milestone_id)
     svc.delete_checklist_item(milestone_id, item_id)
 
 
@@ -203,8 +210,9 @@ async def add_dependency(
     body: DependencyCreate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MilestoneService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> DependencyItem:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_milestone_execution(client, current_user, milestone_id)
     return svc.add_dependency(milestone_id, body)
 
 
@@ -217,8 +225,9 @@ async def delete_dependency(
     dependency_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MilestoneService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> None:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_milestone_execution(client, current_user, milestone_id)
     svc.delete_dependency(milestone_id, dependency_id)
 
 

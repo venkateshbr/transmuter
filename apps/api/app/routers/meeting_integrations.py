@@ -16,7 +16,7 @@ from app.core.auth import CurrentUser, get_current_user
 from app.core.config import settings
 from app.core.crypto import encrypt_secret
 from app.core.database import get_supabase_admin, get_supabase_request_client
-from app.core.rbac import assert_can_manage_initiatives, assert_can_view_portfolio
+from app.core.rbac import assert_can_manage_program_cadence, assert_can_view_portfolio
 from app.repositories.meeting import MeetingRepository
 
 router = APIRouter(prefix="/meeting-integrations", tags=["meeting-integrations"])
@@ -63,7 +63,7 @@ async def list_meeting_integrations(
 async def start_microsoft_oauth(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> OAuthStartResponse:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     missing = [
         name
         for name, value in (

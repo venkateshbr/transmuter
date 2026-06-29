@@ -10,7 +10,7 @@ from fastapi import HTTPException, status
 from supabase import Client
 
 from app.core.auth import CurrentUser
-from app.core.rbac import can_view_all_initiatives
+from app.core.rbac import can_view_all_initiatives, workstream_lead_filter
 from app.domain.financials import (
     FinancialGridUpdate,
     FinancialSummary,
@@ -86,9 +86,26 @@ class InitiativeService:
             if current_user and current_user.role == "initiative_owner"
             else None
         )
+        requested_workstream_ids = self._split_filter_values(workstream_id)
+        scoped_workstream_ids = (
+            workstream_lead_filter(self._client, current_user) if current_user else None
+        )
+        if scoped_workstream_ids is not None:
+            if not scoped_workstream_ids:
+                return InitiativeListResponse(items=[], total=0, page=page, page_size=page_size)
+            if requested_workstream_ids:
+                requested = set(requested_workstream_ids)
+                scoped_workstream_ids = [
+                    workstream_id
+                    for workstream_id in scoped_workstream_ids
+                    if workstream_id in requested
+                ]
+                if not scoped_workstream_ids:
+                    return InitiativeListResponse(items=[], total=0, page=page, page_size=page_size)
+
         rows, total = self._repo.list(
             business_unit_ids=self._split_filter_values(business_unit_id),
-            workstream_ids=self._split_filter_values(workstream_id),
+            workstream_ids=scoped_workstream_ids or requested_workstream_ids,
             rag_statuses=self._split_filter_values(rag_status),
             stages=self._split_filter_values(stage),
             priorities=self._split_filter_values(priority),
@@ -122,7 +139,15 @@ class InitiativeService:
             )
         if current_user and not can_view_all_initiatives(current_user.role):
             user_id = str(current_user.id)
-            if row.get("owner_id") != user_id and row.get("group_owner_id") != user_id:
+            workstream_ids = workstream_lead_filter(self._client, current_user)
+            can_view_workstream = (
+                workstream_ids is not None and str(row.get("workstream_id") or "") in workstream_ids
+            )
+            if (
+                row.get("owner_id") != user_id
+                and row.get("group_owner_id") != user_id
+                and not can_view_workstream
+            ):
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND, detail="Initiative not found"
                 )
@@ -256,7 +281,8 @@ class InitiativeService:
             if current_user and current_user.role == "initiative_owner"
             else None
         )
-        return self._repo.export_csv(owner_user_id=owner_user_id)
+        workstream_ids = workstream_lead_filter(self._client, current_user) if current_user else None
+        return self._repo.export_csv(owner_user_id=owner_user_id, workstream_ids=workstream_ids)
 
     def export_template(self) -> bytes:
         return build_initiative_template()

@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { AuthService, type UserProfile } from '../../core/services/auth.service';
+import { operatingModelRoleLabel } from '../../core/rbac/operating-model-permissions';
 
 @Component({
   selector: 'app-profile',
@@ -250,7 +251,7 @@ export class ProfileComponent implements OnInit {
   }
 
   roleLabel(role: string | null | undefined): string {
-    return (role || 'viewer').replace(/_/g, ' ');
+    return operatingModelRoleLabel(role);
   }
 
   saveProfile(): void {

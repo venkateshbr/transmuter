@@ -22,8 +22,9 @@ Safety checks:
   `tenant_id uuid NOT NULL`.
 - Enables RLS on both new tables.
 - Allows read access only for the current tenant.
-- Allows insert/update/delete only for the current tenant when
-  `current_user_role() = 'transformation_office'`.
+- Allows insert/update/delete only for the current tenant when the user has
+  financial configuration capability (`transformation_office`, `tenant_admin`,
+  or `finance_lead`).
 - Adds `financial_cost_lines.category_key TEXT NOT NULL DEFAULT 'other'`.
 - Adds an index on `(tenant_id, category_key)` for portfolio filtering.
 - Historical migration seeded default groups/items for existing tenants with

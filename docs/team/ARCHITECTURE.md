@@ -43,7 +43,7 @@ Background: Procrastinate (async job queue over PostgreSQL)
 {
   "sub": "<user_uuid>",
   "tenant_id": "<org_uuid>",
-  "role": "transformation_office | initiative_owner | workstream_lead",
+  "role": "transformation_office | tenant_admin | pmo_lead | finance_lead | workstream_lead | initiative_owner | business_benefit_owner | executive_sponsor | viewer",
   "email": "<user_email>",
   "exp": <unix_timestamp>,
   "iat": <unix_timestamp>
@@ -81,12 +81,12 @@ CREATE POLICY "<table>_delete" ON <table>
   );
 ```
 
-For role-restricted tables (e.g., gate decisions — transformation_office only):
+For capability-restricted tables (e.g., governance configuration and gate decisions):
 ```sql
-CREATE POLICY "gate_decisions_toffice_only" ON gate_submissions
+CREATE POLICY "gate_decisions_governance" ON gate_submissions
   FOR UPDATE USING (
     tenant_id = (auth.jwt() ->> 'tenant_id')::uuid
-    AND (auth.jwt() ->> 'role') = 'transformation_office'
+    AND current_user_role() IN ('transformation_office', 'tenant_admin', 'pmo_lead')
   );
 ```
 
@@ -98,15 +98,15 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials) -> Current
     payload = decode_token(credentials.credentials)
     return CurrentUser(id=payload.sub, tenant_id=payload.tenant_id, role=payload.role)
 
-def require_role(*roles: str):
+def require_capability(capability: str):
     async def _check(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
-        if user.role not in roles:
+        if not has_capability(user.role, capability):
             raise HTTPException(403, "Insufficient role")
         return user
     return _check
 
 # Usage:
-# @router.post("/gates/{id}/decide", dependencies=[Depends(require_role("transformation_office"))])
+# @router.post("/gates/{id}/decide", dependencies=[Depends(require_capability("governance.manage"))])
 ```
 
 **Consequences**:

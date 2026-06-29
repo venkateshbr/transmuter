@@ -19,7 +19,17 @@ class DashboardConfigItem(BaseModel):
     display_order: int = 0
     is_enabled: bool = True
     allowed_roles: list[str] = Field(
-        default_factory=lambda: ["transformation_office", "initiative_owner", "viewer"]
+        default_factory=lambda: [
+            "transformation_office",
+            "tenant_admin",
+            "pmo_lead",
+            "finance_lead",
+            "workstream_lead",
+            "initiative_owner",
+            "business_benefit_owner",
+            "executive_sponsor",
+            "viewer",
+        ]
     )
     is_system: bool = True
     metadata: dict[str, object] = Field(default_factory=dict)

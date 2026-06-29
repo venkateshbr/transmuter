@@ -534,7 +534,7 @@ export class PipelineComponent {
   }
 
   canManageInitiatives(): boolean {
-    return this.auth.getRole() === 'transformation_office';
+    return this.auth.hasPermission('initiatives.manage_all');
   }
 
   reload(syncState = true): void {

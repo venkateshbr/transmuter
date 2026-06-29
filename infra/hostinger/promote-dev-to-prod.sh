@@ -20,12 +20,6 @@ Options:
                    transmuter before deploying. Repeat for multiple files.
   --skip-validate  Deploy only; skip local/public health checks.
 
-Deployment:
-  Default deploy mode is remote Hostinger VPS Docker Manager API. Dev and
-  production are separate Docker Compose projects on the same VPS.
-  Set HOSTINGER_DEPLOY_MODE=local only when running directly on the VPS.
-  Schema SQL helpers require a database URL reachable from this machine.
-
 Merge and pull the reviewed production commit before running this command.
 USAGE
 }
@@ -74,7 +68,13 @@ current_commit="$(git rev-parse --short HEAD)"
 echo "Promoting ${current_branch}@${current_commit} to production Hostinger stack."
 
 if [[ "${#SCHEMA_FILES[@]}" -gt 0 ]]; then
-  CONFIRM_PROD_SCHEMA=1 "${SCRIPT_DIR}/apply-schema-sql.sh" prod "${SCHEMA_FILES[@]}"
+  HOSTINGER_PROJECT_NAME="${HOSTINGER_PROJECT_NAME:-transmuter-hostinger}" \
+    HOSTINGER_VPS_ID="${HOSTINGER_VPS_ID:-1695814}" \
+    HOSTINGER_PUBLIC_IP="${HOSTINGER_PUBLIC_IP:-76.13.208.106}" \
+    HOSTINGER_SCHEMA_DATABASE_HOST="${HOSTINGER_SCHEMA_DATABASE_HOST:-${HOSTINGER_PUBLIC_IP:-76.13.208.106}}" \
+    HOSTINGER_SCHEMA_APPLY_MODE="${HOSTINGER_SCHEMA_APPLY_MODE:-hostinger-job}" \
+    CONFIRM_PROD_SCHEMA=1 \
+    "${SCRIPT_DIR}/apply-schema-sql.sh" prod "${SCHEMA_FILES[@]}"
 fi
 
 "${SCRIPT_DIR}/deploy-prod.sh"

@@ -4,27 +4,30 @@ set -euo pipefail
 PROD_LOCAL_BASE_URL="${PROD_LOCAL_BASE_URL:-http://127.0.0.1:4301}"
 PROD_PUBLIC_BASE_URL="${PROD_PUBLIC_BASE_URL:-https://transmuter.ishirock.tech}"
 VALIDATE_LOCAL="${VALIDATE_LOCAL:-0}"
-CURL_INSECURE_FLAG=()
 
-if [[ "${ALLOW_INSECURE_TLS:-0}" == "1" ]]; then
-  CURL_INSECURE_FLAG=(-k)
-fi
+check_url() {
+  local url="$1"
+  local attempts="${2:-30}"
+  local delay="${3:-10}"
+  local i
+  for ((i = 1; i <= attempts; i++)); do
+    if curl -fsS "${url}" >/dev/null; then
+      return 0
+    fi
+    sleep "${delay}"
+  done
+  echo "Health check failed after ${attempts} attempts: ${url}" >&2
+  return 1
+}
 
 if [[ "${VALIDATE_LOCAL}" == "1" ]]; then
-  echo "Validating production on the VPS loopback at ${PROD_LOCAL_BASE_URL}."
-  curl -fsS "${PROD_LOCAL_BASE_URL}/health" >/dev/null
-  curl -fsS "${PROD_LOCAL_BASE_URL}/api/health" >/dev/null
-else
-  echo "Skipping VPS loopback validation. Set VALIDATE_LOCAL=1 when running on the Hostinger VPS."
+  echo "Validating production local bind at ${PROD_LOCAL_BASE_URL}."
+  check_url "${PROD_LOCAL_BASE_URL}/health" 6 5
+  check_url "${PROD_LOCAL_BASE_URL}/api/health" 6 5
 fi
 
 echo "Validating production publicly at ${PROD_PUBLIC_BASE_URL}."
-if [[ "${#CURL_INSECURE_FLAG[@]}" -gt 0 ]]; then
-  curl "${CURL_INSECURE_FLAG[@]}" -fsS "${PROD_PUBLIC_BASE_URL}/health" >/dev/null
-  curl "${CURL_INSECURE_FLAG[@]}" -fsS "${PROD_PUBLIC_BASE_URL}/api/health" >/dev/null
-else
-  curl -fsS "${PROD_PUBLIC_BASE_URL}/health" >/dev/null
-  curl -fsS "${PROD_PUBLIC_BASE_URL}/api/health" >/dev/null
-fi
+check_url "${PROD_PUBLIC_BASE_URL}/health"
+check_url "${PROD_PUBLIC_BASE_URL}/api/health"
 
 echo "Production validation passed."

@@ -3,8 +3,9 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from supabase import Client
 
-from app.core.auth import CurrentUser, get_current_user, require_role
+from app.core.auth import CurrentUser, get_current_user
 from app.core.database import get_supabase_request_client
+from app.core.rbac import assert_can_manage_tenant_setup
 from app.services.workstream import WorkstreamService
 
 router = APIRouter(prefix="/workstreams", tags=["workstreams"])
@@ -29,9 +30,10 @@ async def list_workstreams(
 async def create_workstream(
     body: dict[str, object],
     svc: Annotated[WorkstreamService, Depends(_svc)],
-    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> dict[str, object]:
     """Create a new workstream."""
+    assert_can_manage_tenant_setup(current_user)
     return svc.create_workstream(body)
 
 
@@ -40,9 +42,10 @@ async def update_workstream(
     workstream_id: str,
     body: dict[str, object],
     svc: Annotated[WorkstreamService, Depends(_svc)],
-    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> dict[str, object]:
     """Update an existing workstream."""
+    assert_can_manage_tenant_setup(current_user)
     return svc.update_workstream(workstream_id, body)
 
 
@@ -50,8 +53,9 @@ async def update_workstream(
 async def delete_workstream(
     workstream_id: str,
     svc: Annotated[WorkstreamService, Depends(_svc)],
-    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> None:
     """Delete a workstream."""
+    assert_can_manage_tenant_setup(current_user)
     svc.delete_workstream(workstream_id)
     return None

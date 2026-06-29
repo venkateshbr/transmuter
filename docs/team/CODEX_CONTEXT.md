@@ -16,11 +16,10 @@ replace them.
 - Shared Costs configurable allocation engine is promoted to production from
   app commit `31c8805`, with the docs-only release-manifest update at
   `b7c32e3`.
-- Running production Docker stack uses:
-  - API image `transmuter-api:prod` on host port `8001`.
-  - Frontend image `transmuter-web:prod` on host port `4301`.
-  - Compose file `infra/docker-compose.prod.yml`.
-- Docker CLI path on this machine is `/usr/bin/docker`.
+- Hostinger production Docker project uses API image `transmuter-api:hostinger`
+  and web image `transmuter-web:hostinger`.
+- Hostinger dev Docker project uses API image `transmuter-api:hostinger-dev`
+  and web image `transmuter-web:hostinger-dev`.
 - Hostinger VPS / domain context:
   - Primary domain owned for the VPS: `ishirock.tech`.
   - VPS hostname: `srv1695814.hstgr.cloud`.
@@ -33,22 +32,11 @@ replace them.
     `DATABASE_LOCAL_URL` search path `transmuter,public,extensions`; Cloud remains
     the fallback/demo target.
   - Hostinger deployment runbook: `docs/team/HOSTINGER_VPS_DEPLOYMENT.md`.
-  - Legacy Hostinger local-mode deployment root on the VPS:
-    `/docker/transmuter`.
-  - Legacy Hostinger local-mode staged compose file on the VPS:
-    `/docker/transmuter/docker-compose.yml`.
-  - Legacy Hostinger local-mode source compose template in the repo:
-    `docker-compose.hostinger.yml`.
-  - Hostinger API compose template in the repo:
-    `docker-compose.hostinger.api.yml`.
-  - Hostinger deploy script: `infra/hostinger/deploy.sh`.
-  - Hostinger deploys default to remote VPS Docker Manager API mode. Legacy
-    on-VPS staged bundle deploys are still available with
-    `HOSTINGER_DEPLOY_MODE=local`.
-  - Standard remote deployment shell environment:
-    `HAPI_API_TOKEN=<token> HOSTINGER_VPS_ID=1695814
-    HOSTINGER_REUSE_REMOTE_ENV=1 HOSTINGER_ALLOW_LOCAL_IMAGE_TAGS=1
-    TRANSMUTER_IMAGE_PULL_POLICY=never`.
+  - Hostinger source compose template in the repo: `docker-compose.hostinger.yml`.
+  - Hostinger remote deploy script: `infra/hostinger/deploy-remote.sh`.
+  - `infra/hostinger/deploy.sh` is legacy VPS-local fallback only.
+  - Hostinger API deploys fetch the pushed GitHub commit/compose file; local
+    uncommitted changes are not deployable through the API.
   - Default dev deployment command for every feature/fix:
     `infra/hostinger/deploy-change-to-dev.sh`.
   - If a feature/fix includes database changes, apply explicit SQL to the dev
@@ -58,9 +46,6 @@ replace them.
     `transmuter-dev-hostinger`, images `transmuter-api:hostinger-dev` /
     `transmuter-web:hostinger-dev`, host bind `127.0.0.1:4302`, and Supabase
     schema `transmuter_dev`.
-  - Dev and production remain on the same Hostinger VPS. They are separate
-    Docker Compose projects with different image tags, Traefik hostnames, host
-    binds, and Supabase schemas.
   - Production promotion command is
     `CONFIRM_PROMOTE=1 infra/hostinger/promote-dev-to-prod.sh`; if schema SQL is
     required, pass `--schema path/to/change.sql` so it applies to production
@@ -70,14 +55,11 @@ replace them.
     commit, dev validation, schema SQL, and production validation result.
   - Cloud-to-local Supabase schema migration script:
     `infra/hostinger/migrate_supabase_schema_to_transmuter.sh`.
-  - Feature/fix validation deploys should go to dev through
-    `infra/hostinger/deploy-change-to-dev.sh` and validate
-    `https://transmuter-dev.ishirock.tech` unless the user explicitly asks for
-    production.
-  - Production promotion requires review/merge and explicit approval, then
-    `CONFIRM_PROMOTE=1 infra/hostinger/promote-dev-to-prod.sh`.
-  - Production post-deploy validation should include
-    `https://transmuter.ishirock.tech/health`,
+  - When the user asks to build, test, and deploy, deploy to dev through
+    `infra/hostinger/deploy-change-to-dev.sh` after the commit is pushed, then
+    validate the real public dev domain `https://transmuter-dev.ishirock.tech`.
+    Promote production only after review/merge and explicit confirmation.
+  - Post-deploy validation should include `https://transmuter.ishirock.tech/health`,
     `https://transmuter.ishirock.tech/api/health`, login through the browser,
     and the touched real workflows on the public domain.
   - Hostinger `worker` is opt-in via Compose profile `worker`. The current
@@ -110,11 +92,23 @@ replace them.
 - Current platform admin operator email is `venkatesh@ishirock.com`; API startup
   idempotently ensures that Supabase Auth user has platform-admin app metadata
   when `PLATFORM_ADMIN_BOOTSTRAP_ENABLED=true`.
-- Tenant admin configures tenant master data and users.
+- Tenant administrator role (`tenant_admin`) configures tenant master data,
+  users, access, dashboard configuration, and billing portal access.
 - Supported tenant roles:
-  - `transformation_office`: can see and manage all initiatives.
-  - `initiative_owner`: can see assigned/owned initiatives only.
-  - `viewer`: can view portfolio data but should not create or mutate data.
+  - `transformation_office`: full tenant and portfolio permissions.
+  - `tenant_admin`: users, access, tenant setup, dimensions, dashboard setup,
+    governance configuration, and billing portal access.
+  - `pmo_lead`: governance, meetings, actions, milestones, risks, KPIs, and
+    program cadence.
+  - `finance_lead`: financial configuration, initiative financials, benefit
+    validation, shared costs, bankable plans, actuals, and benefit tracking.
+  - `workstream_lead`: assigned-workstream visibility and execution evidence.
+  - `initiative_owner`: owned-initiative master data, execution evidence,
+    status, and financial assumptions.
+  - `business_benefit_owner`: portfolio visibility plus benefit realization
+    evidence and ledger updates.
+  - `executive_sponsor`: read-only executive portfolio and financial views.
+  - `viewer`: read-only management portfolio and dashboard access.
 - RBAC must be enforced in the API; UI affordances should also hide forbidden actions.
 
 ## Stripe And Webhooks

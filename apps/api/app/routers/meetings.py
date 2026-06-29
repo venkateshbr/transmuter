@@ -6,7 +6,7 @@ from supabase import Client
 from app.core.auth import CurrentUser, get_current_user
 from app.core.database import get_supabase_request_client
 from app.core.rbac import (
-    assert_can_manage_initiatives,
+    assert_can_manage_program_cadence,
     assert_can_view_meeting,
     assert_can_view_portfolio,
     assert_can_view_session,
@@ -60,7 +60,7 @@ async def create_meeting(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> dict:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     return svc.create_meeting(body)
 
 
@@ -84,7 +84,7 @@ async def update_session(
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> dict:
     """Update session data (notes, transcript)."""
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     return svc.update_session(session_id, data)
 
 
@@ -95,7 +95,7 @@ async def end_session(
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> dict:
     """Mark a session as completed."""
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     return svc.end_session(session_id)
 
 
@@ -107,7 +107,7 @@ async def create_action_item(
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> dict:
     """Create a new action item in the session."""
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     return svc.create_action_item(session_id, data)
 
 
@@ -118,7 +118,7 @@ async def create_session_agenda_item(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> dict:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     return svc.create_session_agenda_item(session_id, body)
 
 
@@ -130,7 +130,7 @@ async def update_session_agenda_item(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> dict:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     return svc.update_session_agenda_item(session_id, item_id, body)
 
 
@@ -140,7 +140,7 @@ async def suggest_session_agenda_items(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> AgendaSuggestionsResponse:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     return svc.suggest_session_agenda_items(session_id)
 
 
@@ -151,7 +151,7 @@ async def delete_session_agenda_item(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> None:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     svc.delete_session_agenda_item(session_id, item_id)
 
 
@@ -162,7 +162,7 @@ async def add_session_attendee(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> dict:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     return svc.add_session_attendee(session_id, body)
 
 
@@ -173,7 +173,7 @@ async def delete_session_attendee(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> None:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     svc.delete_session_attendee(session_id, attendee_id)
 
 
@@ -185,7 +185,7 @@ async def create_session_microsoft_external_event(
     svc: Annotated[MeetingService, Depends(_svc)],
     client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> dict:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     assert_can_view_session(client, current_user, session_id)
     session = svc.get_session_detail(session_id)
     return svc.create_microsoft_event(session["meeting_id"], body, session_id=session_id)
@@ -209,7 +209,7 @@ async def create_session_artifact(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> dict:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     return svc.create_artifact(session_id, body)
 
 
@@ -220,7 +220,7 @@ async def import_session_transcript(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> dict:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     return svc.import_transcript(session_id, body)
 
 
@@ -233,7 +233,7 @@ async def sync_microsoft_session_transcript(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> MeetingTranscriptSyncResponse:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     return svc.sync_microsoft_transcript(session_id)
 
 
@@ -244,7 +244,7 @@ async def generate_session_minutes(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> dict:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     return svc.generate_minutes(session_id, body)
 
 
@@ -254,7 +254,7 @@ async def extract_session_ai_notes(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> MeetingNotesWorkflowReview:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     return svc.extract_meeting_notes(session_id)
 
 
@@ -264,7 +264,7 @@ async def send_session_minutes(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> dict:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     return svc.send_minutes(session_id)
 
 
@@ -275,7 +275,7 @@ async def update_meeting_artifact(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> dict:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     return svc.update_artifact(artifact_id, body)
 
 
@@ -285,7 +285,7 @@ async def delete_meeting_artifact(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> None:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     svc.delete_artifact(artifact_id)
 
 
@@ -308,7 +308,7 @@ async def update_meeting(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> dict:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     return svc.update_meeting(meeting_id, body)
 
 
@@ -318,7 +318,7 @@ async def cancel_meeting_series(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> MeetingSeriesCancelResponse:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     return svc.cancel_meeting_series(meeting_id)
 
 
@@ -328,7 +328,7 @@ async def delete_meeting(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> None:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     svc.delete_meeting(meeting_id)
 
 
@@ -340,7 +340,7 @@ async def start_session(
     body: SessionStartRequest | None = None,
 ) -> dict:
     """Start a date-specific live session or resume that date's session."""
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     return svc.start_session(meeting_id, body)
 
 
@@ -364,7 +364,7 @@ async def create_microsoft_external_event(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> dict:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     return svc.create_microsoft_event(meeting_id, body)
 
 
@@ -375,7 +375,7 @@ async def create_agenda_item(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> dict:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     return svc.create_agenda_item(meeting_id, body)
 
 
@@ -385,7 +385,7 @@ async def suggest_agenda_items(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> AgendaSuggestionsResponse:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     return svc.suggest_agenda_items(meeting_id)
 
 
@@ -397,7 +397,7 @@ async def update_agenda_item(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> dict:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     return svc.update_agenda_item(meeting_id, item_id, body)
 
 
@@ -408,7 +408,7 @@ async def delete_agenda_item(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> None:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     svc.delete_agenda_item(meeting_id, item_id)
 
 
@@ -419,7 +419,7 @@ async def add_attendee(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> dict:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     return svc.add_attendee(meeting_id, body)
 
 
@@ -430,7 +430,7 @@ async def delete_attendee(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> None:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     svc.delete_attendee(meeting_id, attendee_id)
 
 
@@ -441,7 +441,7 @@ async def add_initiative(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> dict:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     return svc.add_initiative(meeting_id, body)
 
 
@@ -452,5 +452,5 @@ async def delete_initiative(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> None:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     svc.delete_initiative(meeting_id, link_id)

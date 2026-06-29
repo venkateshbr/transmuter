@@ -183,7 +183,7 @@ interface GlobalSearchResult {
               <div class="absolute right-0 top-full mt-3 w-64 border border-[var(--t-border)] bg-[var(--t-surface)] shadow-xl">
                 <div class="border-b border-[var(--t-border)] px-4 py-3">
                   <p class="truncate text-xs font-black text-[var(--t-text-primary)]">{{ auth.user()?.display_name || auth.user()?.email || 'User' }}</p>
-                  <p class="mt-1 truncate text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">{{ auth.user()?.role || 'viewer' }}</p>
+                  <p class="mt-1 truncate text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">{{ auth.roleLabel(auth.user()?.role || 'viewer') }}</p>
                 </div>
                 <a
                   routerLink="/profile"
@@ -469,7 +469,7 @@ export class App {
       { label: 'Risks',            path: '/pmo/risks',          icon: 'alert' },
       { label: 'Meetings',         path: '/meetings',           icon: 'calendar' },
       { label: 'People',           path: '/people',             icon: 'users' },
-    ];
+    ].filter(item => item.path !== '/people' || this.auth.hasPermission('users.manage'));
   }
 
   protected get primaryNavItems(): NavItem[] {
@@ -502,7 +502,9 @@ export class App {
   }
 
   protected canManageTenant(): boolean {
-    return this.auth.getRole() === 'transformation_office';
+    return this.auth.hasPermission('tenant_setup.manage')
+      || this.auth.hasPermission('financials.manage')
+      || this.auth.hasPermission('governance.manage');
   }
 
   protected homeLink(): string {

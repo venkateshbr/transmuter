@@ -108,7 +108,7 @@ import { AuthService } from '../../../../core/services/auth.service';
           <!-- Right: Decision & History -->
           <div class="space-y-6">
             <!-- Decision Panel (Admin only) -->
-            @if (activeSubmission() && auth.getRole() === 'transformation_office') {
+            @if (activeSubmission() && auth.hasPermission('governance.manage')) {
               <div class="card glass-panel border-l-4 border-amber-500 p-8 shadow-xl animate-fade-in">
                 <div class="flex items-center gap-3 mb-6">
                   <div class="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center">

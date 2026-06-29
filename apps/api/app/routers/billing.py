@@ -11,9 +11,10 @@ import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field
 
-from app.core.auth import CurrentUser, require_role
+from app.core.auth import CurrentUser
 from app.core.config import settings
 from app.core.database import get_supabase_admin
+from app.core.rbac import CAP_MANAGE_TENANT_SETUP, require_capability
 from app.services.billing import BillingProvisioningService, public_plan_catalog
 
 router = APIRouter(prefix="/billing", tags=["billing"])
@@ -270,7 +271,7 @@ async def complete_checkout_session(body: CheckoutCompletionRequest) -> Checkout
 async def create_billing_portal_session(
     request: Request,
     body: BillingPortalRequest,
-    current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+    current_user: Annotated[CurrentUser, Depends(require_capability(CAP_MANAGE_TENANT_SETUP))],
 ) -> BillingPortalResponse:
     org = (
         get_supabase_admin()

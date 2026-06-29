@@ -7,10 +7,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from supabase import Client
 
-from app.core.auth import CurrentUser, get_current_user, require_role
+from app.core.auth import CurrentUser, get_current_user
 from app.core.database import get_supabase_request_client
 from app.core.rbac import (
-    assert_can_manage_initiatives,
+    assert_can_manage_initiative_execution,
+    assert_can_manage_program_cadence,
     assert_can_view_initiative,
     assert_can_view_portfolio,
 )
@@ -83,7 +84,7 @@ async def nudge_initiative(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[StatusUpdateService, Depends(_svc)],
 ) -> NudgeResponse:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     return svc.nudge_owner(initiative_id, body)
 
 
@@ -104,9 +105,10 @@ async def list_nudges(
     response_model=list[NudgeResponse],
 )
 async def run_daily_nudges(
-    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[StatusUpdateService, Depends(_svc)],
 ) -> list[NudgeResponse]:
+    assert_can_manage_program_cadence(current_user)
     return svc.nudge_non_compliant_initiatives()
 
 
@@ -146,8 +148,9 @@ async def generate_status_update_draft(
     initiative_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[StatusUpdateService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> StatusUpdateDraftSuggestion:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_execution(client, current_user, initiative_id)
     return await svc.generate_draft(initiative_id)
 
 
@@ -161,8 +164,9 @@ async def create_status_update(
     body: StatusUpdateCreate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[StatusUpdateService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> StatusUpdateItem:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_execution(client, current_user, initiative_id)
     return svc.create_update(initiative_id, body)
 
 
@@ -176,8 +180,9 @@ async def patch_status_update(
     body: StatusUpdatePatch,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[StatusUpdateService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> StatusUpdateItem:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_execution(client, current_user, initiative_id)
     return svc.patch_update(update_id, body)
 
 
@@ -190,8 +195,9 @@ async def submit_status_update(
     update_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[StatusUpdateService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> StatusUpdateItem:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_execution(client, current_user, initiative_id)
     return svc.submit_update(update_id)
 
 
@@ -204,6 +210,7 @@ async def delete_status_update(
     update_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[StatusUpdateService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> None:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_execution(client, current_user, initiative_id)
     svc.delete_update(update_id)
