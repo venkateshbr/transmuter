@@ -1,6 +1,6 @@
 # Transmuter — End-to-End Test Runbook (8 Tenants)
 
-Last updated: 2026-06-24
+Last updated: 2026-06-29
 
 This runbook turns the eight test scenarios into **step-by-step UI sequences you follow one after another**, in the same style as the ACME demo tenant UI setup guide (`docs/user-guides/acme-demo-tenant-ui-setup-guide.md`). Each scenario is a separate tenant. Work through them top to bottom; within a scenario, follow the numbered steps in order.
 
@@ -37,8 +37,51 @@ Every scenario reuses the same nine-step skeleton below. Each scenario section g
 3. Create **Market**, **Theme**, and **Tags** from the scenario table. Save.
 
 **Standard Step 3 — Users** (`/people` + `/admin` → **Access Control**)
-1. Create one `transformation_office` user, one `initiative_owner`, one `viewer`.
-2. In **Access Control**, confirm each role. For a fast pass, the admin can own all initiatives.
+
+Create the full operating-model user set for every scenario tenant. This
+matches the ACME operating model in
+`docs/user-guides/acme-transformation-office-detailed-setup-and-demo-guide.md`
+and prevents the old three-user shortcut from hiding role-permission gaps.
+
+| Demo user | Email pattern | Role | Scenario use |
+|---|---|---|---|
+| Transformation Office Director | `<slug>.to@transmuter-e2e.dev` | `transformation_office` | Full tenant and portfolio control; use for setup and cross-role validation. |
+| Tenant Administrator | `<slug>.admin@transmuter-e2e.dev` | `tenant_admin` | Tenant setup, users, access control, dimensions, dashboard setup, and billing portal. |
+| PMO / Governance Lead | `<slug>.pmo@transmuter-e2e.dev` | `pmo_lead` | Governance, gates, meetings, actions, milestones, risks, KPIs, and cadence. |
+| Finance Lead / Benefits Controller | `<slug>.finance@transmuter-e2e.dev` | `finance_lead` | Financial configuration, benefit validation, shared costs, actuals, bankable plan, and benefit tracking. |
+| Workstream Lead | `<slug>.workstream@transmuter-e2e.dev` | `workstream_lead` | Assigned-workstream visibility and execution updates. |
+| Initiative Owner | `<slug>.owner@transmuter-e2e.dev` | `initiative_owner` | Owned initiative master data, execution evidence, status, and financial assumptions. |
+| Business Benefit Owner | `<slug>.benefit@transmuter-e2e.dev` | `business_benefit_owner` | Benefit realization evidence, sustainment notes, and ledger updates. |
+| Executive Sponsor | `<slug>.exec@transmuter-e2e.dev` | `executive_sponsor` | Read-only executive dashboard, financial, and Control Tower review. |
+| Management Viewer | `<slug>.viewer@transmuter-e2e.dev` | `viewer` | Read-only management portfolio and dashboard review. |
+
+User creation sequence:
+
+1. Sign in as the scenario's initial administrator or the
+   `transformation_office` persona.
+2. Open **People**.
+3. Click **Add User** to open the **Add Platform User** modal.
+4. Select **Temp Password** / **Create User**. Do not use invite links in this
+   runbook; every persona must be able to log in immediately during E2E.
+5. Create all nine users with the scenario's controlled temporary password.
+6. Assign workstream scope to the `workstream_lead` user.
+7. Assign initiative ownership to the `initiative_owner` user after the
+   initiatives are created.
+8. In **Admin > Access Control**, confirm each role and user status.
+
+Role login validation:
+
+| Role | Must allow | Must deny or hide |
+|---|---|---|
+| `transformation_office` | `/people`, `/admin`, `/initiatives/new`, `/initiatives/:id/edit`, `/financials/*`, `/shared-costs`, `/progress/*`, `/meetings`, `/reports/control-tower` | None in tenant scope. |
+| `tenant_admin` | `/people`, `/admin` setup and access controls | `/initiatives/new`, `/shared-costs`; Finance remains accountable for benefit validation, actuals, bankable plan, and benefit tracking. |
+| `pmo_lead` | `/admin` governance controls, `/pmo/*`, `/progress/*`, `/meetings` | `/people`, `/initiatives/new`, `/shared-costs`, financial configuration writes. |
+| `finance_lead` | `/admin` financial configuration, `/financials/*`, `/shared-costs`, benefit validation, actuals, bankable plan, benefit tracking | `/people`, `/initiatives/new`, program cadence writes outside finance. |
+| `workstream_lead` | Portfolio views and execution evidence for assigned workstreams | `/people`, `/admin`, `/shared-costs`, `/initiatives/new`, unassigned workstream updates. |
+| `initiative_owner` | Owned initiative edit, financial assumptions, execution evidence, status, milestones, KPIs, risks | `/people`, `/admin`, `/shared-costs`, `/initiatives/new`, unowned initiative writes. |
+| `business_benefit_owner` | Portfolio views, Benefits Register / Benefit Tracking realization evidence and ledger updates | `/people`, `/admin`, `/shared-costs`, `/initiatives/new`, financial configuration writes. |
+| `executive_sponsor` | Dashboard, portfolio, financial, and Control Tower reads | Any setup, write, create, approve, import, or delete control. |
+| `viewer` | Dashboard, portfolio, and management-report reads | Any setup, write, create, approve, import, or delete control. |
 
 **Standard Step 4 — Financial engine** (`/admin` → **Financial Configuration**)
 1. **Reporting Settings** — set the scenario's **reporting currency** and **fiscal year start**. Save. *(This is the most common per-scenario deviation — do not skip.)*
@@ -88,7 +131,9 @@ Each scenario then ends with a **Validation** block — numbered dashboard check
 |---|---|---|
 | Operations; Technology; Procurement; Corporate | Operations; Technology; Procurement | Market: Singapore / APAC · Theme: Supply-chain cost & service transformation · Tags: `cost`, `automation`, `ops`, `other` |
 
-**Step 3 — Users.** Standard three roles.
+**Step 3 — Users.** Run Standard Step 3 with slug `meridian`; assign the
+workstream lead to Operations, Technology, and Procurement, and assign the
+initiative owner to MER-001, MER-002, and MER-003 after initiative creation.
 
 **Step 4 — Financial engine.** Reporting currency **SGD**, fiscal year **January**. Baseline year FY26. Standard scenarios and metrics.
 

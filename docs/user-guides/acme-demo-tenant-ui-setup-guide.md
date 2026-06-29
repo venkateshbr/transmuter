@@ -1,6 +1,6 @@
 # Transformation Tenant UI Setup Guide With ACME Example
 
-Last updated: 2026-06-22
+Last updated: 2026-06-29
 
 This guide explains how a normal tenant user can create a blank tenant and
 configure a transformation office through the Transmuter UI. ACME is used as a
@@ -242,29 +242,49 @@ Screens:
 
 Minimum demo users:
 
-| User type | Role |
-|---|---|
-| Transformation office lead | `transformation_office` |
-| Tenant administrator | `tenant_admin` |
-| PMO / governance lead | `pmo_lead` |
-| Finance lead / benefits controller | `finance_lead` |
-| Workstream lead | `workstream_lead` |
-| Initiative owner | `initiative_owner` |
-| Business benefit owner | `business_benefit_owner` |
-| Executive sponsor | `executive_sponsor` |
-| Management viewer | `viewer` |
+| Demo user | Email pattern | Role | Setup scope |
+|---|---|---|---|
+| Priya Raman | `acme-to-<run>@acme-transformation.dev` | `transformation_office` | Full tenant and portfolio control. |
+| Jordan Lee | `acme-admin-<run>@acme-transformation.dev` | `tenant_admin` | Tenant setup, users, access control, dimensions, dashboard configuration, and billing portal. |
+| Maya Patel | `acme-pmo-<run>@acme-transformation.dev` | `pmo_lead` | Governance, gates, meetings, actions, milestones, risks, KPIs, and cadence. |
+| Omar Haddad | `acme-finance-<run>@acme-transformation.dev` | `finance_lead` | Financial configuration, shared costs, benefit validation, actuals, bankable plan, and benefit tracking. |
+| Lena Ortiz | `acme-workstream-<run>@acme-transformation.dev` | `workstream_lead` | Assign to the ACME workstreams used in the walkthrough. |
+| Ethan Brooks | `acme-owner-<run>@acme-transformation.dev` | `initiative_owner` | Assign as owner for the initiatives used in the role walkthrough, such as ENT-006, ENT-008, and ENT-010. |
+| Sofia Chen | `acme-benefit-<run>@acme-transformation.dev` | `business_benefit_owner` | Benefit realization evidence, sustainment notes, and ledger updates. |
+| Daniel Wright | `acme-exec-<run>@acme-transformation.dev` | `executive_sponsor` | Read-only executive portfolio, financial, and Control Tower review. |
+| Nora Singh | `acme-viewer-<run>@acme-transformation.dev` | `viewer` | Read-only management portfolio and dashboard review. |
 
 Steps:
 
-1. Open **People**.
-2. Invite or create the transformation office user.
-3. Invite or create PMO, finance, workstream, initiative-owner, benefit-owner,
-   executive-sponsor, and viewer users as needed for the walkthrough.
-5. Open **Admin > Access Control**.
-6. Confirm each user has the intended role.
+1. Open **People** as the initial administrator, a `transformation_office`
+   user, or a `tenant_admin` user.
+2. Click **Add User** to open the **Add Platform User** modal.
+3. Select **Temp Password** / **Create User**. Do not send invite links for the
+   ACME role walkthrough; users should be immediately available for role login
+   testing.
+4. Create all nine users in the matrix with a controlled temporary password for
+   the demo environment.
+5. Assign workstream scope to the `workstream_lead` user in the People modal.
+6. Assign initiative ownership to the `initiative_owner` user on the relevant
+   initiative master-data screens.
+7. Open **Admin > Access Control**.
+8. Confirm each user has the intended role.
+9. Log in once as each user and verify the role-specific experience before the
+   demo.
 
-For a simple demo, the initial administrator can own all initiatives. Add
-separate users only when you want to demonstrate role-based visibility.
+Role login checks:
+
+| Role | Expected access | Expected restriction |
+|---|---|---|
+| `transformation_office` | Can open `/people`, `/admin`, `/initiatives/new`, `/financials`, `/shared-costs`, `/progress`, `/meetings`, and `/reports/control-tower`. | None in the tenant operating model. |
+| `tenant_admin` | Can open `/people` and `/admin` for setup, access, dimensions, dashboard configuration, governance setup, and billing portal. | Cannot create initiatives or manage shared costs; Finance remains accountable for benefit validation, actuals, bankable plan, and benefit tracking. |
+| `pmo_lead` | Can open `/admin` governance, `/pmo/*`, `/progress/*`, and `/meetings`. | Cannot manage users, create initiatives, or manage shared costs. |
+| `finance_lead` | Can open `/admin` financial configuration, `/financials/*`, `/shared-costs`, and initiative financial controls. | Cannot manage users or create initiatives. |
+| `workstream_lead` | Can view the portfolio and update execution evidence for assigned workstreams. | Cannot manage users, tenant setup, financial configuration, or unassigned workstream data. |
+| `initiative_owner` | Can update owned initiative master data, financial assumptions, and execution evidence. | Cannot manage users, tenant setup, shared costs, or unowned initiatives. |
+| `business_benefit_owner` | Can view portfolio financials and update realization evidence or ledger entries. | Cannot manage tenant setup, users, initiative creation, or financial configuration. |
+| `executive_sponsor` | Can review dashboard, portfolio, financial, and Control Tower views. | Read-only; no setup or write controls. |
+| `viewer` | Can review management dashboards and portfolio views. | Read-only; no setup or write controls. |
 
 ## 5. Configure Financial Engine
 
