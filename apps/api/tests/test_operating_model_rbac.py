@@ -217,7 +217,9 @@ def test_initiative_owner_and_workstream_lead_are_assignment_scoped() -> None:
         workstream_lead,
         OTHER_INITIATIVE_ID,
     )
-    assert_forbidden(assert_can_manage_initiative_financials, client, workstream_lead, INITIATIVE_ID)
+    assert_forbidden(
+        assert_can_manage_initiative_financials, client, workstream_lead, INITIATIVE_ID
+    )
 
 
 def test_migration_expands_roles_and_updates_financial_rls() -> None:

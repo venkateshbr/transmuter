@@ -281,7 +281,9 @@ class InitiativeService:
             if current_user and current_user.role == "initiative_owner"
             else None
         )
-        workstream_ids = workstream_lead_filter(self._client, current_user) if current_user else None
+        workstream_ids = (
+            workstream_lead_filter(self._client, current_user) if current_user else None
+        )
         return self._repo.export_csv(owner_user_id=owner_user_id, workstream_ids=workstream_ids)
 
     def export_template(self) -> bytes:

@@ -1134,9 +1134,7 @@ class AIService:
     ) -> dict[str, Any]:
         return {
             "response": "I can draft that, but your role does not allow this write action.",
-            "sources": self._sources(
-                ["ai_tools"], snapshot, f"Role does not allow {action_type}."
-            ),
+            "sources": self._sources(["ai_tools"], snapshot, f"Role does not allow {action_type}."),
             "tool_trace": self._trace(["ai_tools"], snapshot, plan, rejected="role_guardrail"),
             "confidence": 0.93,
             "proposed_actions": [],
