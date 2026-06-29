@@ -1,4 +1,4 @@
-import { Component, WritableSignal, inject, signal } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -18,30 +18,6 @@ interface BusinessUnitOption {
 interface UserOption {
   id: string;
   display_name: string;
-}
-
-interface FinancialConfigGroup {
-  key: string;
-  label: string;
-  kind: 'calculation' | 'metric' | 'cost_category';
-  display_order: number;
-  is_active: boolean;
-}
-
-interface FinancialConfigItem {
-  key: string;
-  label: string;
-  item_type: 'metric' | 'cost_category';
-  system_metric_key?: string | null;
-  rollup_type?: string | null;
-  group_key?: string | null;
-  display_order: number;
-  is_active: boolean;
-}
-
-interface FinancialConfiguration {
-  groups: FinancialConfigGroup[];
-  items: FinancialConfigItem[];
 }
 
 type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
@@ -179,7 +155,7 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
             <h2 class="mt-1 text-lg font-black" style="color:var(--t-text-primary)">Configure the tenant before creating initiatives</h2>
             <p class="mt-2 max-w-3xl text-sm leading-6" style="color:var(--t-text-secondary)">
               Complete the setup checklist in Admin first. That includes business units, workstreams,
-              financial engine definitions, stage gates, and gate criteria.
+              stage gates, and gate criteria.
             </p>
           </div>
           <a routerLink="/admin" class="btn-primary px-4 py-2 text-[10px] font-black uppercase tracking-widest" aria-label="Open tenant administration setup">
@@ -284,7 +260,7 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
             <p class="text-sm" style="color:var(--t-text-secondary)">
               {{ editId
                 ? 'Update core initiative fields. Financials, KPIs, risks, and milestones stay managed from their dedicated tabs.'
-                : 'Capture the case, then review AI-assisted financial, KPI, risk, and milestone suggestions before creation.' }}
+                : 'Capture the case, generate an editable narrative, then review AI-assisted KPI, risk, and milestone suggestions before creation.' }}
             </p>
           </div>
         </div>
@@ -382,6 +358,24 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
 
         <!-- STEP 2: Description & Context -->
         <div *ngIf="formStep === 2" class="space-y-5 animate-in">
+          <div class="border-l-4 border-[var(--t-accent)] bg-[var(--t-surface-raised)] px-4 py-3">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p class="text-[10px] font-bold uppercase tracking-wider" style="color:var(--t-text-secondary)">Narrative Draft</p>
+                <p class="mt-1 text-sm font-bold" style="color:var(--t-text-primary)">Use the initiative basics to draft the case narrative.</p>
+              </div>
+              <button
+                type="button"
+                class="btn-secondary px-4 py-2 text-[10px]"
+                [disabled]="generatingNarrative() || !form.name.trim()"
+                (click)="generateNarrative()"
+                aria-label="Generate initiative narrative">
+                <span *ngIf="!generatingNarrative()">Generate Narrative</span>
+                <span *ngIf="generatingNarrative()">Generating...</span>
+              </button>
+            </div>
+          </div>
+
           <div>
             <label for="init-summary" class="field-label">Summary / Description</label>
             <textarea id="init-summary" class="input-field" rows="3"
@@ -442,90 +436,6 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
                      [(ngModel)]="form.planned_end">
             </div>
           </div>
-
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-2">
-            <div *ngIf="financialSelectionsLocked()" class="lg:col-span-2 border-l-4 border-[var(--t-accent)] bg-[var(--t-surface-raised)] px-4 py-3 text-sm" style="color:var(--t-text-secondary)">
-              <span class="font-bold" style="color:var(--t-text-primary)">Financial values locked.</span>
-              Scope selections can still be saved by the transformation office.
-            </div>
-            <section class="rounded-lg border p-4" style="border-color:var(--t-border);background:var(--t-bg)">
-              <div class="mb-3">
-                <p class="text-[10px] font-bold uppercase tracking-wider" style="color:var(--t-text-secondary)">Financial Metrics</p>
-                <h3 class="text-sm font-bold" style="color:var(--t-text-primary)">Shown in Initiative Financials</h3>
-              </div>
-              <div class="space-y-2 max-h-56 overflow-auto pr-1">
-                <label *ngFor="let metric of financialMetricOptions()"
-                       class="flex items-center gap-3 rounded border px-3 py-2 text-sm"
-                       style="border-color:var(--t-border);color:var(--t-text-primary)">
-                  <input type="checkbox"
-                         [checked]="isMetricSelected(metric)"
-                         (change)="toggleMetric(metric, $any($event.target).checked)"
-                         aria-label="Toggle financial metric">
-                  <span class="min-w-0 flex-1 truncate">{{ metric.label }}</span>
-                </label>
-              </div>
-            </section>
-
-            <section class="rounded-lg border p-4" style="border-color:var(--t-border);background:var(--t-bg)">
-              <div class="mb-3">
-                <p class="text-[10px] font-bold uppercase tracking-wider" style="color:var(--t-text-secondary)">Cost Categories</p>
-                <h3 class="text-sm font-bold" style="color:var(--t-text-primary)">One-time and recurring cost rows</h3>
-              </div>
-              <div class="space-y-2 max-h-56 overflow-auto pr-1">
-                <label *ngFor="let cost of costCategoryOptions()"
-                       class="flex items-center gap-3 rounded border px-3 py-2 text-sm"
-                       style="border-color:var(--t-border);color:var(--t-text-primary)">
-                  <input type="checkbox"
-                         [checked]="isCostCategorySelected(cost)"
-                         (change)="toggleCostCategory(cost, $any($event.target).checked)"
-                         aria-label="Toggle cost category">
-                  <span class="min-w-0 flex-1 truncate">{{ cost.label }}</span>
-                  <span class="text-[10px] font-bold uppercase" style="color:var(--t-text-tertiary)">
-                    {{ cost.rollup_type === 'recurring_cost' ? 'Recurring' : 'One-time' }}
-                  </span>
-                </label>
-              </div>
-            </section>
-
-            <section class="lg:col-span-2 rounded-lg border p-4" style="border-color:var(--t-border);background:var(--t-bg)" data-testid="initiative-edit-annual-baseline">
-              <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
-                <div>
-                  <p class="text-[10px] font-bold uppercase tracking-wider" style="color:var(--t-text-secondary)">Annual Baseline</p>
-                  <h3 class="text-sm font-bold" style="color:var(--t-text-primary)">Original operating metrics</h3>
-                </div>
-                <div class="w-32">
-                  <label for="init-baseline-year" class="field-label">Fiscal Year</label>
-                  <input
-                    id="init-baseline-year"
-                    type="number"
-                    min="2020"
-                    max="2060"
-                    class="input-field"
-                    [disabled]="baselineLocked()"
-                    [(ngModel)]="form.baseline_year"
-                    aria-label="Baseline fiscal year">
-                </div>
-              </div>
-              <div *ngIf="baselineLocked()" class="mb-3 border-l-4 border-[var(--t-accent)] bg-[var(--t-surface-raised)] px-4 py-3 text-sm" style="color:var(--t-text-secondary)">
-                <span class="font-bold" style="color:var(--t-text-primary)">Annual baseline locked.</span>
-                {{ baselineLockReason() || 'Baseline updates are locked by governance.' }}
-              </div>
-              <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-                <label *ngFor="let metric of baselineMetricOptions()"
-                       class="block rounded border px-3 py-2"
-                       style="border-color:var(--t-border);color:var(--t-text-primary)">
-                  <span class="block truncate text-[10px] font-bold uppercase tracking-wider" style="color:var(--t-text-secondary)">{{ metric.label }}</span>
-                  <input
-                    type="number"
-                    class="input-field mt-2"
-                    [disabled]="baselineLocked()"
-                    [ngModel]="baselineMetricValue(metric.id)"
-                    (ngModelChange)="setBaselineMetricValue(metric.id, $event)"
-                    [attr.aria-label]="'Annual baseline value for ' + metric.label">
-                </label>
-              </div>
-            </section>
-          </div>
         </div>
 
         <!-- STEP 4: HITL Suggestions -->
@@ -547,22 +457,6 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
           </div>
 
           <div *ngIf="suggestions() as suggestionSet" class="grid grid-cols-1 gap-4">
-            <section class="card p-4">
-              <h4 class="text-sm font-bold mb-3" style="color:var(--t-text-primary)">Financials</h4>
-              <label *ngFor="let item of suggestionSet.financial_entries; let i = index"
-                     class="grid grid-cols-[auto_1fr_1fr] gap-3 items-center mb-2">
-                <input type="checkbox" [(ngModel)]="item.accepted" aria-label="Accept financial suggestion">
-                <input class="input-field text-xs" [(ngModel)]="item.gm_uplift_base" aria-label="Suggested base value">
-                <input class="input-field text-xs" [(ngModel)]="item.gm_uplift_high" aria-label="Suggested high value">
-              </label>
-              <label *ngFor="let item of suggestionSet.cost_lines; let i = index"
-                     class="grid grid-cols-[auto_1fr_1fr] gap-3 items-center mb-2">
-                <input type="checkbox" [(ngModel)]="item.accepted" aria-label="Accept cost suggestion">
-                <input class="input-field text-xs" [(ngModel)]="item.name" aria-label="Suggested cost name">
-                <input class="input-field text-xs" [(ngModel)]="item.amount_plan" aria-label="Suggested cost amount">
-              </label>
-            </section>
-
             <section class="card p-4">
               <h4 class="text-sm font-bold mb-3" style="color:var(--t-text-primary)">KPIs</h4>
               <label *ngFor="let item of suggestionSet.kpis"
@@ -627,8 +521,8 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
                     (click)="generateSuggestions()"
                     [disabled]="submitting() || generating() || isCreationBlocked()"
                     aria-label="Generate initiative suggestions">
-              <span *ngIf="!generating()">Generate Suggestions</span>
-              <span *ngIf="generating()">Generating…</span>
+              <span *ngIf="!generating()">Generate Planning Suggestions</span>
+              <span *ngIf="generating()">Generating...</span>
             </button>
             <button *ngIf="formStep === 3 && editId" class="btn-primary text-sm"
                     (click)="submitForm()"
@@ -667,7 +561,7 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
         <p class="text-[10px] font-black uppercase tracking-widest text-amber-600">Tenant setup required</p>
         <p class="mt-2 text-sm font-bold text-[var(--t-text-primary)]">Upload is disabled until the tenant setup checklist is complete.</p>
         <p class="mt-1 text-sm leading-6 text-[var(--t-text-secondary)]">
-          Configure business units, workstreams, financial engine definitions, stage gates, and gate criteria in Admin first.
+          Configure business units, workstreams, stage gates, and gate criteria in Admin first.
         </p>
       </div>
 
@@ -788,6 +682,7 @@ export class CreateInitiativeComponent {
 
   readonly submitting = signal(false);
   readonly generating = signal(false);
+  readonly generatingNarrative = signal(false);
   readonly error = signal<string | null>(null);
   readonly workstreams = signal<WorkstreamOption[]>([]);
   readonly businessUnits = signal<BusinessUnitOption[]>([]);
@@ -795,25 +690,10 @@ export class CreateInitiativeComponent {
   readonly themes = signal<string[]>([]);
   readonly tags = signal<string[]>([]);
   readonly users = signal<UserOption[]>([]);
-  readonly financialConfiguration = signal<FinancialConfiguration | null>(null);
-  readonly financialEngineConfiguration = signal<any>({ definitions: [], scenarios: [], cost_categories: [], settings: {} });
   readonly stageGateDefinitions = signal<any[]>([]);
   readonly gateCriteria = signal<any[]>([]);
-  readonly financialSelectionsLocked = signal(false);
-  readonly financialSelectionsLockReason = signal<string | null>(null);
-  readonly baselineLocked = signal(false);
-  readonly baselineLockReason = signal<string | null>(null);
   readonly setupStatus = signal<any>({ complete: false, completed: 0, total: 0, checks: [] });
   readonly setupStatusLoaded = signal(false);
-  readonly selectedMetricKeys = signal<string[]>([
-    'revenue_uplift_base',
-    'revenue_uplift_high',
-    'revenue_uplift_actual',
-    'gm_uplift_base',
-    'gm_uplift_high',
-    'gm_uplift_actual',
-  ]);
-  readonly selectedCostCategoryKeys = signal<string[]>(['implementation', 'maintenance']);
   readonly uploadedFileName = signal<string | null>(null);
   readonly uploadPreview = signal<any | null>(null);
   readonly suggestions = signal<any | null>(null);
@@ -840,8 +720,6 @@ export class CreateInitiativeComponent {
     dependencies_text: '',
     planned_start: '',
     planned_end: '',
-    baseline_year: new Date().getFullYear(),
-    baseline_values: {} as Record<string, string>,
   };
 
   constructor() {
@@ -856,9 +734,9 @@ export class CreateInitiativeComponent {
 
   stepLabel(): string {
     return this.formStep === 1 ? 'Basic Details'
-         : this.formStep === 2 ? 'Description & Context'
+         : this.formStep === 2 ? 'Narrative'
          : this.formStep === 3 ? 'Ownership & Timeline'
-         : 'Review Suggestions';
+         : 'Planning Suggestions';
   }
 
   totalSteps(): number[] {
@@ -888,14 +766,6 @@ export class CreateInitiativeComponent {
     this.api.get<{ data: UserOption[] }>('/users').subscribe({
       next: r => this.users.set(r.data ?? []),
       error: () => {},
-    });
-    this.api.get<FinancialConfiguration>('/financial-configuration').subscribe({
-      next: r => this.financialConfiguration.set(r),
-      error: () => this.financialConfiguration.set(null),
-    });
-    this.api.get<any>('/financial-engine-configuration').subscribe({
-      next: r => this.financialEngineConfiguration.set(r || { definitions: [], scenarios: [], cost_categories: [], settings: {} }),
-      error: () => this.financialEngineConfiguration.set({ definitions: [], scenarios: [], cost_categories: [], settings: {} }),
     });
     this.api.get<any[]>('/governance/stage-gates').subscribe({
       next: r => this.stageGateDefinitions.set(Array.isArray(r) ? r : []),
@@ -944,38 +814,9 @@ export class CreateInitiativeComponent {
           dependencies_text: item.dependencies_text ?? '',
           planned_start: item.planned_start ?? '',
           planned_end: item.planned_end ?? '',
-          baseline_year: new Date().getFullYear(),
-          baseline_values: {},
         };
       },
       error: err => this.error.set(this.errorText(err, 'Failed to load initiative for editing.')),
-    });
-    this.api.get<any>(`/initiatives/${id}/financials/selections`).subscribe({
-      next: response => {
-        const selected = response?.selected || {};
-        this.financialSelectionsLocked.set(Boolean(response?.locked));
-        this.financialSelectionsLockReason.set(response?.lock_reason || null);
-        if (Array.isArray(selected.metric_keys) && selected.metric_keys.length) {
-          this.selectedMetricKeys.set(selected.metric_keys);
-        }
-        if (Array.isArray(selected.cost_category_keys) && selected.cost_category_keys.length) {
-          this.selectedCostCategoryKeys.set(selected.cost_category_keys);
-        }
-      },
-      error: () => {},
-    });
-    this.api.get<any>(`/initiatives/${id}/financials/baseline`).subscribe({
-      next: response => {
-        this.baselineLocked.set(Boolean(response?.locked));
-        this.baselineLockReason.set(response?.lock_reason || null);
-        if (response?.baseline_year) this.form.baseline_year = Number(response.baseline_year);
-        const values: Record<string, string> = {};
-        for (const row of response?.values || []) {
-          values[row.metric_definition_id] = row.value;
-        }
-        this.form.baseline_values = values;
-      },
-      error: () => {},
     });
   }
 
@@ -1029,84 +870,6 @@ export class CreateInitiativeComponent {
     return this.withCurrentOption(this.tags(), this.form.tag);
   }
 
-  financialMetricOptions(): FinancialConfigItem[] {
-    return this.sortedFinancialItems('metric');
-  }
-
-  baselineMetricOptions(): any[] {
-    const definitions = this.financialEngineConfiguration()?.definitions || [];
-    const eligibleKeys = this.baselineMetricKeys(definitions);
-    return definitions
-      .filter((metric: any) =>
-        metric?.is_active !== false
-        && metric?.aggregation !== 'formula'
-        && eligibleKeys.has(String(metric?.key || ''))
-      )
-      .sort((a: any, b: any) =>
-        Number(a.display_order || 0) - Number(b.display_order || 0)
-        || String(a.label || '').localeCompare(String(b.label || '')),
-      );
-  }
-
-  private baselineMetricKeys(definitions: any[]): Set<string> {
-    const activeNonFormula = new Set(
-      definitions
-        .filter((metric: any) => metric?.is_active !== false && metric?.aggregation !== 'formula')
-        .map((metric: any) => String(metric?.key || ''))
-        .filter(Boolean),
-    );
-    const keys = new Set<string>();
-    for (const metric of definitions) {
-      const key = String(metric?.key || '');
-      if (activeNonFormula.has(key) && String(metric?.group_key || '') === 'baseline') {
-        keys.add(key);
-      }
-      if (metric?.aggregation !== 'formula' || metric?.is_active === false) continue;
-      const identifiers = new Set<string>(Array.isArray(metric?.formula_inputs) ? metric.formula_inputs.map(String) : []);
-      String(metric?.formula || '').replace(/\b[A-Za-z_][A-Za-z0-9_]*\b/g, identifier => {
-        identifiers.add(identifier);
-        return identifier;
-      });
-      identifiers.forEach(identifier => {
-        if (!identifier.startsWith('baseline_')) return;
-        const baselineKey = identifier.replace(/^baseline_/, '');
-        if (activeNonFormula.has(baselineKey)) keys.add(baselineKey);
-      });
-    }
-    return keys;
-  }
-
-  baselineMetricValue(metricDefinitionId: string): string {
-    return this.form.baseline_values[metricDefinitionId] || '';
-  }
-
-  setBaselineMetricValue(metricDefinitionId: string, value: string | number): void {
-    this.form.baseline_values = {
-      ...this.form.baseline_values,
-      [metricDefinitionId]: String(value ?? ''),
-    };
-  }
-
-  costCategoryOptions(): FinancialConfigItem[] {
-    return this.sortedFinancialItems('cost_category');
-  }
-
-  isMetricSelected(item: FinancialConfigItem): boolean {
-    return this.selectedMetricKeys().includes(this.financialMetricKey(item));
-  }
-
-  isCostCategorySelected(item: FinancialConfigItem): boolean {
-    return this.selectedCostCategoryKeys().includes(item.key);
-  }
-
-  toggleMetric(item: FinancialConfigItem, checked: boolean): void {
-    this.toggleSelection(this.selectedMetricKeys, this.financialMetricKey(item), checked);
-  }
-
-  toggleCostCategory(item: FinancialConfigItem, checked: boolean): void {
-    this.toggleSelection(this.selectedCostCategoryKeys, item.key, checked);
-  }
-
   isBusinessUnitSelected(businessUnitId: string): boolean {
     return this.form.business_unit_ids.includes(businessUnitId);
   }
@@ -1126,30 +889,6 @@ export class CreateInitiativeComponent {
   private withCurrentOption(options: string[], currentValue: string): string[] {
     const current = currentValue.trim();
     return this.normalizeConfigList(current ? [...options, current] : options);
-  }
-
-  private sortedFinancialItems(type: 'metric' | 'cost_category'): FinancialConfigItem[] {
-    const config = this.financialConfiguration();
-    if (!config) return [];
-    const groups = new Map(config.groups.map(group => [group.key, group]));
-    return config.items
-      .filter(item => item.item_type === type && item.is_active)
-      .sort((a, b) => {
-        const groupA = groups.get(a.group_key || '')?.display_order || 0;
-        const groupB = groups.get(b.group_key || '')?.display_order || 0;
-        return groupA - groupB || a.display_order - b.display_order || a.label.localeCompare(b.label);
-      });
-  }
-
-  private financialMetricKey(item: FinancialConfigItem): string {
-    return item.system_metric_key || item.key;
-  }
-
-  private toggleSelection(target: WritableSignal<string[]>, key: string, checked: boolean): void {
-    const current = new Set(target());
-    if (checked) current.add(key);
-    else current.delete(key);
-    target.set(Array.from(current));
   }
 
   labelize(value: string): string {
@@ -1172,11 +911,46 @@ export class CreateInitiativeComponent {
       next: result => {
         this.generating.set(false);
         this.formStep = 4;
-        this.suggestions.set(result);
+        this.suggestions.set({
+          ...result,
+          financial_entries: [],
+          cost_lines: [],
+        });
       },
       error: err => {
         this.generating.set(false);
         this.error.set(this.errorText(err, 'Failed to generate initiative suggestions.'));
+      },
+    });
+  }
+
+  generateNarrative(): void {
+    if (this.isCreationBlocked() && !this.editId) {
+      this.error.set('Complete tenant setup in Admin before generating initiative narrative.');
+      return;
+    }
+    if (!this.form.name.trim()) {
+      this.error.set('Initiative name is required before generating narrative.');
+      return;
+    }
+
+    this.generatingNarrative.set(true);
+    this.error.set(null);
+    this.api.post<any>('/initiatives/intake/narrative', {
+      initiative: this.buildPayload(),
+      conversation: [],
+    }).subscribe({
+      next: result => {
+        const draft = result?.draft || {};
+        this.form.summary = draft.summary || this.form.summary;
+        this.form.context_problem = draft.context_problem || this.form.context_problem;
+        this.form.value_logic = draft.value_logic || this.form.value_logic;
+        this.form.dependencies_text = draft.dependencies || this.form.dependencies_text;
+        this.generatingNarrative.set(false);
+      },
+      error: err => {
+        this.generatingNarrative.set(false);
+        this.error.set(this.errorText(err, 'Failed to generate initiative narrative.'));
       },
     });
   }
@@ -1199,60 +973,18 @@ export class CreateInitiativeComponent {
     request.subscribe({
       next: result => {
         const initiativeId = result.id || this.editId;
+        this.submitting.set(false);
         if (!initiativeId) {
-          this.submitting.set(false);
           this.router.navigate(['/initiatives/pipeline']);
           return;
         }
-        this.saveFinancialSelections(initiativeId);
+        this.router.navigate(['/initiatives', initiativeId]);
       },
       error: err => {
         this.submitting.set(false);
         this.error.set(this.errorText(err, this.editId
           ? 'Failed to save initiative. Please try again.'
           : 'Failed to create initiative. Please try again.'));
-      },
-    });
-  }
-
-  private saveFinancialSelections(initiativeId: string): void {
-    this.api.put(`/initiatives/${initiativeId}/financials/selections`, {
-      metric_keys: this.selectedMetricKeys(),
-      cost_category_keys: this.selectedCostCategoryKeys(),
-    }).subscribe({
-      next: () => this.saveAnnualBaseline(initiativeId),
-      error: err => {
-        this.submitting.set(false);
-        this.error.set(this.errorText(err, 'Initiative saved, but financial selections could not be updated.'));
-      },
-    });
-  }
-
-  private saveAnnualBaseline(initiativeId: string): void {
-    const baselineYear = Number(this.form.baseline_year);
-    const values = Object.entries(this.form.baseline_values)
-      .map(([metric_definition_id, raw]) => ({
-        metric_definition_id,
-        baseline_year: baselineYear,
-        value: String(raw ?? '').trim(),
-      }))
-      .filter(row => row.value !== '');
-    if (!values.length || this.baselineLocked()) {
-      this.submitting.set(false);
-      this.router.navigate(['/initiatives', initiativeId]);
-      return;
-    }
-    this.api.put(`/initiatives/${initiativeId}/financials/baseline`, {
-      baseline_year: baselineYear,
-      values,
-    }).subscribe({
-      next: () => {
-        this.submitting.set(false);
-        this.router.navigate(['/initiatives', initiativeId]);
-      },
-      error: err => {
-        this.submitting.set(false);
-        this.error.set(this.errorText(err, 'Initiative saved, but annual baseline values could not be updated.'));
       },
     });
   }
@@ -1361,7 +1093,7 @@ export class CreateInitiativeComponent {
     if (this.editId) return false;
     const localReady = this.hasLocalSetupReady();
     if (this.auth.getRole() === 'transformation_office' && this.setupStatusLoaded()) {
-      return !Boolean(this.setupStatus()?.complete) || !localReady;
+      return !this.hasOperationalSetupStatusReady() || !localReady;
     }
     return !localReady;
   }
@@ -1370,11 +1102,24 @@ export class CreateInitiativeComponent {
     return Boolean(
       this.businessUnits().length &&
       this.workstreams().length &&
-      this.financialEngineConfiguration()?.definitions?.length &&
-      this.financialEngineConfiguration()?.scenarios?.length &&
-      this.financialEngineConfiguration()?.cost_categories?.length &&
       this.stageGateDefinitions().length &&
       this.gateCriteria().length
     );
+  }
+
+  private hasOperationalSetupStatusReady(): boolean {
+    const checks = this.setupStatus()?.checks;
+    if (!Array.isArray(checks) || !checks.length) return true;
+    const requiredKeys = new Set([
+      'organization',
+      'business_units',
+      'workstreams',
+      'stage_gates',
+      'gate_criteria',
+      'users',
+    ]);
+    return checks
+      .filter(check => requiredKeys.has(check?.key))
+      .every(check => Boolean(check?.complete));
   }
 }

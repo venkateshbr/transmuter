@@ -40,43 +40,55 @@ describe('CreateInitiativeComponent', () => {
 
   afterEach(() => TestBed.resetTestingModule());
 
-  it('allows creation when new financial engine setup is complete without legacy financial configuration', () => {
+  it('allows creation when operational setup is complete without financial engine configuration', () => {
     const component = configure({
       '/workstreams': { data: [{ id: 'ws-1', name: 'Automation' }] },
       '/business-units': { data: [{ id: 'bu-1', name: 'Corporate' }] },
       '/admin/settings': { settings: { strategic_parameters: {} } },
       '/users': { data: [{ id: 'user-1', display_name: 'Transformation Lead' }] },
-      '/financial-configuration': { groups: [], items: [] },
-      '/financial-engine-configuration': {
-        definitions: [{ id: 'metric-1', key: 'revenue_uplift' }],
-        scenarios: [{ id: 'scenario-1', key: 'plan_base' }],
-        cost_categories: [{ id: 'cost-1', key: 'implementation' }],
-        settings: {},
-      },
       '/governance/stage-gates': [{ id: 'gate-1', gate_number: 1 }],
       '/admin/governance/gate-criteria': [{ id: 'criterion-1', gate_number: 1 }],
-      '/admin/setup-status': { complete: true, completed: 7, total: 7, checks: [] },
+      '/admin/setup-status': {
+        complete: false,
+        completed: 6,
+        total: 7,
+        checks: [
+          { key: 'organization', complete: true },
+          { key: 'business_units', complete: true },
+          { key: 'workstreams', complete: true },
+          { key: 'financial_config', complete: false },
+          { key: 'stage_gates', complete: true },
+          { key: 'gate_criteria', complete: true },
+          { key: 'users', complete: true },
+        ],
+      },
     });
 
     expect(component.isCreationBlocked()).toBe(false);
   });
 
-  it('blocks creation when new financial engine cost categories are missing', () => {
+  it('blocks creation when stage gate criteria are missing', () => {
     const component = configure({
       '/workstreams': { data: [{ id: 'ws-1', name: 'Automation' }] },
       '/business-units': { data: [{ id: 'bu-1', name: 'Corporate' }] },
       '/admin/settings': { settings: { strategic_parameters: {} } },
       '/users': { data: [{ id: 'user-1', display_name: 'Transformation Lead' }] },
-      '/financial-configuration': { groups: [], items: [] },
-      '/financial-engine-configuration': {
-        definitions: [{ id: 'metric-1', key: 'revenue_uplift' }],
-        scenarios: [{ id: 'scenario-1', key: 'plan_base' }],
-        cost_categories: [],
-        settings: {},
-      },
       '/governance/stage-gates': [{ id: 'gate-1', gate_number: 1 }],
-      '/admin/governance/gate-criteria': [{ id: 'criterion-1', gate_number: 1 }],
-      '/admin/setup-status': { complete: true, completed: 7, total: 7, checks: [] },
+      '/admin/governance/gate-criteria': [],
+      '/admin/setup-status': {
+        complete: false,
+        completed: 6,
+        total: 7,
+        checks: [
+          { key: 'organization', complete: true },
+          { key: 'business_units', complete: true },
+          { key: 'workstreams', complete: true },
+          { key: 'financial_config', complete: true },
+          { key: 'stage_gates', complete: true },
+          { key: 'gate_criteria', complete: false },
+          { key: 'users', complete: true },
+        ],
+      },
     });
 
     expect(component.isCreationBlocked()).toBe(true);

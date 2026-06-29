@@ -12,6 +12,7 @@ from supabase import Client
 
 from app.agents.initiative_intake_agent import (
     extract_initiative_fields,
+    generate_initiative_narrative,
     generate_intake_suggestions,
     scan_risk_patterns,
     suggest_kpis,
@@ -138,6 +139,15 @@ async def create_intake_suggestions(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> InitiativeIntakeSuggestions:
     return await generate_intake_suggestions(body)
+
+
+@router.post("/intake/narrative", response_model=InitiativeFieldExtractionResult)
+async def create_intake_narrative(
+    body: InitiativeIntakeRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> InitiativeFieldExtractionResult:
+    assert_can_manage_initiatives(current_user)
+    return await generate_initiative_narrative(body)
 
 
 @router.post("/intake/extract", response_model=InitiativeFieldExtractionResult)

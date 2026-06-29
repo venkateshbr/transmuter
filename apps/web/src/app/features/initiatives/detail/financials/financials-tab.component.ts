@@ -164,6 +164,8 @@ interface FinancialBenefitLine {
 interface InitiativeFinancialSelections {
   metric_keys: string[];
   cost_category_keys: string[];
+  metric_definition_ids?: string[];
+  cost_category_ids?: string[];
 }
 
 interface CostLine {
@@ -466,7 +468,7 @@ interface GridMetric {
         @if (financialsView() === 'entry') {
           @if (!isLocked() && benefitMetricDefinitions().length) {
             <div class="mb-4 grid gap-4 border bg-[var(--t-surface-raised)] p-4" style="border-color:var(--t-border)" data-testid="benefit-line-entry-form">
-              <div class="grid gap-3 xl:grid-cols-[220px_minmax(360px,1fr)_120px_140px] lg:grid-cols-[200px_minmax(320px,1fr)_120px_140px] md:grid-cols-2">
+              <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-[minmax(190px,240px)_minmax(380px,1fr)_minmax(120px,140px)_minmax(130px,160px)]">
                 <label class="grid gap-1">
                   <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Benefit Metric</span>
                   <select class="input-field py-2 text-xs" [ngModel]="newBenefitLineMetricId()" (ngModelChange)="newBenefitLineMetricId.set($event)" aria-label="Benefit line metric">
@@ -497,7 +499,7 @@ interface GridMetric {
                 {{ benefitLinePhasingHelpText() }}
               </p>
               @if (newBenefitLinePhasingMode() === 'manual') {
-                <div class="grid gap-3 md:grid-cols-[1fr_160px] md:items-end">
+                <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(140px,160px)] md:items-end">
                   <div class="border bg-[var(--t-surface)] p-3" style="border-color:var(--t-border)" data-testid="benefit-line-manual-note">
                     <p class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-tertiary)">Line-only mode</p>
                     <p class="mt-1 text-xs font-bold" style="color:var(--t-text-secondary)">Manual creates the named benefit line without generated monthly values. Enter Base, High, and Actual values directly in the financial grid.</p>
@@ -505,32 +507,42 @@ interface GridMetric {
                   <button type="button" class="btn-primary w-full px-4 py-2 text-[10px]" [disabled]="!canAddBenefitLine()" (click)="addBenefitLine()" aria-label="Add benefit line">Add Line</button>
                 </div>
               } @else {
-                <div class="grid gap-3 xl:grid-cols-[minmax(120px,1fr)_minmax(120px,1fr)_minmax(120px,1fr)_minmax(145px,1fr)_minmax(145px,1fr)_120px] lg:grid-cols-[repeat(3,minmax(120px,1fr))_repeat(2,minmax(145px,1fr))_120px] md:grid-cols-3">
-                  <label class="grid gap-1">
-                    <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Base</span>
-                    <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineBaseAmount()" (ngModelChange)="newBenefitLineBaseAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line base amount">
-                  </label>
-                  <label class="grid gap-1">
-                    <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">High</span>
-                    <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineHighAmount()" (ngModelChange)="newBenefitLineHighAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line high amount">
-                  </label>
-                  <label class="grid gap-1">
-                    <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Actual</span>
-                    <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineActualAmount()" (ngModelChange)="newBenefitLineActualAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line actual amount">
-                  </label>
-                  <label class="grid gap-1">
-                    <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Start</span>
-                    <input type="month" class="input-field py-2 text-xs" [ngModel]="newBenefitLineStartMonth()" (ngModelChange)="newBenefitLineStartMonth.set($event)" aria-label="Benefit line start month">
-                  </label>
-                  @if (newBenefitLinePhasingMode() === 'spread') {
+                <div class="grid gap-3">
+                  <div class="grid gap-3 md:grid-cols-3">
                     <label class="grid gap-1">
-                      <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">End</span>
-                      <input type="month" class="input-field py-2 text-xs" [ngModel]="newBenefitLineEndMonth()" (ngModelChange)="newBenefitLineEndMonth.set($event)" aria-label="Benefit line end month">
+                      <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Base</span>
+                      <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineBaseAmount()" (ngModelChange)="newBenefitLineBaseAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line base amount">
                     </label>
-                  }
-                  <div class="flex items-end md:col-span-3 lg:col-span-1">
-                    <button type="button" class="btn-primary w-full px-4 py-2 text-[10px]" [disabled]="!canAddBenefitLine()" (click)="addBenefitLine()" aria-label="Add benefit line">Add Line</button>
+                    <label class="grid gap-1">
+                      <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">High</span>
+                      <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineHighAmount()" (ngModelChange)="newBenefitLineHighAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line high amount">
+                    </label>
+                    <label class="grid gap-1">
+                      <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Actual</span>
+                      <input type="number" class="input-field py-2 text-xs" [ngModel]="newBenefitLineActualAmount()" (ngModelChange)="newBenefitLineActualAmount.set(numberValueOrNullUnbounded($event))" aria-label="Benefit line actual amount">
+                    </label>
                   </div>
+                  @if (newBenefitLinePhasingMode() === 'spread') {
+                    <div class="grid gap-3 md:grid-cols-[minmax(180px,1fr)_minmax(180px,1fr)_minmax(140px,160px)] md:items-end">
+                      <label class="grid gap-1">
+                        <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Start</span>
+                        <input type="month" class="input-field py-2 text-xs" [ngModel]="newBenefitLineStartMonth()" (ngModelChange)="newBenefitLineStartMonth.set($event)" aria-label="Benefit line start month">
+                      </label>
+                      <label class="grid gap-1">
+                        <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">End</span>
+                        <input type="month" class="input-field py-2 text-xs" [ngModel]="newBenefitLineEndMonth()" (ngModelChange)="newBenefitLineEndMonth.set($event)" aria-label="Benefit line end month">
+                      </label>
+                      <button type="button" class="btn-primary w-full px-4 py-2 text-[10px]" [disabled]="!canAddBenefitLine()" (click)="addBenefitLine()" aria-label="Add benefit line">Add Line</button>
+                    </div>
+                  } @else {
+                    <div class="grid gap-3 md:grid-cols-[minmax(180px,1fr)_minmax(140px,160px)] md:items-end">
+                      <label class="grid gap-1">
+                        <span class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-secondary)">Start</span>
+                        <input type="month" class="input-field py-2 text-xs" [ngModel]="newBenefitLineStartMonth()" (ngModelChange)="newBenefitLineStartMonth.set($event)" aria-label="Benefit line start month">
+                      </label>
+                      <button type="button" class="btn-primary w-full px-4 py-2 text-[10px]" [disabled]="!canAddBenefitLine()" (click)="addBenefitLine()" aria-label="Add benefit line">Add Line</button>
+                    </div>
+                  }
                 </div>
               }
             </div>
@@ -633,6 +645,28 @@ interface GridMetric {
           </div>
         }
 
+        @if (visibleBenefitLines().length) {
+          <div class="mb-4 border bg-[var(--t-surface-raised)]" style="border-color:var(--t-border)" data-testid="entry-benefit-lines-panel">
+            <div class="flex items-center justify-between border-b px-4 py-3" style="border-color:var(--t-border)">
+              <div>
+                <p class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-tertiary)">Benefit Lines</p>
+                <p class="mt-1 text-sm font-black" style="color:var(--t-text-primary)">{{ visibleBenefitLines().length }} scoped line{{ visibleBenefitLines().length === 1 ? '' : 's' }}</p>
+              </div>
+            </div>
+            <div class="divide-y divide-[var(--t-border)]">
+              @for (line of visibleBenefitLines(); track line.id) {
+                <div class="grid gap-3 px-4 py-3 md:grid-cols-[1fr_auto] md:items-center">
+                  <div>
+                    <p class="text-sm font-black" style="color:var(--t-text-primary)">{{ line.name }}</p>
+                    <p class="mt-1 text-[10px] font-bold uppercase tracking-widest" style="color:var(--t-text-tertiary)">{{ benefitLineMetricLabel(line) }}</p>
+                  </div>
+                  <button type="button" class="btn-ghost px-3 py-2 text-[10px] text-[var(--t-red)]" [disabled]="!canDeleteBenefitLine(line) || saving()" (click)="deleteBenefitLine(line)" aria-label="Remove benefit line">Remove</button>
+                </div>
+              }
+            </div>
+          </div>
+        }
+
         <div class="handsontable-container overflow-hidden rounded-xl border bg-[var(--t-surface-raised)]" style="border-color:var(--t-border)">
           <hot-table
             #hot
@@ -672,9 +706,9 @@ interface GridMetric {
               </div>
               <a routerLink="/financials/benefits-register" class="btn-ghost px-3 py-2 text-[10px]">Open Register</a>
             </div>
-            @if ((grid()?.benefit_lines || []).length) {
+            @if (visibleBenefitLines().length) {
               <div class="mt-4 grid gap-3">
-                @for (line of grid()?.benefit_lines || []; track line.id) {
+                @for (line of visibleBenefitLines(); track line.id) {
                   <div class="grid gap-3 border border-[var(--t-border)] bg-[var(--t-surface)] p-3 lg:grid-cols-[1fr_auto] lg:items-center">
                     <div>
                       <p class="text-sm font-black" style="color:var(--t-text-primary)">{{ line.name }}</p>
@@ -917,10 +951,15 @@ export class FinancialsTabComponent implements OnInit {
     const cleanDefinitions = this.grid()?.definitions || [];
     const cleanScenarios = this.gridScenarioDefinitions();
     if (cleanDefinitions.length && cleanScenarios.length) {
-      const benefitLines = this.grid()?.benefit_lines || [];
+      const benefitLines = this.visibleBenefitLines();
       const baselineMetricKeys = this.baselineMetricKeys(cleanDefinitions);
+      const selectedMetricDefinitionIds = this.selectedMetricDefinitionIdSet();
       const metricRows = cleanDefinitions
-        .filter(definition => definition.is_active !== false && !baselineMetricKeys.has(definition.key))
+        .filter(definition =>
+          definition.is_active !== false
+          && !baselineMetricKeys.has(definition.key)
+          && selectedMetricDefinitionIds.has(definition.id)
+        )
         .sort((a, b) => (a.group_key || '').localeCompare(b.group_key || '') || a.label.localeCompare(b.label))
         .flatMap((definition): GridMetric[] => {
           const matchingLines = benefitLines
@@ -943,12 +982,34 @@ export class FinancialsTabComponent implements OnInit {
             })),
           );
         });
-      const costRows: GridMetric[] = [
-        { category: 'Costs', label: 'Recurring Costs (Plan)', key: 'costs_recurring_plan', source: 'cost_line', isRecurring: true, actual: false },
-        { category: 'Costs', label: 'Recurring Costs (Actual)', key: 'costs_recurring_actual', source: 'cost_line', isRecurring: true, actual: true },
-        { category: 'Costs', label: 'One-off Costs (Plan)', key: 'costs_one_off_plan', source: 'cost_line', isRecurring: false, actual: false },
-        { category: 'Costs', label: 'One-off Costs (Actual)', key: 'costs_one_off_actual', source: 'cost_line', isRecurring: false, actual: true },
-      ];
+      const selectedCosts = this.selectedCostCategoryKeySet();
+      const costRows: GridMetric[] = (this.grid()?.cost_categories || [])
+        .filter(category => category.is_active !== false && selectedCosts.has(category.key))
+        .sort((a, b) => a.label.localeCompare(b.label))
+        .flatMap(category => {
+          const isRecurring = category.rollup_type === 'recurring_cost';
+          const label = `${category.label} (${this.costRollupLabel(category.rollup_type)})`;
+          return [
+            {
+              category: `Costs / ${this.costRollupLabel(category.rollup_type)}`,
+              label: `${label} Plan`,
+              key: `cost_${category.key}_plan`,
+              source: 'cost_line' as const,
+              costCategoryKey: category.key,
+              isRecurring,
+              actual: false,
+            },
+            {
+              category: `Costs / ${this.costRollupLabel(category.rollup_type)}`,
+              label: `${label} Actual`,
+              key: `cost_${category.key}_actual`,
+              source: 'cost_line' as const,
+              costCategoryKey: category.key,
+              isRecurring,
+              actual: true,
+            },
+          ];
+        });
       return [...metricRows, ...costRows];
     }
 
@@ -1124,6 +1185,10 @@ export class FinancialsTabComponent implements OnInit {
     return new Set(selections ? selections.metric_keys : Array.from(this.DEFAULT_METRIC_KEYS));
   }
 
+  private selectedMetricDefinitionIdSet(): Set<string> {
+    return new Set(this.grid()?.selections?.metric_definition_ids || []);
+  }
+
   private selectedCostCategoryKeySet(): Set<string> {
     const selections = this.grid()?.selections;
     return new Set(selections ? selections.cost_category_keys : Array.from(this.DEFAULT_COST_CATEGORY_KEYS));
@@ -1204,22 +1269,49 @@ export class FinancialsTabComponent implements OnInit {
     return bridge.base_case;
   });
 
-  benefitMetricDefinitions = computed(() =>
-    (this.grid()?.definitions || [])
-      .filter(definition => definition.is_active !== false && definition.is_benefit && definition.aggregation !== 'formula')
-      .sort((a, b) => a.label.localeCompare(b.label)),
-  );
+  benefitMetricDefinitions = computed(() => {
+    const selectedMetricDefinitionIds = this.selectedMetricDefinitionIdSet();
+    const usedBenefitMetricIds = new Set(
+      this.visibleBenefitLines().map(line => line.metric_definition_id),
+    );
+    return (this.grid()?.definitions || [])
+      .filter(definition =>
+        definition.is_active !== false
+        && definition.is_benefit
+        && definition.aggregation !== 'formula'
+        && selectedMetricDefinitionIds.has(definition.id)
+        && !usedBenefitMetricIds.has(definition.id)
+      )
+      .sort((a, b) => a.label.localeCompare(b.label));
+  });
 
-  costCategoryDefinitions = computed(() =>
-    ((this.grid()?.cost_categories || []) as Array<FinancialCostCategory | FinancialConfigItem>)
+  visibleBenefitLines = computed(() => {
+    const selectedMetricDefinitionIds = this.selectedMetricDefinitionIdSet();
+    const activeBenefitMetricIds = new Set(
+      (this.grid()?.definitions || [])
+        .filter(definition =>
+          definition.is_active !== false
+          && definition.is_benefit
+          && selectedMetricDefinitionIds.has(definition.id)
+        )
+        .map(definition => definition.id),
+    );
+    return (this.grid()?.benefit_lines || [])
+      .filter(line => line.show_in_summary !== false && activeBenefitMetricIds.has(line.metric_definition_id))
+      .sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0) || a.name.localeCompare(b.name));
+  });
+
+  costCategoryDefinitions = computed(() => {
+    const selectedCosts = this.selectedCostCategoryKeySet();
+    return ((this.grid()?.cost_categories || []) as Array<FinancialCostCategory | FinancialConfigItem>)
       .concat(
         this.grid()?.cost_categories?.length
           ? []
           : (this.configuration()?.items || []).filter(item => item.item_type === 'cost_category'),
       )
-      .filter(item => item.is_active !== false)
-      .sort((a, b) => a.label.localeCompare(b.label)),
-  );
+      .filter(item => item.is_active !== false && selectedCosts.has(item.key))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  });
 
   dynamicYears = computed(() => {
     const planned = this.plannedMonthRange();
@@ -2109,7 +2201,9 @@ export class FinancialsTabComponent implements OnInit {
 
   canAddBenefitLine(): boolean {
     if (this.saving() || this.isLocked()) return false;
-    if (!this.newBenefitLineMetricId() || !this.newBenefitLineName().trim()) return false;
+    const metricDefinitionId = this.newBenefitLineMetricId();
+    if (!metricDefinitionId || !this.newBenefitLineName().trim()) return false;
+    if (!this.benefitMetricDefinitions().some(metric => metric.id === metricDefinitionId)) return false;
     if (this.newBenefitLinePhasingMode() === 'manual') return true;
     if (!this.hasBenefitLineScenarioAmount() || !this.newBenefitLineStartMonth()) return false;
     if (this.newBenefitLinePhasingMode() === 'spread' && !this.newBenefitLineEndMonth()) return false;
@@ -2216,6 +2310,10 @@ export class FinancialsTabComponent implements OnInit {
       metric?.label || 'Benefit metric',
       scenarioLabels.length ? scenarioLabels.join(', ') : 'No scenario values',
     ].join(' · ');
+  }
+
+  benefitLineMetricLabel(line: FinancialBenefitLine): string {
+    return (this.grid()?.definitions || []).find(item => item.id === line.metric_definition_id)?.label || 'Benefit metric';
   }
 
   canSubmitBenefitLine(line: FinancialBenefitLine): boolean {
