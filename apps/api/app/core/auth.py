@@ -170,7 +170,4 @@ def require_role(*roles: str):
     return _check
 
 
-# Convenience role dependencies
-RequireAdmin = Depends(require_role("transformation_office"))
-RequireOwnerOrAdmin = Depends(require_role("transformation_office", "initiative_owner"))
 AnyRole = Depends(get_current_user)

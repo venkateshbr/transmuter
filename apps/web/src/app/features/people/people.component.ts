@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ApiService } from '../../core/services/api.service';
 import { FormsModule } from '@angular/forms';
 import { CompactFilterToolbarComponent, type CompactFilterGroup } from '../../shared/components/compact-filter-toolbar/compact-filter-toolbar.component';
+import { OPERATING_MODEL_ROLES, operatingModelRoleLabel } from '../../core/rbac/operating-model-permissions';
 
 const PEOPLE_FILTER_STATE_KEY = 'transmuter.filters.people.directory';
 
@@ -229,9 +230,9 @@ const PEOPLE_FILTER_STATE_KEY = 'transmuter.filters.people.directory';
               <input [(ngModel)]="inviteForm.display_name" class="input-field w-full" placeholder="Display name" aria-label="Invite display name" />
               <input [(ngModel)]="inviteForm.title" class="input-field w-full" placeholder="Title" aria-label="Invite title" />
               <select [(ngModel)]="inviteForm.role" class="input-field w-full" aria-label="Invite role">
-                <option value="transformation_office">Transformation Office</option>
-                <option value="initiative_owner">Initiative Owner</option>
-                <option value="viewer">Viewer</option>
+                @for (role of roleOptions; track role.id) {
+                  <option [value]="role.id">{{ role.name }}</option>
+                }
               </select>
               @if (inviteMode() === 'create') {
                 <div class="grid grid-cols-[1fr_auto_auto] gap-2">
@@ -326,9 +327,9 @@ const PEOPLE_FILTER_STATE_KEY = 'transmuter.filters.people.directory';
                    <input [(ngModel)]="selectedUser.display_name" class="input-field text-sm" aria-label="User display name" placeholder="Display name" />
                    <input [(ngModel)]="selectedUser.title" class="input-field text-sm" aria-label="User title" placeholder="Title" />
                    <select [(ngModel)]="selectedUser.role" class="input-field text-sm" aria-label="User platform role">
-                     <option value="transformation_office">Transformation Office</option>
-                     <option value="initiative_owner">Initiative Owner</option>
-                     <option value="viewer">Viewer</option>
+                     @for (role of roleOptions; track role.id) {
+                       <option [value]="role.id">{{ role.name }}</option>
+                     }
                    </select>
                    <input [(ngModel)]="selectedUser.department" class="input-field text-sm" aria-label="User department" placeholder="Department" />
                    <input [(ngModel)]="selectedUser.market" class="input-field text-sm" aria-label="User market" placeholder="Market" />
@@ -443,6 +444,7 @@ const PEOPLE_FILTER_STATE_KEY = 'transmuter.filters.people.directory';
 })
 export class PeopleComponent implements OnInit {
   private readonly api = inject(ApiService);
+  protected readonly roleOptions = OPERATING_MODEL_ROLES;
   people = signal<any[]>([]);
   pendingPeople = signal<any[]>([]);
   invites = signal<any[]>([]);
@@ -504,11 +506,7 @@ export class PeopleComponent implements OnInit {
         label: 'Role',
         mode: 'single',
         selected: this.roleFilter ? [this.roleFilter] : [],
-        options: [
-          { id: 'transformation_office', name: 'Transformation Office' },
-          { id: 'initiative_owner', name: 'Initiative Owner' },
-          { id: 'viewer', name: 'Viewer' },
-        ],
+        options: this.roleOptions.map(role => ({ id: role.id, name: role.name })),
       },
       {
         key: 'status',
@@ -810,7 +808,7 @@ export class PeopleComponent implements OnInit {
   }
 
   formatRole(role: string | undefined): string {
-    return (role || 'unassigned').replace(/_/g, ' ');
+    return operatingModelRoleLabel(role);
   }
 
   formatPressure(score: string | number | undefined): string {

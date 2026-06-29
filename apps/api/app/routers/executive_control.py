@@ -10,7 +10,8 @@ from supabase import Client
 from app.core.auth import CurrentUser, get_current_user
 from app.core.database import get_supabase_request_client
 from app.core.rbac import (
-    assert_can_manage_initiatives,
+    assert_can_manage_governance,
+    assert_can_manage_shared_costs,
     assert_can_view_initiative,
     assert_can_view_portfolio,
 )
@@ -93,7 +94,7 @@ async def create_initiative_dependency(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[ExecutiveControlService, Depends(_svc)],
 ) -> InitiativeDependencyItem:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_governance(current_user)
     return svc.create_dependency(body)
 
 
@@ -113,7 +114,7 @@ async def delete_initiative_dependency(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[ExecutiveControlService, Depends(_svc)],
 ) -> None:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_governance(current_user)
     svc.delete_dependency(dependency_id)
 
 
@@ -155,7 +156,7 @@ async def update_shared_cost_reporting_settings(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[ExecutiveControlService, Depends(_svc)],
 ) -> SharedCostReportingSettings:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_shared_costs(current_user)
     return svc.update_reporting_settings(body)
 
 
@@ -173,7 +174,7 @@ async def create_shared_cost_pool(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[ExecutiveControlService, Depends(_svc)],
 ) -> SharedCostPoolItem:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_shared_costs(current_user)
     return svc.create_pool(body)
 
 
@@ -184,7 +185,7 @@ async def update_shared_cost_pool(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[ExecutiveControlService, Depends(_svc)],
 ) -> SharedCostPoolItem:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_shared_costs(current_user)
     return svc.update_pool(pool_id, body)
 
 
@@ -205,7 +206,7 @@ async def replace_shared_cost_pool_periods(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[ExecutiveControlService, Depends(_svc)],
 ) -> list[SharedCostPoolPeriodItem]:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_shared_costs(current_user)
     return svc.replace_pool_periods(pool_id, body)
 
 
@@ -232,7 +233,7 @@ async def create_allocation_rule(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[ExecutiveControlService, Depends(_svc)],
 ) -> AllocationRuleItem:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_shared_costs(current_user)
     return svc.create_rule(pool_id, body)
 
 
@@ -246,7 +247,7 @@ async def update_allocation_rule(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[ExecutiveControlService, Depends(_svc)],
 ) -> AllocationRuleItem:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_shared_costs(current_user)
     return svc.update_rule(pool_id, rule_id, body)
 
 
@@ -261,7 +262,7 @@ async def replace_allocation_rule_targets(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[ExecutiveControlService, Depends(_svc)],
 ) -> list[AllocationTargetItem]:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_shared_costs(current_user)
     return svc.replace_rule_targets(pool_id, rule_id, body)
 
 
@@ -276,7 +277,7 @@ async def replace_allocation_rule_weights(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[ExecutiveControlService, Depends(_svc)],
 ) -> list[AllocationWeightItem]:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_shared_costs(current_user)
     return svc.replace_rule_weights(pool_id, rule_id, body)
 
 
@@ -301,7 +302,7 @@ async def create_allocation_run(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[ExecutiveControlService, Depends(_svc)],
 ) -> AllocationRunItem:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_shared_costs(current_user)
     return svc.create_allocation_run(pool_id, body, current_user)
 
 
@@ -329,7 +330,7 @@ async def approve_allocation_run(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[ExecutiveControlService, Depends(_svc)],
 ) -> AllocationRunItem:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_shared_costs(current_user)
     return svc.approve_run(pool_id, run_id, current_user)
 
 
@@ -343,7 +344,7 @@ async def lock_allocation_run(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[ExecutiveControlService, Depends(_svc)],
 ) -> AllocationRunItem:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_shared_costs(current_user)
     return svc.approve_run(pool_id, run_id, current_user, lock=True)
 
 
@@ -358,7 +359,7 @@ async def void_allocation_run(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[ExecutiveControlService, Depends(_svc)],
 ) -> AllocationRunItem:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_shared_costs(current_user)
     return svc.void_run(pool_id, run_id, body.get("reason", ""), current_user)
 
 

@@ -8,6 +8,7 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "e2e:real": "node ./e2e/real-ui-acceptance.mjs",
+    "e2e:permissions": "node ./e2e/operating-model-permissions.mjs",
     "e2e:signup-expired-session": "node ./e2e/signup-expired-session.mjs"
   },
   "private": true,

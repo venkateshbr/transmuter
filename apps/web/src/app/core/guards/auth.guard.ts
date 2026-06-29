@@ -1,6 +1,7 @@
 import { inject } from '@angular/core';
 import { Router, type CanActivateFn } from '@angular/router';
 import { AuthService } from '../services/auth.service';
+import type { OperatingModelPermission } from '../rbac/operating-model-permissions';
 
 export const authGuard: CanActivateFn = (route, state) => {
   const authService = inject(AuthService);
@@ -23,6 +24,12 @@ export const authGuard: CanActivateFn = (route, state) => {
 
   const allowedRoles = route.data?.['roles'] as string[] | undefined;
   if (allowedRoles?.length && !allowedRoles.includes(authService.getRole() ?? '')) {
+    router.navigate([authService.getRole() === 'platform_admin' ? '/platform' : '/dashboard']);
+    return false;
+  }
+
+  const requiredPermissions = route.data?.['permissions'] as OperatingModelPermission[] | undefined;
+  if (requiredPermissions?.length && !requiredPermissions.some(item => authService.hasPermission(item))) {
     router.navigate([authService.getRole() === 'platform_admin' ? '/platform' : '/dashboard']);
     return false;
   }

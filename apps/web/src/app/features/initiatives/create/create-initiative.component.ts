@@ -270,7 +270,7 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
           <div>
             <label for="init-name" class="field-label">Initiative Name *</label>
             <input id="init-name" type="text" class="input-field"
-                   [(ngModel)]="form.name" placeholder="e.g. HK Accounting System Integration & Automation"
+                   [(ngModel)]="form.name" placeholder="e.g. Automation of Accounts Payable Process"
                    aria-required="true">
           </div>
 
@@ -778,7 +778,7 @@ export class CreateInitiativeComponent {
   }
 
   private loadSetupStatus(): void {
-    if (this.auth.getRole() !== 'transformation_office') {
+    if (!this.auth.hasPermission('initiatives.manage_all')) {
       this.setupStatusLoaded.set(true);
       return;
     }
@@ -1092,7 +1092,7 @@ export class CreateInitiativeComponent {
   isCreationBlocked(): boolean {
     if (this.editId) return false;
     const localReady = this.hasLocalSetupReady();
-    if (this.auth.getRole() === 'transformation_office' && this.setupStatusLoaded()) {
+    if (this.auth.hasPermission('initiatives.manage_all') && this.setupStatusLoaded()) {
       return !this.hasOperationalSetupStatusReady() || !localReady;
     }
     return !localReady;

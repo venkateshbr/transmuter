@@ -537,7 +537,7 @@ def test_bankable_plan_routes_expose_current_history_and_rebaseline_request(
         financials_router, "assert_can_view_initiative", lambda *args, **kwargs: None
     )
     monkeypatch.setattr(
-        financials_router, "assert_can_manage_initiatives", lambda *args, **kwargs: None
+        financials_router, "assert_can_manage_initiative_financials", lambda *args, **kwargs: None
     )
 
     try:

@@ -70,7 +70,9 @@ class FinancialGovernanceSettings(BaseModel):
     baseline_lock_gate_number: int = Field(2, ge=1, le=10)
     baseline_lock_on_approval: bool = True
     allow_rebaseline: bool = True
-    rebaseline_roles: list[str] = Field(default_factory=lambda: ["transformation_office"])
+    rebaseline_roles: list[str] = Field(
+        default_factory=lambda: ["transformation_office", "finance_lead", "pmo_lead"]
+    )
     workstream_lock_cadence: WorkstreamLockCadence = "one_off"
     initiative_inclusion_cutoff: WorkstreamCutoffRule = "approved_at_lte_lock_date"
     valuation_method: WorkstreamValuationMethod = "run_rate"

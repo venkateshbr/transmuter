@@ -24,6 +24,16 @@ status.
 6. After production validation, update the entry with promotion time, validation
    result, and any operational notes.
 
+Deployment note:
+- Hostinger deploy commands use the remote VPS Docker project API. The API
+  fetches the pushed GitHub commit and `docker-compose.hostinger.yml`, then
+  builds/recreates the selected Docker project on the VPS.
+- Keep `HOSTINGER_API_KEY` or `HOSTINGER_API_TOKEN` and `HOSTINGER_VPS_ID` in an
+  ignored local `.env`, `infra/hostinger/.env`, `infra/hostinger/.env.dev`, or
+  the operator shell.
+- Dev and production remain separate Docker Compose projects on the same
+  Hostinger VPS. `infra/hostinger/deploy.sh` is legacy VPS-local fallback only.
+
 ## Current Release Entries
 
 ### 2026-06-29 - Wizard Financial Scope Cleanup

@@ -10,7 +10,7 @@ from supabase import Client
 from app.core.auth import CurrentUser, get_current_user
 from app.core.database import get_supabase_request_client
 from app.core.rbac import (
-    assert_can_manage_initiatives,
+    assert_can_manage_initiative_execution,
     assert_can_view_initiative,
     assert_can_view_portfolio,
 )
@@ -93,8 +93,9 @@ async def create_kpi(
     body: KPICreate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[KPIService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> KPIItem:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_execution(client, current_user, initiative_id)
     return svc.create_kpi(initiative_id, body)
 
 
@@ -108,8 +109,9 @@ async def update_kpi(
     body: KPIUpdate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[KPIService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> KPIItem:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_execution(client, current_user, initiative_id)
     return svc.update_kpi(initiative_id, kpi_id, body)
 
 
@@ -122,8 +124,9 @@ async def delete_kpi(
     kpi_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[KPIService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> None:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_execution(client, current_user, initiative_id)
     svc.delete_kpi(initiative_id, kpi_id)
 
 
@@ -140,6 +143,7 @@ async def upsert_entries(
     body: list[KPIEntryUpsert],
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[KPIService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> list[KPIEntryItem]:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_execution(client, current_user, initiative_id)
     return svc.upsert_entries(initiative_id, kpi_id, body)

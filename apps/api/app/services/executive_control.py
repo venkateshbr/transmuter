@@ -14,9 +14,11 @@ from supabase import Client
 
 from app.core.auth import CurrentUser
 from app.core.rbac import (
+    CAP_MANAGE_BENEFIT_REALIZATION,
+    CAP_MANAGE_INITIATIVES,
     ROLE_INITIATIVE_OWNER,
-    ROLE_TRANSFORMATION_OFFICE,
     can_view_all_initiatives,
+    has_capability,
 )
 from app.domain.executive_control import (
     AllocationExceptionItem,
@@ -117,7 +119,7 @@ class ExecutiveControlService:
             raise HTTPException(status_code=404, detail="Dependency not found")
         existing_item = self._dependency_item(self._hydrate_dependency(existing))
         patch = self._dependency_payload(data.model_dump(exclude_unset=True))
-        if current_user.role == ROLE_TRANSFORMATION_OFFICE:
+        if has_capability(current_user.role, CAP_MANAGE_INITIATIVES):
             pass
         elif current_user.role == ROLE_INITIATIVE_OWNER:
             if not self._can_view_dependency(current_user, existing_item):
@@ -463,7 +465,10 @@ class ExecutiveControlService:
         if current_user.role == ROLE_INITIATIVE_OWNER:
             if initiative_id not in self._owned_initiative_ids(current_user):
                 raise HTTPException(status_code=404, detail="Initiative not found")
-        elif current_user.role != ROLE_TRANSFORMATION_OFFICE:
+        elif not has_capability(
+            current_user.role,
+            CAP_MANAGE_BENEFIT_REALIZATION,
+        ):
             raise HTTPException(status_code=403, detail="Insufficient role")
         row = self._repo.create_value_note(
             initiative_id,

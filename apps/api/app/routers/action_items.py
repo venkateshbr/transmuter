@@ -5,7 +5,7 @@ from supabase import Client
 
 from app.core.auth import CurrentUser, get_current_user
 from app.core.database import get_supabase_request_client
-from app.core.rbac import assert_can_manage_initiatives, assert_can_view_portfolio
+from app.core.rbac import assert_can_manage_program_cadence, assert_can_view_portfolio
 from app.domain.meetings import ActionItemListResponse, ActionItemUpdate
 from app.services.meeting import MeetingService
 
@@ -46,7 +46,7 @@ async def update_action_item(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> dict:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     return svc.update_action_item(action_item_id, body)
 
 
@@ -56,5 +56,5 @@ async def delete_action_item(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> None:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_program_cadence(current_user)
     svc.delete_action_item(action_item_id)

@@ -25,6 +25,7 @@ describe('CreateInitiativeComponent', () => {
           provide: AuthService,
           useValue: {
             getRole: () => 'transformation_office',
+            hasPermission: (permission: string) => permission === 'initiatives.manage_all',
           },
         },
         {

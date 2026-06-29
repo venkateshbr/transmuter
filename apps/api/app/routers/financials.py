@@ -12,7 +12,11 @@ from supabase import Client
 from app.core.auth import CurrentUser, get_current_user
 from app.core.database import get_supabase_admin, get_supabase_request_client
 from app.core.rbac import (
-    assert_can_manage_initiatives,
+    assert_can_manage_benefit_realization,
+    assert_can_manage_financial_configuration,
+    assert_can_manage_financials,
+    assert_can_manage_initiative_financials,
+    assert_can_validate_benefits,
     assert_can_view_initiative,
     assert_can_view_portfolio,
 )
@@ -139,9 +143,10 @@ async def update_financials(
     body: ConfigurableFinancialGridUpdate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> ConfigurableFinancialGridResponse:
     """Upsert the configurable monthly financial grid for an initiative."""
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_financials(client, current_user, initiative_id)
     return svc.update_configurable_financial_grid(initiative_id, body, str(current_user.id))
 
 
@@ -155,8 +160,9 @@ async def create_benefit_line(
     body: FinancialBenefitLineCreate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> FinancialBenefitLine:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_financials(client, current_user, initiative_id)
     return svc.create_benefit_line(initiative_id, body, str(current_user.id))
 
 
@@ -169,8 +175,9 @@ async def delete_benefit_line(
     benefit_line_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> None:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_financials(client, current_user, initiative_id)
     svc.delete_benefit_line(initiative_id, benefit_line_id)
 
 
@@ -184,8 +191,9 @@ async def submit_benefit_line_for_validation(
     body: FinancialBenefitLineValidationRequest,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> FinancialBenefitLine:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_financials(client, current_user, initiative_id)
     return svc.submit_benefit_line_for_validation(
         initiative_id, benefit_line_id, body, str(current_user.id)
     )
@@ -201,8 +209,10 @@ async def validate_benefit_line(
     body: FinancialBenefitLineValidationRequest,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> FinancialBenefitLine:
-    assert_can_manage_initiatives(current_user)
+    assert_can_validate_benefits(current_user)
+    assert_can_view_initiative(client, current_user, initiative_id)
     return svc.validate_benefit_line(initiative_id, benefit_line_id, body, str(current_user.id))
 
 
@@ -216,8 +226,10 @@ async def reject_benefit_line(
     body: FinancialBenefitLineValidationRequest,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> FinancialBenefitLine:
-    assert_can_manage_initiatives(current_user)
+    assert_can_validate_benefits(current_user)
+    assert_can_view_initiative(client, current_user, initiative_id)
     return svc.reject_benefit_line(initiative_id, benefit_line_id, body, str(current_user.id))
 
 
@@ -231,8 +243,9 @@ async def update_benefit_line_handoff(
     body: FinancialBenefitLineHandoffUpdate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> FinancialBenefitLine:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_financials(client, current_user, initiative_id)
     return svc.update_benefit_line_handoff(
         initiative_id, benefit_line_id, body, str(current_user.id)
     )
@@ -278,9 +291,10 @@ async def update_initiative_annual_baseline(
     body: InitiativeAnnualBaselineUpdate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> InitiativeAnnualBaselineResponse:
     """Upsert annual original-baseline metrics for an initiative."""
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_financials(client, current_user, initiative_id)
     return svc.update_initiative_annual_baseline(initiative_id, body, str(current_user.id))
 
 
@@ -321,8 +335,9 @@ async def request_bankable_plan_rebaseline(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[GovernanceService, Depends(_governance_svc)],
     body: BankablePlanRebaselineRequest,
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> GateSubmissionItem:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_financials(client, current_user, initiative_id)
     return svc.submit_bankable_plan_rebaseline(initiative_id, body.reason)
 
 
@@ -350,8 +365,10 @@ async def create_benefit_ledger_entry(
     body: BenefitLedgerEntryCreate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> BenefitLedgerEntry:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_benefit_realization(current_user)
+    assert_can_view_initiative(client, current_user, initiative_id)
     return svc.create_benefit_ledger_entry(initiative_id, body)
 
 
@@ -365,8 +382,10 @@ async def update_benefit_ledger_entry(
     body: BenefitLedgerEntryUpdate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> BenefitLedgerEntry:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_benefit_realization(current_user)
+    assert_can_view_initiative(client, current_user, initiative_id)
     return svc.update_benefit_ledger_entry(initiative_id, entry_id, body)
 
 
@@ -379,8 +398,10 @@ async def delete_benefit_ledger_entry(
     entry_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> None:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_benefit_realization(current_user)
+    assert_can_view_initiative(client, current_user, initiative_id)
     svc.delete_benefit_ledger_entry(initiative_id, entry_id)
 
 
@@ -393,7 +414,7 @@ async def import_benefit_ledger(
     svc: Annotated[FinancialService, Depends(_svc)],
     file: UploadFile = File(...),
 ) -> BenefitLedgerImportResult:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_benefit_realization(current_user)
     return svc.import_benefit_ledger_csv(await file.read())
 
 
@@ -434,7 +455,7 @@ async def get_financial_governance_settings(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_admin_svc)],
 ) -> FinancialGovernanceSettings:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_financial_configuration(current_user)
     return svc.get_governance_settings()
 
 
@@ -447,7 +468,7 @@ async def update_financial_governance_settings(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_admin_svc)],
 ) -> FinancialGovernanceSettings:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_financial_configuration(current_user)
     return svc.update_governance_settings(body)
 
 
@@ -489,7 +510,7 @@ async def lock_workstream_target(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> WorkstreamTargetLockVersion:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_financials(current_user)
     return svc.lock_workstream_target(workstream_id, body, str(current_user.id))
 
 
@@ -516,8 +537,9 @@ async def update_financial_selections(
     body: InitiativeFinancialSelections,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> InitiativeFinancialSelectionsResponse:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_financials(client, current_user, initiative_id)
     return svc.update_initiative_selections(initiative_id, body)
 
 
@@ -544,8 +566,9 @@ async def update_financial_forecasts(
     body: list[FinancialForecastUpdate],
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> FinancialForecastResponse:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_financials(client, current_user, initiative_id)
     return svc.update_forecasts(initiative_id, body)
 
 
@@ -578,10 +601,11 @@ async def import_financials_workbook(
     initiative_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
     file: UploadFile = File(...),
 ) -> FinancialGridResponse:
     """Import financial entries and cost lines from an XLSX workbook."""
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_financials(client, current_user, initiative_id)
     return svc.import_workbook(initiative_id, await file.read())
 
 
@@ -612,8 +636,9 @@ async def create_cost_line(
     body: CostLineCreate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> CostLineItem:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_financials(client, current_user, initiative_id)
     return svc.create_cost_line(initiative_id, body)
 
 
@@ -627,8 +652,9 @@ async def update_cost_line(
     body: CostLineUpdate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> CostLineItem:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_financials(client, current_user, initiative_id)
     return svc.update_cost_line(initiative_id, cost_line_id, body)
 
 
@@ -641,8 +667,9 @@ async def delete_cost_line(
     cost_line_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> None:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_financials(client, current_user, initiative_id)
     svc.delete_cost_line(initiative_id, cost_line_id)
 
 
@@ -654,7 +681,7 @@ async def get_financial_configuration(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> FinancialConfigurationResponse:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_financial_configuration(current_user)
     return svc.get_configuration()
 
 
@@ -704,7 +731,7 @@ async def get_tenant_annual_baselines(
     svc: Annotated[FinancialService, Depends(_svc)],
     baseline_year: int | None = Query(None, ge=2020, le=2060),
 ) -> TenantAnnualBaselineResponse:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_financial_configuration(current_user)
     return svc.get_tenant_annual_baselines(baseline_year)
 
 
@@ -717,7 +744,7 @@ async def update_tenant_annual_baselines(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> TenantAnnualBaselineResponse:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_financial_configuration(current_user)
     return svc.update_tenant_annual_baselines(body, str(current_user.id))
 
 
@@ -730,7 +757,7 @@ async def update_financial_reporting_settings(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_admin_svc)],
 ) -> FinancialReportingSettings:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_financial_configuration(current_user)
     return svc.update_reporting_settings(body)
 
 
@@ -744,7 +771,7 @@ async def create_financial_metric_definition(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> FinancialMetricDefinition:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_financial_configuration(current_user)
     return svc.create_metric_definition(body, str(current_user.id))
 
 
@@ -758,7 +785,7 @@ async def update_financial_metric_definition(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> FinancialMetricDefinition:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_financial_configuration(current_user)
     return svc.update_metric_definition(metric_definition_id, body, str(current_user.id))
 
 
@@ -772,7 +799,7 @@ async def create_financial_scenario_definition(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> FinancialScenarioDefinition:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_financial_configuration(current_user)
     return svc.create_scenario_definition(body)
 
 
@@ -786,7 +813,7 @@ async def update_financial_scenario_definition(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> FinancialScenarioDefinition:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_financial_configuration(current_user)
     return svc.update_scenario_definition(scenario_id, body)
 
 
@@ -800,7 +827,7 @@ async def create_financial_cost_category(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> FinancialCostCategory:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_financial_configuration(current_user)
     return svc.create_cost_category(body)
 
 
@@ -814,7 +841,7 @@ async def update_financial_cost_category(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> FinancialCostCategory:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_financial_configuration(current_user)
     return svc.update_cost_category(cost_category_id, body)
 
 
@@ -828,7 +855,7 @@ async def create_financial_bridge_row(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> FinancialBridgeRow:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_financial_configuration(current_user)
     return svc.create_bridge_row(body)
 
 
@@ -842,7 +869,7 @@ async def update_financial_bridge_row(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> FinancialBridgeRow:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_financial_configuration(current_user)
     return svc.update_bridge_row(bridge_row_id, body)
 
 
@@ -856,7 +883,7 @@ async def create_financial_attribute_definition(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> FinancialAttributeDefinition:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_financial_configuration(current_user)
     return svc.create_attribute_definition(body)
 
 
@@ -870,7 +897,7 @@ async def update_financial_attribute_definition(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> FinancialAttributeDefinition:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_financial_configuration(current_user)
     return svc.update_attribute_definition(attribute_definition_id, body)
 
 
@@ -883,7 +910,7 @@ async def update_financial_configuration(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> FinancialConfigurationResponse:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_financial_configuration(current_user)
     return svc.update_configuration(body)
 
 
@@ -893,7 +920,7 @@ async def delete_financial_cost_category(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> dict[str, object]:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_financial_configuration(current_user)
     return svc.delete_cost_category(body)
 
 
@@ -903,7 +930,7 @@ async def deactivate_financial_metric(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
 ) -> dict[str, object]:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_financial_configuration(current_user)
     return svc.deactivate_metric(body)
 
 
@@ -979,8 +1006,9 @@ async def upsert_cell_assumption(
     body: FinancialCellAssumptionCreate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> FinancialCellAssumption:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_financials(client, current_user, initiative_id)
     return svc.upsert_cell_assumption(initiative_id, body, current_user.id)
 
 
@@ -994,8 +1022,9 @@ async def update_cell_assumption(
     body: FinancialCellAssumptionUpdate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> FinancialCellAssumption:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_financials(client, current_user, initiative_id)
     return svc.update_cell_assumption(initiative_id, assumption_id, body, current_user.id)
 
 
@@ -1008,8 +1037,9 @@ async def delete_cell_assumption(
     assumption_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[FinancialService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> None:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_financials(client, current_user, initiative_id)
     svc.delete_cell_assumption(initiative_id, assumption_id)
 
 

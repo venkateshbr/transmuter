@@ -26,10 +26,16 @@ Local launch gate reports:
 - Admins can view billing state and open Stripe Billing Portal after checkout has created a customer.
 - Admins can view production Stripe Price ID configuration status in Admin Billing.
 - Platform admins can view cross-tenant signup, billing, tenant, and Stripe catalog readiness without being tenant members.
-- Admins can grant only `transformation_office`, `initiative_owner`, or `viewer`.
+- Tenant access managers can grant the operating-model tenant roles:
+  `transformation_office`, `tenant_admin`, `pmo_lead`, `finance_lead`,
+  `workstream_lead`, `initiative_owner`, `business_benefit_owner`,
+  `executive_sponsor`, and `viewer`.
 - Initiative owners are scoped to initiatives where they are owner or group owner.
-- Viewers can see portfolio data but cannot mutate initiative data or grant roles.
-- Transformation Office owns mutation paths for users, initiatives, meetings, action items, governance, financials, KPIs, risks, milestones, dependencies, and team assignments.
+- Workstream leads are scoped to assigned workstreams through `user_workstreams`.
+- Viewers and executive sponsors can see portfolio data but cannot mutate data or grant roles.
+- Transformation Office owns full mutation paths; PMO, Finance, tenant admin,
+  workstream lead, initiative owner, and business benefit owner permissions are
+  scoped by the operating-model capability map.
 - Supabase RLS verification is repeatable via `apps/api/scripts/verify_rls.py`.
 
 ## Remaining Production Hardening

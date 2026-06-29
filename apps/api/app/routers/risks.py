@@ -10,7 +10,7 @@ from supabase import Client
 from app.core.auth import CurrentUser, get_current_user
 from app.core.database import get_supabase_request_client
 from app.core.rbac import (
-    assert_can_manage_initiatives,
+    assert_can_manage_initiative_execution,
     assert_can_view_initiative,
     assert_can_view_portfolio,
 )
@@ -94,8 +94,9 @@ async def create_risk(
     body: RiskCreate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[RiskService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> RiskItem:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_execution(client, current_user, initiative_id)
     return svc.create_risk(initiative_id, body)
 
 
@@ -109,8 +110,9 @@ async def update_risk(
     body: RiskUpdate,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[RiskService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> RiskItem:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_execution(client, current_user, initiative_id)
     return svc.update_risk(initiative_id, risk_id, body)
 
 
@@ -123,6 +125,7 @@ async def delete_risk(
     risk_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[RiskService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> None:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_execution(client, current_user, initiative_id)
     svc.delete_risk(initiative_id, risk_id)

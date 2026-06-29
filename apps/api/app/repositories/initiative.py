@@ -311,9 +311,18 @@ class InitiativeRepository:
             "id", initiative_id
         ).execute()
 
-    def export_csv(self, owner_user_id: str | None = None) -> str:
+    def export_csv(
+        self,
+        owner_user_id: str | None = None,
+        workstream_ids: list[str] | None = None,
+    ) -> str:
         """Return CSV string of all non-archived initiatives."""
-        rows, _ = self.list(page_size=10000, include_archived=False, owner_user_id=owner_user_id)
+        rows, _ = self.list(
+            page_size=10000,
+            include_archived=False,
+            owner_user_id=owner_user_id,
+            workstream_ids=workstream_ids,
+        )
         output = io.StringIO()
         fieldnames = [
             "initiative_code",

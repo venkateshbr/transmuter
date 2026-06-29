@@ -10,7 +10,7 @@ from supabase import Client
 from app.core.auth import CurrentUser, get_current_user
 from app.core.database import get_supabase_request_client
 from app.core.rbac import (
-    assert_can_manage_initiatives,
+    assert_can_manage_governance,
     assert_can_view_initiative,
     assert_can_view_portfolio,
 )
@@ -115,7 +115,7 @@ async def create_stage_gate_definition(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[GovernanceService, Depends(_svc)],
 ) -> StageGateDefinition:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_governance(current_user)
     return svc.create_gate_definition(body)
 
 
@@ -129,7 +129,7 @@ async def update_stage_gate_definition(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[GovernanceService, Depends(_svc)],
 ) -> StageGateDefinition:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_governance(current_user)
     return svc.update_gate_definition(definition_id, body)
 
 
@@ -142,7 +142,7 @@ async def delete_stage_gate_definition(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[GovernanceService, Depends(_svc)],
 ) -> None:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_governance(current_user)
     svc.delete_gate_definition(definition_id)
 
 
@@ -169,7 +169,7 @@ async def create_gate_criterion_config(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[GovernanceService, Depends(_svc)],
 ) -> GateCriteriaItem:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_governance(current_user)
     return svc.create_gate_criterion(body)
 
 
@@ -183,7 +183,7 @@ async def update_gate_criterion_config(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[GovernanceService, Depends(_svc)],
 ) -> GateCriteriaItem:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_governance(current_user)
     return svc.update_gate_criterion(criterion_id, body)
 
 
@@ -196,7 +196,7 @@ async def delete_gate_criterion_config(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[GovernanceService, Depends(_svc)],
 ) -> None:
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_governance(current_user)
     svc.delete_gate_criterion(criterion_id)
 
 

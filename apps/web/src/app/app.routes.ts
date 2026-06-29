@@ -97,6 +97,8 @@ export const routes: Routes = [
       },
       {
         path: 'shared-costs',
+        canActivate: [authGuard],
+        data: { permissions: ['shared_costs.manage'] },
         loadComponent: () =>
           import('./features/financials/shared-costs.component').then(m => m.SharedCostsComponent),
       },
@@ -121,21 +123,27 @@ export const routes: Routes = [
           {
             path: 'new',
             canActivate: [authGuard],
-            data: { roles: ['transformation_office'] },
+            data: { permissions: ['initiatives.manage_all'] },
             loadComponent: () =>
               import('./features/initiatives/create/create-initiative.component').then(m => m.CreateInitiativeComponent),
           },
           {
             path: ':id/edit',
             canActivate: [authGuard],
-            data: { roles: ['transformation_office'] },
+            data: {
+              permissions: [
+                'initiatives.manage_all',
+                'initiatives.manage_assigned',
+                'initiatives.manage_workstream',
+              ],
+            },
             loadComponent: () =>
               import('./features/initiatives/create/create-initiative.component').then(m => m.CreateInitiativeComponent),
           },
           {
             path: ':id/financial-scope',
             canActivate: [authGuard],
-            data: { roles: ['transformation_office'] },
+            data: { permissions: ['financials.manage', 'financials.manage_assigned'] },
             loadComponent: () =>
               import('./features/initiatives/financial-scope/financial-scope.component').then(m => m.FinancialScopeComponent),
           },
@@ -199,6 +207,8 @@ export const routes: Routes = [
       },
       {
         path: 'people',
+        canActivate: [authGuard],
+        data: { permissions: ['users.manage'] },
         loadComponent: () =>
           import('./features/people/people.component').then(m => m.PeopleComponent),
       },
@@ -235,7 +245,7 @@ export const routes: Routes = [
       {
         path: 'admin',
         canActivate: [authGuard],
-        data: { roles: ['transformation_office'] },
+        data: { permissions: ['tenant_setup.manage', 'financials.manage', 'governance.manage'] },
         loadComponent: () =>
           import('./features/admin/admin.component').then(m => m.AdminComponent),
       },

@@ -2,6 +2,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+from app.core.rbac import ROLE_WORKSTREAM_LEAD
 from app.repositories.dashboard import DashboardRepository
 
 
@@ -22,9 +23,28 @@ class DashboardService:
     ) -> dict[str, Any]:
         # 1. Initiatives & Filters
         owner_user_id = str(user_id) if role == "initiative_owner" else None
-        all_inits = self.repo.get_initiatives_for_dashboard(owner_user_id=owner_user_id)
         business_unit_ids = self._split_filter_values(business_unit_id)
         workstream_ids = self._split_filter_values(workstream_id)
+        if role == ROLE_WORKSTREAM_LEAD:
+            assigned_workstreams = self.repo.get_user_workstream_ids(user_id)
+            if workstream_ids:
+                requested = set(workstream_ids)
+                workstream_ids = [
+                    workstream_id
+                    for workstream_id in assigned_workstreams
+                    if workstream_id in requested
+                ]
+            else:
+                workstream_ids = assigned_workstreams
+            if not workstream_ids:
+                all_inits = []
+            else:
+                all_inits = self.repo.get_initiatives_for_dashboard(
+                    owner_user_id=owner_user_id,
+                    workstream_ids=workstream_ids,
+                )
+        else:
+            all_inits = self.repo.get_initiatives_for_dashboard(owner_user_id=owner_user_id)
         rag_statuses = self._split_filter_values(rag_status)
         priorities = self._split_filter_values(priority)
         tags = self._split_filter_values(tag)

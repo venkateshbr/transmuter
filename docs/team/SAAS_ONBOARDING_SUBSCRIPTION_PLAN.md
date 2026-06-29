@@ -87,23 +87,28 @@ Security requirements:
 
 Initial tenant roles:
 
-- `transformation_office`
-  - Can view all initiatives and portfolio dashboards.
-  - Can create, update, archive, import, and delete initiative planning data.
-  - Can invite users, deactivate users, and grant/change roles.
-- `initiative_owner`
-  - Can view only initiatives where they are the `owner_id` or `group_owner_id`.
-  - Can view related financials, milestones, risks, and KPIs only for those initiatives.
-  - Cannot access portfolio-wide summaries or manage tenant users.
-- `viewer`
-  - Can view all initiatives and portfolio dashboards.
-  - Cannot create, update, archive, import, delete, or grant roles.
+- `transformation_office`: full tenant and portfolio permissions.
+- `tenant_admin`: users, access, tenant setup, dimensions, dashboard
+  configuration, governance configuration, and billing portal access.
+- `pmo_lead`: governance, meetings, actions, milestones, risks, KPIs, and
+  program cadence.
+- `finance_lead`: financial configuration, initiative financials, benefit
+  validation, shared costs, bankable plans, actuals, and benefit tracking.
+- `workstream_lead`: assigned-workstream portfolio visibility and execution
+  evidence.
+- `initiative_owner`: owned-initiative master data, execution evidence, status,
+  and financial assumptions.
+- `business_benefit_owner`: portfolio visibility plus benefit realization
+  evidence and ledger updates.
+- `executive_sponsor`: read-only executive portfolio and financial views.
+- `viewer`: read-only management portfolio and dashboard access.
 
 Role assignment:
 
 - Initial signup admin is provisioned as `transformation_office`.
-- Only `transformation_office` users can invite users or change user roles.
-- API validation only accepts `transformation_office`, `initiative_owner`, and `viewer`.
+- `transformation_office` and `tenant_admin` users can invite users or change
+  user roles.
+- API validation accepts the nine operating-model tenant roles listed above.
 
 ## Frontend Work
 

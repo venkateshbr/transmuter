@@ -16,11 +16,10 @@ replace them.
 - Shared Costs configurable allocation engine is promoted to production from
   app commit `31c8805`, with the docs-only release-manifest update at
   `b7c32e3`.
-- Running production Docker stack uses:
-  - API image `transmuter-api:prod` on host port `8001`.
-  - Frontend image `transmuter-web:prod` on host port `4301`.
-  - Compose file `infra/docker-compose.prod.yml`.
-- Docker CLI path on this machine is `/usr/bin/docker`.
+- Hostinger production Docker project uses API image `transmuter-api:hostinger`
+  and web image `transmuter-web:hostinger`.
+- Hostinger dev Docker project uses API image `transmuter-api:hostinger-dev`
+  and web image `transmuter-web:hostinger-dev`.
 - Hostinger VPS / domain context:
   - Primary domain owned for the VPS: `ishirock.tech`.
   - VPS hostname: `srv1695814.hstgr.cloud`.
@@ -33,10 +32,11 @@ replace them.
     `DATABASE_LOCAL_URL` search path `transmuter,public,extensions`; Cloud remains
     the fallback/demo target.
   - Hostinger deployment runbook: `docs/team/HOSTINGER_VPS_DEPLOYMENT.md`.
-  - Hostinger deployment root on the VPS: `/docker/transmuter`.
-  - Hostinger staged compose file on the VPS: `/docker/transmuter/docker-compose.yml`.
   - Hostinger source compose template in the repo: `docker-compose.hostinger.yml`.
-  - Hostinger deploy script: `infra/hostinger/deploy.sh`.
+  - Hostinger remote deploy script: `infra/hostinger/deploy-remote.sh`.
+  - `infra/hostinger/deploy.sh` is legacy VPS-local fallback only.
+  - Hostinger API deploys fetch the pushed GitHub commit/compose file; local
+    uncommitted changes are not deployable through the API.
   - Default dev deployment command for every feature/fix:
     `infra/hostinger/deploy-change-to-dev.sh`.
   - If a feature/fix includes database changes, apply explicit SQL to the dev
@@ -55,10 +55,10 @@ replace them.
     commit, dev validation, schema SQL, and production validation result.
   - Cloud-to-local Supabase schema migration script:
     `infra/hostinger/migrate_supabase_schema_to_transmuter.sh`.
-  - When the user asks to build and test, deploy through
-    `infra/hostinger/deploy.sh` and validate the real public domain
-    `https://transmuter.ishirock.tech` unless they explicitly ask for local-only
-    validation.
+  - When the user asks to build, test, and deploy, deploy to dev through
+    `infra/hostinger/deploy-change-to-dev.sh` after the commit is pushed, then
+    validate the real public dev domain `https://transmuter-dev.ishirock.tech`.
+    Promote production only after review/merge and explicit confirmation.
   - Post-deploy validation should include `https://transmuter.ishirock.tech/health`,
     `https://transmuter.ishirock.tech/api/health`, login through the browser,
     and the touched real workflows on the public domain.
@@ -92,11 +92,23 @@ replace them.
 - Current platform admin operator email is `venkatesh@ishirock.com`; API startup
   idempotently ensures that Supabase Auth user has platform-admin app metadata
   when `PLATFORM_ADMIN_BOOTSTRAP_ENABLED=true`.
-- Tenant admin configures tenant master data and users.
+- Tenant administrator role (`tenant_admin`) configures tenant master data,
+  users, access, dashboard configuration, and billing portal access.
 - Supported tenant roles:
-  - `transformation_office`: can see and manage all initiatives.
-  - `initiative_owner`: can see assigned/owned initiatives only.
-  - `viewer`: can view portfolio data but should not create or mutate data.
+  - `transformation_office`: full tenant and portfolio permissions.
+  - `tenant_admin`: users, access, tenant setup, dimensions, dashboard setup,
+    governance configuration, and billing portal access.
+  - `pmo_lead`: governance, meetings, actions, milestones, risks, KPIs, and
+    program cadence.
+  - `finance_lead`: financial configuration, initiative financials, benefit
+    validation, shared costs, bankable plans, actuals, and benefit tracking.
+  - `workstream_lead`: assigned-workstream visibility and execution evidence.
+  - `initiative_owner`: owned-initiative master data, execution evidence,
+    status, and financial assumptions.
+  - `business_benefit_owner`: portfolio visibility plus benefit realization
+    evidence and ledger updates.
+  - `executive_sponsor`: read-only executive portfolio and financial views.
+  - `viewer`: read-only management portfolio and dashboard access.
 - RBAC must be enforced in the API; UI affordances should also hide forbidden actions.
 
 ## Stripe And Webhooks

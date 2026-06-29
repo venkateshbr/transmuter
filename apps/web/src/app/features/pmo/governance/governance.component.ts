@@ -20,7 +20,7 @@ import { ActivatedRoute } from '@angular/router';
           </h1>
           <p class="text-[var(--t-text-secondary)] mt-1">Centralized stage-gate oversight and portfolio compliance management.</p>
         </div>
-        @if (auth.getRole() === 'transformation_office') {
+        @if (auth.hasPermission('governance.manage')) {
           <div class="badge-purple px-4 py-2 border border-[var(--t-accent)]/20 shadow-lg flex items-center gap-2">
             <span class="relative flex h-2 w-2">
               <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--t-accent)] opacity-75"></span>
@@ -151,7 +151,7 @@ import { ActivatedRoute } from '@angular/router';
               <div class="h-10 w-px bg-[var(--t-border)]"></div>
 
               <div class="flex gap-2">
-                @if (s.decision === 'pending' && auth.getRole() === 'transformation_office') {
+                @if (s.decision === 'pending' && auth.hasPermission('governance.manage')) {
                   <button (click)="decide(s.id, 'approved')" [attr.aria-label]="'Approve ' + submissionLabel(s)" class="w-10 h-10 rounded-xl bg-green-500 text-white flex items-center justify-center shadow-lg shadow-green-500/20 hover:scale-110 active:scale-95 transition-all">
                     <span class="material-icons">check</span>
                   </button>
