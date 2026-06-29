@@ -69,6 +69,9 @@ User creation sequence:
    initiatives are created.
 8. In **Admin > Access Control**, confirm each role and user status.
 
+For the current dev ACME operating-model users created during validation, use
+the credential matrix in `tests/runbook-e2e-credentials.md`.
+
 Role login validation:
 
 | Role | Must allow | Must deny or hide |
