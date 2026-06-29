@@ -99,80 +99,72 @@ npm run e2e:real
 The real UI acceptance test expects the API and frontend to be running against
 deterministic sample data.
 
-## Production Docker Build
+## Hostinger Remote Deployment
 
-Production uses two images:
+Dev and production run on the same Hostinger VPS as separate Docker Compose
+projects, image names, bind ports, domains, and Supabase schemas:
 
-- `transmuter-api:prod`, exposed on host port `8001`
-- `transmuter-web:prod`, exposed on host port `4301`
+- Dev: `transmuter-dev-hostinger`, `transmuter-api:hostinger-dev`,
+  `transmuter-web:hostinger-dev`, `https://transmuter-dev.ishirock.tech`,
+  schema `transmuter_dev`.
+- Production: `transmuter-hostinger`, `transmuter-api:hostinger`,
+  `transmuter-web:hostinger`, `https://transmuter.ishirock.tech`,
+  schema `transmuter`.
 
-The production compose file is `infra/docker-compose.prod.yml`.
+Deployments are remote-first through the Hostinger VPS Docker project API. The
+API fetches `docker-compose.hostinger.yml` from GitHub, builds on the VPS, and
+recreates the selected Docker project. Because the API fetches from GitHub, the
+commit being deployed must be committed and pushed first; uncommitted local
+files are not deployable through this path.
 
-### Build Images
+Set the Hostinger API key in an ignored local dotenv file. Shell values still
+take precedence, but when they are absent the deploy scripts read
+`HOSTINGER_API_KEY` or `HOSTINGER_API_TOKEN` from the repository root `.env`,
+then from the selected `infra/hostinger/.env` or `.env.dev` file:
 
-```bash
-docker compose -f infra/docker-compose.prod.yml build
+```dotenv
+HOSTINGER_API_KEY=<hostinger-api-key>
+HOSTINGER_VPS_ID=1695814
 ```
 
-If Docker is installed at `/usr/local/bin/docker`, use:
+Do not commit `.env` or Hostinger env files; they contain secrets.
+
+Deploy the current pushed commit to dev:
 
 ```bash
-/usr/local/bin/docker compose -f infra/docker-compose.prod.yml build
+./infra/hostinger/deploy-change-to-dev.sh
 ```
 
-### Start Or Recreate The Production Stack
+Deploy a schema-bearing change to dev:
 
 ```bash
-docker compose -f infra/docker-compose.prod.yml --env-file .env up -d
+./infra/hostinger/deploy-change-to-dev.sh \
+  --schema supabase/migrations/20260629000001_operating_model_rbac_roles.sql
 ```
 
-Equivalent convenience script:
+Validate dev:
 
 ```bash
-./start-prod.sh
+./infra/hostinger/validate-dev.sh
 ```
 
-### Rebuild Only The Frontend
+Promote the reviewed, merged, and pulled production commit:
 
 ```bash
-docker compose -f infra/docker-compose.prod.yml build web
-docker compose -f infra/docker-compose.prod.yml up -d web
+CONFIRM_PROMOTE=1 ./infra/hostinger/promote-dev-to-prod.sh
 ```
 
-### Rebuild Only The API
+Promote with production schema SQL:
 
 ```bash
-docker compose -f infra/docker-compose.prod.yml build api
-docker compose -f infra/docker-compose.prod.yml up -d api
+CONFIRM_PROMOTE=1 ./infra/hostinger/promote-dev-to-prod.sh \
+  --schema supabase/migrations/20260629000001_operating_model_rbac_roles.sql
 ```
 
-### Check Production Container Status
-
-```bash
-docker compose -f infra/docker-compose.prod.yml ps
-curl -fsS http://127.0.0.1:8001/health
-curl -fsS http://127.0.0.1:4301/health
-```
-
-For the current Hostinger production deployment, public health checks should
-also pass:
-
-```bash
-curl -fsS https://transmuter.ishirock.tech/health
-curl -fsS https://transmuter.ishirock.tech/api/health
-```
-
-### Stop Production Stack
-
-```bash
-docker compose -f infra/docker-compose.prod.yml --env-file .env down
-```
-
-Equivalent convenience script:
-
-```bash
-./stop-prod.sh
-```
+The legacy `infra/hostinger/deploy.sh` script still exists only for emergency
+VPS-local fallback when you are already on the VPS and intentionally want to
+stage `/docker/transmuter` from that machine. Routine dev and production
+deployments should use the remote API wrappers above.
 
 ## 🛠 Technology Stack
 

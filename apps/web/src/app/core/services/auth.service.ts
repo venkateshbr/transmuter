@@ -2,6 +2,11 @@ import { Injectable, inject, signal } from '@angular/core';
 import { ApiService } from './api.service';
 import { Router } from '@angular/router';
 import { Observable, tap } from 'rxjs';
+import {
+  hasOperatingModelPermission,
+  operatingModelRoleLabel,
+  type OperatingModelPermission,
+} from '../rbac/operating-model-permissions';
 
 interface AuthResponse {
   access_token: string;
@@ -216,6 +221,14 @@ export class AuthService {
     } catch {
       return null;
     }
+  }
+
+  hasPermission(permission: OperatingModelPermission): boolean {
+    return hasOperatingModelPermission(this.getRole(), permission);
+  }
+
+  roleLabel(role = this.getRole()): string {
+    return operatingModelRoleLabel(role);
   }
 
   isTokenExpired(token = this.getToken()): boolean {

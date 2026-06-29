@@ -245,15 +245,21 @@ Minimum demo users:
 | User type | Role |
 |---|---|
 | Transformation office lead | `transformation_office` |
+| Tenant administrator | `tenant_admin` |
+| PMO / governance lead | `pmo_lead` |
+| Finance lead / benefits controller | `finance_lead` |
+| Workstream lead | `workstream_lead` |
 | Initiative owner | `initiative_owner` |
-| Executive viewer | `viewer` |
+| Business benefit owner | `business_benefit_owner` |
+| Executive sponsor | `executive_sponsor` |
+| Management viewer | `viewer` |
 
 Steps:
 
 1. Open **People**.
 2. Invite or create the transformation office user.
-3. Invite or create at least one initiative owner.
-4. Invite or create at least one viewer.
+3. Invite or create PMO, finance, workstream, initiative-owner, benefit-owner,
+   executive-sponsor, and viewer users as needed for the walkthrough.
 5. Open **Admin > Access Control**.
 6. Confirm each user has the intended role.
 

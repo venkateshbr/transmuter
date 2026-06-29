@@ -6,7 +6,17 @@ from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field
 
-PlatformRole = Literal["transformation_office", "initiative_owner", "viewer"]
+PlatformRole = Literal[
+    "transformation_office",
+    "tenant_admin",
+    "pmo_lead",
+    "finance_lead",
+    "workstream_lead",
+    "initiative_owner",
+    "business_benefit_owner",
+    "executive_sponsor",
+    "viewer",
+]
 
 
 class UserUpdate(BaseModel):

@@ -218,7 +218,7 @@ def test_copilot_tools_catalog_documents_curated_registry() -> None:
 
     assert {"portfolio_snapshot", "financial_rollup", "draft_initiative"} <= names
     assert all(tool["operation"] in {"read", "write"} for tool in tools)
-    assert any(tool["permission"] == "transformation_office" for tool in tools)
+    assert any(tool["permission"] == "initiatives.manage_all" for tool in tools)
 
 
 @pytest.mark.asyncio

@@ -6,8 +6,9 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query
 
-from app.core.auth import CurrentUser, get_current_user, require_role
+from app.core.auth import CurrentUser, get_current_user
 from app.core.database import get_supabase_admin
+from app.core.rbac import assert_can_manage_users
 from app.domain.people import (
     InviteCreate,
     UserCreate,
@@ -49,8 +50,9 @@ async def get_user_profile(
 async def create_user(
     body: UserCreate,
     svc: Annotated[PeopleService, Depends(_svc)],
-    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> dict[str, Any]:
+    assert_can_manage_users(current_user)
     return svc.create_user(body)
 
 
@@ -59,8 +61,9 @@ async def update_user_profile(
     user_id: str,
     body: UserUpdate,
     svc: Annotated[PeopleService, Depends(_svc)],
-    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> dict[str, Any]:
+    assert_can_manage_users(current_user)
     return svc.update_profile(user_id, body)
 
 
@@ -68,8 +71,9 @@ async def update_user_profile(
 async def ghost_user(
     user_id: str,
     svc: Annotated[PeopleService, Depends(_svc)],
-    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> dict[str, Any]:
+    assert_can_manage_users(current_user)
     return svc.ghost_user(user_id)
 
 
@@ -77,8 +81,9 @@ async def ghost_user(
 async def deactivate_user(
     user_id: str,
     svc: Annotated[PeopleService, Depends(_svc)],
-    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> dict[str, Any]:
+    assert_can_manage_users(current_user)
     return svc.deactivate_user(user_id)
 
 
@@ -86,8 +91,9 @@ async def deactivate_user(
 async def send_password_reset_link(
     user_id: str,
     svc: Annotated[PeopleService, Depends(_svc)],
-    current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> dict[str, Any]:
+    assert_can_manage_users(current_user)
     return svc.send_password_setup_link(user_id, created_by_id=str(current_user.id))
 
 
@@ -96,8 +102,9 @@ async def set_temporary_password(
     user_id: str,
     body: UserTemporaryPassword,
     svc: Annotated[PeopleService, Depends(_svc)],
-    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> dict[str, Any]:
+    assert_can_manage_users(current_user)
     return svc.set_temporary_password(user_id, body)
 
 
@@ -114,8 +121,9 @@ async def assign_user_workstreams(
     user_id: str,
     body: WorkstreamAssignment,
     svc: Annotated[PeopleService, Depends(_svc)],
-    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> dict[str, Any]:
+    assert_can_manage_users(current_user)
     return svc.assign_workstreams(user_id, body)
 
 
@@ -123,8 +131,9 @@ async def assign_user_workstreams(
 async def create_invite(
     body: InviteCreate,
     svc: Annotated[PeopleService, Depends(_svc)],
-    current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> dict[str, Any]:
+    assert_can_manage_users(current_user)
     return svc.invite_user(body, created_by_id=str(current_user.id))
 
 
@@ -139,8 +148,9 @@ async def list_invites(
 async def resend_invite(
     invite_id: str,
     svc: Annotated[PeopleService, Depends(_svc)],
-    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> dict[str, Any]:
+    assert_can_manage_users(current_user)
     return svc.resend_invite(invite_id)
 
 
@@ -148,6 +158,7 @@ async def resend_invite(
 async def revoke_invite(
     invite_id: str,
     svc: Annotated[PeopleService, Depends(_svc)],
-    _current_user: Annotated[CurrentUser, Depends(require_role("transformation_office"))],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> dict[str, Any]:
+    assert_can_manage_users(current_user)
     return svc.revoke_invite(invite_id)

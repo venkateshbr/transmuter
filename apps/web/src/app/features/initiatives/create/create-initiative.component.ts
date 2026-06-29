@@ -778,7 +778,7 @@ export class CreateInitiativeComponent {
   }
 
   private loadSetupStatus(): void {
-    if (this.auth.getRole() !== 'transformation_office') {
+    if (!this.auth.hasPermission('initiatives.manage_all')) {
       this.setupStatusLoaded.set(true);
       return;
     }
@@ -1092,7 +1092,7 @@ export class CreateInitiativeComponent {
   isCreationBlocked(): boolean {
     if (this.editId) return false;
     const localReady = this.hasLocalSetupReady();
-    if (this.auth.getRole() === 'transformation_office' && this.setupStatusLoaded()) {
+    if (this.auth.hasPermission('initiatives.manage_all') && this.setupStatusLoaded()) {
       return !this.hasOperationalSetupStatusReady() || !localReady;
     }
     return !localReady;

@@ -16,11 +16,13 @@ DOCKER_BIN="${DOCKER_BIN:-docker}"
 
 usage() {
   cat <<'USAGE'
-Stage and deploy the Transmuter Hostinger bundle locally.
+Legacy VPS-local fallback: stage and deploy the Transmuter Hostinger bundle on
+the machine where this script is run.
 
 This script copies the required repo subsets into /docker/transmuter on this
 machine, then builds and starts the Docker Compose stack from that local bundle.
-No SSH is used.
+It does not use the Hostinger API and should not be used for routine dev or
+production deployment.
 
 Required local file:
   infra/hostinger/.env  Runtime secrets and deployment settings.
@@ -42,7 +44,11 @@ Useful environment overrides:
   RUN_DB_SCHEMA_MIGRATION=1
   DOCKER_BIN=docker
 
-Example:
+Preferred remote examples:
+  ./infra/hostinger/deploy-change-to-dev.sh
+  CONFIRM_PROMOTE=1 ./infra/hostinger/promote-dev-to-prod.sh
+
+Legacy local fallback example:
   ./infra/hostinger/deploy.sh
 USAGE
 }
@@ -118,6 +124,7 @@ rm -rf "${DEPLOY_DIR}"
 mkdir -p "${DEPLOY_DIR}/apps/api" "${DEPLOY_DIR}/apps/web" "${DEPLOY_DIR}/domain_packs" "${DEPLOY_DIR}/infra/hostinger"
 
 echo "Staging Transmuter bundle locally into ${DEPLOY_DIR}"
+echo "WARNING: infra/hostinger/deploy.sh is a legacy VPS-local fallback; routine deploys use deploy-remote.sh."
 echo "Compose template: ${HOSTINGER_COMPOSE_TEMPLATE}"
 
 rsync -az --delete "${APP_EXCLUDES[@]}" \
@@ -165,8 +172,8 @@ fi
   "${DOCKER_BIN}" compose -p "${COMPOSE_PROJECT}" -f "${REMOTE_COMPOSE_FILE}" --env-file "${REMOTE_ENV_FILE}" ps
 )
 
-echo "Deployment command completed locally."
-echo "Validate locally:"
+echo "Legacy local deployment command completed."
+echo "Validate local bind:"
 LOCAL_WEB_BIND="${TRANSMUTER_WEB_BIND:-127.0.0.1:4301}"
 LOCAL_WEB_BASE_URL="http://${LOCAL_WEB_BIND}"
 echo "  curl -fsS ${LOCAL_WEB_BASE_URL}/health"

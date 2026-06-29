@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.core.auth import CurrentUser
-from app.core.rbac import can_view_all_initiatives
+from app.core.rbac import ROLE_WORKSTREAM_LEAD, can_view_all_initiatives
 from app.domain.search import SearchResponse, SearchResult
 from app.repositories.search import SearchRepository
 
@@ -18,25 +18,41 @@ class SearchService:
         if len(needle) < 2:
             return SearchResponse(items=[], categories={}, total=0)
 
+        workstream_ids = (
+            self._repo.list_user_workstream_ids(str(self._current_user.id))
+            if self._current_user.role == ROLE_WORKSTREAM_LEAD
+            else None
+        )
+        if workstream_ids == []:
+            return SearchResponse(items=[], categories={}, total=0)
         owner_user_id = (
             None
-            if can_view_all_initiatives(self._current_user.role)
+            if can_view_all_initiatives(self._current_user.role) or workstream_ids is not None
             else str(self._current_user.id)
         )
         initiative_matches = [
             _initiative_result(row)
-            for row in self._repo.list_initiative_search_rows(owner_user_id=owner_user_id)
+            for row in self._repo.list_initiative_search_rows(
+                owner_user_id=owner_user_id,
+                workstream_ids=workstream_ids,
+            )
             if _matches(row, needle, ("name", "summary", "initiative_code"))
         ]
         milestone_matches = [
             _milestone_result(row)
-            for row in self._repo.list_milestone_search_rows(owner_user_id=owner_user_id)
+            for row in self._repo.list_milestone_search_rows(
+                owner_user_id=owner_user_id,
+                workstream_ids=workstream_ids,
+            )
             if _visible_related(row, owner_user_id)
             and _matches(row, needle, ("name", "description", "status", "priority"))
         ]
         risk_matches = [
             _risk_result(row)
-            for row in self._repo.list_risk_search_rows(owner_user_id=owner_user_id)
+            for row in self._repo.list_risk_search_rows(
+                owner_user_id=owner_user_id,
+                workstream_ids=workstream_ids,
+            )
             if _visible_related(row, owner_user_id)
             and _matches(
                 row, needle, ("description", "type", "impact", "likelihood", "rating", "status")

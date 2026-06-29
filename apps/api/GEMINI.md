@@ -31,7 +31,10 @@ Router (thin: parse + respond) → Service (business logic) → Repository (data
 
 ### Auth
 - All routes require `Depends(get_current_user)` unless explicitly public
-- Role check: use `require_role("transformation_office")` dependency factory
+- Tenant authorization: prefer `app.core.rbac` capability helpers such as
+  `require_capability(...)`, `assert_can_manage_users(...)`, and
+  initiative-scoped helpers. Use direct role checks only for platform-admin or
+  explicitly role-specific exceptions.
 - Never log or return JWT tokens in responses
 
 ### Agents / AI

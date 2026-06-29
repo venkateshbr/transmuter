@@ -3,6 +3,10 @@ import { CommonModule } from '@angular/common';
 import { AuthService } from '../../core/services/auth.service';
 import { ApiService } from '../../core/services/api.service';
 import { FormsModule } from '@angular/forms';
+import { OPERATING_MODEL_ROLES } from '../../core/rbac/operating-model-permissions';
+
+const DEFAULT_ROLE_IDS = OPERATING_MODEL_ROLES.map(role => role.id);
+const DEFAULT_REBASELINE_ROLES = ['transformation_office', 'finance_lead', 'pmo_lead'];
 
 @Component({
   selector: 'app-admin',
@@ -1363,7 +1367,7 @@ export class AdminComponent implements OnInit {
     baseline_lock_gate_number: 2,
     baseline_lock_on_approval: true,
     allow_rebaseline: true,
-    rebaseline_roles: ['transformation_office'],
+    rebaseline_roles: [...DEFAULT_REBASELINE_ROLES],
     workstream_lock_cadence: 'one_off',
     initiative_inclusion_cutoff: 'approved_at_lte_lock_date',
     valuation_method: 'run_rate',
@@ -1557,7 +1561,7 @@ export class AdminComponent implements OnInit {
         ...res,
         rebaseline_roles: this.normalizeConfigList(res?.rebaseline_roles).length
           ? this.normalizeConfigList(res?.rebaseline_roles)
-          : ['transformation_office'],
+          : [...DEFAULT_REBASELINE_ROLES],
       }),
       error: err => this.financialGovernanceError.set(err.error?.detail || 'Could not load bankable plan governance settings'),
     });
@@ -1593,7 +1597,7 @@ export class AdminComponent implements OnInit {
       allow_rebaseline: settings.allow_rebaseline !== false,
       rebaseline_roles: this.normalizeConfigList(settings.rebaseline_roles).length
         ? this.normalizeConfigList(settings.rebaseline_roles)
-        : ['transformation_office'],
+        : [...DEFAULT_REBASELINE_ROLES],
       workstream_lock_cadence: settings.workstream_lock_cadence || 'one_off',
       initiative_inclusion_cutoff: settings.initiative_inclusion_cutoff || 'approved_at_lte_lock_date',
       valuation_method: settings.valuation_method || 'run_rate',
@@ -1621,7 +1625,7 @@ export class AdminComponent implements OnInit {
       menu_group: item.menu_group || 'dashboard',
       allowed_roles: item.allowed_roles?.length
         ? item.allowed_roles
-        : ['transformation_office', 'initiative_owner', 'viewer'],
+          : [...DEFAULT_ROLE_IDS],
       metadata: item.metadata || {},
     }));
     this.api.put<any>('/admin/dashboard-configuration', { dashboards }).subscribe(res => {

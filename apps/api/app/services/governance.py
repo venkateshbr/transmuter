@@ -11,6 +11,7 @@ import yaml
 from fastapi import HTTPException, status
 from supabase import Client
 
+from app.core.rbac import CAP_MANAGE_INITIATIVES, has_capability
 from app.domain.governance import (
     GateCriteriaCreate,
     GateCriteriaItem,
@@ -488,7 +489,7 @@ class GovernanceService:
         initiative_id: str,
         gate_definition: dict[str, Any] | None,
     ) -> None:
-        if self._user_role == "transformation_office":
+        if has_capability(self._user_role, CAP_MANAGE_INITIATIVES):
             return
         if not gate_definition:
             raise HTTPException(

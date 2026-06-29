@@ -7,6 +7,7 @@ import { ApiService } from './core/services/api.service';
 import { AuthService } from './core/services/auth.service';
 import { LoadingService } from './core/services/loading.service';
 import { ThemeService } from './core/services/theme.service';
+import { hasOperatingModelPermission, operatingModelRoleLabel, type OperatingModelPermission } from './core/rbac/operating-model-permissions';
 
 @Component({ standalone: true, template: '' })
 class EmptyRouteComponent {}
@@ -83,6 +84,9 @@ describe('App', () => {
             user: authUser,
             isAuthenticated,
             getRole: () => role,
+            hasPermission: (permission: OperatingModelPermission) =>
+              hasOperatingModelPermission(role, permission),
+            roleLabel: (value?: string | null) => operatingModelRoleLabel(value ?? role),
             logout: () => {
               logoutCalled = true;
             },

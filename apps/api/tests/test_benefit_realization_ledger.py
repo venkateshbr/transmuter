@@ -203,7 +203,7 @@ def test_benefit_ledger_entry_crud_routes(
         financials_router, "assert_can_view_initiative", lambda *args, **kwargs: None
     )
     monkeypatch.setattr(
-        financials_router, "assert_can_manage_initiatives", lambda *args, **kwargs: None
+        financials_router, "assert_can_manage_benefit_realization", lambda *args, **kwargs: None
     )
 
     try:

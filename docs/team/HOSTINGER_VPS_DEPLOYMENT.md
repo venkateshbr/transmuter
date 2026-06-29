@@ -1,6 +1,6 @@
 # Hostinger VPS Deployment Runbook
 
-Last updated: 2026-06-12
+Last updated: 2026-06-29
 
 ## Target
 
@@ -9,29 +9,31 @@ Last updated: 2026-06-12
 - Primary domain: `ishirock.tech`
 - Public app hostname: `https://transmuter.ishirock.tech`
 - Supabase API domain: `https://supabase.ishirock.tech`
-- Deployment directory on VPS: `/docker/transmuter`
-- Dev deployment directory on VPS: `/docker/transmuter-dev`
-- Staged compose file on VPS: `/docker/transmuter/docker-compose.yml`
 - Source compose template in repo: `docker-compose.hostinger.yml`
-- Deployment script in repo: `infra/hostinger/deploy.sh`
+- Remote deployment script in repo: `infra/hostinger/deploy-remote.sh`
+- Dev wrapper: `infra/hostinger/deploy-change-to-dev.sh`
+- Production wrapper: `infra/hostinger/promote-dev-to-prod.sh`
 - Schema migration script in repo: `infra/hostinger/migrate_supabase_schema_to_transmuter.sh`
 - Dev schema clone script in repo: `infra/hostinger/clone_schema_to_dev.sh`
 
-## Bundle Model
+## Remote Deployment Model
 
-The Hostinger deployment is a *staged bundle*, not a full repository clone.
+The canonical Hostinger deployment path is remote-first through the Hostinger
+VPS Docker project API. The API fetches `docker-compose.hostinger.yml` from
+GitHub for the requested pushed commit, builds on the VPS, and replaces the
+selected Docker Compose project while preserving project volumes.
 
-`infra/hostinger/deploy.sh` copies only the required repo subsets to the VPS:
+The same VPS runs two separate Transmuter Docker projects:
 
-- `apps/api/`
-- `apps/web/`
-- `domain_packs/`
-- `infra/hostinger/`
-- `docker-compose.hostinger.yml` staged as `/docker/transmuter/docker-compose.yml`
-- `infra/hostinger/.env` staged as `/docker/transmuter/.env`
+- Dev: `transmuter-dev-hostinger`
+- Production: `transmuter-hostinger`
 
-The dev bundle uses the same model with `infra/hostinger/.env.dev` staged to
-`/docker/transmuter-dev/.env`.
+Because Hostinger fetches source from GitHub, the commit being deployed must be
+committed and pushed before running the deploy wrapper. Uncommitted local files
+cannot be deployed through the Hostinger API.
+
+`infra/hostinger/deploy.sh` is retained only as a legacy VPS-local fallback for
+emergency manual staging on the VPS. It is not the routine deploy path.
 
 ## Traefik Routing
 
@@ -46,7 +48,20 @@ The API is not publicly exposed; `/api` is proxied by the web nginx container on
 
 ## Environment Preparation
 
-Create the local deployment env file from the template:
+Set the Hostinger API key in an ignored local dotenv file:
+
+```dotenv
+HOSTINGER_API_KEY=<hostinger-api-key>
+HOSTINGER_VPS_ID=1695814
+```
+
+Shell exports remain valid one-off overrides and take precedence. When they are
+absent, the remote deploy and schema scripts load Hostinger control values from
+the repository root `.env`, then from the selected `infra/hostinger/.env` or
+`.env.dev` file.
+
+For first-time setup or secret rotation, create the deployment env file from
+the template:
 
 ```bash
 cp infra/hostinger/.env.example infra/hostinger/.env
@@ -75,9 +90,13 @@ Fill in:
 - `HOSTINGER_ADMIN_PASSWORD` for one-time minimal local bootstrap, or separate
   `HOSTINGER_PLATFORM_ADMIN_PASSWORD` and `HOSTINGER_TENANT_ADMIN_PASSWORD`
 
-Keep `infra/hostinger/.env` uncommitted.
+Keep `infra/hostinger/.env` and `.env.dev` uncommitted. If these files are
+absent during remote deployment, `deploy-remote.sh` fetches and reuses the
+existing saved Hostinger Docker project environment so a project replacement
+does not wipe runtime secrets.
+
 If any value contains spaces or shell-special characters, quote it in the `.env`
-file because the deploy script sources that file with shell syntax.
+file because local scripts source that file with shell syntax.
 
 The legacy direct variables `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
 `SUPABASE_SERVICE_KEY`, and `DATABASE_URL` remain compatibility fallbacks. Leave
@@ -112,19 +131,20 @@ Transmuter stack. To return to Hostinger local Supabase, set
 ## Deploy
 
 ```bash
-./infra/hostinger/deploy.sh
+./infra/hostinger/deploy-prod.sh
 ```
 
 Production wrapper:
 
 ```bash
-./infra/hostinger/deploy-prod.sh
+CONFIRM_PROMOTE=1 ./infra/hostinger/promote-dev-to-prod.sh
 ```
 
-To run the schema migration on the VPS immediately before restarting containers:
+Production schema SQL is explicit:
 
 ```bash
-RUN_DB_SCHEMA_MIGRATION=1 ./infra/hostinger/deploy.sh
+CONFIRM_PROMOTE=1 ./infra/hostinger/promote-dev-to-prod.sh \
+  --schema supabase/migrations/20260629000001_operating_model_rbac_roles.sql
 ```
 
 ## Hostinger Dev Environment
@@ -132,7 +152,6 @@ RUN_DB_SCHEMA_MIGRATION=1 ./infra/hostinger/deploy.sh
 The dev environment is separate from production:
 
 - Public app hostname: `https://transmuter-dev.ishirock.tech`
-- Dev bundle root: `/docker/transmuter-dev`
 - Dev compose project: `transmuter-dev-hostinger`
 - Dev images: `transmuter-api:hostinger-dev`, `transmuter-web:hostinger-dev`
 - Dev web bind: `127.0.0.1:4302`
@@ -168,18 +187,19 @@ Refresh dev schema from current production app schema/data:
 ./infra/hostinger/deploy-change-to-dev.sh --refresh-schema
 ```
 
-On the Hostinger VPS, use `POSTGRES_DOCKER_NETWORK=supabase-aethos_default` if
-the clone URL uses Supabase's internal `db` hostname and local `pg_dump`/`psql`
-are not installed.
+`--refresh-schema` still uses direct PostgreSQL clone tooling and requires
+database connectivity from the machine running it.
 
-Deploy the current checkout to dev for every feature/fix:
+Deploy the current pushed commit to dev for every feature/fix:
 
 ```bash
 ./infra/hostinger/deploy-change-to-dev.sh
 ```
 
 If the feature/fix includes database changes, pass explicit SQL files. They are
-applied to `transmuter_dev` before the dev containers are rebuilt:
+applied to `transmuter_dev` before the dev containers are rebuilt. When local
+env files are absent, the schema helper fetches the saved Hostinger project
+environment and rewrites container-local database hosts to the VPS public host:
 
 ```bash
 ./infra/hostinger/deploy-change-to-dev.sh --schema path/to/change.sql
@@ -275,8 +295,7 @@ creating or importing initiatives.
 Rollback to the pre-refactor baseline:
 
 ```bash
-git checkout v0.4.0
-./infra/hostinger/deploy.sh
+HOSTINGER_DEPLOY_REF=v0.4.0 ./infra/hostinger/deploy-prod.sh
 ```
 
 If the schema migration has already been applied, rollback also requires
@@ -320,25 +339,26 @@ PLATFORM_ADMIN_BOOTSTRAP_EMAIL=venkatesh@ishirock.com \
 uv run python scripts/rotate_platform_admin_email.py
 ```
 
-What the script does:
+Legacy VPS-local fallback only:
 
-1. Creates `/docker/transmuter` on the VPS.
-2. Syncs only the required repo subsets.
-3. Copies `infra/hostinger/.env` to `/docker/transmuter/.env`.
-4. Copies `docker-compose.hostinger.yml` to `/docker/transmuter/docker-compose.yml`.
-5. Optionally runs the schema migration helper on the VPS.
-6. Builds and starts `api` and `web` with Docker Compose. The `worker` service
-   is available through the opt-in `worker` Compose profile.
+`infra/hostinger/deploy.sh` can still be run from the VPS to rebuild a staged
+`/docker/transmuter` bundle manually. This path creates `/docker/transmuter`,
+copies repo subsets and env files into it, and runs Docker Compose locally on
+the VPS. Use it only when the Hostinger API path is unavailable.
 
 ## Validation
 
-On the VPS:
+Remote validation:
 
 ```bash
-cd /docker/transmuter
-docker compose -f docker-compose.yml --env-file .env ps
-docker compose -f docker-compose.yml --env-file .env exec web wget -qO- http://127.0.0.1/health
-curl -fsS http://127.0.0.1:4301/health
+./infra/hostinger/validate-dev.sh
+./infra/hostinger/validate-prod.sh
+```
+
+Optional local bind validation when already on the VPS:
+
+```bash
+VALIDATE_LOCAL=1 ./infra/hostinger/validate-prod.sh
 ```
 
 From outside the VPS after DNS / reverse-proxy routing:
@@ -379,9 +399,13 @@ https://transmuter.ishirock.tech/api/billing/webhook
 
 ## SRE Notes
 
-- Do not treat `/docker/transmuter` as a source checkout.
-- Keep the compose file at the bundle root as `docker-compose.yml`.
-- The deploy script sets the remote `.env` to mode `600` after copying it.
+- Routine deployments use Hostinger API Docker project replacement. Do not
+  require SSH or assume the Hostinger VPS is the local machine.
+- The commit must be pushed to GitHub before deployment.
+- The VPS Docker manager must be able to fetch the repo/compose path. For
+  private repositories, keep the VPS deploy key configured in GitHub.
+- Do not treat `/docker/transmuter` as the canonical source checkout.
 - Do not expose the API publicly unless there is a specific debugging need.
 - Do not commit secrets or copy them into repo-tracked files.
-- If the bundle is manually refreshed, refresh only the changed repo subsets rather than cloning the full repository.
+- If the legacy VPS-local bundle is manually refreshed, keep the compose file at
+  the bundle root as `docker-compose.yml`.

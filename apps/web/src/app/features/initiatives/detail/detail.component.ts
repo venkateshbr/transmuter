@@ -2,6 +2,7 @@ import { Component, Input, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
+import { AuthService } from '../../../core/services/auth.service';
 import { MilestonesTabComponent } from './milestones/milestones-tab.component';
 import { KpisTabComponent } from './kpis/kpis-tab.component';
 import { RisksTabComponent } from './risks/risks-tab.component';
@@ -45,15 +46,17 @@ import { DependenciesTabComponent } from './dependencies/dependencies-tab.compon
             </h1>
           </div>
           <div class="flex flex-wrap items-center gap-2">
-            <a
-              [routerLink]="['/initiatives', id, 'edit']"
-              class="btn-primary inline-flex items-center gap-2"
-              aria-label="Edit initiative"
-              title="Edit initiative"
-            >
-              <span class="material-icons text-base">edit</span>
-              Edit Initiative
-            </a>
+            @if (canEditInitiative()) {
+              <a
+                [routerLink]="['/initiatives', id, 'edit']"
+                class="btn-primary inline-flex items-center gap-2"
+                aria-label="Edit initiative"
+                title="Edit initiative"
+              >
+                <span class="material-icons text-base">edit</span>
+                Edit Initiative
+              </a>
+            }
             <button
               type="button"
               class="btn-secondary inline-flex items-center gap-2"
@@ -102,6 +105,7 @@ export class InitiativeDetailComponent implements OnInit {
   @Input() id!: string; // Bound from the route via withComponentInputBinding()
   
   private readonly api = inject(ApiService);
+  private readonly auth = inject(AuthService);
   initiative = signal<any | null>(null);
   loadError = signal(false);
   exporting = signal(false);
@@ -135,6 +139,12 @@ export class InitiativeDetailComponent implements OnInit {
     { id: 'team', label: 'Team' },
     { id: 'summary', label: 'Summary' }
   ];
+
+  canEditInitiative(): boolean {
+    return this.auth.hasPermission('initiatives.manage_all')
+      || this.auth.hasPermission('initiatives.manage_assigned')
+      || this.auth.hasPermission('initiatives.manage_workstream');
+  }
 
   exportWorkbook(): void {
     if (!this.id || this.exporting()) return;

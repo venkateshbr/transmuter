@@ -7,7 +7,7 @@ from supabase import Client
 
 from app.core.auth import CurrentUser, get_current_user
 from app.core.database import get_supabase_request_client
-from app.core.rbac import assert_can_manage_initiatives, assert_can_view_initiative
+from app.core.rbac import assert_can_manage_initiative_execution, assert_can_view_initiative
 
 router = APIRouter(tags=["initiative-team"])
 
@@ -94,7 +94,7 @@ async def add_team_member(
     client: Annotated[Client, Depends(get_supabase_request_client)],
 ):
     tid = str(current_user.tenant_id)
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_execution(client, current_user, str(initiative_id))
     _assert_initiative_access(client, initiative_id, tid)
     _assert_user_access(client, data.user_id, tid)
 
@@ -125,7 +125,7 @@ async def remove_team_member(
     client: Annotated[Client, Depends(get_supabase_request_client)],
 ):
     tid = str(current_user.tenant_id)
-    assert_can_manage_initiatives(current_user)
+    assert_can_manage_initiative_execution(client, current_user, str(initiative_id))
     _assert_initiative_access(client, initiative_id, tid)
 
     deleted = (

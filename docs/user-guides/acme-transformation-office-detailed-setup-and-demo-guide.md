@@ -622,21 +622,30 @@ Recommended roles:
 
 | Role | Use |
 |---|---|
-| `transformation_office` | PMO / value office, full portfolio management. |
-| `initiative_owner` | Own assigned initiatives and updates. |
-| `viewer` | Read-only portfolio and dashboard access. |
+| `transformation_office` | Transformation Office Director / value office with full tenant and portfolio permissions. |
+| `tenant_admin` | Tenant setup, users, access, dimensions, dashboard configuration, and billing portal access. |
+| `pmo_lead` | Governance, stage gates, meetings, actions, milestones, risks, KPIs, and cadence. |
+| `finance_lead` | Financial configuration, baselines, benefit validation, shared costs, actuals, and benefit tracking. |
+| `workstream_lead` | Assigned workstream visibility and execution updates. |
+| `initiative_owner` | Owned initiative master data, execution evidence, status, and financial assumptions. |
+| `business_benefit_owner` | Realization evidence, sustainment notes, and benefit ledger updates. |
+| `executive_sponsor` | Read-only executive portfolio, financial, and control-tower views. |
+| `viewer` | Read-only management portfolio and dashboard access. |
 
 Actions:
 
 1. Open **People** to create or invite users.
-2. Assign transformation office, initiative owner, or viewer roles.
+2. Assign each operating-model role according to the accountability table in
+   section 4.
 3. Use **Admin > Access Control** to review user status and role assignment.
 
 Speaker notes:
 
-> Value delivery is role-based. The transformation office governs portfolio
-> value, owners maintain their initiatives, and viewers can inspect management
-> dashboards without changing data.
+> Value delivery is role-based. The transformation office has full control,
+> tenant administrators manage access and setup, PMO and Finance run their
+> governance and value controls, initiative and workstream owners update scoped
+> delivery evidence, benefit owners confirm realization, and executive viewers
+> inspect management dashboards without changing data.
 
 ---
 

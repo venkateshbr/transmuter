@@ -8,7 +8,9 @@ class DashboardRepository:
         self.tenant_id = str(tenant_id)
 
     def get_initiatives_for_dashboard(
-        self, owner_user_id: str | None = None
+        self,
+        owner_user_id: str | None = None,
+        workstream_ids: list[str] | None = None,
     ) -> list[dict[str, Any]]:
         select = (
             "id, name, initiative_code, stage, rag_status, priority, pressure_score, workstream_id, tag, "
@@ -22,6 +24,8 @@ class DashboardRepository:
         )
         if owner_user_id:
             res = res.or_(f"owner_id.eq.{owner_user_id},group_owner_id.eq.{owner_user_id}")
+        if workstream_ids:
+            res = res.in_("workstream_id", workstream_ids)
         res = res.execute()
         return res.data or []
 
@@ -48,6 +52,16 @@ class DashboardRepository:
             .execute()
         )
         return res.data or []
+
+    def get_user_workstream_ids(self, user_id: UUID) -> list[str]:
+        res = (
+            self.client.table("user_workstreams")
+            .select("workstream_id")
+            .eq("tenant_id", self.tenant_id)
+            .eq("user_id", str(user_id))
+            .execute()
+        )
+        return [str(row["workstream_id"]) for row in res.data or [] if row.get("workstream_id")]
 
     def get_risks_for_heatmap(self) -> list[dict[str, Any]]:
         res = (

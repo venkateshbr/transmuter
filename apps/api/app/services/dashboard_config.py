@@ -15,7 +15,17 @@ from app.domain.dashboard_config import (
     DashboardConfigUpdate,
 )
 
-DEFAULT_DASHBOARD_ROLES = ["transformation_office", "initiative_owner", "viewer"]
+DEFAULT_DASHBOARD_ROLES = [
+    "transformation_office",
+    "tenant_admin",
+    "pmo_lead",
+    "finance_lead",
+    "workstream_lead",
+    "initiative_owner",
+    "business_benefit_owner",
+    "executive_sponsor",
+    "viewer",
+]
 STARTER_ENABLED_DASHBOARDS = {
     "executive_dashboard",
     "financial_overview",

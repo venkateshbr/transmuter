@@ -14,7 +14,17 @@ from supabase import Client
 
 from app.core.auth import CurrentUser
 from app.core.observability import record_agent_run, start_agent_timer
-from app.core.rbac import ROLE_TRANSFORMATION_OFFICE, can_view_all_initiatives
+from app.core.rbac import (
+    CAP_MANAGE_EXECUTION_EVIDENCE,
+    CAP_MANAGE_FINANCIALS,
+    CAP_MANAGE_INITIATIVES,
+    CAP_VIEW_PORTFOLIO,
+    ROLE_WORKSTREAM_LEAD,
+    assert_can_manage_initiative_execution,
+    assert_can_manage_initiative_financials,
+    can_view_all_initiatives,
+    has_capability,
+)
 from app.domain.financials import CostLineCreate, FinancialEntryUpdate, FinancialGridUpdate
 from app.domain.initiatives import InitiativeCreate
 from app.domain.kpis import KPICreate
@@ -123,7 +133,14 @@ class CopilotToolRegistry:
                 "pressure_score, benefit_confidence, realization_status, archived_at"
             ),
         )
-        if not can_view_all_initiatives(self.current_user.role):
+        if self.current_user.role == ROLE_WORKSTREAM_LEAD:
+            assigned_workstreams = self._assigned_workstream_ids()
+            initiatives = [
+                row
+                for row in initiatives
+                if str(row.get("workstream_id") or "") in assigned_workstreams
+            ]
+        elif not can_view_all_initiatives(self.current_user.role):
             user_id = str(self.current_user.id)
             initiatives = [
                 row
@@ -237,6 +254,13 @@ class CopilotToolRegistry:
                 return []
             raise
 
+    def _assigned_workstream_ids(self) -> set[str]:
+        return {
+            str(row["workstream_id"])
+            for row in self._query("user_workstreams", "workstream_id")
+            if row.get("workstream_id")
+        }
+
     @staticmethod
     def _filter_initiative_rows(
         rows: list[dict[str, Any]],
@@ -271,7 +295,7 @@ class CopilotToolRegistry:
                 "portfolio",
                 "Read tenant-scoped initiatives, health, status, ownership, and pressure context.",
                 "read",
-                "viewer",
+                CAP_VIEW_PORTFOLIO,
                 "initiatives, dashboard",
                 {"query": "string", "filters": "optional portfolio filters"},
                 ["Summarize the portfolio", "Which initiatives are red?"],
@@ -281,7 +305,7 @@ class CopilotToolRegistry:
                 "financials",
                 "Read and aggregate initiative financial entries and cost lines with Decimal math.",
                 "read",
-                "viewer",
+                CAP_VIEW_PORTFOLIO,
                 "financial_entries, financial_cost_lines, portfolio financial APIs",
                 {"initiative": "optional string", "year": "optional integer"},
                 ["What is the net value for HK CoSec?", "Show portfolio financial totals"],
@@ -291,7 +315,7 @@ class CopilotToolRegistry:
                 "milestones",
                 "Read portfolio milestones, due dates, owners, status, pressure, and dependencies.",
                 "read",
-                "viewer",
+                CAP_VIEW_PORTFOLIO,
                 "milestones, milestone_dependencies",
                 {
                     "initiative": "optional string",
@@ -305,7 +329,7 @@ class CopilotToolRegistry:
                 "risks",
                 "Read risk register, ratings, mitigations, escalations, and affected initiatives.",
                 "read",
-                "viewer",
+                CAP_VIEW_PORTFOLIO,
                 "risks",
                 {"initiative": "optional string", "rating": "optional high|medium|low"},
                 ["Show high risks", "Risks for ERP rollout"],
@@ -315,7 +339,7 @@ class CopilotToolRegistry:
                 "kpis",
                 "Read KPIs and latest KPI entries across initiatives.",
                 "read",
-                "viewer",
+                CAP_VIEW_PORTFOLIO,
                 "kpis, kpi_entries",
                 {"initiative": "optional string", "health": "optional"},
                 ["Which KPIs are missing actuals?", "KPI status for Initiative ALQ-001"],
@@ -325,7 +349,7 @@ class CopilotToolRegistry:
                 "meetings",
                 "Read meetings, agenda-related action items, owners, due dates, and open workload.",
                 "read",
-                "viewer",
+                CAP_VIEW_PORTFOLIO,
                 "meetings, action_items",
                 {"owner": "optional string", "status": "optional"},
                 ["Open action items", "What meetings are active?"],
@@ -335,7 +359,7 @@ class CopilotToolRegistry:
                 "reports",
                 "Return executive report summaries and links to existing report/export endpoints.",
                 "read",
-                "viewer",
+                CAP_VIEW_PORTFOLIO,
                 "executive control report APIs",
                 {"report": "owner-cockpit|executive-control-tower|investor-summary"},
                 ["Generate an executive report", "Investor summary for 2026"],
@@ -345,7 +369,7 @@ class CopilotToolRegistry:
                 "initiatives",
                 "Draft a new initiative for explicit user confirmation before writing.",
                 "write",
-                "transformation_office",
+                CAP_MANAGE_INITIATIVES,
                 "InitiativeService.create_initiative",
                 {"name": "string", "priority": "low|medium|high", "summary": "optional string"},
                 ["Create an initiative called Vendor Consolidation"],
@@ -355,7 +379,7 @@ class CopilotToolRegistry:
                 "milestones",
                 "Draft a milestone on an existing initiative for confirmation.",
                 "write",
-                "transformation_office",
+                CAP_MANAGE_EXECUTION_EVIDENCE,
                 "MilestoneService.create_milestone",
                 {"initiative_id": "uuid", "name": "string", "planned_end": "optional date"},
                 ["Add milestone Contract signed to HK CoSec by 2026-06-30"],
@@ -365,7 +389,7 @@ class CopilotToolRegistry:
                 "risks",
                 "Draft an initiative risk for confirmation.",
                 "write",
-                "transformation_office",
+                CAP_MANAGE_EXECUTION_EVIDENCE,
                 "RiskService.create_risk",
                 {"initiative_id": "uuid", "description": "string", "impact": "optional"},
                 ["Add a high risk to ERP rollout about adoption readiness"],
@@ -375,7 +399,7 @@ class CopilotToolRegistry:
                 "kpis",
                 "Draft a KPI on an initiative for confirmation.",
                 "write",
-                "transformation_office",
+                CAP_MANAGE_EXECUTION_EVIDENCE,
                 "KPIService.create_kpi",
                 {"initiative_id": "uuid", "name": "string", "unit": "optional string"},
                 ["Add KPI cycle time to Onboarding Automation"],
@@ -385,7 +409,7 @@ class CopilotToolRegistry:
                 "financials",
                 "Draft a financial grid update or cost line for confirmation.",
                 "write",
-                "transformation_office",
+                CAP_MANAGE_FINANCIALS,
                 "FinancialService.update_financial_grid/create_cost_line",
                 {"initiative_id": "uuid", "year": "integer", "amounts": "Decimal strings"},
                 ["Add 50000 GM uplift base in 2026 Q2 to HK CoSec"],
@@ -439,8 +463,7 @@ class AIService:
         if draft.expires_at < datetime.now(UTC):
             self._update_action_status(draft, "expired")
             raise HTTPException(status_code=status.HTTP_410_GONE, detail="Action expired")
-        if self.current_user.role != ROLE_TRANSFORMATION_OFFICE:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role")
+        self._assert_action_allowed(draft.action_type, draft.payload)
         if self._payload_hash(draft.action_type, draft.payload) != draft.payload_hash:
             self._update_action_status(draft, "failed", {"reason": "payload_hash_mismatch"})
             raise HTTPException(
@@ -583,17 +606,21 @@ class AIService:
         plan: CopilotPlan,
     ) -> dict[str, Any]:
         query_l = query.lower()
-        if self.current_user.role != ROLE_TRANSFORMATION_OFFICE:
-            return {
-                "response": "I can draft that, but your role does not allow portfolio writes. Ask a transformation office user to perform this action.",
-                "sources": self._sources(["ai_tools"], snapshot, "Role does not allow writes."),
-                "tool_trace": self._trace(["ai_tools"], snapshot, plan, rejected="role_guardrail"),
-                "confidence": 0.93,
-                "proposed_actions": [],
-                "plan": plan.__dict__,
-            }
-
         draft: CopilotDraftAction | None = None
+        blocked_response: dict[str, Any] | None = None
+
+        def store(
+            action_type: str,
+            title: str,
+            description: str,
+            payload: dict[str, Any],
+        ) -> CopilotDraftAction | None:
+            nonlocal blocked_response
+            if not self._can_perform_action(action_type, payload):
+                blocked_response = self._write_denied_response(snapshot, plan, action_type)
+                return None
+            return self._store_action(action_type, title, description, payload, plan)
+
         if "initiative" in query_l and ("create" in query_l or "new" in query_l):
             name = self._extract_name(query, ("called", "named", "initiative"))
             payload = {
@@ -602,12 +629,11 @@ class AIService:
                 "summary": self._extract_after(query, "summary")
                 or "Drafted by Transmuter Copilot.",
             }
-            draft = self._store_action(
+            draft = store(
                 "create_initiative",
                 f"Create initiative: {payload['name']}",
                 "Create a new scoping-stage initiative after confirmation.",
                 payload,
-                plan,
             )
         else:
             initiative = self._find_write_target_initiative(query, snapshot, context)
@@ -623,12 +649,11 @@ class AIService:
                         "planned_end": self._extract_date(query),
                     },
                 }
-                draft = self._store_action(
+                draft = store(
                     "create_milestone",
                     f"Add milestone to {initiative['initiative_code']}",
                     f"Create milestone '{payload['data']['name']}' on {initiative['name']}.",
                     payload,
-                    plan,
                 )
             elif "risk" in query_l:
                 description = self._extract_after(query, "risk") or self._extract_after(
@@ -645,12 +670,11 @@ class AIService:
                         "mitigation": self._extract_after(query, "mitigation"),
                     },
                 }
-                draft = self._store_action(
+                draft = store(
                     "create_risk",
                     f"Add risk to {initiative['initiative_code']}",
                     f"Create a risk on {initiative['name']} after confirmation.",
                     payload,
-                    plan,
                 )
             elif "kpi" in query_l or "metric" in query_l:
                 name = self._extract_name(query, ("called", "named", "kpi", "metric"))
@@ -663,12 +687,11 @@ class AIService:
                         "unit": self._extract_unit(query),
                     },
                 }
-                draft = self._store_action(
+                draft = store(
                     "create_kpi",
                     f"Add KPI to {initiative['initiative_code']}",
                     f"Create KPI '{payload['data']['name']}' on {initiative['name']}.",
                     payload,
-                    plan,
                 )
             elif "cost" in query_l or "cost line" in query_l:
                 amount = self._extract_amount(query)
@@ -684,12 +707,11 @@ class AIService:
                         "is_recurring": "recurring" in query_l,
                     },
                 }
-                draft = self._store_action(
+                draft = store(
                     "create_cost_line",
                     f"Add cost line to {initiative['initiative_code']}",
                     f"Create a cost line on {initiative['name']}.",
                     payload,
-                    plan,
                 )
             elif (
                 "financial" in query_l
@@ -707,14 +729,15 @@ class AIService:
                         "gm_uplift_high": _money(amount),
                     },
                 }
-                draft = self._store_action(
+                draft = store(
                     "update_financial_entry",
                     f"Update financials for {initiative['initiative_code']}",
                     f"Upsert GM uplift values on {initiative['name']}.",
                     payload,
-                    plan,
                 )
 
+        if blocked_response:
+            return blocked_response
         if not draft:
             return {
                 "response": "I can help draft initiatives, milestones, risks, KPIs, cost lines, and financial entries. Please include the target initiative and the item to add.",
@@ -1103,6 +1126,51 @@ class AIService:
             for source_type in dict.fromkeys(source_types)
         ]
 
+    def _write_denied_response(
+        self,
+        snapshot: CopilotSnapshot,
+        plan: CopilotPlan,
+        action_type: str,
+    ) -> dict[str, Any]:
+        return {
+            "response": "I can draft that, but your role does not allow this write action.",
+            "sources": self._sources(
+                ["ai_tools"], snapshot, f"Role does not allow {action_type}."
+            ),
+            "tool_trace": self._trace(["ai_tools"], snapshot, plan, rejected="role_guardrail"),
+            "confidence": 0.93,
+            "proposed_actions": [],
+            "plan": plan.__dict__,
+        }
+
+    def _can_perform_action(self, action_type: str, payload: dict[str, Any]) -> bool:
+        try:
+            self._assert_action_allowed(action_type, payload)
+            return True
+        except HTTPException:
+            return False
+
+    def _assert_action_allowed(self, action_type: str, payload: dict[str, Any]) -> None:
+        if action_type == "create_initiative":
+            if not has_capability(self.current_user.role, CAP_MANAGE_INITIATIVES):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role"
+                )
+            return
+
+        initiative_id = str(payload.get("initiative_id") or "")
+        if not initiative_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Missing target initiative"
+            )
+        if action_type in {"create_milestone", "create_risk", "create_kpi"}:
+            assert_can_manage_initiative_execution(self.client, self.current_user, initiative_id)
+            return
+        if action_type in {"create_cost_line", "update_financial_entry"}:
+            assert_can_manage_initiative_financials(self.client, self.current_user, initiative_id)
+            return
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported action")
+
     def _store_action(
         self,
         action_type: str,
@@ -1182,8 +1250,8 @@ class AIService:
             },
             {
                 "name": "role_required",
-                "passed": self.current_user.role == ROLE_TRANSFORMATION_OFFICE,
-                "message": "Transformation office role is required for confirmed writes.",
+                "passed": self._can_perform_action(action_type, payload),
+                "message": "Current role has the required operating-model capability.",
             },
         ]
         if action_type != "create_initiative":

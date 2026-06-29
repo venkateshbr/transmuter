@@ -172,6 +172,17 @@ describe('AuthService', () => {
     expect(service.isAuthenticated()).toBe(false);
   });
 
+  it('should evaluate operating-model permissions from the active role', () => {
+    const service = TestBed.inject(AuthService);
+    localStorage.setItem('access_token', token({ exp: future(), role: 'finance_lead' }));
+    service.user.set({ role: 'finance_lead' });
+
+    expect(service.hasPermission('financials.manage')).toBe(true);
+    expect(service.hasPermission('benefits.validate')).toBe(true);
+    expect(service.hasPermission('users.manage')).toBe(false);
+    expect(service.roleLabel()).toBe('Finance Lead / Benefits Controller');
+  });
+
   it('should navigate on logout and expired-session handling', () => {
     const service = TestBed.inject(AuthService);
     localStorage.setItem('access_token', token({ exp: future(), role: 'viewer' }));
