@@ -1,6 +1,6 @@
 # Codex Context - Transmuter
 
-Last updated: 2026-06-20
+Last updated: 2026-06-29
 
 This file captures durable working context for future Codex sessions. It supplements
 `AGENTS.md`, `docs/team/SDLC_PROTOCOL.md`, and `team/DESIGN_SYSTEM.md`; it does not
@@ -20,7 +20,7 @@ replace them.
   - API image `transmuter-api:prod` on host port `8001`.
   - Frontend image `transmuter-web:prod` on host port `4301`.
   - Compose file `infra/docker-compose.prod.yml`.
-- Docker CLI path on this machine is `/usr/local/bin/docker`.
+- Docker CLI path on this machine is `/usr/bin/docker`.
 - Hostinger VPS / domain context:
   - Primary domain owned for the VPS: `ishirock.tech`.
   - VPS hostname: `srv1695814.hstgr.cloud`.

@@ -28,12 +28,13 @@ status.
 
 ### 2026-06-29 - Wizard Financial Scope Cleanup
 
-Status: dev validated; production promotion pending
+Status: promoted to production; authenticated production tenant validation pending
 
 GitHub tracking:
 - Issue: `#367`
 - PR: `#368`
 - Commits:
+  - `682e48d feat: remove wizard financial suggestions`
   - `9a64511 feat: remove wizard financial suggestions (#367)`
   - `a1b7b99 test: isolate real UI financial acceptance data (#367)`
   - `ad0b023 chore: update joserfc audit dependency (#367)`
@@ -91,7 +92,27 @@ Schema SQL required for production:
 - None.
 
 Production promotion:
-- Pending merge and production promotion.
+- Environment: `https://transmuter.ishirock.tech`
+- Schema: `transmuter`
+- Promotion commit: `682e48d`
+- Schema SQL applied: none.
+- Promoted with `CONFIRM_PROMOTE=1 infra/hostinger/promote-dev-to-prod.sh`.
+- Initial scripted public validation hit the known immediate `/health` 404
+  readiness race after container recreation.
+- Rerun `infra/hostinger/validate-prod.sh` passed for local/public `/health`
+  and `/api/health`.
+- Public health probes passed:
+  - `https://transmuter.ishirock.tech/health`
+  - `https://transmuter.ishirock.tech/api/health`
+
+Production validation note:
+- Authenticated production workflow validation is pending because no valid
+  production tenant acceptance credential is currently available.
+- The dev ACME3 credential authenticated with Supabase Auth but hit existing
+  production demo-data drift at `app/routers/auth.py:320`
+  (`user_row` returned `None`).
+- The stored production launch credential artifact returned `401 Unauthorized`
+  for `/api/auth/login`.
 
 ### 2026-06-26 - Initiative Financials Entry and Validation Layout
 
