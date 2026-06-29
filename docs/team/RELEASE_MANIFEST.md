@@ -36,6 +36,7 @@ GitHub tracking:
 - Commits:
   - `9a64511 feat: remove wizard financial suggestions (#367)`
   - `a1b7b99 test: isolate real UI financial acceptance data (#367)`
+  - `ad0b023 chore: update joserfc audit dependency (#367)`
 
 Runtime changes:
 - Removed financial metric, cost category, annual baseline, and financial AI
@@ -47,6 +48,8 @@ Runtime changes:
 - Scoped Initiative Financials grid rows, benefit lines, and Add Line options
   to the initiative's configured financial scope.
 - Prevented duplicate visible benefit lines for the same scoped benefit metric.
+- Updated `joserfc` to `1.7.1` to satisfy the CI dependency audit for
+  `CVE-2026-48990`.
 
 Local validation:
 - `cd apps/api && uv run --extra dev ruff check app/agents/initiative_intake_agent.py app/domain/initiative_intake.py app/routers/initiatives.py app/services/financial.py app/services/initiative.py tests/test_initiative_intake_agent.py tests/test_financial_portfolio.py tests/test_initiative_setup_gate.py tests/test_real_route_coverage.py tests/acceptance/test_real_api_sample_data.py`
@@ -71,10 +74,14 @@ Dev deployment:
   readiness race after container recreation.
 - Rerun `infra/hostinger/validate-dev.sh` passed for local/public `/health` and
   `/api/health`.
+- Final dev redeploy after the dependency audit fix installed `joserfc==1.7.1`
+  in the API image; rerun `infra/hostinger/validate-dev.sh` passed.
 - Real dev API validation passed:
   - `RUN_REAL_ACCEPTANCE=1 TRANSMUTER_API_BASE_URL=https://transmuter-dev.ishirock.tech/api TRANSMUTER_E2E_EMAIL=admin@acme3-transformation.dev TRANSMUTER_E2E_PASSWORD=... uv run --extra dev pytest tests/acceptance/test_real_api_sample_data.py::test_real_api_initiative_intake_hitl_create_flow -q`
 - Real dev browser validation passed:
   - `CHROME_BIN=/usr/bin/chromium-browser TRANSMUTER_UI_BASE_URL=https://transmuter-dev.ishirock.tech TRANSMUTER_API_BASE_URL=https://transmuter-dev.ishirock.tech/api TRANSMUTER_E2E_EMAIL=admin@acme3-transformation.dev TRANSMUTER_E2E_PASSWORD=... CHROME_DEBUG_PORT=9338 node e2e/real-ui-acceptance.mjs`
+- Real dev API and browser validation were rerun successfully after the final
+  dependency rebuild.
 
 Prahari review:
 - Required because the change touches the initiative intake agent path.
