@@ -270,7 +270,7 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
           <div>
             <label for="init-name" class="field-label">Initiative Name *</label>
             <input id="init-name" type="text" class="input-field"
-                   [(ngModel)]="form.name" placeholder="e.g. HK Accounting System Integration & Automation"
+                   [(ngModel)]="form.name" placeholder="e.g. Automation of Accounts Payable Process"
                    aria-required="true">
           </div>
 
