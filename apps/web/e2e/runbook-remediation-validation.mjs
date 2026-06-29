@@ -416,14 +416,25 @@ async function validatePinnacleFinancialGridScenarioRows(page) {
   assert(valueFor(base) === 3_600_000, `Expected PIN-002 base savings 3.6M, got ${valueFor(base)}`);
   assert(valueFor(high) === 4_500_000, `Expected PIN-002 high savings 4.5M, got ${valueFor(high)}`);
 
+  const costRollupLabel = rollupType => {
+    if (rollupType === 'recurring_cost') return 'Recurring';
+    if (rollupType === 'one_off_cost') return 'One-time';
+    return 'Unclassified';
+  };
+  const selectedCostKeys = new Set(grid.selections?.cost_category_keys ?? []);
+  const costGridLabels = (grid.cost_categories ?? [])
+    .filter(category => category.is_active !== false && selectedCostKeys.has(category.key))
+    .flatMap(category => {
+      const label = `${category.label} (${costRollupLabel(category.rollup_type)})`;
+      return [`${label} Plan`, `${label} Actual`];
+    });
+  assert(costGridLabels.length > 0, 'Expected PIN-002 selected cost categories to render grid rows');
+
   const gridLabels = [
     `Cost Savings (${base.label})`,
     `Cost Savings (${high.label})`,
     `Cost Savings (${actual.label})`,
-    'Recurring Costs (Plan)',
-    'Recurring Costs (Actual)',
-    'One-off Costs (Plan)',
-    'One-off Costs (Actual)',
+    ...costGridLabels,
   ];
   const labelPresence = () => evalJs(page, `
     (async () => {

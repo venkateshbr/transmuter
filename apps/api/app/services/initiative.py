@@ -11,7 +11,11 @@ from supabase import Client
 
 from app.core.auth import CurrentUser
 from app.core.rbac import can_view_all_initiatives
-from app.domain.financials import FinancialGridUpdate, FinancialSummary
+from app.domain.financials import (
+    FinancialGridUpdate,
+    FinancialSummary,
+    InitiativeFinancialSelections,
+)
 from app.domain.initiative_intake import (
     InitiativeIntakeCreate,
     InitiativeWorkbookPreview,
@@ -621,17 +625,13 @@ class InitiativeService:
         self._assert_tenant_ready_for_creation()
         created = self.create_initiative(data.initiative, created_by)
         initiative_id = str(created.id)
+        self._fin.update_initiative_selections(
+            initiative_id,
+            InitiativeFinancialSelections(metric_keys=[], cost_category_keys=[]),
+        )
         suggestions = data.suggestions
         if not suggestions:
             return created
-
-        accepted_entries = [item for item in suggestions.financial_entries if item.accepted]
-        accepted_costs = [item for item in suggestions.cost_lines if item.accepted]
-        if accepted_entries or accepted_costs:
-            self._fin.update_financial_grid(
-                initiative_id,
-                FinancialGridUpdate(entries=accepted_entries, cost_lines=accepted_costs),
-            )
 
         kpi_service = KPIService(self._client, self._tenant_id)
         for kpi in [item for item in suggestions.kpis if item.accepted]:
@@ -664,9 +664,6 @@ class InitiativeService:
         required_tables = {
             "business_units": "business units",
             "workstreams": "workstreams",
-            "financial_metric_definitions": "financial metric definitions",
-            "financial_scenarios": "financial scenarios",
-            "financial_cost_categories": "financial cost categories",
             "stage_gate_definitions": "stage gates",
             "gate_criteria": "gate criteria",
         }

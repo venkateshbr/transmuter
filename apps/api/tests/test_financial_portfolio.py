@@ -2001,6 +2001,160 @@ def test_explicit_financial_selection_does_not_reenable_hidden_data_bearing_rows
     assert selected.cost_category_keys == []
 
 
+class _BenefitLineScopeRepo:
+    def __init__(self, existing_lines: list[dict] | None = None) -> None:
+        self.existing_lines = existing_lines or []
+        self.created_payload: dict[str, object] | None = None
+
+    def initiative_exists(self, _initiative_id: str) -> bool:
+        return True
+
+    def get_organization_settings(self) -> dict:
+        return {"bankable_plan_governance": {"plan_lock_on_approval": True}}
+
+    def get_latest_bankable_plan(self, _initiative_id: str) -> dict[str, object] | None:
+        return None
+
+    def get_reporting_settings(self) -> dict:
+        return {}
+
+    def list_metric_definitions(self) -> list[dict]:
+        return [
+            {
+                "id": "metric-gm",
+                "key": "gm_uplift",
+                "label": "Gross Margin Uplift",
+                "is_benefit": True,
+                "aggregation": "sum",
+                "display_order": 1,
+                "is_active": True,
+            },
+            {
+                "id": "metric-revenue",
+                "key": "revenue_uplift",
+                "label": "Revenue Uplift",
+                "is_benefit": True,
+                "aggregation": "sum",
+                "display_order": 2,
+                "is_active": True,
+            },
+        ]
+
+    def list_financial_scenarios(self) -> list[dict]:
+        return []
+
+    def list_cost_categories(self) -> list[dict]:
+        return []
+
+    def list_financial_bridge_rows(self) -> list[dict]:
+        return []
+
+    def list_financial_attribute_definitions(self) -> list[dict]:
+        return []
+
+    def list_financial_scope(self, _initiative_id: str) -> list[dict]:
+        return [
+            {
+                "scope_type": "metric_definition",
+                "metric_definition_id": "metric-gm",
+                "is_active": True,
+            }
+        ]
+
+    def list_financial_selections(self, _initiative_id: str) -> list[dict]:
+        return []
+
+    def list_cost_lines(self, _initiative_id: str) -> list[dict]:
+        return []
+
+    def list_benefit_lines(self, _initiative_id: str) -> list[dict]:
+        return self.existing_lines
+
+    def create_benefit_line(
+        self,
+        _initiative_id: str,
+        payload: dict[str, object],
+        user_id: str | None = None,
+    ) -> dict:
+        self.created_payload = payload
+        return {
+            "id": "benefit-line-1",
+            **payload,
+            "validation_status": "draft",
+            "created_by": user_id,
+        }
+
+
+def test_create_benefit_line_rejects_metric_outside_configured_scope() -> None:
+    service = FinancialService.__new__(FinancialService)
+    service._repo = _BenefitLineScopeRepo()
+
+    with pytest.raises(HTTPException) as exc:
+        service.create_benefit_line(
+            "initiative-1",
+            FinancialBenefitLineCreate(
+                metric_definition_id="metric-revenue",
+                name="Revenue duplicate",
+            ),
+        )
+
+    assert exc.value.status_code == 400
+    assert "configured financial scope" in str(exc.value.detail)
+
+
+def test_create_benefit_line_rejects_duplicate_visible_metric() -> None:
+    service = FinancialService.__new__(FinancialService)
+    service._repo = _BenefitLineScopeRepo(
+        existing_lines=[
+            {
+                "id": "benefit-line-existing",
+                "metric_definition_id": "metric-gm",
+                "name": "Existing GM uplift",
+                "show_in_summary": True,
+            }
+        ]
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        service.create_benefit_line(
+            "initiative-1",
+            FinancialBenefitLineCreate(
+                metric_definition_id="metric-gm",
+                name="Second GM uplift",
+            ),
+        )
+
+    assert exc.value.status_code == 409
+    assert "already exists" in str(exc.value.detail)
+
+
+def test_create_benefit_line_allows_readd_after_visible_line_removed() -> None:
+    repo = _BenefitLineScopeRepo(
+        existing_lines=[
+            {
+                "id": "benefit-line-hidden",
+                "metric_definition_id": "metric-gm",
+                "name": "Hidden GM uplift",
+                "show_in_summary": False,
+            }
+        ]
+    )
+    service = FinancialService.__new__(FinancialService)
+    service._repo = repo
+
+    line = service.create_benefit_line(
+        "initiative-1",
+        FinancialBenefitLineCreate(
+            metric_definition_id="metric-gm",
+            name="Replacement GM uplift",
+        ),
+    )
+
+    assert line.id == "benefit-line-1"
+    assert repo.created_payload is not None
+    assert repo.created_payload["metric_definition_id"] == "metric-gm"
+
+
 def test_financial_selection_updates_raise_conflict_after_financial_values_lock() -> None:
     repo = _SelectionRepo(stage="in_progress", latest_plan={"id": "plan-1"})
     service = FinancialService.__new__(FinancialService)

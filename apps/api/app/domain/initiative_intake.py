@@ -104,6 +104,7 @@ class InitiativeDraft(BaseModel):
     workstream: str | None = None
     country: str | None = None
     summary: str | None = None
+    context_problem: str | None = None
     value_logic: str | None = None
     planned_end: date | None = None
     dependencies: str | None = None

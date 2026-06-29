@@ -389,31 +389,53 @@ class FinancialService:
         self._ensure_tenant_initiative(initiative_id)
         locked, lock_reason = self._financial_lock_state(initiative_id)
         config = self.get_engine_configuration()
-        legacy_summary = self.get_financial_summary(initiative_id)
         stored_values = self._repo.list_configurable_metric_values(initiative_id)
         baseline = self.get_initiative_annual_baseline(initiative_id)
         values = self._values_with_formula_metrics(
             stored_values,
             self._repo.list_initiative_annual_baselines(initiative_id),
         )
+        cost_rows = self._repo.list_cost_lines(initiative_id)
+        benefit_line_rows = self._repo.list_benefit_lines(initiative_id)
+        selections = self._resolve_selections(
+            initiative_id,
+            [],
+            cost_rows,
+            [],
+            self.get_configuration(),
+        )
+        selected_metric_definition_ids = set(selections.metric_definition_ids)
+        selected_cost_keys = set(selections.cost_category_keys)
+        scoped_values = [
+            row
+            for row in values
+            if str(row.get("metric_definition_id")) in selected_metric_definition_ids
+        ]
+        scoped_cost_rows = [
+            row
+            for row in cost_rows
+            if str(row.get("category_key") or "other") in selected_cost_keys
+        ]
+        scoped_benefit_line_rows = [
+            row
+            for row in benefit_line_rows
+            if str(row.get("metric_definition_id")) in selected_metric_definition_ids
+        ]
+        summary = self._compute_clean_summary(scoped_values, scoped_cost_rows)
         return ConfigurableFinancialGridResponse(
             initiative_id=initiative_id,
             definitions=config.definitions,
             scenarios=config.scenarios,
             cost_categories=config.cost_categories,
             baseline=baseline,
-            benefit_lines=[
-                self._to_benefit_line(row) for row in self._repo.list_benefit_lines(initiative_id)
-            ],
-            values=[self._to_configurable_metric_value(row) for row in values],
-            cost_lines=[
-                self._to_cost_line(row) for row in self._repo.list_cost_lines(initiative_id)
-            ],
+            benefit_lines=[self._to_benefit_line(row) for row in scoped_benefit_line_rows],
+            values=[self._to_configurable_metric_value(row) for row in scoped_values],
+            cost_lines=[self._to_cost_line(row) for row in scoped_cost_rows],
             settings=config.settings,
             entries=[],
             metric_values=[],
-            selections=InitiativeFinancialSelections(),
-            summary=legacy_summary,
+            selections=selections,
+            summary=summary,
             locked=locked,
             lock_reason=lock_reason,
         )
@@ -827,10 +849,52 @@ class FinancialService:
     ) -> FinancialBenefitLine:
         self._ensure_tenant_initiative(initiative_id)
         self._assert_financials_editable(initiative_id)
+        metric_definition_id = str(data.metric_definition_id)
+        definitions = {
+            str(row["id"]): row
+            for row in getattr(self._repo, "list_metric_definitions", lambda: [])()
+        }
+        definition = definitions.get(metric_definition_id)
+        if (
+            not definition
+            or definition.get("is_active", True) is False
+            or not definition.get("is_benefit")
+            or definition.get("aggregation") == "formula"
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Benefit lines can only be added for active non-formula benefit metrics.",
+            )
+        selections = self._resolve_selections(
+            initiative_id,
+            [],
+            self._repo.list_cost_lines(initiative_id),
+            [],
+            self.get_configuration(),
+        )
+        if metric_definition_id not in set(selections.metric_definition_ids):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Benefit metric is not in this initiative's configured financial scope.",
+            )
+        existing_visible_line = next(
+            (
+                row
+                for row in self._repo.list_benefit_lines(initiative_id)
+                if str(row.get("metric_definition_id")) == metric_definition_id
+                and row.get("show_in_summary", True) is not False
+            ),
+            None,
+        )
+        if existing_visible_line:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A visible benefit line already exists for this metric. Remove it before adding another.",
+            )
         row = self._repo.create_benefit_line(
             initiative_id,
             {
-                "metric_definition_id": data.metric_definition_id,
+                "metric_definition_id": metric_definition_id,
                 "name": data.name,
                 "description": data.description,
                 "impact_type": data.impact_type,
@@ -4483,6 +4547,7 @@ class FinancialService:
                 if row.get("scope_type") == "metric_definition"
                 and row.get("is_active", True)
                 and row.get("metric_definition_id") in definitions
+                and str(definitions[row.get("metric_definition_id")]["key"]) in valid_metric_keys
             }
             cost_category_ids = {
                 str(row["cost_category_id"])
@@ -4490,6 +4555,7 @@ class FinancialService:
                 if row.get("scope_type") == "cost_category"
                 and row.get("is_active", True)
                 and row.get("cost_category_id") in categories
+                and str(categories[row.get("cost_category_id")]["key"]) in valid_cost_keys
             }
             metric_keys = {
                 str(definitions[metric_id]["key"])

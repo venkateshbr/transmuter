@@ -443,6 +443,8 @@ async function main() {
     const originalFinancialConfig = await api('/admin/financial-configuration');
     const acceptanceCategoryLabel = `UI Acceptance Category ${Date.now()}`;
     let acceptanceCategoryKey = null;
+    let acceptanceCategoryId = null;
+    let acceptanceCategoryInitiativeId = null;
     let acceptanceCostLineId = null;
     try {
       await page.send('Page.navigate', { url: `${uiBaseUrl}/admin` });
@@ -460,29 +462,66 @@ async function main() {
         })()
       `);
       await waitFor(
-        () => evalJs(page, "document.body.innerText.includes('Cost Categories') && !!document.querySelector('input[aria-label=\"New cost category name\"]')"),
+        () => evalJs(page, "document.body.innerText.includes('Cost Categories') && !!document.querySelector('button[aria-label=\"Add cost category\"]')"),
         'admin cost category configuration',
         45_000,
       );
-      await setField(page, 'input[aria-label="New cost category name"]', acceptanceCategoryLabel);
       await evalJs(page, `
         (() => {
-          const button = document.querySelector('button[aria-label="Create cost category"]');
-          if (!button) throw new Error('Missing create cost category button');
+          const button = document.querySelector('button[aria-label="Add cost category"]');
+          if (!button) throw new Error('Missing add cost category button');
           button.click();
           return true;
         })()
       `);
+      await waitFor(
+        () => evalJs(page, "document.querySelectorAll('input[aria-label=\"Cost category label\"]').length > 0"),
+        'new cost category row',
+      );
+      await evalJs(page, `
+        (() => {
+          const labels = [...document.querySelectorAll('input[aria-label="Cost category label"]')];
+          const label = labels[labels.length - 1];
+          if (!label) throw new Error('Missing cost category label input');
+          label.value = ${JSON.stringify(acceptanceCategoryLabel)};
+          label.dispatchEvent(new Event('input', { bubbles: true }));
+          label.dispatchEvent(new Event('change', { bubbles: true }));
+          let row = label.parentElement;
+          while (row && !row.querySelector('button[aria-label="Save cost category"]')) {
+            row = row.parentElement;
+          }
+          const rollup = row?.querySelector('select[aria-label="Cost category rollup"]');
+          if (rollup) {
+            rollup.value = 'one_off_cost';
+            rollup.dispatchEvent(new Event('input', { bubbles: true }));
+            rollup.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+          const save = row?.querySelector('button[aria-label="Save cost category"]');
+          if (!save) throw new Error('Missing save cost category button');
+          save.click();
+          return true;
+        })()
+      `);
       await waitFor(async () => {
-        const config = await api('/admin/financial-configuration');
-        const category = config.items.find(item => item.label === acceptanceCategoryLabel && item.is_active !== false);
-        if (category) acceptanceCategoryKey = category.key;
+        const config = await api('/financial-engine-configuration');
+        const category = config.cost_categories.find(item => item.label === acceptanceCategoryLabel && item.is_active !== false);
+        if (category) {
+          acceptanceCategoryKey = category.key;
+          acceptanceCategoryId = category.id;
+        }
         return !!category;
       }, 'admin-created financial category persisted', 20_000);
       assert(acceptanceCategoryKey, 'Created financial category key was not found');
 
-      const categoryInitiativeId = (await api('/initiatives')).items[0].id;
-      const categoryCost = await api(`/initiatives/${categoryInitiativeId}/financials/cost-lines`, {
+      const categoryInitiative = await api('/initiatives', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: `UI Acceptance Cost Category Initiative ${Date.now()}`,
+          priority: 'medium',
+        }),
+      });
+      acceptanceCategoryInitiativeId = categoryInitiative.id;
+      const categoryCost = await api(`/initiatives/${acceptanceCategoryInitiativeId}/financials/cost-lines`, {
         method: 'POST',
         body: JSON.stringify({
           name: `UI Acceptance Categorized Cost ${Date.now()}`,
@@ -503,6 +542,7 @@ async function main() {
         'portfolio financials page',
         20_000,
       );
+      await setField(page, 'input[aria-label="Filter financial year"]', '2026');
       await clickText(page, 'Quarterly');
       await evalJs(page, `
         (() => {
@@ -519,16 +559,26 @@ async function main() {
         20_000,
       );
     } finally {
-      if (acceptanceCostLineId) {
-        const categoryInitiatives = await api('/initiatives').catch(() => ({ items: [] }));
-        await Promise.all((categoryInitiatives.items || []).map(item =>
-          api(`/initiatives/${item.id}/financials/cost-lines/${acceptanceCostLineId}`, { method: 'DELETE' }).catch(() => null)
-        ));
+      if (acceptanceCostLineId && acceptanceCategoryInitiativeId) {
+        await api(`/initiatives/${acceptanceCategoryInitiativeId}/financials/cost-lines/${acceptanceCostLineId}`, { method: 'DELETE' }).catch(() => null);
+      }
+      if (acceptanceCategoryInitiativeId) {
+        await api(`/initiatives/${acceptanceCategoryInitiativeId}`, { method: 'DELETE' }).catch(() => null);
       }
       await api('/admin/financial-configuration', {
         method: 'PUT',
         body: JSON.stringify(originalFinancialConfig),
       }).catch(() => null);
+      if (acceptanceCategoryId) {
+        const engineConfig = await api('/financial-engine-configuration').catch(() => ({ cost_categories: [] }));
+        const category = (engineConfig.cost_categories || []).find(item => item.id === acceptanceCategoryId);
+        if (category) {
+          await api(`/admin/financial-engine/cost-categories/${acceptanceCategoryId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ ...category, is_active: false }),
+          }).catch(() => null);
+        }
+      }
     }
 
     await page.send('Page.navigate', { url: `${uiBaseUrl}/reports/control-tower` });
@@ -803,7 +853,7 @@ async function main() {
         'initiative suggestion button enabled',
         20_000,
       );
-      await clickText(page, 'Generate Suggestions');
+      await clickText(page, 'Generate Planning Suggestions');
       try {
         await waitFor(
           () => evalJs(page, "document.body.innerText.toLowerCase().includes('hitl review') && document.body.innerText.includes('Transmuter suggestions')"),
@@ -1541,6 +1591,14 @@ async function main() {
         const risks = await api(`/initiatives/${manualInitiativeId}/risks`);
         return risks.items.some(item => item.description === riskDescription && item.rating === 'high');
       }, 'risk persistence');
+      await waitFor(
+        () => evalJs(page, `
+          [...document.querySelectorAll('.card')]
+            .some(node => node.textContent.includes(${JSON.stringify(riskDescription)})
+              && [...node.querySelectorAll('button')].some(button => button.textContent.trim() === 'Close'))
+        `),
+        'risk row visible',
+      );
       await evalJs(page, `
         (() => {
           const row = [...document.querySelectorAll('.card')]
@@ -1579,6 +1637,7 @@ async function main() {
       await evalJs(page, `
         (() => {
           const input = document.querySelector('input[type=file][accept*=".xlsx"]');
+          input.dispatchEvent(new Event('input', { bubbles: true }));
           input.dispatchEvent(new Event('change', { bubbles: true }));
           return true;
         })()
@@ -1615,8 +1674,13 @@ async function main() {
 
     await page.send('Page.navigate', { url: `${uiBaseUrl}/meetings` });
     await waitFor(
-      () => evalJs(page, "document.body.innerText.includes('Transformation Steering Committee')"),
-      'seeded meetings list',
+      () => evalJs(page, "document.body !== null && document.readyState !== 'loading'"),
+      'meetings document ready',
+      20_000,
+    );
+    await waitFor(
+      () => evalJs(page, "location.pathname === '/meetings' && !!document.querySelector('button[aria-label=\"Create meeting series\"]')"),
+      'meetings list create action',
       20_000,
     );
 
@@ -1743,13 +1807,27 @@ async function main() {
     }
 
     const initiatives = await api('/initiatives');
-    let financialInitiativeId = initiatives.items[0].id;
+    let financialInitiativeId = null;
+    let financialAcceptanceInitiativeCreated = false;
     for (const item of initiatives.items) {
       const candidateFinancials = await api(`/initiatives/${item.id}/financials`);
       if (!candidateFinancials.locked) {
         financialInitiativeId = item.id;
         break;
       }
+    }
+    if (!financialInitiativeId) {
+      const financialAcceptanceInitiative = await api('/initiatives', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: `UI Acceptance Financial Grid Initiative ${Date.now()}`,
+          priority: 'medium',
+          planned_start: '2026-01-01',
+          planned_end: '2026-12-31',
+        }),
+      });
+      financialInitiativeId = financialAcceptanceInitiative.id;
+      financialAcceptanceInitiativeCreated = true;
     }
     const financialInitiative = await api(`/initiatives/${financialInitiativeId}`);
     const financialBefore = await api(`/initiatives/${financialInitiativeId}/financials`);
@@ -2150,6 +2228,9 @@ async function main() {
             }),
           }).catch(() => null);
         }));
+      if (financialAcceptanceInitiativeCreated) {
+        await api(`/initiatives/${financialInitiativeId}`, { method: 'DELETE' }).catch(() => null);
+      }
     }
 
     await page.close();

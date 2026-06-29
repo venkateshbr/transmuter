@@ -811,8 +811,8 @@ def test_real_api_initiative_intake_hitl_create_flow() -> None:
         suggestions = suggestions_response.json()
         assert suggestions["trace_id"]
         assert suggestions["agent_status"] in {"generated", "deterministic_fallback"}
-        assert len(suggestions["financial_entries"]) >= 1
-        assert len(suggestions["cost_lines"]) >= 1
+        assert suggestions["financial_entries"] == []
+        assert suggestions["cost_lines"] == []
         assert len(suggestions["kpis"]) >= 3
         assert len(suggestions["risks"]) >= 3
         assert len(suggestions["milestones"]) >= 3
@@ -850,10 +850,14 @@ def test_real_api_initiative_intake_hitl_create_flow() -> None:
                 headers=headers,
             )
             financials.raise_for_status()
-            assert any(
-                Decimal(item["gm_uplift_base"]) > Decimal("0")
-                for item in financials.json()["entries"]
+            assert financials.json()["entries"] == []
+
+            cost_lines = client.get(
+                f"/initiatives/{initiative_id}/financials/cost-lines",
+                headers=headers,
             )
+            cost_lines.raise_for_status()
+            assert cost_lines.json()["items"] == []
         finally:
             client.delete(f"/initiatives/{initiative_id}", headers=headers)
 

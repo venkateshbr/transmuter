@@ -329,7 +329,9 @@ def test_real_initiative_template_preview_and_intake_routes() -> None:
         )
         suggestions.raise_for_status()
         suggestion_payload = suggestions.json()
-        assert suggestion_payload["financial_entries"]
+        assert suggestion_payload["financial_entries"] == []
+        assert suggestion_payload["cost_lines"] == []
+        assert suggestion_payload["kpis"]
 
         extracted = client.post(
             "/initiatives/intake/extract",

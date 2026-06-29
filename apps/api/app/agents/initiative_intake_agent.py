@@ -30,8 +30,6 @@ from app.domain.initiative_intake import (
     KPISuggestionResult,
     RiskPattern,
     RiskPatternScanResult,
-    SuggestedCostLine,
-    SuggestedFinancialEntry,
     SuggestedKPI,
     SuggestedMilestone,
     SuggestedRisk,
@@ -40,6 +38,7 @@ from app.domain.kpis import KPIEntryUpsert
 
 initiative_intake_agent: Agent[None, InitiativeIntakeSuggestions] | None = None
 initiative_field_agent: Agent[None, InitiativeFieldExtractionResult] | None = None
+initiative_narrative_agent: Agent[None, InitiativeDraft] | None = None
 langfuse_client: Langfuse | None = None
 INTAKE_AGENT_TIMEOUT_SECONDS = 8
 
@@ -58,8 +57,10 @@ def _get_agent() -> Agent[None, InitiativeIntakeSuggestions]:
             output_type=InitiativeIntakeSuggestions,
             system_prompt=(
                 "You are Transmuter's initiative intake analyst. Generate structured, "
-                "reviewable financial, KPI, risk, and milestone suggestions. Never include "
-                "PII in external prompts; rely only on business context provided by the user."
+                "reviewable KPI, risk, and milestone suggestions only. Do not generate "
+                "financial entries, benefit values, cost lines, budgets, or dollar amounts "
+                "for the initiative financial model. Never include PII in external prompts; "
+                "rely only on business context provided by the user."
             ),
         )
     return initiative_intake_agent
@@ -86,6 +87,28 @@ def _get_field_agent() -> Agent[None, InitiativeFieldExtractionResult]:
     return initiative_field_agent
 
 
+def _get_narrative_agent() -> Agent[None, InitiativeDraft]:
+    global initiative_narrative_agent
+    if initiative_narrative_agent is None:
+        client = AsyncOpenAI(
+            base_url=settings.openrouter_base_url,
+            api_key=settings.openrouter_api_key,
+        )
+        provider = OpenAIProvider(openai_client=client)
+        model = OpenAIChatModel(settings.default_model, provider=provider)
+        initiative_narrative_agent = Agent(
+            model,
+            output_type=InitiativeDraft,
+            system_prompt=(
+                "You draft initiative narrative fields for Transmuter. Return typed JSON only. "
+                "Create concise but specific summary, context_problem, value_logic, and "
+                "dependencies text from the provided initiative context. Do not generate "
+                "financial values, costs, budgets, or benefit-line amounts."
+            ),
+        )
+    return initiative_narrative_agent
+
+
 def _get_langfuse() -> Langfuse | None:
     global langfuse_client
     if not (settings.ai_enabled and settings.langfuse_public_key and settings.langfuse_secret_key):
@@ -103,7 +126,7 @@ def _get_langfuse() -> Langfuse | None:
 async def generate_intake_suggestions(
     request: InitiativeIntakeRequest,
 ) -> InitiativeIntakeSuggestions:
-    """Generate suggestions, falling back deterministically if LLM access is unavailable."""
+    """Generate non-financial planning suggestions, falling back deterministically."""
     started_at = start_agent_timer()
     trace_id = _trace_id()
     prompt = _masked_prompt(request)
@@ -124,6 +147,7 @@ async def generate_intake_suggestions(
                         timeout=INTAKE_AGENT_TIMEOUT_SECONDS,
                     )
                     suggestions = _with_trace(result.output, trace_id, langfuse)
+                    _strip_financial_suggestions(suggestions)
                     suggestions.agent_status = "generated"
                     langfuse.update_current_span(
                         output=suggestions.model_dump(mode="json"),
@@ -136,6 +160,7 @@ async def generate_intake_suggestions(
                 timeout=INTAKE_AGENT_TIMEOUT_SECONDS,
             )
             suggestions = _with_trace(result.output, trace_id, None)
+            _strip_financial_suggestions(suggestions)
             suggestions.agent_status = "generated"
             record_agent_run("initiative_intake", "unscoped", "generated", started_at)
             return suggestions
@@ -145,6 +170,68 @@ async def generate_intake_suggestions(
     suggestions = deterministic_intake_suggestions(request, trace_id=trace_id)
     record_agent_run("initiative_intake", "unscoped", suggestions.agent_status, started_at)
     return suggestions
+
+
+async def generate_initiative_narrative(
+    request: InitiativeIntakeRequest,
+) -> InitiativeFieldExtractionResult:
+    """Draft editable narrative fields from the basic initiative intake."""
+    started_at = start_agent_timer()
+    trace_id = _trace_id()
+    prompt = _masked_narrative_prompt(request)
+    input_tokens = _estimate_tokens(prompt)
+    fallback = deterministic_initiative_narrative(request, trace_id=trace_id)
+    if settings.ai_enabled and settings.openrouter_api_key:
+        try:
+            langfuse = _get_langfuse()
+            if langfuse:
+                with langfuse.start_as_current_observation(
+                    name="initiative_narrative",
+                    as_type="agent",
+                    trace_context=TraceContext(trace_id=trace_id),
+                    input=prompt,
+                    metadata={"source": "new_initiative_narrative", "input_tokens": input_tokens},
+                    model=settings.default_model,
+                ):
+                    result = await asyncio.wait_for(
+                        _get_narrative_agent().run(prompt),
+                        timeout=INTAKE_AGENT_TIMEOUT_SECONDS,
+                    )
+                    draft = result.output
+                    _fill_missing_draft_fields(draft, fallback.draft)
+                    response = InitiativeFieldExtractionResult(
+                        trace_id=trace_id,
+                        trace_url=langfuse.get_trace_url(trace_id=trace_id),
+                        agent_status="generated",
+                        confidence=0.82,
+                        input_tokens=input_tokens,
+                        output_tokens=_estimate_tokens(draft.model_dump_json(exclude_none=True)),
+                        draft=draft,
+                    )
+                    langfuse.update_current_span(output=response.model_dump(mode="json"))
+                    langfuse.flush()
+                    record_agent_run("initiative_narrative", "unscoped", "generated", started_at)
+                    return response
+            result = await asyncio.wait_for(
+                _get_narrative_agent().run(prompt),
+                timeout=INTAKE_AGENT_TIMEOUT_SECONDS,
+            )
+            draft = result.output
+            _fill_missing_draft_fields(draft, fallback.draft)
+            record_agent_run("initiative_narrative", "unscoped", "generated", started_at)
+            return InitiativeFieldExtractionResult(
+                trace_id=trace_id,
+                trace_url=None,
+                agent_status="generated",
+                confidence=0.82,
+                input_tokens=input_tokens,
+                output_tokens=_estimate_tokens(draft.model_dump_json(exclude_none=True)),
+                draft=draft,
+            )
+        except Exception:
+            pass
+    record_agent_run("initiative_narrative", "unscoped", fallback.agent_status, started_at)
+    return fallback
 
 
 async def extract_initiative_fields(text: str) -> InitiativeFieldExtractionResult:
@@ -211,9 +298,8 @@ def deterministic_intake_suggestions(
 ) -> InitiativeIntakeSuggestions:
     init = request.initiative
     start_year = init.planned_start.year if init.planned_start else date.today().year
-    is_cost = init.type in {"cost_reduction", "cost_avoidance"}
-    base_value = Decimal("75000.0000") if is_cost else Decimal("125000.0000")
-    high_value = Decimal("115000.0000") if is_cost else Decimal("190000.0000")
+    base_value = Decimal("75.0000")
+    high_value = Decimal("90.0000")
     kpi_result = suggest_kpis(init.type, init.name, init.value_logic)
     risk_result = scan_risk_patterns(
         InitiativeDraft(
@@ -232,27 +318,8 @@ def deterministic_intake_suggestions(
         trace_id=trace_id or f"deterministic-intake-{uuid4()}",
         trace_url=_trace_url(trace_id),
         agent_status="deterministic_fallback",
-        financial_entries=[
-            SuggestedFinancialEntry(
-                year=start_year,
-                quarter=1,
-                revenue_uplift_base=Decimal("0") if is_cost else base_value,
-                revenue_uplift_high=Decimal("0") if is_cost else high_value,
-                gross_margin_base=base_value,
-                gross_margin_high=high_value,
-                gm_uplift_base=base_value,
-                gm_uplift_high=high_value,
-            )
-        ],
-        cost_lines=[
-            SuggestedCostLine(
-                name="Implementation and change support",
-                year=start_year,
-                quarter=1,
-                amount_plan=Decimal("15000.0000"),
-                is_recurring=False,
-            )
-        ],
+        financial_entries=[],
+        cost_lines=[],
         kpis=[
             SuggestedKPI(
                 name=kpi.name,
@@ -305,6 +372,58 @@ def deterministic_intake_suggestions(
                 planned_end=_iso(init.planned_end),
             ),
         ],
+    )
+
+
+def deterministic_initiative_narrative(
+    request: InitiativeIntakeRequest,
+    trace_id: str | None = None,
+) -> InitiativeFieldExtractionResult:
+    init = request.initiative
+    name = init.name.strip() or "this initiative"
+    type_label = _labelize(init.type or "transformation")
+    market = init.country or "the impacted market"
+    theme = init.theme or "the relevant operating area"
+    summary = init.summary or (
+        f"{name} is a {type_label.lower()} initiative focused on improving {theme} "
+        f"performance in {market}. It should define the current operating baseline, "
+        "standardize the target process, and establish clear ownership for delivery."
+    )
+    context_problem = init.context_problem or (
+        f"The current environment for {name} likely depends on fragmented handoffs, "
+        "manual controls, and inconsistent management information. This creates avoidable "
+        "cycle time, rework, control risk, and limited visibility into whether the intended "
+        "operating change is being adopted."
+    )
+    value_logic = init.value_logic or (
+        f"Value will come from converting {name} into measurable operating improvements: "
+        "reduced manual effort, fewer exceptions, faster cycle times, stronger controls, "
+        "and better management visibility. Financial benefits should be modeled separately "
+        "in Initiative Financials after scope and assumptions are confirmed."
+    )
+    dependencies = init.dependencies_text or (
+        "Confirm process owners, data availability, technology readiness, change-management "
+        "capacity, and Finance alignment on measurement approach before committing delivery gates."
+    )
+    draft = InitiativeDraft(
+        name=name,
+        type=init.type,
+        priority=init.priority,
+        country=init.country,
+        summary=summary,
+        context_problem=context_problem,
+        value_logic=value_logic,
+        planned_end=init.planned_end,
+        dependencies=dependencies,
+    )
+    return InitiativeFieldExtractionResult(
+        trace_id=trace_id or f"deterministic-narrative-{uuid4()}",
+        trace_url=_trace_url(trace_id),
+        agent_status="deterministic_fallback",
+        confidence=0.72,
+        input_tokens=_estimate_tokens(name),
+        output_tokens=_estimate_tokens(draft.model_dump_json(exclude_none=True)),
+        draft=draft,
     )
 
 
@@ -373,6 +492,10 @@ def deterministic_field_extraction(
         workstream=_extract_labeled_text(clean, ("workstream", "stream")),
         country=_extract_labeled_text(clean, ("country", "market", "region")),
         summary=_extract_summary(clean),
+        context_problem=_extract_labeled_text(
+            clean,
+            ("context", "problem", "pain point", "pain points"),
+        ),
         value_logic=_extract_labeled_text(clean, ("value logic", "benefit", "benefits")),
         planned_end=_extract_date(clean),
         dependencies=_extract_labeled_text(clean, ("dependencies", "dependency", "depends on")),
@@ -688,14 +811,35 @@ def _masked_prompt(request: InitiativeIntakeRequest) -> str:
         f"Value logic: {init.value_logic}\n"
         f"Dependencies: {init.dependencies_text}\n"
         f"Timeline: {init.planned_start} to {init.planned_end}\n"
-        "Generate only structured suggestions for HITL review."
+        "Generate only KPI, risk, and milestone suggestions for HITL review. "
+        "Do not generate financial entries, benefit values, cost lines, budgets, or dollar amounts."
+    )
+
+
+def _masked_narrative_prompt(request: InitiativeIntakeRequest) -> str:
+    init = request.initiative
+    return (
+        "Draft editable initiative narrative fields from this basic intake. "
+        "Return only name, type, priority, country, summary, context_problem, "
+        "value_logic, planned_end, and dependencies. Do not create financial values, "
+        "costs, benefit lines, budgets, or dollar amounts.\n\n"
+        f"Initiative name: {init.name}\n"
+        f"Type: {init.type}\n"
+        f"Impact type: {init.impact_type}\n"
+        f"Theme: {init.theme}\n"
+        f"Country/market: {init.country}\n"
+        f"Priority: {init.priority}\n"
+        f"Known summary: {init.summary}\n"
+        f"Known context/problem: {init.context_problem}\n"
+        f"Known value logic: {init.value_logic}\n"
+        f"Known dependencies: {init.dependencies_text}\n"
     )
 
 
 def _field_prompt(masked_text: str) -> str:
     return (
         "Extract these fields from the initiative description: name, type, priority, "
-        "workstream, country, summary, value_logic, planned_end, dependencies. "
+        "workstream, country, summary, context_problem, value_logic, planned_end, dependencies. "
         "Allowed type values: revenue_growth, cost_reduction, cost_avoidance, compliance, "
         "capability_building. Allowed priority values: high, medium, low. "
         "Return null for fields that are not directly supported by the text.\n\n"
@@ -859,3 +1003,12 @@ def _fill_missing_draft_fields(target: InitiativeDraft, fallback: InitiativeDraf
     for field, value in fallback.model_dump().items():
         if getattr(target, field) is None and value is not None:
             setattr(target, field, value)
+
+
+def _strip_financial_suggestions(suggestions: InitiativeIntakeSuggestions) -> None:
+    suggestions.financial_entries = []
+    suggestions.cost_lines = []
+
+
+def _labelize(value: str) -> str:
+    return re.sub(r"[_-]+", " ", value).strip().title()
