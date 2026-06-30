@@ -86,6 +86,7 @@ class AdminService:
         org = self._org_repo.get_organization()
         settings = (org or {}).get("settings") or {}
         billing = settings.get("billing") or {}
+        price_configuration = stripe_price_configuration(self._c)
         subscription_response = (
             self._c.table("tenant_subscriptions")
             .select(
@@ -132,10 +133,15 @@ class AdminService:
             "stripe_checkout_session_id": (subscription or {}).get("stripe_checkout_session_id")
             or billing.get("checkout_session_id"),
             "last_event_at": (subscription or {}).get("updated_at") or billing.get("last_event_at"),
-            "stripe_price_configuration": stripe_price_configuration(),
+            "stripe_price_configuration": price_configuration,
         }
 
     def get_launch_readiness(self) -> dict[str, Any]:
+        price_configuration = stripe_price_configuration(self._c)
+        configured_prices = {
+            f"{item['plan_code']}_{item['billing_interval']}": item["configured"]
+            for item in price_configuration
+        }
         checks = [
             self._check("supabase_url", bool(settings.supabase_url), "Supabase URL is configured."),
             self._check(
@@ -170,22 +176,22 @@ class AdminService:
             ),
             self._check(
                 "stripe_price_team_monthly",
-                bool(settings.stripe_price_team_monthly),
+                bool(configured_prices.get("team_month")),
                 "Team monthly Stripe Price ID is configured.",
             ),
             self._check(
                 "stripe_price_team_annual",
-                bool(settings.stripe_price_team_annual),
+                bool(configured_prices.get("team_year")),
                 "Team annual Stripe Price ID is configured.",
             ),
             self._check(
                 "stripe_price_business_monthly",
-                bool(settings.stripe_price_business_monthly),
+                bool(configured_prices.get("business_month")),
                 "Business monthly Stripe Price ID is configured.",
             ),
             self._check(
                 "stripe_price_business_annual",
-                bool(settings.stripe_price_business_annual),
+                bool(configured_prices.get("business_year")),
                 "Business annual Stripe Price ID is configured.",
             ),
             self._check(

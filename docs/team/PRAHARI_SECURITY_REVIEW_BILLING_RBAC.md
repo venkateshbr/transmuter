@@ -78,14 +78,14 @@ functions rather than one-off role checks.
 
 Status: implemented
 
-Admin Billing now surfaces all required production Stripe Price ID environment variables and whether they are configured:
+Admin Billing now surfaces all required effective Stripe Price IDs and whether they are configured:
 
 - `STRIPE_PRICE_TEAM_MONTHLY`
 - `STRIPE_PRICE_TEAM_ANNUAL`
 - `STRIPE_PRICE_BUSINESS_MONTHLY`
 - `STRIPE_PRICE_BUSINESS_ANNUAL`
 
-Launch readiness also checks these values.
+Launch readiness also checks the effective values. Platform Control lets platform admins update the four Price IDs remotely; environment variables remain fallback/bootstrap values when no platform override has been saved.
 
 ## Remaining Prahari Conditions
 
@@ -93,7 +93,10 @@ Launch readiness also checks these values.
 
 Status: open
 
-Create live Stripe Prices for the approved catalog and set the resulting live Price IDs in the API environment. Until these are present, the API can continue sandbox validation through inline `price_data`, but production self-serve checkout is not ready.
+Create live Stripe Prices for the approved catalog and save the resulting live
+Price IDs in Platform Control. Until these are present, the API can continue
+sandbox validation through inline `price_data`, but production self-serve
+checkout is not ready.
 
 ### Configure Production Webhook URL
 
@@ -133,6 +136,7 @@ Run one live-mode or production-like test through:
 ## Prahari Notes
 
 - Stripe Price IDs are safe to display to tenant admins; secret keys and webhook secrets must never be rendered.
+- Platform Control accepts only `price_...` values for saved Price IDs; Stripe secret, publishable, restricted, and webhook key prefixes must be rejected server-side.
 - Service-role Supabase access remains confined to backend provisioning/admin services.
 - PII is stored in signup/admin records but is not sent to external LLM APIs by this flow.
 - Webhook processing is idempotent at the tenant subscription layer by tenant and Stripe subscription/session identifiers.

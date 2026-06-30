@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -9,7 +9,10 @@ from pydantic import BaseModel, Field
 
 from app.core.auth import CurrentUser, require_role
 from app.core.database import get_supabase_admin
-from app.services.billing import stripe_price_configuration
+from app.services.billing import (
+    stripe_price_configuration,
+    update_platform_stripe_price_configuration,
+)
 
 router = APIRouter(
     prefix="/platform",
@@ -84,6 +87,16 @@ TENANT_DELETE_TABLES = [
 
 class DeleteTenantRequest(BaseModel):
     confirm_slug: str = Field(..., min_length=2, max_length=80)
+
+
+class StripePriceConfigItem(BaseModel):
+    plan_code: Literal["team", "business"]
+    billing_interval: Literal["month", "year"]
+    stripe_price_id: str | None = Field(default=None, max_length=255)
+
+
+class StripePriceConfigUpdate(BaseModel):
+    items: list[StripePriceConfigItem] = Field(..., min_length=1, max_length=4)
 
 
 @router.get("/overview")
@@ -181,9 +194,8 @@ async def platform_overview(
             if intent["status"] in {"pending_checkout", "checkout_created"}
         ]
     )
-    configured_prices = len(
-        [price for price in stripe_price_configuration() if price["configured"]]
-    )
+    price_configuration = stripe_price_configuration(client)
+    configured_prices = len([price for price in price_configuration if price["configured"]])
 
     return {
         "generated_at": datetime.now(UTC).isoformat(),
@@ -192,12 +204,33 @@ async def platform_overview(
             "active_tenant_count": active_tenants,
             "pending_signup_count": pending_signups,
             "configured_price_count": configured_prices,
-            "required_price_count": len(stripe_price_configuration()),
+            "required_price_count": len(price_configuration),
         },
-        "stripe_price_configuration": stripe_price_configuration(),
+        "stripe_price_configuration": price_configuration,
         "tenants": tenants,
         "signup_intents": intents,
     }
+
+
+@router.get("/billing/stripe-prices")
+async def get_stripe_price_configuration(
+    _current_user: Annotated[CurrentUser, Depends(require_role("platform_admin"))],
+) -> dict[str, Any]:
+    return {"items": stripe_price_configuration(get_supabase_admin())}
+
+
+@router.put("/billing/stripe-prices")
+async def update_stripe_price_configuration(
+    body: StripePriceConfigUpdate,
+    current_user: Annotated[CurrentUser, Depends(require_role("platform_admin"))],
+) -> dict[str, Any]:
+    client = get_supabase_admin()
+    items = update_platform_stripe_price_configuration(
+        client,
+        [item.model_dump() for item in body.items],
+        updated_by=str(current_user.id),
+    )
+    return {"items": items}
 
 
 @router.get("/tenants/{tenant_id}/delete-preview")

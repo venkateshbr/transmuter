@@ -104,7 +104,30 @@ import { ApiService } from '../../core/services/api.service';
 
         <div class="space-y-8">
           <div class="border border-[var(--t-border)] bg-[var(--t-surface)] p-5">
-            <h2 class="text-lg font-black">Production Price IDs</h2>
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <h2 class="text-lg font-black">Stripe Price IDs</h2>
+                <p class="mt-1 text-xs text-[var(--t-text-secondary)]">Checkout uses these values before falling back to inline price data.</p>
+              </div>
+              <button
+                type="button"
+                class="btn-ghost border border-[var(--t-border)] px-4 py-2 text-xs font-black uppercase disabled:cursor-not-allowed disabled:opacity-40"
+                [disabled]="priceSaving()"
+                (click)="saveStripePrices()"
+                aria-label="Save Stripe price IDs">
+                {{ priceSaving() ? 'Saving' : 'Save' }}
+              </button>
+            </div>
+            @if (priceMessage()) {
+              <div class="mt-4 border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm font-bold text-emerald-600">
+                {{ priceMessage() }}
+              </div>
+            }
+            @if (priceError()) {
+              <div class="mt-4 border border-red-500/30 bg-red-500/10 p-3 text-sm font-bold text-red-500">
+                {{ priceError() }}
+              </div>
+            }
             <div class="mt-5 space-y-3">
               @for (price of overview().stripe_price_configuration || []; track price.env_key) {
                 <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4">
@@ -115,7 +138,17 @@ import { ApiService } from '../../core/services/api.service';
                     </span>
                   </div>
                   <p class="mt-1 text-[10px] uppercase tracking-widest text-[var(--t-text-tertiary)]">{{ price.billing_interval }} · {{ formatMoney(price.amount_cents, price.currency) }}</p>
-                  <p class="mt-3 break-all font-mono text-[10px] text-[var(--t-text-secondary)]">{{ price.price_id || price.env_key }}</p>
+                  <label class="mt-3 block">
+                    <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">
+                      {{ price.source === 'platform' ? 'Platform override' : price.env_key }}
+                    </span>
+                    <input
+                      class="input-field mt-2 w-full font-mono text-xs"
+                      [ngModel]="priceDraftValue(price)"
+                      (ngModelChange)="setPriceDraftValue(price, $event)"
+                      placeholder="price_..."
+                      [attr.aria-label]="'Stripe Price ID for ' + price.plan_name + ' ' + price.billing_interval">
+                  </label>
                 </div>
               }
             </div>
@@ -240,6 +273,10 @@ export class PlatformConsoleComponent implements OnInit {
 
   protected readonly overview = signal<any>({ summary: {}, tenants: [], signup_intents: [], stripe_price_configuration: [] });
   protected readonly error = signal<string | null>(null);
+  protected readonly priceDraft = signal<Record<string, string>>({});
+  protected readonly priceSaving = signal(false);
+  protected readonly priceMessage = signal<string | null>(null);
+  protected readonly priceError = signal<string | null>(null);
   protected readonly deleteTarget = signal<any | null>(null);
   protected readonly deleteError = signal<string | null>(null);
   protected readonly deletePreview = signal<any | null>(null);
@@ -269,7 +306,10 @@ export class PlatformConsoleComponent implements OnInit {
   protected load(): void {
     this.error.set(null);
     this.api.get<any>('/platform/overview').subscribe({
-      next: response => this.overview.set(response),
+      next: response => {
+        this.overview.set(response);
+        this.syncPriceDrafts(response.stripe_price_configuration || []);
+      },
       error: err => this.error.set(err.error?.detail || 'Could not load platform console'),
     });
   }
@@ -281,6 +321,56 @@ export class PlatformConsoleComponent implements OnInit {
   protected formatMoney(cents: number | undefined, currency: string | undefined): string {
     if (!cents) return 'Custom';
     return `${String(currency || 'usd').toUpperCase()} ${(Number(cents) / 100).toFixed(2)}`;
+  }
+
+  protected priceKey(price: any): string {
+    return `${price.plan_code}:${price.billing_interval}`;
+  }
+
+  protected priceDraftValue(price: any): string {
+    return this.priceDraft()[this.priceKey(price)] ?? price.price_id ?? '';
+  }
+
+  protected setPriceDraftValue(price: any, value: string): void {
+    this.priceDraft.set({ ...this.priceDraft(), [this.priceKey(price)]: value });
+    this.priceMessage.set(null);
+    this.priceError.set(null);
+  }
+
+  protected saveStripePrices(): void {
+    const prices = this.overview().stripe_price_configuration || [];
+    if (!prices.length || this.priceSaving()) return;
+    this.priceSaving.set(true);
+    this.priceMessage.set(null);
+    this.priceError.set(null);
+    this.api.put<any>('/platform/billing/stripe-prices', {
+      items: prices.map((price: any) => ({
+        plan_code: price.plan_code,
+        billing_interval: price.billing_interval,
+        stripe_price_id: this.priceDraftValue(price).trim(),
+      })),
+    }).subscribe({
+      next: response => {
+        const items = response.items || [];
+        const current = this.overview();
+        this.overview.set({
+          ...current,
+          stripe_price_configuration: items,
+          summary: {
+            ...(current.summary || {}),
+            configured_price_count: items.filter((price: any) => price.configured).length,
+            required_price_count: items.length,
+          },
+        });
+        this.syncPriceDrafts(items);
+        this.priceSaving.set(false);
+        this.priceMessage.set('Stripe Price IDs saved.');
+      },
+      error: err => {
+        this.priceSaving.set(false);
+        this.priceError.set(err.error?.detail || 'Could not save Stripe Price IDs');
+      },
+    });
   }
 
   protected openDeleteTenant(tenant: any): void {
@@ -330,5 +420,13 @@ export class PlatformConsoleComponent implements OnInit {
       label: this.objectLabels[key],
       count: Number(counts[key] || 0),
     }));
+  }
+
+  private syncPriceDrafts(prices: any[]): void {
+    const next: Record<string, string> = {};
+    for (const price of prices) {
+      next[this.priceKey(price)] = price.price_id || '';
+    }
+    this.priceDraft.set(next);
   }
 }

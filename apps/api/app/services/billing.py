@@ -14,6 +14,9 @@ from supabase import Client
 from app.core.config import settings
 from app.services.tenant_bootstrap import TenantBootstrapService
 
+PLATFORM_TENANT_ID = "00000000-0000-0000-0000-000000000000"
+STRIPE_PRICE_CONFIG_TABLE = "platform_billing_price_config"
+
 
 @dataclass(frozen=True)
 class BillingPlan:
@@ -32,6 +35,52 @@ STRIPE_PRICE_PLACEHOLDER_PREFIXES = (
     "change-me",
     "todo",
 )
+STRIPE_PRICE_SECRET_PREFIXES = (
+    "sk_",
+    "rk_",
+    "pk_",
+    "whsec_",
+)
+
+
+STRIPE_PRICE_CONFIG_DEFAULTS: tuple[dict[str, Any], ...] = (
+    {
+        "env_key": "STRIPE_PRICE_TEAM_MONTHLY",
+        "plan_code": "team",
+        "plan_name": "Transmuter Team",
+        "billing_interval": "month",
+        "amount_cents": 99900,
+        "currency": "usd",
+        "settings_value": "stripe_price_team_monthly",
+    },
+    {
+        "env_key": "STRIPE_PRICE_TEAM_ANNUAL",
+        "plan_code": "team",
+        "plan_name": "Transmuter Team",
+        "billing_interval": "year",
+        "amount_cents": 999000,
+        "currency": "usd",
+        "settings_value": "stripe_price_team_annual",
+    },
+    {
+        "env_key": "STRIPE_PRICE_BUSINESS_MONTHLY",
+        "plan_code": "business",
+        "plan_name": "Transmuter Business",
+        "billing_interval": "month",
+        "amount_cents": 199900,
+        "currency": "usd",
+        "settings_value": "stripe_price_business_monthly",
+    },
+    {
+        "env_key": "STRIPE_PRICE_BUSINESS_ANNUAL",
+        "plan_code": "business",
+        "plan_name": "Transmuter Business",
+        "billing_interval": "year",
+        "amount_cents": 1999000,
+        "currency": "usd",
+        "settings_value": "stripe_price_business_annual",
+    },
+)
 
 
 def normalize_stripe_price_id(value: str) -> str:
@@ -41,10 +90,38 @@ def normalize_stripe_price_id(value: str) -> str:
     lowered = price_id.lower()
     if any(lowered.startswith(prefix) for prefix in STRIPE_PRICE_PLACEHOLDER_PREFIXES):
         return ""
+    if any(lowered.startswith(prefix) for prefix in STRIPE_PRICE_SECRET_PREFIXES):
+        return ""
     return price_id
 
 
-def select_billing_plan(planned_user_count: int, billing_interval: str = "month") -> BillingPlan:
+def validate_stripe_price_config_value(value: str | None) -> str | None:
+    if value is None:
+        return None
+    price_id = (value or "").strip()
+    if not price_id:
+        return ""
+    lowered = price_id.lower()
+    if any(lowered.startswith(prefix) for prefix in STRIPE_PRICE_PLACEHOLDER_PREFIXES):
+        return ""
+    if any(lowered.startswith(prefix) for prefix in STRIPE_PRICE_SECRET_PREFIXES):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Stripe Price ID must start with price_",
+        )
+    if not price_id.startswith("price_"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Stripe Price ID must start with price_",
+        )
+    return price_id
+
+
+def select_billing_plan(
+    planned_user_count: int,
+    billing_interval: str = "month",
+    client: Client | None = None,
+) -> BillingPlan:
     if billing_interval not in {"month", "year"}:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Unsupported billing interval"
@@ -55,35 +132,9 @@ def select_billing_plan(planned_user_count: int, billing_interval: str = "month"
             detail="Planned users must be greater than zero",
         )
     if planned_user_count <= 50:
-        return BillingPlan(
-            code="team",
-            name="Transmuter Team",
-            user_limit_min=1,
-            user_limit_max=50,
-            amount_cents=99900 if billing_interval == "month" else 999000,
-            currency="usd",
-            billing_interval=billing_interval,
-            stripe_price_id=normalize_stripe_price_id(
-                settings.stripe_price_team_monthly
-                if billing_interval == "month"
-                else settings.stripe_price_team_annual
-            ),
-        )
+        return _billing_plan_from_config("team", billing_interval, 1, 50, client)
     if planned_user_count <= 100:
-        return BillingPlan(
-            code="business",
-            name="Transmuter Business",
-            user_limit_min=51,
-            user_limit_max=100,
-            amount_cents=199900 if billing_interval == "month" else 1999000,
-            currency="usd",
-            billing_interval=billing_interval,
-            stripe_price_id=normalize_stripe_price_id(
-                settings.stripe_price_business_monthly
-                if billing_interval == "month"
-                else settings.stripe_price_business_annual
-            ),
-        )
+        return _billing_plan_from_config("business", billing_interval, 51, 100, client)
     raise HTTPException(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         detail="Plans above 100 users require enterprise pricing. Please contact sales.",
@@ -125,49 +176,181 @@ def public_plan_catalog() -> list[dict[str, Any]]:
     ]
 
 
-def stripe_price_configuration() -> list[dict[str, Any]]:
-    return [
-        {
-            "env_key": "STRIPE_PRICE_TEAM_MONTHLY",
-            "plan_code": "team",
-            "plan_name": "Transmuter Team",
-            "billing_interval": "month",
-            "amount_cents": 99900,
-            "currency": "usd",
-            "price_id": normalize_stripe_price_id(settings.stripe_price_team_monthly) or None,
-            "configured": bool(normalize_stripe_price_id(settings.stripe_price_team_monthly)),
-        },
-        {
-            "env_key": "STRIPE_PRICE_TEAM_ANNUAL",
-            "plan_code": "team",
-            "plan_name": "Transmuter Team",
-            "billing_interval": "year",
-            "amount_cents": 999000,
-            "currency": "usd",
-            "price_id": normalize_stripe_price_id(settings.stripe_price_team_annual) or None,
-            "configured": bool(normalize_stripe_price_id(settings.stripe_price_team_annual)),
-        },
-        {
-            "env_key": "STRIPE_PRICE_BUSINESS_MONTHLY",
-            "plan_code": "business",
-            "plan_name": "Transmuter Business",
-            "billing_interval": "month",
-            "amount_cents": 199900,
-            "currency": "usd",
-            "price_id": normalize_stripe_price_id(settings.stripe_price_business_monthly) or None,
-            "configured": bool(normalize_stripe_price_id(settings.stripe_price_business_monthly)),
-        },
-        {
-            "env_key": "STRIPE_PRICE_BUSINESS_ANNUAL",
-            "plan_code": "business",
-            "plan_name": "Transmuter Business",
-            "billing_interval": "year",
-            "amount_cents": 1999000,
-            "currency": "usd",
-            "price_id": normalize_stripe_price_id(settings.stripe_price_business_annual) or None,
-            "configured": bool(normalize_stripe_price_id(settings.stripe_price_business_annual)),
-        },
-    ]
+def stripe_price_configuration(client: Client | None = None) -> list[dict[str, Any]]:
+    config = _environment_stripe_price_configuration()
+    if client is None:
+        return config
+
+    rows = _load_platform_price_config_rows(client)
+    if rows is None or not rows:
+        return config
+
+    by_key = {(row.get("plan_code"), row.get("billing_interval")): row for row in rows}
+    merged: list[dict[str, Any]] = []
+    for item in config:
+        row = by_key.get((item["plan_code"], item["billing_interval"]))
+        if not row:
+            merged.append(item)
+            continue
+        raw_price_id = row.get("stripe_price_id")
+        if raw_price_id is None:
+            price_id = item["price_id"]
+            source = "environment"
+        else:
+            price_id = normalize_stripe_price_id(str(raw_price_id)) or None
+            source = "platform"
+        merged.append(
+            {
+                **item,
+                "plan_name": row.get("plan_name") or item["plan_name"],
+                "amount_cents": row.get("amount_cents") or item["amount_cents"],
+                "currency": row.get("currency") or item["currency"],
+                "price_id": price_id,
+                "configured": bool(price_id),
+                "source": source,
+                "updated_at": row.get("updated_at"),
+                "updated_by": row.get("updated_by"),
+            }
+        )
+    return merged
+
+
+def update_platform_stripe_price_configuration(
+    client: Client,
+    items: list[dict[str, Any]],
+    updated_by: str | None = None,
+) -> list[dict[str, Any]]:
+    rows = _load_platform_price_config_rows(client)
+    if rows is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Platform Stripe price configuration table is not available",
+        )
+
+    defaults_by_key = {
+        (item["plan_code"], item["billing_interval"]): item
+        for item in _environment_stripe_price_configuration()
+    }
+    seen: set[tuple[str, str]] = set()
+    payloads: list[dict[str, Any]] = []
+    now = datetime.now(UTC).isoformat()
+    for item in items:
+        plan_code = str(item.get("plan_code") or "").strip().lower()
+        billing_interval = str(item.get("billing_interval") or "").strip().lower()
+        key = (plan_code, billing_interval)
+        if key not in defaults_by_key:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Unsupported Stripe price configuration item",
+            )
+        if key in seen:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Duplicate Stripe price configuration item",
+            )
+        seen.add(key)
+        default = defaults_by_key[key]
+        price_id = validate_stripe_price_config_value(item.get("stripe_price_id"))
+        payloads.append(
+            {
+                "tenant_id": PLATFORM_TENANT_ID,
+                "plan_code": plan_code,
+                "plan_name": default["plan_name"],
+                "billing_interval": billing_interval,
+                "amount_cents": default["amount_cents"],
+                "currency": default["currency"],
+                "stripe_price_id": price_id,
+                "is_active": True,
+                "updated_at": now,
+                "updated_by": updated_by,
+            }
+        )
+
+    if not payloads:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="At least one Stripe price configuration item is required",
+        )
+
+    client.table(STRIPE_PRICE_CONFIG_TABLE).upsert(
+        payloads,
+        on_conflict="tenant_id,plan_code,billing_interval",
+    ).execute()
+    return stripe_price_configuration(client)
+
+
+def _billing_plan_from_config(
+    code: str,
+    billing_interval: str,
+    user_limit_min: int,
+    user_limit_max: int | None,
+    client: Client | None,
+) -> BillingPlan:
+    config = next(
+        item
+        for item in stripe_price_configuration(client)
+        if item["plan_code"] == code and item["billing_interval"] == billing_interval
+    )
+    return BillingPlan(
+        code=code,
+        name=config["plan_name"],
+        user_limit_min=user_limit_min,
+        user_limit_max=user_limit_max,
+        amount_cents=config["amount_cents"],
+        currency=config["currency"],
+        billing_interval=billing_interval,
+        stripe_price_id=config["price_id"] or "",
+    )
+
+
+def _environment_stripe_price_configuration() -> list[dict[str, Any]]:
+    config = []
+    for item in STRIPE_PRICE_CONFIG_DEFAULTS:
+        price_id = normalize_stripe_price_id(str(getattr(settings, item["settings_value"]) or ""))
+        config.append(
+            {
+                "env_key": item["env_key"],
+                "plan_code": item["plan_code"],
+                "plan_name": item["plan_name"],
+                "billing_interval": item["billing_interval"],
+                "amount_cents": item["amount_cents"],
+                "currency": item["currency"],
+                "price_id": price_id or None,
+                "configured": bool(price_id),
+                "source": "environment",
+                "updated_at": None,
+                "updated_by": None,
+            }
+        )
+    return config
+
+
+def _load_platform_price_config_rows(client: Client) -> list[dict[str, Any]] | None:
+    try:
+        response = (
+            client.table(STRIPE_PRICE_CONFIG_TABLE)
+            .select(
+                "tenant_id,plan_code,plan_name,billing_interval,amount_cents,currency,"
+                "stripe_price_id,is_active,updated_at,updated_by"
+            )
+            .eq("tenant_id", PLATFORM_TENANT_ID)
+            .eq("is_active", True)
+            .order("plan_code")
+            .order("billing_interval")
+            .execute()
+        )
+    except Exception as exc:
+        if _is_missing_platform_price_config_table(exc):
+            return None
+        raise
+    return response.data or []
+
+
+def _is_missing_platform_price_config_table(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return STRIPE_PRICE_CONFIG_TABLE in text and (
+        "could not find" in text or "does not exist" in text or "schema cache" in text
+    )
 
 
 class BillingProvisioningService:
@@ -185,7 +368,7 @@ class BillingProvisioningService:
         planned_user_count: int,
         billing_interval: str = "month",
     ) -> dict[str, Any]:
-        plan = select_billing_plan(planned_user_count, billing_interval)
+        plan = select_billing_plan(planned_user_count, billing_interval, self._client)
         self._assert_signup_email_available(admin_email)
         org = self._ensure_pending_organization(
             name=organization_name,

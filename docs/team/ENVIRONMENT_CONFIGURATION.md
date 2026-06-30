@@ -106,11 +106,17 @@ checkout. Use Stripe test keys for sandbox and live keys only for production.
 | `STRIPE_SECRET_KEY` | Yes | Server-side Stripe API key, `sk_test_...` or `sk_live_...`. |
 | `STRIPE_PUBLISHABLE_KEY` | Yes | Client-visible Stripe publishable key, `pk_test_...` or `pk_live_...`. |
 | `STRIPE_WEBHOOK_SECRET` | Yes | Webhook signing secret, `whsec_...`, for `/billing/webhook`. |
-| `STRIPE_PRICE_TEAM_MONTHLY` | Yes | Stripe Price ID for 1-50 user monthly tier. |
-| `STRIPE_PRICE_TEAM_ANNUAL` | Yes | Stripe Price ID for 1-50 user annual tier. |
-| `STRIPE_PRICE_BUSINESS_MONTHLY` | Yes | Stripe Price ID for 51-100 user monthly tier. |
-| `STRIPE_PRICE_BUSINESS_ANNUAL` | Yes | Stripe Price ID for 51-100 user annual tier. |
+| `STRIPE_PRICE_TEAM_MONTHLY` | Fallback | Stripe Price ID for 1-50 user monthly tier when platform admin config is unset. |
+| `STRIPE_PRICE_TEAM_ANNUAL` | Fallback | Stripe Price ID for 1-50 user annual tier when platform admin config is unset. |
+| `STRIPE_PRICE_BUSINESS_MONTHLY` | Fallback | Stripe Price ID for 51-100 user monthly tier when platform admin config is unset. |
+| `STRIPE_PRICE_BUSINESS_ANNUAL` | Fallback | Stripe Price ID for 51-100 user annual tier when platform admin config is unset. |
 | `ENCRYPTION_KEY` | Yes | Base64 32-byte Fernet-compatible key for encrypted billing metadata. |
+
+Stripe Price IDs are configured remotely in Platform Control (`/platform`) by
+the platform admin. The API reads the platform billing price configuration first
+and falls back to the environment variables above only when a platform override
+has not been saved. If neither source has a Price ID, checkout uses inline
+`price_data` for sandbox validation.
 
 Current product catalog direction:
 
@@ -215,8 +221,9 @@ Before local or production startup:
 - `SUPABASE_TARGET` points to the intended project, and that target's URL, anon
   key, service key, and database URL are populated.
 - JWT secret is random and at least 32 characters.
-- Stripe keys, webhook secret, and Price IDs all come from the same Stripe mode
-  (`test` or `live`), never mixed.
+- Stripe keys, webhook secret, and effective Price IDs from Platform Control or
+  env fallback all come from the same Stripe mode (`test` or `live`), never
+  mixed.
 - `PLATFORM_ADMIN_EMAILS` includes the intended operator emails, and
   `PLATFORM_ADMIN_BOOTSTRAP_EMAIL` is either blank or included in that allowlist.
 - `TRANSMUTER_API_URL` is `/api` for the production web container unless there is
