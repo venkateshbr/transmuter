@@ -32,7 +32,10 @@ Create four recurring Prices:
 | `transmuter_business_monthly` | Flat rate | 1,999 USD | Monthly |
 | `transmuter_business_annual` | Flat rate | 19,990 USD | Yearly |
 
-For production, store the resulting Stripe Price IDs in environment variables and have Checkout use those Price IDs. Keep the current inline `price_data` flow only for sandbox validation until production Prices exist.
+For production, save the resulting Stripe Price IDs in Platform Control
+(`/platform`) as the platform admin. Checkout uses the platform-admin Price ID
+configuration first, then falls back to the legacy environment variables, and
+uses inline `price_data` only when no Price ID exists for the selected tier.
 
 ## Future Option
 

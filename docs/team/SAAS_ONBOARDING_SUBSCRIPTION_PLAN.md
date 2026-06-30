@@ -142,7 +142,10 @@ Recommended launch catalog:
 - Checkout mode: `subscription`
 - Customer metadata: signup intent ID and requested org slug
 - Subscription metadata: tenant ID after provisioning
-- Production Checkout should use Stripe Price IDs from the production catalog; inline sandbox `price_data` is only for validation before those Price IDs exist.
+- Production Checkout should use Stripe Price IDs from the platform-admin
+  billing price configuration. Environment Price IDs are fallback/bootstrap
+  values only; inline sandbox `price_data` is only for validation before those
+  Price IDs exist.
 
 Future-ready additions:
 

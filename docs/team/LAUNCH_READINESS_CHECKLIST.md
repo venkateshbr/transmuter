@@ -24,8 +24,8 @@ Local launch gate reports:
 - Signup creates a pending tenant, signup intent, and tenant-specific plan record before redirecting to Stripe Checkout.
 - Initial signup admin is provisioned as `transformation_office`.
 - Admins can view billing state and open Stripe Billing Portal after checkout has created a customer.
-- Admins can view production Stripe Price ID configuration status in Admin Billing.
-- Platform admins can view cross-tenant signup, billing, tenant, and Stripe catalog readiness without being tenant members.
+- Admins can view effective Stripe Price ID configuration status in Admin Billing.
+- Platform admins can view and update cross-tenant signup, billing, tenant, and Stripe catalog readiness without being tenant members.
 - Tenant access managers can grant the operating-model tenant roles:
   `transformation_office`, `tenant_admin`, `pmo_lead`, `finance_lead`,
   `workstream_lead`, `initiative_owner`, `business_benefit_owner`,
@@ -40,7 +40,7 @@ Local launch gate reports:
 
 ## Remaining Production Hardening
 
-- Configure production Stripe product/price IDs from `docs/team/STRIPE_PRODUCT_CATALOG.md`; Admin Billing and Launch Readiness now show missing IDs.
+- Configure production Stripe product/price IDs from `docs/team/STRIPE_PRODUCT_CATALOG.md` in Platform Control (`/platform`); Admin Billing and Launch Readiness show missing effective IDs.
 - Configure Stripe webhook endpoint in the Stripe dashboard for production.
 - Configure production domain redirect URLs for checkout success, cancel, and Billing Portal return.
 - Decide whether beta tenants start empty or with optional sample data.

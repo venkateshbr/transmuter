@@ -18,6 +18,10 @@ from app.core.database import get_supabase_admin
 from app.main import app
 from app.routers.auth import PLATFORM_TENANT_ID, _mint_token
 from app.routers.platform import DeleteTenantRequest, delete_tenant
+from app.services.billing import (
+    select_billing_plan,
+    update_platform_stripe_price_configuration,
+)
 
 client = TestClient(app)
 
@@ -337,6 +341,107 @@ def test_checkout_session_uses_price_data_for_placeholder_price_ids(
     assert sent["line_items[0][price_data][product_data][name]"] == ["Transmuter Team"]
 
 
+def test_select_billing_plan_prefers_platform_stripe_price_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "stripe_price_team_monthly", "price_env_team_month")
+    fake_admin = _FakePriceConfigAdmin(
+        rows=[
+            {
+                "tenant_id": str(PLATFORM_TENANT_ID),
+                "plan_code": "team",
+                "plan_name": "Transmuter Team",
+                "billing_interval": "month",
+                "amount_cents": 99900,
+                "currency": "usd",
+                "stripe_price_id": "price_platform_team_month",
+                "is_active": True,
+            }
+        ]
+    )
+
+    plan = select_billing_plan(25, "month", fake_admin)
+
+    assert plan.code == "team"
+    assert plan.stripe_price_id == "price_platform_team_month"
+
+
+def test_select_billing_plan_uses_env_fallback_when_platform_price_is_null(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings, "stripe_price_team_monthly", "price_env_team_month")
+    fake_admin = _FakePriceConfigAdmin(
+        rows=[
+            {
+                "tenant_id": str(PLATFORM_TENANT_ID),
+                "plan_code": "team",
+                "plan_name": "Transmuter Team",
+                "billing_interval": "month",
+                "amount_cents": 99900,
+                "currency": "usd",
+                "stripe_price_id": None,
+                "is_active": True,
+            }
+        ]
+    )
+
+    plan = select_billing_plan(25, "month", fake_admin)
+
+    assert plan.stripe_price_id == "price_env_team_month"
+
+
+def test_platform_stripe_price_update_persists_platform_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_admin = _FakePriceConfigAdmin(rows=[])
+    monkeypatch.setattr("app.routers.platform.get_supabase_admin", lambda: fake_admin)
+
+    response = client.put(
+        "/platform/billing/stripe-prices",
+        headers=_platform_headers(),
+        json={
+            "items": [
+                {
+                    "plan_code": "team",
+                    "billing_interval": "month",
+                    "stripe_price_id": "price_platform_team_month",
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    team_month = next(
+        price
+        for price in data["items"]
+        if price["plan_code"] == "team" and price["billing_interval"] == "month"
+    )
+    assert team_month["price_id"] == "price_platform_team_month"
+    assert team_month["source"] == "platform"
+    assert fake_admin.upsert_payloads[0]["stripe_price_id"] == "price_platform_team_month"
+
+
+def test_platform_stripe_price_update_rejects_secret_keys() -> None:
+    fake_admin = _FakePriceConfigAdmin(rows=[])
+
+    with pytest.raises(HTTPException) as exc:
+        update_platform_stripe_price_configuration(
+            fake_admin,
+            [
+                {
+                    "plan_code": "team",
+                    "billing_interval": "month",
+                    "stripe_price_id": "sk_test_secret",
+                }
+            ],
+            updated_by=str(PLATFORM_TENANT_ID),
+        )
+
+    assert exc.value.status_code == 422
+    assert fake_admin.upsert_payloads == []
+
+
 def test_checkout_completion_provisions_paid_session(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_123")
 
@@ -551,6 +656,82 @@ class _FakeStripeAsyncClient:
     async def get(self, url: str, headers: dict[str, str]) -> object:
         self.last_request = {"url": url, "headers": headers}
         return SimpleNamespace(status_code=200, json=lambda: self.response_payload)
+
+
+class _FakePriceConfigAdmin:
+    def __init__(
+        self,
+        *,
+        rows: list[dict[str, object]],
+        missing_table: bool = False,
+    ) -> None:
+        self.rows = rows
+        self.missing_table = missing_table
+        self.upsert_payloads: list[dict[str, object]] = []
+
+    def table(self, name: str) -> _FakePriceConfigQuery:
+        assert name == "platform_billing_price_config"
+        return _FakePriceConfigQuery(self)
+
+
+class _FakePriceConfigQuery:
+    def __init__(self, admin: _FakePriceConfigAdmin) -> None:
+        self._admin = admin
+        self._operation = "select"
+        self._payloads: list[dict[str, object]] = []
+
+    def select(self, *args: object, **kwargs: object) -> _FakePriceConfigQuery:
+        self._operation = "select"
+        return self
+
+    def eq(self, *args: object, **kwargs: object) -> _FakePriceConfigQuery:
+        return self
+
+    def order(self, *args: object, **kwargs: object) -> _FakePriceConfigQuery:
+        return self
+
+    def upsert(
+        self,
+        payloads: list[dict[str, object]],
+        *args: object,
+        **kwargs: object,
+    ) -> _FakePriceConfigQuery:
+        self._operation = "upsert"
+        self._payloads = payloads
+        return self
+
+    def execute(self) -> SimpleNamespace:
+        if self._admin.missing_table:
+            raise Exception(
+                "Could not find the table platform_billing_price_config in the schema cache"
+            )
+        if self._operation == "upsert":
+            for payload in self._payloads:
+                self._admin.upsert_payloads.append(payload)
+                key = (
+                    payload["tenant_id"],
+                    payload["plan_code"],
+                    payload["billing_interval"],
+                )
+                existing = next(
+                    (
+                        row
+                        for row in self._admin.rows
+                        if (
+                            row.get("tenant_id"),
+                            row.get("plan_code"),
+                            row.get("billing_interval"),
+                        )
+                        == key
+                    ),
+                    None,
+                )
+                if existing:
+                    existing.update(payload)
+                else:
+                    self._admin.rows.append(dict(payload))
+            return SimpleNamespace(data=self._payloads)
+        return SimpleNamespace(data=self._admin.rows)
 
 
 class _FakeSupabaseQuery:
