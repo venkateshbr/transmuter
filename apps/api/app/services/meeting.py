@@ -911,9 +911,8 @@ class MeetingService:
         if "series_start_date" in payload and payload["series_start_date"]:
             series_start = self._parse_date(str(payload["series_start_date"]), "series_start_date")
             payload["series_start_date"] = series_start.isoformat()
-        elif (
-            not partial
-            or ("recurrence" in payload and not (existing or {}).get("series_start_date"))
+        elif not partial or (
+            "recurrence" in payload and not (existing or {}).get("series_start_date")
         ):
             raw_day_of_week = payload.get("day_of_week")
             if raw_day_of_week is None:
@@ -925,7 +924,9 @@ class MeetingService:
             payload["series_start_date"] = series_start.isoformat()
         else:
             raw_start = (existing or {}).get("series_start_date")
-            series_start = self._parse_date(str(raw_start), "series_start_date") if raw_start else None
+            series_start = (
+                self._parse_date(str(raw_start), "series_start_date") if raw_start else None
+            )
 
         if "series_end_date" in payload and payload["series_end_date"]:
             series_end = self._parse_date(str(payload["series_end_date"]), "series_end_date")
