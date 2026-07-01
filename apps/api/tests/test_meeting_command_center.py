@@ -79,6 +79,16 @@ def create_meeting_with_session(token: str, initiative_id: str) -> tuple[dict, d
     return meeting, agenda, session_response.json()
 
 
+def test_meeting_timezones_endpoint_returns_iana_catalog(admin_token: str) -> None:
+    response = client.get("/meetings/timezones", headers=auth(admin_token))
+
+    assert response.status_code == 200, response.text
+    values = {item["value"] for item in response.json()["items"]}
+    assert "UTC" in values
+    assert "Asia/Kolkata" in values
+    assert "America/New_York" in values
+
+
 def test_meeting_artifacts_actions_risks_carry_forward_and_minutes(
     admin_token: str,
     monkeypatch: pytest.MonkeyPatch,

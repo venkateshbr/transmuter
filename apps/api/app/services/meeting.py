@@ -1,7 +1,7 @@
 import re
 from datetime import UTC, date, datetime, time, timedelta
 from uuid import UUID, uuid4
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError, available_timezones
 
 from fastapi import HTTPException, status
 from langfuse.types import TraceContext
@@ -65,6 +65,11 @@ class MeetingService:
     def list_meetings(self) -> list[dict]:
         return self._repo.list()
 
+    @staticmethod
+    def list_timezones() -> list[dict[str, str]]:
+        zones = ["UTC", *[zone for zone in sorted(available_timezones()) if zone != "UTC"]]
+        return [{"value": zone, "label": zone.replace("_", " ")} for zone in zones]
+
     def create_meeting(self, data: MeetingCreate) -> dict:
         payload = data.model_dump(exclude_none=True)
         participant_user_ids = payload.pop("participant_user_ids", [])
@@ -112,7 +117,7 @@ class MeetingService:
         }
 
     def update_meeting(self, meeting_id: str, data: MeetingUpdate) -> dict:
-        self._assert_meeting(meeting_id)
+        existing = self._assert_meeting(meeting_id)
         payload = data.model_dump(exclude_none=True)
         participant_user_ids = payload.pop("participant_user_ids", None)
         workstream_ids_provided = (
@@ -124,7 +129,7 @@ class MeetingService:
         )
         if workstream_ids_provided:
             payload["workstream_id"] = workstream_ids[0] if workstream_ids else None
-        self._normalize_schedule_payload(payload, partial=True)
+        self._normalize_schedule_payload(payload, partial=True, existing=existing)
         if not payload:
             if workstream_ids_provided:
                 self._repo.set_workstreams(meeting_id, workstream_ids)
@@ -870,7 +875,12 @@ class MeetingService:
     def _normalized_ids(values: list[str]) -> list[str]:
         return list(dict.fromkeys([str(value) for value in values if value]))
 
-    def _normalize_schedule_payload(self, payload: dict, partial: bool = False) -> None:
+    def _normalize_schedule_payload(
+        self,
+        payload: dict,
+        partial: bool = False,
+        existing: dict | None = None,
+    ) -> None:
         if "start_time" in payload:
             parsed_time = self._parse_time(str(payload["start_time"]))
             payload["start_time"] = parsed_time.strftime("%H:%M")
@@ -888,14 +898,50 @@ class MeetingService:
             if payload.get("recurrence") == "ad_hoc" and payload.get("day_of_week") is None:
                 payload["day_of_week"] = one_off.weekday()
 
+        if not partial and payload.get("day_of_week") is None:
+            payload["day_of_week"] = date.today().weekday()
+
+        recurrence = payload.get("recurrence") or (existing or {}).get("recurrence") or "weekly"
+        if recurrence == "ad_hoc":
+            if "recurrence" in payload:
+                payload["series_start_date"] = None
+                payload["series_end_date"] = None
+            return
+
+        if "series_start_date" in payload and payload["series_start_date"]:
+            series_start = self._parse_date(str(payload["series_start_date"]), "series_start_date")
+            payload["series_start_date"] = series_start.isoformat()
+        elif (
+            not partial
+            or ("recurrence" in payload and not (existing or {}).get("series_start_date"))
+        ):
+            raw_day_of_week = payload.get("day_of_week")
+            if raw_day_of_week is None:
+                raw_day_of_week = (existing or {}).get("day_of_week")
+            if raw_day_of_week is None:
+                raw_day_of_week = date.today().weekday()
+            day_of_week = int(raw_day_of_week)
+            series_start = self._next_matching_weekday(date.today(), day_of_week)
+            payload["series_start_date"] = series_start.isoformat()
+        else:
+            raw_start = (existing or {}).get("series_start_date")
+            series_start = self._parse_date(str(raw_start), "series_start_date") if raw_start else None
+
         if "series_end_date" in payload and payload["series_end_date"]:
             series_end = self._parse_date(str(payload["series_end_date"]), "series_end_date")
             payload["series_end_date"] = series_end.isoformat()
         elif not partial and payload.get("recurrence") != "ad_hoc":
             payload["series_end_date"] = None
+            series_end = None
+        else:
+            raw_end = (existing or {}).get("series_end_date")
+            series_end = self._parse_date(str(raw_end), "series_end_date") if raw_end else None
 
-        if not partial and payload.get("day_of_week") is None:
-            payload["day_of_week"] = date.today().weekday()
+        if series_start and series_end and series_end < series_start:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="series_end_date must be on or after series_start_date.",
+            )
 
     def _ensure_session(self, meeting: dict, session_date: date) -> dict:
         existing = self._repo.get_session_by_date(meeting["id"], session_date.isoformat())
@@ -931,13 +977,23 @@ class MeetingService:
         if recurrence == "ad_hoc":
             one_off = meeting.get("one_off_date") or meeting.get("created_at", "")[:10]
             return [self._parse_date(str(one_off or anchor.isoformat()), "one_off_date")]
+        start_bound, end_bound = self._series_date_bounds(meeting)
+        bounded_anchor = anchor
+        if start_bound and bounded_anchor < start_bound:
+            bounded_anchor = start_bound
+        if end_bound and bounded_anchor > end_bound:
+            bounded_anchor = end_bound
         if recurrence == "monthly":
-            return self._monthly_window_dates(meeting, anchor, page_size)
+            return self._bounded_session_dates(
+                self._monthly_window_dates(meeting, bounded_anchor, page_size),
+                start_bound,
+                end_bound,
+            )
 
         interval_days = 14 if recurrence == "biweekly" else 7
-        target_weekday = self._meeting_weekday(meeting, anchor)
-        current = anchor + timedelta(days=(target_weekday - anchor.weekday()) % 7)
-        while current >= anchor:
+        target_weekday = self._meeting_weekday(meeting, bounded_anchor)
+        current = bounded_anchor + timedelta(days=(target_weekday - bounded_anchor.weekday()) % 7)
+        while current >= bounded_anchor:
             current -= timedelta(days=interval_days)
         previous_dates = [
             current - timedelta(days=interval_days * index) for index in range(page_size)
@@ -947,7 +1003,7 @@ class MeetingService:
         next_dates = [
             next_start + timedelta(days=interval_days * index) for index in range(page_size)
         ]
-        return [*previous_dates, *next_dates]
+        return self._bounded_session_dates([*previous_dates, *next_dates], start_bound, end_bound)
 
     def _monthly_window_dates(self, meeting: dict, anchor: date, page_size: int) -> list[date]:
         target_weekday = self._meeting_weekday(meeting, anchor)
@@ -966,6 +1022,30 @@ class MeetingService:
         year = value.year + month_index // 12
         month = month_index % 12 + 1
         return date(year, month, 1)
+
+    @staticmethod
+    def _next_matching_weekday(anchor: date, day_of_week: int) -> date:
+        return anchor + timedelta(days=(day_of_week - anchor.weekday()) % 7)
+
+    def _series_date_bounds(self, meeting: dict) -> tuple[date | None, date | None]:
+        start_raw = meeting.get("series_start_date")
+        end_raw = meeting.get("series_end_date")
+        start_bound = self._parse_date(str(start_raw), "series_start_date") if start_raw else None
+        end_bound = self._parse_date(str(end_raw), "series_end_date") if end_raw else None
+        return start_bound, end_bound
+
+    @staticmethod
+    def _bounded_session_dates(
+        dates: list[date],
+        start_bound: date | None,
+        end_bound: date | None,
+    ) -> list[date]:
+        return [
+            item
+            for item in dates
+            if (start_bound is None or item >= start_bound)
+            and (end_bound is None or item <= end_bound)
+        ]
 
     @staticmethod
     def _meeting_weekday(meeting: dict, anchor: date) -> int:
@@ -1522,7 +1602,10 @@ class MeetingService:
             return None
         start = MeetingService._parse_event_datetime(data.start_date_time).date()
         end = MeetingService._parse_date(str(series_end_date), "series_end_date")
-        day_name = MeetingService._graph_weekday(int(meeting.get("day_of_week") or start.weekday()))
+        raw_day_of_week = meeting.get("day_of_week")
+        day_name = MeetingService._graph_weekday(
+            int(raw_day_of_week) if raw_day_of_week is not None else start.weekday()
+        )
         recurrence = meeting.get("recurrence") or "weekly"
         if recurrence == "monthly":
             pattern = {

@@ -58,6 +58,7 @@ class MeetingRepository:
                     "timezone",
                     "duration_minutes",
                     "one_off_date",
+                    "series_start_date",
                     "series_end_date",
                 }
             }
@@ -86,6 +87,7 @@ class MeetingRepository:
                     "timezone",
                     "duration_minutes",
                     "one_off_date",
+                    "series_start_date",
                     "series_end_date",
                     "status",
                 }
@@ -1035,6 +1037,7 @@ class MeetingRepository:
                 "timezone",
                 "duration_minutes",
                 "one_off_date",
+                "series_start_date",
                 "series_end_date",
                 "status",
             )
