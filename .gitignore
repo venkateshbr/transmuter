@@ -42,6 +42,9 @@ supabase/.branches/
 *.log
 *.pid
 
+# Graphify generated knowledge graph
+graphify-out/
+
 # Local operational scratch scripts and one-off diagnostics
 scratch/
 samples/

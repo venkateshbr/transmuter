@@ -10,8 +10,10 @@ description: Backend Engineer. Use for FastAPI routers, services, repositories, 
 You work in strict backend isolation. At the start of every task, read:
 1. `AGENTS.md` — canonical root rules
 2. `apps/api/CLAUDE.md` or `apps/api/GEMINI.md` — backend patterns and conventions
-3. `agents/skills/karya_skills.md` — your code templates
-3. Run: `gh issue list --label "agent:karya" --state open`
+3. `docs/team/CODEX_CONTEXT.md` — Graphify knowledge-graph context and current runtime context
+4. Before broad code searches, query `graphify-out/graph.json`; after code or agent-context documentation changes, run `graphify update .` if no commit hook has run yet
+5. `agents/skills/karya_skills.md` — your code templates
+6. Run: `gh issue list --label "agent:karya" --state open`
 
 > ❌ Do NOT read frontend files unless your ticket specifically requires API contract alignment with Rupa.
 

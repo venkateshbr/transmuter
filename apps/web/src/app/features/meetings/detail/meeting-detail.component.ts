@@ -4,6 +4,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { ActivatedRoute, RouterLink, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
+import { TimezoneOptionsService } from '../../../core/services/timezone-options.service';
 
 @Component({
   selector: 'app-meeting-detail',
@@ -351,11 +352,15 @@ import { forkJoin } from 'rxjs';
                 } @else {
                   <label>
                     <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Day</span>
-                    <select [(ngModel)]="editDraft.day_of_week" name="edit_day_of_week" class="input-field w-full" aria-label="Meeting day">
+                    <select [(ngModel)]="editDraft.day_of_week" (ngModelChange)="onEditDayChange()" name="edit_day_of_week" class="input-field w-full" aria-label="Meeting day">
                       @for (day of weekdays; track day.value) {
                         <option [ngValue]="day.value">{{ day.label }}</option>
                       }
                     </select>
+                  </label>
+                  <label>
+                    <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Series start</span>
+                    <input [(ngModel)]="editDraft.series_start_date" name="edit_series_start_date" type="date" class="input-field w-full" aria-label="Meeting series start date" />
                   </label>
                   <label>
                     <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Series end</span>
@@ -372,7 +377,11 @@ import { forkJoin } from 'rxjs';
                 </label>
                 <label>
                   <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Timezone</span>
-                  <input [(ngModel)]="editDraft.timezone" name="edit_timezone" class="input-field w-full" aria-label="Meeting timezone" />
+                  <select [(ngModel)]="editDraft.timezone" name="edit_timezone" class="input-field w-full" aria-label="Meeting timezone">
+                    @for (timezone of timezoneOptions(editDraft.timezone); track timezone.value) {
+                      <option [value]="timezone.value">{{ timezone.label }}</option>
+                    }
+                  </select>
                 </label>
               </div>
               <label>
@@ -466,7 +475,11 @@ import { forkJoin } from 'rxjs';
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <label>
                 <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Timezone</span>
-                <input [(ngModel)]="microsoftInviteDraft.time_zone" name="teams_time_zone" required class="input-field w-full" aria-label="Teams invite timezone" />
+                <select [(ngModel)]="microsoftInviteDraft.time_zone" name="teams_time_zone" required class="input-field w-full" aria-label="Teams invite timezone">
+                  @for (timezone of timezoneOptions(microsoftInviteDraft.time_zone); track timezone.value) {
+                    <option [value]="timezone.value">{{ timezone.label }}</option>
+                  }
+                </select>
               </label>
               @if (!selectedTeamsSession && meeting()?.recurrence !== 'ad_hoc') {
                 <label>
@@ -563,6 +576,7 @@ export class MeetingDetailComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly timezones = inject(TimezoneOptionsService);
   
   meeting = signal<any>(null);
   users = signal<any[]>([]);
@@ -595,7 +609,7 @@ export class MeetingDetailComponent implements OnInit {
     date: this.todayLocal(),
     start_time: '09:00',
     end_time: '10:00',
-    time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    time_zone: this.timezones.browserTimezone(),
     series_end_date: '',
     organizer_email: '',
     attendee_user_ids: [] as string[],
@@ -603,6 +617,7 @@ export class MeetingDetailComponent implements OnInit {
   private meetingId = '';
 
   ngOnInit() {
+    this.timezones.load();
     this.route.paramMap.subscribe(params => {
       const id = params.get('id');
       if (id) {
@@ -647,9 +662,10 @@ export class MeetingDetailComponent implements OnInit {
       recurrence: meeting.recurrence || 'weekly',
       day_of_week: meeting.day_of_week ?? 0,
       one_off_date: meeting.one_off_date || this.todayLocal(),
+      series_start_date: meeting.series_start_date || this.defaultSeriesStartDate(meeting.day_of_week ?? 0),
       series_end_date: meeting.series_end_date || '',
       start_time: String(meeting.start_time || '09:00').slice(0, 5),
-      timezone: meeting.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+      timezone: meeting.timezone || this.timezones.browserTimezone(),
       duration_minutes: meeting.duration_minutes || 60,
       description: meeting.description || '',
       workstream_ids: (Array.isArray(meeting.workstreams) ? meeting.workstreams : [])
@@ -668,6 +684,7 @@ export class MeetingDetailComponent implements OnInit {
       ...this.editDraft,
       workstream_id: this.editDraft.workstream_ids?.[0] || null,
       one_off_date: this.editDraft.recurrence === 'ad_hoc' ? this.editDraft.one_off_date || null : null,
+      series_start_date: this.editDraft.recurrence === 'ad_hoc' ? null : this.editDraft.series_start_date || this.defaultSeriesStartDate(this.editDraft.day_of_week),
       series_end_date: this.editDraft.recurrence === 'ad_hoc' ? null : this.editDraft.series_end_date || null,
     };
     this.api.put<any>(`/meetings/${this.meetingId}`, payload).subscribe(m => {
@@ -782,7 +799,7 @@ export class MeetingDetailComponent implements OnInit {
       date,
       start_time: String(m.start_time || '09:00').slice(0, 5),
       end_time: endTime,
-      time_zone: m.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+      time_zone: m.timezone || this.timezones.browserTimezone(),
       series_end_date: !session && m.recurrence !== 'ad_hoc' ? m.series_end_date || this.defaultSeriesEndDate() : '',
       attendee_user_ids: attendees.map((attendee: any) => attendee.user_id).filter(Boolean),
       organizer_email: this.microsoftConnections()[0]?.organizer_email || '',
@@ -971,6 +988,14 @@ export class MeetingDetailComponent implements OnInit {
     return `${day} · ${time} ${timezone}`;
   }
 
+  onEditDayChange(): void {
+    this.editDraft.series_start_date = this.defaultSeriesStartDate(this.editDraft.day_of_week);
+  }
+
+  timezoneOptions(currentValue?: string | null) {
+    return this.timezones.optionsWithCurrent(currentValue);
+  }
+
   nextScheduledSessionDate(meeting: any): string {
     const sessions = this.sessionsForDisplay(meeting);
     const today = this.todayLocal();
@@ -998,6 +1023,14 @@ export class MeetingDetailComponent implements OnInit {
 
   private todayLocal(): string {
     const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    return now.toISOString().slice(0, 10);
+  }
+
+  private defaultSeriesStartDate(dayOfWeek: number): string {
+    const now = new Date();
+    const currentDay = (now.getDay() + 6) % 7;
+    now.setDate(now.getDate() + ((Number(dayOfWeek) - currentDay + 7) % 7));
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
     return now.toISOString().slice(0, 10);
   }

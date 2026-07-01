@@ -256,6 +256,7 @@ def test_create_meeting_sets_v3_participants_schedule_and_default_agenda() -> No
             start_time="13:30",
             timezone="America/New_York",
             duration_minutes=45,
+            series_start_date="2026-06-10",
             series_end_date="2026-09-30",
             participant_user_ids=["user-1", "user-2", "user-1"],
             default_agenda_items=[{"text": "Review blockers"}],
@@ -267,8 +268,48 @@ def test_create_meeting_sets_v3_participants_schedule_and_default_agenda() -> No
     assert repo.created_payload["start_time"] == "13:30"
     assert repo.created_payload["timezone"] == "America/New_York"
     assert repo.created_payload["duration_minutes"] == 45
+    assert repo.created_payload["series_start_date"] == "2026-06-10"
     assert repo.created_payload["series_end_date"] == "2026-09-30"
     assert repo.attendee_sets == [["user-1", "user-2"]]
+
+
+def test_timezones_catalog_contains_iana_values() -> None:
+    values = {item["value"] for item in MeetingService.list_timezones()}
+
+    assert "UTC" in values
+    assert "Asia/Kolkata" in values
+    assert "America/New_York" in values
+
+
+def test_create_meeting_rejects_invalid_timezone() -> None:
+    repo = FakeMeetingV2Repository()
+    service = build_service(repo)
+
+    with pytest.raises(HTTPException) as exc:
+        service.create_meeting(MeetingCreate(name="Bad timezone", timezone="IST"))
+
+    assert exc.value.status_code == 422
+    assert exc.value.detail == "timezone must be a valid IANA timezone."
+    assert repo.created_payload is None
+
+
+def test_create_meeting_rejects_series_end_before_start() -> None:
+    repo = FakeMeetingV2Repository()
+    service = build_service(repo)
+
+    with pytest.raises(HTTPException) as exc:
+        service.create_meeting(
+            MeetingCreate(
+                name="Bad date range",
+                day_of_week=2,
+                series_start_date="2026-06-10",
+                series_end_date="2026-06-09",
+            )
+        )
+
+    assert exc.value.status_code == 422
+    assert exc.value.detail == "series_end_date must be on or after series_start_date."
+    assert repo.created_payload is None
 
 
 def test_update_meeting_can_clear_join_workstreams() -> None:
@@ -349,6 +390,31 @@ def test_session_window_materializes_last_three_and_next_three() -> None:
     ]
     assert len(repo.created_sessions) == 5
     assert all(row[2]["status"] == "scheduled" for row in repo.created_sessions)
+
+
+def test_session_window_respects_series_start_and_end_dates() -> None:
+    repo = FakeMeetingV2Repository()
+    repo.meeting.update(
+        {
+            "day_of_week": 2,
+            "series_start_date": "2026-06-10",
+            "series_end_date": "2026-06-24",
+        }
+    )
+    service = build_service(repo)
+
+    window = service.get_sessions_window("meeting-1", anchor_date="2026-06-01", page_size=3)
+
+    assert [item["session_date"] for item in window["items"]] == [
+        "2026-06-10",
+        "2026-06-17",
+        "2026-06-24",
+    ]
+    assert [row[1] for row in repo.created_sessions] == [
+        "2026-06-10",
+        "2026-06-17",
+        "2026-06-24",
+    ]
 
 
 def test_agenda_suggestions_use_actions_workstreams_and_mask_pii() -> None:

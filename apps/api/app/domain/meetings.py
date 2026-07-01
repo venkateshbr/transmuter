@@ -47,6 +47,7 @@ class MeetingCreate(BaseModel):
     timezone: str = "UTC"
     duration_minutes: int = Field(60, ge=1, le=1440)
     one_off_date: str | None = None
+    series_start_date: str | None = None
     series_end_date: str | None = None
     description: str | None = None
     owner_id: str | None = None
@@ -65,6 +66,7 @@ class MeetingUpdate(BaseModel):
     timezone: str | None = None
     duration_minutes: int | None = Field(None, ge=1, le=1440)
     one_off_date: str | None = None
+    series_start_date: str | None = None
     series_end_date: str | None = None
     description: str | None = None
     owner_id: str | None = None

@@ -64,6 +64,15 @@ async def create_meeting(
     return svc.create_meeting(body)
 
 
+@router.get("/timezones")
+async def list_timezones(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[MeetingService, Depends(_svc)],
+) -> dict[str, list[dict[str, str]]]:
+    assert_can_view_portfolio(current_user)
+    return {"items": svc.list_timezones()}
+
+
 @router.get("/sessions/{session_id}")
 async def get_session(
     session_id: str,

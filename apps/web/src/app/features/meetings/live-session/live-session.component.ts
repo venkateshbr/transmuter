@@ -5,6 +5,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subject, forkJoin, interval, of } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { ApiService } from '../../../core/services/api.service';
+import { TimezoneOptionsService } from '../../../core/services/timezone-options.service';
 
 type ArtifactType = 'action' | 'decision' | 'risk' | 'assumption' | 'issue';
 
@@ -420,7 +421,11 @@ interface MeetingArtifact {
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <label>
                   <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Timezone</span>
-                  <input [(ngModel)]="teamsDraft.time_zone" name="session_teams_timezone" required class="input-field w-full" aria-label="Teams timezone" />
+                  <select [(ngModel)]="teamsDraft.time_zone" name="session_teams_timezone" required class="input-field w-full" aria-label="Teams timezone">
+                    @for (timezone of timezoneOptions(teamsDraft.time_zone); track timezone.value) {
+                      <option [value]="timezone.value">{{ timezone.label }}</option>
+                    }
+                  </select>
                 </label>
                 <label>
                   <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Organizer</span>
@@ -455,6 +460,7 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly timezones = inject(TimezoneOptionsService);
   private readonly destroy$ = new Subject<void>();
   private readonly notesChanged$ = new Subject<string>();
 
@@ -487,7 +493,7 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
     date: '',
     start_time: '09:00',
     end_time: '10:00',
-    time_zone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    time_zone: this.timezones.browserTimezone(),
     organizer_email: '',
   };
   newActionItem = '';
@@ -521,6 +527,7 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
   });
 
   ngOnInit() {
+    this.timezones.load();
     const id = this.route.snapshot.paramMap.get('id');
     if (id) this.loadSession(id);
     this.loadUsers();
@@ -737,11 +744,15 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
       date: session.session_date || this.todayLocal(),
       start_time: start,
       end_time: this.endTime(start, Number(meeting.duration_minutes || 60)),
-      time_zone: meeting.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+      time_zone: meeting.timezone || this.timezones.browserTimezone(),
       organizer_email: this.microsoftConnections()[0]?.organizer_email || '',
     };
     this.teamsInviteError.set(null);
     this.showTeamsInvite.set(true);
+  }
+
+  timezoneOptions(currentValue?: string | null) {
+    return this.timezones.optionsWithCurrent(currentValue);
   }
 
   syncTeamsInvite() {

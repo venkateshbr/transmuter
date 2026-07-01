@@ -99,6 +99,38 @@ npm run e2e:real
 The real UI acceptance test expects the API and frontend to be running against
 deterministic sample data.
 
+## Knowledge Graph
+
+This repository is configured for [Graphify](https://graphify.net/) so agents can
+query a local code knowledge graph before broad source searches. The project
+integration lives in `.codex/`, and `AGENTS.md` tells Codex how to use
+`graphify query`, `graphify path`, and `graphify explain`.
+
+Install the CLI if it is missing:
+
+```bash
+uv tool install graphifyy
+```
+
+Refresh the local code graph after code changes:
+
+```bash
+graphify update .
+```
+
+The generated graph is written to `graphify-out/` and is intentionally ignored by
+git. Local git hooks are installed with `graphify hook install` so commits and
+checkouts refresh the graph on this machine; run that command once on another
+machine if the hooks are missing.
+
+Query the graph:
+
+```bash
+graphify query "How is Stripe billing configured?"
+graphify path "BillingProvisioningService" "stripe_price_configuration()"
+graphify explain "BillingProvisioningService"
+```
+
 ## Hostinger Remote Deployment
 
 Dev and production run on the same Hostinger VPS as separate Docker Compose

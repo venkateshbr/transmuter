@@ -8,6 +8,7 @@ Check `package.json` for the exact installed Angular version before using framew
 ## Required Context
 - Root rules: `../../AGENTS.md`
 - Durable context: `../../docs/team/CODEX_CONTEXT.md` for launch, hostnames, release state, and known follow-ups.
+- Graphify: use the root Graphify rules; query `graphify-out/graph.json` before broad frontend searches and run `graphify update .` after code or agent-context documentation changes when no commit hook has run yet.
 - Design system: `../../team/DESIGN_SYSTEM.md`
 - Rupa skills: `../../agents/skills/rupa_skills.md`
 - Chitra skills: `../../agents/skills/chitra_skills.md`

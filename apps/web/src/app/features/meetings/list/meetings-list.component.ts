@@ -4,6 +4,7 @@ import { ApiService } from '../../../core/services/api.service';
 import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { CompactFilterToolbarComponent, type CompactFilterGroup } from '../../../shared/components/compact-filter-toolbar/compact-filter-toolbar.component';
+import { TimezoneOptionsService } from '../../../core/services/timezone-options.service';
 
 const MEETINGS_FILTER_STATE_KEY = 'transmuter.filters.meetings.list';
 
@@ -148,11 +149,15 @@ const MEETINGS_FILTER_STATE_KEY = 'transmuter.filters.meetings.list';
               } @else {
                 <label>
                   <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Day</span>
-                  <select [(ngModel)]="draft.day_of_week" name="day_of_week" class="input-field w-full" aria-label="Meeting day of week">
+                  <select [(ngModel)]="draft.day_of_week" (ngModelChange)="onDraftDayChange()" name="day_of_week" class="input-field w-full" aria-label="Meeting day of week">
                     @for (day of weekdays; track day.value) {
                       <option [ngValue]="day.value">{{ day.label }}</option>
                     }
                   </select>
+                </label>
+                <label>
+                  <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Series start</span>
+                  <input [(ngModel)]="draft.series_start_date" name="series_start_date" type="date" class="input-field w-full" aria-label="Meeting series start date" />
                 </label>
                 <label>
                   <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Series end</span>
@@ -169,7 +174,11 @@ const MEETINGS_FILTER_STATE_KEY = 'transmuter.filters.meetings.list';
               </label>
               <label>
                 <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Timezone</span>
-                <input [(ngModel)]="draft.timezone" name="timezone" required class="input-field w-full" aria-label="Meeting timezone" />
+                <select [(ngModel)]="draft.timezone" name="timezone" required class="input-field w-full" aria-label="Meeting timezone">
+                  @for (timezone of timezoneOptions(draft.timezone); track timezone.value) {
+                    <option [value]="timezone.value">{{ timezone.label }}</option>
+                  }
+                </select>
               </label>
               <label class="md:col-span-2">
                 <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Owner</span>
@@ -243,6 +252,7 @@ const MEETINGS_FILTER_STATE_KEY = 'transmuter.filters.meetings.list';
 export class MeetingsListComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
+  private readonly timezones = inject(TimezoneOptionsService);
   meetings = signal<any[]>([]);
   users = signal<any[]>([]);
   workstreams = signal<any[]>([]);
@@ -264,6 +274,7 @@ export class MeetingsListComponent implements OnInit {
   }
 
   ngOnInit() {
+    this.timezones.load();
     this.restoreMeetingFilters();
     this.loadMeetings();
     this.api.get<any>('/users').subscribe(res => {
@@ -356,6 +367,7 @@ export class MeetingsListComponent implements OnInit {
       description: this.draft.description?.trim() || null,
       workstream_id: this.draft.workstream_ids[0] || null,
       one_off_date: this.draft.recurrence === 'ad_hoc' ? this.draft.one_off_date || this.todayLocal() : null,
+      series_start_date: this.draft.recurrence === 'ad_hoc' ? null : this.draft.series_start_date || this.defaultSeriesStartDate(this.draft.day_of_week),
       series_end_date: this.draft.recurrence === 'ad_hoc' ? null : this.draft.series_end_date || null,
       default_agenda_items: this.defaultAgendaItems(),
     }).subscribe({
@@ -373,15 +385,17 @@ export class MeetingsListComponent implements OnInit {
   }
 
   private emptyDraft() {
+    const dayOfWeek = this.currentBackendWeekday();
     return {
       name: '',
       scope: 'all',
       recurrence: 'weekly',
-      day_of_week: new Date().getDay() === 0 ? 6 : new Date().getDay() - 1,
+      day_of_week: dayOfWeek,
       one_off_date: this.todayLocal(),
+      series_start_date: this.defaultSeriesStartDate(dayOfWeek),
       series_end_date: this.defaultSeriesEndDate(),
       start_time: '09:00',
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+      timezone: this.timezones.browserTimezone(),
       duration_minutes: 60,
       description: '',
       owner_id: '',
@@ -404,6 +418,14 @@ export class MeetingsListComponent implements OnInit {
     if (checked) ids.add(userId);
     else ids.delete(userId);
     this.draft.participant_user_ids = Array.from(ids);
+  }
+
+  onDraftDayChange(): void {
+    this.draft.series_start_date = this.defaultSeriesStartDate(this.draft.day_of_week);
+  }
+
+  timezoneOptions(currentValue?: string | null) {
+    return this.timezones.optionsWithCurrent(currentValue);
   }
 
   meetingWorkstreamLabel(meeting: any): string {
@@ -453,6 +475,18 @@ export class MeetingsListComponent implements OnInit {
 
   private todayLocal(): string {
     const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    return now.toISOString().slice(0, 10);
+  }
+
+  private currentBackendWeekday(): number {
+    return (new Date().getDay() + 6) % 7;
+  }
+
+  private defaultSeriesStartDate(dayOfWeek: number): string {
+    const now = new Date();
+    const currentDay = (now.getDay() + 6) % 7;
+    now.setDate(now.getDate() + ((Number(dayOfWeek) - currentDay + 7) % 7));
     now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
     return now.toISOString().slice(0, 10);
   }

@@ -9,9 +9,11 @@ description: Site Reliability Engineer. Use for infrastructure, deployment, obse
 
 You work in infrastructure isolation. At the start of every task, read:
 1. `AGENTS.md` — canonical root rules
-2. `docs/team/HOSTINGER_VPS_DEPLOYMENT.md` and `docs/team/ENVIRONMENT_CONFIGURATION.md` — operational strategy and environment runbooks
-3. GitHub Actions workflows in `.github/workflows/`
-4. Run: `gh issue list --label "agent:sthira" --state open`
+2. `docs/team/CODEX_CONTEXT.md` — Graphify knowledge-graph context and current runtime context
+3. Before broad code searches, query `graphify-out/graph.json`; after code or agent-context documentation changes, run `graphify update .` if no commit hook has run yet
+4. `docs/team/HOSTINGER_VPS_DEPLOYMENT.md` and `docs/team/ENVIRONMENT_CONFIGURATION.md` — operational strategy and environment runbooks
+5. GitHub Actions workflows in `.github/workflows/`
+6. Run: `gh issue list --label "agent:sthira" --state open`
 
 > ❌ Do NOT write feature code — you handle CI/CD, Docker, and operational concerns only.
 
