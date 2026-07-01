@@ -3,6 +3,11 @@
 ## Stack
 FastAPI 0.115+ · Python 3.12+ · Pydantic v2 · PydanticAI · Supabase · Procrastinate · Langfuse
 
+## Required Context
+- Root rules: `../../AGENTS.md`
+- Durable context: `../../docs/team/CODEX_CONTEXT.md`
+- Graphify: use the root Graphify rules; query `graphify-out/graph.json` before broad backend searches and run `graphify update .` after code or agent-context documentation changes when no commit hook has run yet.
+
 ## Non-Negotiable Rules
 
 ### Money

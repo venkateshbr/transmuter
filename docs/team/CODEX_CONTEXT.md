@@ -1,6 +1,6 @@
 # Codex Context - Transmuter
 
-Last updated: 2026-06-29
+Last updated: 2026-06-30
 
 This file captures durable working context for future Codex sessions. It supplements
 `AGENTS.md`, `docs/team/SDLC_PROTOCOL.md`, and `team/DESIGN_SYSTEM.md`; it does not
@@ -71,6 +71,28 @@ replace them.
 - Current public app and Stripe webhook traffic use the same-origin Hostinger
   hostname `https://transmuter.ishirock.tech`; no separate public API hostname
   is required for normal operation.
+
+## Knowledge Graph And Agent Memory
+
+- Graphifyy is installed for this repository. The local generated graph lives at
+  `graphify-out/` and is intentionally ignored by git because it is generated
+  source-derived context.
+- Current graph baseline was built from commit `632f066e` with `graphify update .`;
+  it contains the code/navigation graph used by `graphify query`, `graphify path`,
+  and `graphify explain`.
+- Agents should use the graph before broad source searches when
+  `graphify-out/graph.json` exists. For example:
+  `graphify query "How is Stripe billing configured?"`.
+- After code or agent-context documentation changes, run `graphify update .` so
+  the local knowledge graph stays current. The command is AST/code-only and has
+  no API token cost.
+- Local git hooks are installed with `graphify hook install`; every clone or
+  agent machine should run that once so post-commit and post-checkout refreshes
+  keep the graph aligned with commits. If work is not committed yet, run
+  `graphify update .` manually before final review.
+- If the graph becomes stale or missing, regenerate it with `graphify update .`.
+  Full semantic extraction for docs/papers/images should only be enabled with an
+  explicit approved LLM backend/API key decision.
 
 ## Product Direction
 

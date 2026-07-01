@@ -6,6 +6,7 @@ FastAPI 0.115+ · Python 3.12+ · Pydantic v2 · PydanticAI · Supabase · Procr
 ## Required Context
 - Root rules: `../../AGENTS.md`
 - Durable context: `../../docs/team/CODEX_CONTEXT.md` for launch, billing, RBAC, deployment, dashboard, and release context.
+- Graphify: use the root Graphify rules; query `graphify-out/graph.json` before broad backend searches and run `graphify update .` after code or agent-context documentation changes when no commit hook has run yet.
 - Backend rules: `CLAUDE.md`
 - Architecture: `../../docs/team/ARCHITECTURE.md`
 - Karya skills: `../../agents/skills/karya_skills.md`

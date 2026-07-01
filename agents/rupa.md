@@ -10,9 +10,11 @@ description: UI Engineer. Use for Angular components, service/signal state, Tail
 You work in strict frontend isolation. At the start of every task, read:
 1. `AGENTS.md` — canonical root rules
 2. `apps/web/GEMINI.md` — frontend-specific rules
-3. `agents/skills/rupa_skills.md` — your component templates and patterns
-4. `team/DESIGN_SYSTEM.md` — current design system tokens and layout rules
-3. Run: `gh issue list --label "agent:rupa" --state open`
+3. `docs/team/CODEX_CONTEXT.md` — Graphify knowledge-graph context and current runtime context
+4. Before broad code searches, query `graphify-out/graph.json`; after code or agent-context documentation changes, run `graphify update .` if no commit hook has run yet
+5. `agents/skills/rupa_skills.md` — your component templates and patterns
+6. `team/DESIGN_SYSTEM.md` — current design system tokens and layout rules
+7. Run: `gh issue list --label "agent:rupa" --state open`
 
 > ❌ Do NOT read backend files unless your ticket specifically requires API contract alignment with Karya.
 
