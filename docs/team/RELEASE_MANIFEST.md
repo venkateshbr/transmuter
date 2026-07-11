@@ -36,6 +36,119 @@ Deployment note:
 
 ## Current Release Entries
 
+### 2026-07-11 - Meetings Series Boundaries, JWT Audit, and CI Eval Recovery
+
+Status: validated on dev; production promotion pending
+
+GitHub tracking:
+- Meetings V3: issue `#223`, PR `#380`, merge commit `007fb50`.
+- JWT dependency remediation: issue `#383`, Prahari review `#384`, PR `#386`,
+  merge commit `1c3e023`.
+- Registration cleanup assertion: issue `#385`, PR `#386`.
+- Agent eval recovery: issue `#381`, PR `#382`, merge commit `13d5db3`.
+
+Runtime changes:
+- Added an explicit recurring meeting `series_start_date` boundary.
+- Added the authenticated IANA timezone catalog and timezone selectors for meeting
+  series and Microsoft Teams invite setup.
+- Replaced `python-jose` with the existing `joserfc` dependency for application
+  JWTs and Microsoft OAuth state.
+- Restricted JWT algorithms to `HS256`, `HS384`, or `HS512` and enforced a
+  minimum 32-character secret.
+- Removed the vulnerable unused `ecdsa` dependency reported by
+  `PYSEC-2026-1325`.
+- Aligned deterministic initiative-intake evals with the supported
+  non-financial wizard contract and made the Agent eval suite a pull-request
+  gate.
+
+CI and review evidence:
+- PR `#386` passed backend lint/type/tests, the exact Python 3.12 strict
+  dependency audit, frontend build/tests, spec validation, and secret scan.
+- Prahari issue `#384` approved algorithm allowlisting, secret validation,
+  registered-claim validation, existing-token interoperability, and Microsoft
+  OAuth state handling with no blockers.
+- PR `#382` passed the new pull-request Agent eval job with `22/22` tests.
+- Post-merge `main` run `29138383598` passed backend, frontend, specs, secret
+  scan, Agent evals, and the dependent staging job.
+
+Dev deployment:
+- Environment: `https://transmuter-dev.ishirock.tech`
+- Schema: `transmuter_dev`
+- Deployment commit: `13d5db3`
+- Schema SQL applied:
+  `supabase/migrations/20260701000001_meeting_series_start_date.sql`
+- Hostinger action: `103599334`, completed successfully at
+  `2026-07-11T03:45:11Z`.
+- Public `/health` and `/api/health` returned `200`.
+- Authenticated login returned access and refresh tokens after the JWT library
+  migration.
+- Authenticated `/api/meetings/timezones` returned `486` IANA zones.
+- OpenAPI exposes `timezone`, `series_start_date`, and `series_end_date` on
+  meeting create/update.
+- A deterministic weekly series bounded from `2026-07-13` through
+  `2026-08-10` was created in `Asia/Singapore`, updated to `Europe/London`, and
+  returned only bounded rolling sessions.
+- The temporary meeting was deleted; meeting and generated-session reads both
+  returned `404` afterward.
+- PR `#380` records the matching real dev browser flow for timezone selection,
+  explicit series start, persistence, and cleanup against the same frontend
+  tree.
+
+Schema SQL required for production:
+- `supabase/migrations/20260701000001_meeting_series_start_date.sql`
+- Apply with a schema-owner production connection. The saved runtime role does
+  not have `CREATE`/owner privileges on schema `transmuter`.
+
+Production promotion:
+- Pending from reviewed `main` after this manifest entry is merged.
+- Required command:
+  `CONFIRM_PROMOTE=1 infra/hostinger/promote-dev-to-prod.sh --schema supabase/migrations/20260701000001_meeting_series_start_date.sql`
+- Required post-promotion checks: public health, authenticated login, timezone
+  catalog, production schema fields, frontend Series start UI, and temporary
+  bounded meeting create/read/update/delete with cleanup.
+
+### 2026-06-30 - Platform Stripe Price Configuration
+
+Status: promoted to production
+
+GitHub tracking:
+- Issue: `#378`
+- PR: `#379`
+- Implementation commit: `dbbcb32`
+- Merge and production commit: `632f066`
+
+Runtime changes:
+- Added platform-owned Stripe Price ID configuration with tenant ID, RLS, and
+  seeded launch plan/interval rows.
+- Added platform-admin read/update APIs and editable Platform Control fields for
+  the four launch Price IDs.
+- Checkout now resolves platform configuration first, environment fallback
+  second, and inline `price_data` when no Price ID is configured.
+- Server validation accepts only `price_...` identifiers and does not expose
+  Stripe secret, restricted, publishable, or webhook keys.
+
+Dev validation:
+- Applied
+  `supabase/migrations/20260630000001_platform_stripe_price_config.sql` to
+  `transmuter_dev`.
+- Focused backend tests passed (`22 passed`), Ruff passed, and the Angular build
+  passed.
+- Platform-admin API read/update, invalid secret-like value rejection, and the
+  four-input Platform Control UI were validated on the public dev environment.
+
+Production promotion:
+- Applied
+  `supabase/migrations/20260630000001_platform_stripe_price_config.sql` to
+  schema `transmuter` with the internal `supabase_admin` schema-owner
+  connection; the application runtime connection was not changed.
+- Promoted merge commit `632f066` to the Hostinger production project.
+- Public production validation passed for health, platform-admin identity,
+  Price ID read API, secret-like value rejection, and the four-input Platform
+  Control UI.
+- Effective production Price ID count remained `0`; checkout intentionally
+  continues to use inline `price_data` until real `price_...` values are saved
+  through Platform Control.
+
 ### 2026-06-29 - Wizard Financial Scope Cleanup
 
 Status: promoted to production; authenticated production tenant validation pending
