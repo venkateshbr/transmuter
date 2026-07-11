@@ -20,12 +20,15 @@ replace them.
   and web image `transmuter-web:hostinger`.
 - Hostinger dev Docker project uses API image `transmuter-api:hostinger-dev`
   and web image `transmuter-web:hostinger-dev`.
-- Current deployed application commit is `5793115` in dev and production.
-  It includes meeting-series boundaries, the `joserfc` audit remediation,
-  scoped tenant authorization, and the Supabase verified-claims mapping fix.
-- Current Hostinger Docker actions are `103623230` for dev and `103623550` for
-  production. Both are environment-only Microsoft Graph configuration
-  redeployments of the same `5793115` compose and completed successfully.
+- Current deployed application commit is `7c60fbc` in dev and `5793115` in
+  production. Dev includes the Microsoft Graph OAuth isolation and locked
+  offline-rollout controls; production remains on the prior tenant authorization
+  release pending explicit Graph promotion approval.
+- Current Hostinger Docker actions are `103652672` for dev and `103623550` for
+  production. Dev action `103651377` deployed `7c60fbc` after the offline Graph
+  migration; action `103652672` corrected the dev OIDC scope list on the same
+  commit. Production action `103623550` remains the earlier environment-only
+  Graph configuration redeploy of `5793115`.
 - Hostinger VPS / domain context:
   - Primary domain owned for the VPS: `ishirock.tech`.
   - VPS hostname: `srv1695814.hstgr.cloud`.
@@ -83,7 +86,7 @@ replace them.
 - Graphifyy is installed for this repository. The local generated graph lives at
   `graphify-out/` and is intentionally ignored by git because it is generated
   source-derived context.
-- Current graph baseline was built from commit `5793115` with `graphify update .`;
+- Current graph baseline was built from commit `7c60fbc` with `graphify update .`;
   it contains the code/navigation graph used by `graphify query`, `graphify path`,
   and `graphify explain`.
 - Agents should use the graph before broad source searches when
@@ -201,10 +204,14 @@ replace them.
 - Current launch follow-ups:
   - `#216`: app-owned invite/password browser closeout is still required.
   - `#220`, `#389`, `#390`: Microsoft Graph production consent and live
-    invite/transcript acceptance remain open. Dev is intentionally disconnected;
-    its callback, scope list, and encryption key are isolated. Production
-    runtime requests the required scopes, but the stored expired consent still
-    lacks `OnlineMeetings.Read` and must not be refreshed before fresh consent.
+    invite/transcript acceptance remain open. Dev is migrated to the hardened
+    schema on `7c60fbc`, intentionally disconnected, and verified at zero Graph
+    connections. Its callback, client, secret, exact seven-scope list, and
+    encryption key are isolated. The in-app browser target and redacted Entra
+    callback-registration proof remain unavailable. Production is still on
+    `5793115`; its saved scope line omits `openid`/`profile`, the stored expired
+    consent lacks `OnlineMeetings.Read`, and neither should be changed or
+    refreshed before explicit approval and fresh organizer consent.
   - `#224`: Admin bulk-meeting cleanup still needs its specific deployed-browser
     destructive-flow evidence.
 - `scratch/` contains local helper scripts and should not be included in release
