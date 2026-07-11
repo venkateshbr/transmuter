@@ -36,16 +36,21 @@ Deployment note:
 
 ## Current Release Entries
 
-### 2026-07-11 - Meetings Series Boundaries, JWT Audit, and CI Eval Recovery
+### 2026-07-11 - Meetings Boundaries, JWT Audit, and Tenant Authorization Hardening
 
-Status: validated on dev; production promotion pending
+Status: promoted to production and verified
 
 GitHub tracking:
 - Meetings V3: issue `#223`, PR `#380`, merge commit `007fb50`.
+- Production meeting release record: PR `#387`, merge commit `518c844`.
 - JWT dependency remediation: issue `#383`, Prahari review `#384`, PR `#386`,
   merge commit `1c3e023`.
 - Registration cleanup assertion: issue `#385`, PR `#386`.
 - Agent eval recovery: issue `#381`, PR `#382`, merge commit `13d5db3`.
+- Tenant authorization hardening: issue `#388`, PRs `#391` and `#392`, merge
+  commits `370197b` and `5793115`.
+- Security review: issue `#390`; the `#388` identity scope has Prahari live
+  approval. The separate Microsoft Graph isolation scope remains open.
 
 Runtime changes:
 - Added an explicit recurring meeting `series_start_date` boundary.
@@ -60,6 +65,18 @@ Runtime changes:
 - Aligned deterministic initiative-intake evals with the supported
   non-financial wizard contract and made the Agent eval suite a pull-request
   gate.
+- Moved ordinary-user tenant and role authorization out of editable
+  `user_metadata` into independent top-level Supabase `app_metadata` objects:
+  `transmuter_authorization_transmuter_dev` and
+  `transmuter_authorization_transmuter`.
+- Made the API verify the exact bearer through Supabase Auth and require an
+  exact active canonical `users` row match for subject, tenant, and role.
+- Replaced RLS identity helpers with schema-scoped `SECURITY DEFINER` lookups
+  that enforce the same canonical match and do not trust `user_metadata`.
+- Added PII-free, idempotent seed/cleanup reconciliation with independent
+  production and global-cleanup confirmation gates.
+- Fixed the live `supabase-auth==2.29.0` integration boundary: verified ES256
+  `ClaimsResponse` values are runtime mappings, not attribute-bearing objects.
 
 CI and review evidence:
 - PR `#386` passed backend lint/type/tests, the exact Python 3.12 strict
@@ -70,15 +87,25 @@ CI and review evidence:
 - PR `#382` passed the new pull-request Agent eval job with `22/22` tests.
 - Post-merge `main` run `29138383598` passed backend, frontend, specs, secret
   scan, Agent evals, and the dependent staging job.
+- PR `#391` passed backend, frontend, secret scan, spec validation, and Agent
+  evals; Vastu and Prahari approved the scoped authorization design.
+- PR `#392` added the red/green real-SDK mapping regression and passed the same
+  gates; Vastu and Prahari approved the two-file follow-up.
+- Current-main run `29141257001` passed backend, frontend, specs, secret scan,
+  Agent evals, and the configured staging gate for `5793115`.
 
 Dev deployment:
 - Environment: `https://transmuter-dev.ishirock.tech`
 - Schema: `transmuter_dev`
-- Deployment commit: `13d5db3`
+- Final deployment commit: `5793115`.
 - Schema SQL applied:
-  `supabase/migrations/20260701000001_meeting_series_start_date.sql`
-- Hostinger action: `103599334`, completed successfully at
-  `2026-07-11T03:45:11Z`.
+  - `supabase/migrations/20260701000001_meeting_series_start_date.sql`;
+  - `supabase/migrations/20260711000001_harden_rls_identity_claims.sql` as
+    `supabase_admin`.
+- Authorization rollout actions:
+  - API action `103616741` for `370197b` after schema application, successful;
+  - adapter action `103620268` for `5793115`, successful at
+    `2026-07-11T05:31:12Z`.
 - Public `/health` and `/api/health` returned `200`.
 - Authenticated login returned access and refresh tokens after the JWT library
   migration.
@@ -93,19 +120,54 @@ Dev deployment:
 - PR `#380` records the matching real dev browser flow for timezone selection,
   explicit series start, persistence, and cleanup against the same frontend
   tree.
+- Real ES256/API/PostgREST authorization acceptance passed for matching claims,
+  wrong tenant, wrong role, missing active scope with legacy metadata,
+  noncanonical tenant text, inactive users, and Auth subjects without a
+  platform row. All controlled fixture mutations were restored.
+- Post-cleanup fresh login, `/auth/me`, refresh, and direct RLS passed; dev seed
+  and cleanup reconciliation both returned zero planned changes.
 
-Schema SQL required for production:
-- `supabase/migrations/20260701000001_meeting_series_start_date.sql`
-- Apply with a schema-owner production connection. The saved runtime role does
-  not have `CREATE`/owner privileges on schema `transmuter`.
+Schema SQL applied to production:
+- `supabase/migrations/20260701000001_meeting_series_start_date.sql`;
+- `supabase/migrations/20260711000001_harden_rls_identity_claims.sql` as
+  `supabase_admin`.
 
 Production promotion:
-- Pending from reviewed `main` after this manifest entry is merged.
-- Required command:
-  `CONFIRM_PROMOTE=1 infra/hostinger/promote-dev-to-prod.sh --schema supabase/migrations/20260701000001_meeting_series_start_date.sql`
-- Required post-promotion checks: public health, authenticated login, timezone
-  catalog, production schema fields, frontend Series start UI, and temporary
-  bounded meeting create/read/update/delete with cleanup.
+- Environment: `https://transmuter.ishirock.tech`
+- Schema: `transmuter`
+- Promotion commit: `5793115`
+- Meeting-series promotion action `103601800` completed successfully on
+  `518c844`; authorization API action `103620844` followed the schema-before-code
+  migration and completed successfully at `2026-07-11T05:34:07Z` on `5793115`.
+- Saved compose content matched `docker-compose.hostinger.yml`; public web and
+  API health returned `200`.
+- Both RLS helpers passed owner/BYPASSRLS, `SECURITY DEFINER`, pinned
+  `search_path`, ACL, and captured production-scope checks.
+- Real production ES256/API/PostgREST acceptance denied wrong tenant, role,
+  scope, noncanonical tenant, inactive, and unknown-subject cases while fresh
+  login, `/auth/me`, refresh, and matching direct RLS passed.
+- `/meetings/timezones` returned `200`; a temporary weekly series with
+  `Asia/Singapore`, explicit start/end bounds, owner, attendee, and agenda item
+  was created with `201`, verified, and deleted with `204`.
+- Cleanup ran only after dev and production verification. It removed legacy
+  authorization keys for 42 dev-union identities and 3 production-only
+  identities. Final seed and cleanup dry-runs are zero-diff in both schemas;
+  the canonical union has 45 users, zero missing Auth identities, and zero
+  tenant/role authorization keys in `user_metadata`.
+- The platform administrator remains one global-only allowlisted Auth identity
+  with no tenant/scoped claim and no `users` row in either application schema.
+
+Operational notes:
+- The exposed `public` Supabase schema has no Transmuter `users` table or
+  identity helper functions; the application authorization surfaces are only
+  `transmuter_dev` and `transmuter`.
+- Dev and production still share one Supabase Auth project, so credentials,
+  sessions, and service-role administration are global even though application
+  authorization is schema-scoped. Treat eventual Auth-project separation as a
+  future architectural hardening opportunity.
+- Later environment-only Graph isolation actions `103623230` (dev) and
+  `103623550` (production) recreated containers at the same `5793115` compose;
+  they did not change the authorization schema or code.
 
 ### 2026-06-30 - Platform Stripe Price Configuration
 

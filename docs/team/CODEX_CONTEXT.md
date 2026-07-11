@@ -1,6 +1,6 @@
 # Codex Context - Transmuter
 
-Last updated: 2026-06-30
+Last updated: 2026-07-11
 
 This file captures durable working context for future Codex sessions. It supplements
 `AGENTS.md`, `docs/team/SDLC_PROTOCOL.md`, and `team/DESIGN_SYSTEM.md`; it does not
@@ -10,9 +10,9 @@ replace them.
 
 - First release snapshot is committed as `3ab8dcb` and tagged `v0.1.0`.
 - Dashboard value matrix work is committed after the release tag as `9015e86`.
-- Current release snapshot is committed as `e9b670f` and tagged `v0.3.1`.
-- `v0.3.1` includes the Alchemist workbook/dashboard acceptance test updates and
-  the CI/CD pipeline gates from issue #77.
+- Latest release tag is `v1.1.0` at commit `3627311`.
+- The historical `v0.3.1` release includes the Alchemist workbook/dashboard
+  acceptance test updates and the CI/CD pipeline gates from issue #77.
 - Shared Costs configurable allocation engine is promoted to production from
   app commit `31c8805`, with the docs-only release-manifest update at
   `b7c32e3`.
@@ -20,6 +20,12 @@ replace them.
   and web image `transmuter-web:hostinger`.
 - Hostinger dev Docker project uses API image `transmuter-api:hostinger-dev`
   and web image `transmuter-web:hostinger-dev`.
+- Current deployed application commit is `5793115` in dev and production.
+  It includes meeting-series boundaries, the `joserfc` audit remediation,
+  scoped tenant authorization, and the Supabase verified-claims mapping fix.
+- Current Hostinger Docker actions are `103623230` for dev and `103623550` for
+  production. Both are environment-only Microsoft Graph configuration
+  redeployments of the same `5793115` compose and completed successfully.
 - Hostinger VPS / domain context:
   - Primary domain owned for the VPS: `ishirock.tech`.
   - VPS hostname: `srv1695814.hstgr.cloud`.
@@ -77,7 +83,7 @@ replace them.
 - Graphifyy is installed for this repository. The local generated graph lives at
   `graphify-out/` and is intentionally ignored by git because it is generated
   source-derived context.
-- Current graph baseline was built from commit `632f066e` with `graphify update .`;
+- Current graph baseline was built from commit `5793115` with `graphify update .`;
   it contains the code/navigation graph used by `graphify query`, `graphify path`,
   and `graphify explain`.
 - Agents should use the graph before broad source searches when
@@ -114,6 +120,18 @@ replace them.
 - Current platform admin operator email is `venkatesh@ishirock.com`; API startup
   idempotently ensures that Supabase Auth user has platform-admin app metadata
   when `PLATFORM_ADMIN_BOOTSTRAP_ENABLED=true`.
+- Ordinary-user authorization is immutable and schema-scoped in Supabase
+  `app_metadata`: dev uses `transmuter_authorization_transmuter_dev` and
+  production uses `transmuter_authorization_transmuter`. The API and RLS both
+  require exact active canonical `users` row parity for subject, tenant, and
+  role. Never restore tenant/role authorization to `user_metadata`.
+- The self-hosted `public` schema has no Transmuter `users` table or identity
+  helpers. Only `transmuter_dev` and `transmuter` are application authorization
+  surfaces on this instance.
+- Dev and production share one Supabase Auth directory. Application
+  authorization is isolated by scoped claims, but credentials, sessions, and
+  service-role administration remain shared until separate Auth projects are
+  introduced.
 - Tenant administrator role (`tenant_admin`) configures tenant master data,
   users, access, dashboard configuration, and billing portal access.
 - Supported tenant roles:
@@ -180,5 +198,14 @@ replace them.
     API, and UI are live in production, but the full 4-pool FY2028 ACME3 shared
     cost acceptance scenario is dev-only until production demo data is
     backfilled.
+- Current launch follow-ups:
+  - `#216`: app-owned invite/password browser closeout is still required.
+  - `#220`, `#389`, `#390`: Microsoft Graph production consent and live
+    invite/transcript acceptance remain open. Dev is intentionally disconnected;
+    its callback, scope list, and encryption key are isolated. Production
+    runtime requests the required scopes, but the stored expired consent still
+    lacks `OnlineMeetings.Read` and must not be refreshed before fresh consent.
+  - `#224`: Admin bulk-meeting cleanup still needs its specific deployed-browser
+    destructive-flow evidence.
 - `scratch/` contains local helper scripts and should not be included in release
   commits unless explicitly requested.
