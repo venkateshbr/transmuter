@@ -49,7 +49,17 @@ class FakeAuthAdmin:
         self.updated_payloads.append((user_id, payload))
         for email, user in list(self.users.items()):
             if user["id"] == user_id:
-                user.update(payload)
+                for key, value in payload.items():
+                    if key not in {"app_metadata", "user_metadata"}:
+                        user[key] = value
+                        continue
+                    merged = {**user.get(key, {})}
+                    for metadata_key, metadata_value in value.items():
+                        if metadata_value is None:
+                            merged.pop(metadata_key, None)
+                        else:
+                            merged[metadata_key] = metadata_value
+                    user[key] = merged
                 if "email" in payload:
                     self.users.pop(email)
                     user["email"] = str(payload["email"]).lower()
@@ -71,7 +81,7 @@ def test_platform_admin_bootstrap_skips_existing_user_with_complete_metadata() -
     user_id = client.auth.admin.seed_user(
         "venkatesh@ishirock.com",
         app_metadata={"role": "platform_admin", "platform_admin": True},
-        user_metadata={"role": "platform_admin"},
+        user_metadata={"display_name": "Venkatesh"},
     )
 
     result = ensure_platform_admin_user(
@@ -84,6 +94,72 @@ def test_platform_admin_bootstrap_skips_existing_user_with_complete_metadata() -
     assert result.user_id == user_id
     assert client.auth.admin.created_payloads == []
     assert client.auth.admin.updated_payloads == []
+
+
+def test_platform_admin_bootstrap_removes_legacy_role_from_user_metadata() -> None:
+    client = FakeClient()
+    user_id = client.auth.admin.seed_user(
+        "venkatesh@ishirock.com",
+        app_metadata={
+            "provider": "email",
+            "tenant_id": "legacy-tenant",
+            "role": "platform_admin",
+            "platform_admin": True,
+            "transmuter_authorization_transmuter_dev": {
+                "tenant_id": "dev-tenant",
+                "role": "viewer",
+            },
+        },
+        user_metadata={
+            "tenant_id": "legacy-tenant",
+            "role": "platform_admin",
+            "display_name": "Venkatesh",
+        },
+    )
+
+    result = ensure_platform_admin_user(
+        client,
+        allowed_emails="venkatesh@ishirock.com",
+    )
+
+    assert result.status == "metadata_updated"
+    assert result.user_id == user_id
+    _, payload = client.auth.admin.updated_payloads[0]
+    assert payload["app_metadata"]["tenant_id"] is None
+    assert payload["app_metadata"]["transmuter_authorization_transmuter_dev"] is None
+    assert payload["user_metadata"]["tenant_id"] is None
+    assert payload["user_metadata"]["role"] is None
+    user = client.auth.admin.users["venkatesh@ishirock.com"]
+    assert user["app_metadata"] == {
+        "provider": "email",
+        "role": "platform_admin",
+        "platform_admin": True,
+    }
+    assert user["user_metadata"] == {"display_name": "Venkatesh"}
+
+
+def test_platform_admin_bootstrap_removes_even_empty_scoped_metadata_key() -> None:
+    client = FakeClient()
+    user_id = client.auth.admin.seed_user(
+        "venkatesh@ishirock.com",
+        app_metadata={
+            "role": "platform_admin",
+            "platform_admin": True,
+            "transmuter_authorization_public": {},
+        },
+    )
+
+    result = ensure_platform_admin_user(
+        client,
+        allowed_emails="venkatesh@ishirock.com",
+    )
+
+    assert result.status == "metadata_updated"
+    assert result.user_id == user_id
+    assert client.auth.admin.users["venkatesh@ishirock.com"]["app_metadata"] == {
+        "role": "platform_admin",
+        "platform_admin": True,
+    }
 
 
 def test_platform_admin_bootstrap_updates_existing_user_metadata_only() -> None:
@@ -109,7 +185,6 @@ def test_platform_admin_bootstrap_updates_existing_user_metadata_only() -> None:
     }
     assert user["user_metadata"] == {
         "display_name": "Venkatesh",
-        "role": "platform_admin",
     }
     assert client.auth.admin.created_payloads == []
 
@@ -131,7 +206,7 @@ def test_platform_admin_bootstrap_creates_missing_user_with_password() -> None:
     assert payload["email_confirm"] is True
     assert payload["password"] == "TemporaryPassword2026!"
     assert payload["app_metadata"] == {"role": "platform_admin", "platform_admin": True}
-    assert payload["user_metadata"] == {"role": "platform_admin"}
+    assert payload["user_metadata"] == {}
 
 
 def test_platform_admin_bootstrap_missing_user_requires_explicit_password() -> None:
@@ -205,7 +280,6 @@ def test_platform_admin_rotation_renames_previous_auth_user() -> None:
     }
     assert user["user_metadata"] == {
         "display_name": "Operator",
-        "role": "platform_admin",
     }
 
 
@@ -213,7 +287,16 @@ def test_platform_admin_rotation_normalizes_target_and_revokes_previous_metadata
     client = FakeClient()
     previous_id = client.auth.admin.seed_user(
         "admin@ishirock.com",
-        app_metadata={"provider": "email", "role": "platform_admin", "platform_admin": True},
+        app_metadata={
+            "provider": "email",
+            "tenant_id": "legacy-tenant",
+            "role": "platform_admin",
+            "platform_admin": True,
+            "transmuter_authorization_public": {
+                "tenant_id": "tenant-1",
+                "role": "viewer",
+            },
+        },
         user_metadata={"role": "platform_admin"},
     )
     target_id = client.auth.admin.seed_user(

@@ -21,6 +21,9 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "../../../.env")
 
 from supabase import Client, ClientOptions, create_client  # noqa: E402
 
+from app.core.auth_metadata import build_auth_metadata_payload  # noqa: E402
+from app.core.database import get_supabase_schema  # noqa: E402
+
 # ── Constants ──────────────────────────────────────────────────────────────────
 
 ORG_NAME = "Ishirock"
@@ -63,26 +66,30 @@ def ensure_auth_user(c: Client, org_id: str, user: dict[str, object]) -> str:
 
     existing_auth_id = find_auth_user_id_by_email(c, email)
     if existing_auth_id:
+        metadata = build_auth_metadata_payload(
+            existing_auth_id,
+            authorization={"tenant_id": org_id, "role": role},
+            profile={"display_name": display_name},
+            scope=get_supabase_schema(),
+        )
         c.auth.admin.update_user_by_id(existing_auth_id, {
             "password": password,
             "email_confirm": True,
-            "user_metadata": {
-                "tenant_id": org_id,
-                "role": role,
-                "display_name": display_name,
-            },
+            **metadata,
         })
         return existing_auth_id
 
+    metadata = build_auth_metadata_payload(
+        None,
+        authorization={"tenant_id": org_id, "role": role},
+        profile={"display_name": display_name},
+        scope=get_supabase_schema(),
+    )
     auth_resp = c.auth.admin.create_user({
         "email": email,
         "password": password,
         "email_confirm": True,
-        "user_metadata": {
-            "tenant_id": org_id,
-            "role": role,
-            "display_name": display_name,
-        },
+        **metadata,
     })
     return str(auth_resp.user.id)
 

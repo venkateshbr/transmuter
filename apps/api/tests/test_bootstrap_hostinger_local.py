@@ -13,10 +13,10 @@ class FakeAuthAdmin:
     def list_users(self, page: int, per_page: int) -> list[SimpleNamespace]:
         assert page >= 1
         assert per_page > 0
-        return [
-            SimpleNamespace(id=user["id"], email=email)
-            for email, user in sorted(self.users.items())
-        ]
+        return [SimpleNamespace(**user) for email, user in sorted(self.users.items())]
+
+    def get_user_by_id(self, user_id: str) -> SimpleNamespace:
+        raise AssertionError(f"bootstrap metadata writer must not read Auth user {user_id}")
 
     def create_user(self, payload: dict[str, Any]) -> SimpleNamespace:
         user_id = f"auth-{len(self.users) + 1}"
@@ -26,7 +26,19 @@ class FakeAuthAdmin:
     def update_user_by_id(self, user_id: str, payload: dict[str, Any]) -> None:
         for email, user in self.users.items():
             if user["id"] == user_id:
-                self.users[email] = {**user, **payload}
+                updated = {**user}
+                for key, value in payload.items():
+                    if key not in {"app_metadata", "user_metadata"}:
+                        updated[key] = value
+                        continue
+                    merged = {**updated.get(key, {})}
+                    for metadata_key, metadata_value in value.items():
+                        if metadata_value is None:
+                            merged.pop(metadata_key, None)
+                        else:
+                            merged[metadata_key] = metadata_value
+                    updated[key] = merged
+                self.users[email] = updated
                 return
         raise AssertionError(f"missing auth user {user_id}")
 
@@ -120,13 +132,27 @@ def test_hostinger_bootstrap_seeds_only_admin_shell(
         planned_user_count=1,
     )
     monkeypatch.setattr(bootstrap_script, "TenantBootstrapService", FakeTenantBootstrapService)
+    monkeypatch.setattr(bootstrap_script, "get_supabase_schema", lambda: "public")
 
     result = bootstrap_script.bootstrap(client, config)
 
     assert result["tenant_slug"] == "transmuter-admin"
     assert result["subscription_plan_count"] == 5
     assert len(client.auth.admin.users) == 2
-    assert client.auth.admin.users["operator@example.com"]["app_metadata"]["platform_admin"] is True
+    platform_user = client.auth.admin.users["operator@example.com"]
+    assert platform_user["app_metadata"] == {
+        "role": "platform_admin",
+        "platform_admin": True,
+    }
+    assert platform_user["user_metadata"] == {}
+    tenant_user = client.auth.admin.users["admin@example.com"]
+    assert tenant_user["app_metadata"] == {
+        "transmuter_authorization_public": {
+            "tenant_id": result["tenant_id"],
+            "role": "transformation_office",
+        },
+    }
+    assert tenant_user["user_metadata"] == {"display_name": "Tenant Admin"}
     assert len(client.tables["organizations"]) == 1
     assert len(client.tables["users"]) == 1
     assert len(client.tables["subscription_plans"]) == 5
@@ -138,3 +164,71 @@ def test_hostinger_bootstrap_seeds_only_admin_shell(
     assert "meetings" not in client.tables
     assert "financial_entries" not in client.tables
     assert "financial_cost_lines" not in client.tables
+
+
+def test_hostinger_bootstrap_preserves_provider_metadata_on_repeat(monkeypatch) -> None:
+    client = FakeClient()
+    config = bootstrap_script.BootstrapConfig(
+        tenant_name="Transmuter Platform Admin",
+        tenant_slug="transmuter-admin",
+        tenant_admin_email="admin@example.com",
+        tenant_admin_name="Tenant Admin",
+        tenant_admin_password="Password2026!",
+        platform_admin_email="operator@example.com",
+        platform_admin_password="Password2026!",
+        planned_user_count=1,
+    )
+    monkeypatch.setattr(bootstrap_script, "TenantBootstrapService", FakeTenantBootstrapService)
+    monkeypatch.setattr(bootstrap_script, "get_supabase_schema", lambda: "public")
+    first = bootstrap_script.bootstrap(client, config)
+    client.auth.admin.users["operator@example.com"]["app_metadata"].update(
+        {
+            "provider": "email",
+            "tenant_id": "legacy-tenant",
+            "transmuter_authorization_transmuter_dev": {
+                "tenant_id": "dev-tenant",
+                "role": "viewer",
+            },
+        }
+    )
+    client.auth.admin.users["admin@example.com"]["app_metadata"].update(
+        {
+            "provider": "email",
+            "tenant_id": "stale-global-tenant",
+            "transmuter_authorization_transmuter_dev": {
+                "tenant_id": "dev-tenant",
+                "role": "viewer",
+            },
+        }
+    )
+    client.auth.admin.users["admin@example.com"]["user_metadata"].update(
+        {"tenant_id": "legacy", "role": "viewer", "locale": "en"}
+    )
+
+    second = bootstrap_script.bootstrap(client, config)
+
+    assert second["tenant_id"] == first["tenant_id"]
+    platform_user = client.auth.admin.users["operator@example.com"]
+    assert platform_user["app_metadata"] == {
+        "provider": "email",
+        "role": "platform_admin",
+        "platform_admin": True,
+    }
+    tenant_user = client.auth.admin.users["admin@example.com"]
+    assert tenant_user["app_metadata"] == {
+        "provider": "email",
+        "transmuter_authorization_public": {
+            "tenant_id": first["tenant_id"],
+            "role": "transformation_office",
+        },
+        "transmuter_authorization_transmuter_dev": {
+            "tenant_id": "dev-tenant",
+            "role": "viewer",
+        },
+    }
+    assert tenant_user["user_metadata"] == {
+        "display_name": "Tenant Admin",
+        "locale": "en",
+        "tenant_id": "legacy",
+        "role": "viewer",
+    }

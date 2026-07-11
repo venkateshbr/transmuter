@@ -20,7 +20,8 @@ from supabase import Client
 
 load_dotenv(dotenv_path=Path(__file__).resolve().parents[3] / ".env")
 
-from app.core.database import get_supabase_admin  # noqa: E402
+from app.core.auth_metadata import build_auth_metadata_payload  # noqa: E402
+from app.core.database import get_supabase_admin, get_supabase_schema  # noqa: E402
 from app.services.dashboard_config import DashboardConfigService  # noqa: E402
 from app.services.financial import FinancialService  # noqa: E402
 
@@ -93,27 +94,40 @@ def ensure_org(client: Client) -> str:
 
 def ensure_admin_user(client: Client, tenant_id: str) -> str:
     auth_id = find_auth_user_id_by_email(client, ADMIN_EMAIL)
-    metadata = {
-        "tenant_id": tenant_id,
-        "role": "transformation_office",
-        "display_name": "Morgan Patel",
-    }
     if auth_id:
+        metadata = build_auth_metadata_payload(
+            auth_id,
+            authorization={
+                "tenant_id": tenant_id,
+                "role": "transformation_office",
+            },
+            profile={"display_name": "Morgan Patel"},
+            scope=get_supabase_schema(),
+        )
         client.auth.admin.update_user_by_id(
             auth_id,
             {
                 "password": ADMIN_PASSWORD,
                 "email_confirm": True,
-                "user_metadata": metadata,
+                **metadata,
             },
         )
     else:
+        metadata = build_auth_metadata_payload(
+            None,
+            authorization={
+                "tenant_id": tenant_id,
+                "role": "transformation_office",
+            },
+            profile={"display_name": "Morgan Patel"},
+            scope=get_supabase_schema(),
+        )
         created = client.auth.admin.create_user(
             {
                 "email": ADMIN_EMAIL,
                 "password": ADMIN_PASSWORD,
                 "email_confirm": True,
-                "user_metadata": metadata,
+                **metadata,
             }
         )
         auth_id = str(created.user.id)

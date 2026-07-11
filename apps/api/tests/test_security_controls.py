@@ -2,11 +2,21 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+from app.core.auth import (
+    CLAIM_SYNC_ERROR,
+    _current_user_from_app_token,
+    _current_user_from_supabase_token,
+    _current_user_from_user_row,
+    assert_supabase_claims_match_user,
+    get_verified_supabase_claims,
+    is_platform_admin_claims,
+)
 from app.core.config import settings
-from app.core.jwt_tokens import decode_token
+from app.core.jwt_tokens import decode_token, encode_token
 from app.domain.initiative_intake import InitiativeIntakeRequest
 from app.domain.initiatives import InitiativeCreate
 from app.main import _login_attempts, app
@@ -15,6 +25,7 @@ from app.routers.auth import _mint_token
 from app.routers.platform import TENANT_DELETE_TABLES
 
 client = TestClient(app)
+AUTHORIZATION_KEY = "transmuter_authorization_public"
 
 
 def test_app_jwt_excludes_email_claim() -> None:
@@ -24,6 +35,96 @@ def test_app_jwt_excludes_email_claim() -> None:
 
     assert payload["role"] == "viewer"
     assert "email" not in payload
+
+
+def test_legacy_app_token_role_drift_fails_closed(monkeypatch) -> None:
+    user_id = str(uuid4())
+    tenant_id = str(uuid4())
+    token = _mint_token(user_id=user_id, tenant_id=tenant_id, role="viewer")
+
+    class FakeQuery:
+        def select(self, *_args: str) -> "FakeQuery":
+            return self
+
+        def eq(self, *_args: str) -> "FakeQuery":
+            return self
+
+        def maybe_single(self) -> "FakeQuery":
+            return self
+
+        def execute(self) -> object:
+            return type(
+                "Result",
+                (),
+                {
+                    "data": {
+                        "id": user_id,
+                        "tenant_id": tenant_id,
+                        "role": "finance_lead",
+                        "status": "active",
+                    }
+                },
+            )()
+
+    class FakeAdminClient:
+        def table(self, name: str) -> FakeQuery:
+            assert name == "users"
+            return FakeQuery()
+
+    monkeypatch.setattr("app.core.auth.get_supabase_admin", lambda: FakeAdminClient())
+
+    with pytest.raises(HTTPException) as exc_info:
+        _current_user_from_app_token(token, "/meetings")
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == CLAIM_SYNC_ERROR
+
+
+def test_legacy_app_token_without_app_role_fails_closed() -> None:
+    token = _mint_token(user_id=str(uuid4()), tenant_id=str(uuid4()), role="viewer")
+    payload = decode_token(token, settings.jwt_secret, settings.jwt_algorithm)
+    payload.pop("app_role")
+    stale_token = encode_token(payload, settings.jwt_secret, settings.jwt_algorithm)
+
+    with pytest.raises(HTTPException) as exc_info:
+        _current_user_from_app_token(stale_token, "/meetings")
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == CLAIM_SYNC_ERROR
+
+
+def test_platform_admin_claims_require_allowlisted_email_and_app_metadata(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "platform_admin_emails", "operator@example.com")
+    claims = {
+        "sub": str(uuid4()),
+        "email": "operator@example.com",
+        "app_metadata": {"role": "platform_admin", "platform_admin": True},
+    }
+
+    assert is_platform_admin_claims(claims) is True
+    assert is_platform_admin_claims({**claims, "email": "other@example.com"}) is False
+    assert is_platform_admin_claims({**claims, "app_metadata": {}}) is False
+    assert (
+        is_platform_admin_claims(
+            {
+                **claims,
+                "app_metadata": {
+                    **claims["app_metadata"],
+                    AUTHORIZATION_KEY: {"tenant_id": str(uuid4()), "role": "viewer"},
+                },
+            }
+        )
+        is False
+    )
+    assert (
+        is_platform_admin_claims(
+            {
+                **claims,
+                "app_metadata": {**claims["app_metadata"], "tenant_id": str(uuid4())},
+            }
+        )
+        is False
+    )
 
 
 def test_security_headers_are_added() -> None:
@@ -173,6 +274,185 @@ def test_benefit_validation_event_insert_policy_checks_line_tenant() -> None:
     )
 
 
+def test_supabase_claims_must_match_canonical_user() -> None:
+    user_id = str(uuid4())
+    tenant_id = str(uuid4())
+    row = {
+        "id": user_id,
+        "tenant_id": tenant_id,
+        "role": "viewer",
+        "status": "active",
+    }
+
+    assert_supabase_claims_match_user(
+        {
+            "sub": user_id,
+            "app_metadata": {AUTHORIZATION_KEY: {"tenant_id": tenant_id, "role": "viewer"}},
+        },
+        row,
+        authorization_scope="public",
+    )
+
+
+@pytest.mark.parametrize("failure", ["exception", "missing", "invalid"])
+def test_verified_supabase_claim_failures_are_generic(failure: str) -> None:
+    class FakeAuth:
+        def get_claims(self, _token: str) -> object:
+            if failure == "exception":
+                raise RuntimeError("sensitive provider detail")
+            if failure == "missing":
+                return None
+            return type("ClaimsResponse", (), {"claims": "not-a-mapping"})()
+
+    fake_client = type("Client", (), {"auth": FakeAuth()})()
+
+    with pytest.raises(HTTPException) as exc_info:
+        get_verified_supabase_claims(fake_client, "token")
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == "Invalid JWT"
+    assert exc_info.value.headers == {"WWW-Authenticate": "Bearer"}
+
+
+def test_pending_user_is_forced_to_password_flow_even_if_flag_drifted() -> None:
+    row = {
+        "id": str(uuid4()),
+        "tenant_id": str(uuid4()),
+        "role": "viewer",
+        "status": "pending",
+        "must_change_password": False,
+    }
+
+    with pytest.raises(HTTPException) as exc_info:
+        _current_user_from_user_row(row, "/meetings")
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Password change required"
+    user = _current_user_from_user_row(row, "/auth/me")
+    assert user.must_change_password is True
+
+
+@pytest.mark.parametrize(
+    "drift",
+    [
+        "malformed",
+        "tenant",
+        "noncanonical_tenant",
+        "role",
+        "subject",
+        "wrong_scope",
+        "hybrid_platform",
+    ],
+)
+def test_supabase_claim_drift_fails_closed(drift: str) -> None:
+    user_id = str(uuid4())
+    tenant_id = str(uuid4())
+    claims = {
+        "sub": user_id,
+        "app_metadata": {AUTHORIZATION_KEY: {"tenant_id": tenant_id, "role": "viewer"}},
+    }
+    if drift == "malformed":
+        claims = {"sub": "not-a-uuid", "app_metadata": {}}
+    elif drift == "tenant":
+        claims["app_metadata"][AUTHORIZATION_KEY]["tenant_id"] = str(uuid4())
+    elif drift == "noncanonical_tenant":
+        claims["app_metadata"][AUTHORIZATION_KEY]["tenant_id"] = f"{{{tenant_id}}}"
+    elif drift == "role":
+        claims["app_metadata"][AUTHORIZATION_KEY]["role"] = "finance_lead"
+    elif drift == "subject":
+        claims["sub"] = str(uuid4())
+    elif drift == "wrong_scope":
+        claims["app_metadata"] = {
+            "transmuter_authorization_transmuter_dev": {
+                "tenant_id": tenant_id,
+                "role": "viewer",
+            }
+        }
+    else:
+        claims["app_metadata"].update(
+            role="platform_admin",
+            platform_admin=True,
+        )
+    row = {
+        "id": user_id,
+        "tenant_id": tenant_id,
+        "role": "viewer",
+        "status": "active",
+    }
+
+    with pytest.raises(HTTPException) as exc_info:
+        assert_supabase_claims_match_user(claims, row, authorization_scope="public")
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == CLAIM_SYNC_ERROR
+
+
+def test_protected_request_rejects_exact_stale_bearer_claims(monkeypatch) -> None:
+    user_id = str(uuid4())
+    tenant_id = str(uuid4())
+
+    class FakeAuth:
+        def get_claims(self, token: str) -> object:
+            assert token == "stale-bearer-token"
+            return type(
+                "ClaimsResponse",
+                (),
+                {
+                    "claims": {
+                        "sub": user_id,
+                        "email": "owner@example.com",
+                        "app_metadata": {
+                            AUTHORIZATION_KEY: {
+                                "tenant_id": str(uuid4()),
+                                "role": "viewer",
+                            }
+                        },
+                    }
+                },
+            )()
+
+    class FakeAnonClient:
+        auth = FakeAuth()
+
+    class FakeQuery:
+        def select(self, *_args: str) -> "FakeQuery":
+            return self
+
+        def eq(self, *_args: str) -> "FakeQuery":
+            return self
+
+        def maybe_single(self) -> "FakeQuery":
+            return self
+
+        def execute(self) -> object:
+            return type(
+                "Result",
+                (),
+                {
+                    "data": {
+                        "id": user_id,
+                        "tenant_id": tenant_id,
+                        "role": "viewer",
+                        "status": "active",
+                    }
+                },
+            )()
+
+    class FakeAdminClient:
+        def table(self, name: str) -> FakeQuery:
+            assert name == "users"
+            return FakeQuery()
+
+    monkeypatch.setattr("app.core.auth.create_client", lambda *_args: FakeAnonClient())
+    monkeypatch.setattr("app.core.auth.get_supabase_admin", lambda: FakeAdminClient())
+
+    with pytest.raises(HTTPException) as exc_info:
+        _current_user_from_supabase_token("stale-bearer-token", "/meetings")
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == CLAIM_SYNC_ERROR
+
+
 def test_auth_refresh_rotates_supabase_session(monkeypatch) -> None:
     user_id = str(uuid4())
     tenant_id = str(uuid4())
@@ -194,6 +474,22 @@ def test_auth_refresh_rotates_supabase_session(monkeypatch) -> None:
         def refresh_session(self, refresh_token: str) -> FakeAuthResponse:
             assert refresh_token == "old-refresh-token"
             return FakeAuthResponse()
+
+        def get_claims(self, token: str) -> object:
+            assert token == "new-access-token"
+            return type(
+                "ClaimsResponse",
+                (),
+                {
+                    "claims": {
+                        "sub": user_id,
+                        "email": "owner@example.com",
+                        "app_metadata": {
+                            AUTHORIZATION_KEY: {"tenant_id": tenant_id, "role": "viewer"}
+                        },
+                    }
+                },
+            )()
 
     class FakeAnonClient:
         auth = FakeAuth()
@@ -240,6 +536,101 @@ def test_auth_refresh_rotates_supabase_session(monkeypatch) -> None:
     assert data["role"] == "viewer"
 
 
+@pytest.mark.parametrize(
+    ("path", "payload"),
+    [
+        ("/auth/login", {"email": "owner@example.com", "password": "password"}),
+        ("/auth/refresh", {"refresh_token": "old-refresh-token"}),
+    ],
+)
+@pytest.mark.parametrize("drift", ["tenant", "role"])
+def test_auth_session_rejects_stale_authorization_claim(
+    monkeypatch, path: str, payload: dict[str, str], drift: str
+) -> None:
+    _login_attempts.clear()
+    user_id = str(uuid4())
+    tenant_id = str(uuid4())
+
+    class FakeSession:
+        access_token = "stale-access-token"
+        refresh_token = "rotated-refresh-token"
+        expires_in = 3600
+
+    class FakeUser:
+        id = user_id
+        email = "owner@example.com"
+
+    class FakeAuthResponse:
+        user = FakeUser()
+        session = FakeSession()
+
+    class FakeAuth:
+        def sign_in_with_password(self, _credentials: dict[str, object]) -> FakeAuthResponse:
+            return FakeAuthResponse()
+
+        def refresh_session(self, _refresh_token: str) -> FakeAuthResponse:
+            return FakeAuthResponse()
+
+        def get_claims(self, token: str) -> object:
+            assert token == "stale-access-token"
+            authorization = {"tenant_id": tenant_id, "role": "viewer"}
+            if drift == "tenant":
+                authorization["tenant_id"] = str(uuid4())
+            else:
+                authorization["role"] = "finance_lead"
+            return type(
+                "ClaimsResponse",
+                (),
+                {
+                    "claims": {
+                        "sub": user_id,
+                        "email": "owner@example.com",
+                        "app_metadata": {AUTHORIZATION_KEY: authorization},
+                    }
+                },
+            )()
+
+    class FakeQuery:
+        def select(self, *_args: str) -> "FakeQuery":
+            return self
+
+        def eq(self, *_args: str) -> "FakeQuery":
+            return self
+
+        def maybe_single(self) -> "FakeQuery":
+            return self
+
+        def execute(self) -> object:
+            return type(
+                "Result",
+                (),
+                {
+                    "data": {
+                        "id": user_id,
+                        "tenant_id": tenant_id,
+                        "role": "viewer",
+                        "status": "active",
+                    }
+                },
+            )()
+
+    class FakeAnonClient:
+        auth = FakeAuth()
+
+    class FakeAdminClient:
+        def table(self, name: str) -> FakeQuery:
+            assert name == "users"
+            return FakeQuery()
+
+    monkeypatch.setattr("app.routers.auth.create_client", lambda *_args: FakeAnonClient())
+    monkeypatch.setattr("app.routers.auth.get_supabase_admin", lambda: FakeAdminClient())
+
+    response = client.post(path, json=payload)
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": CLAIM_SYNC_ERROR}
+
+
 def test_platform_admin_email_requires_auth_metadata(monkeypatch) -> None:
     user_id = str(uuid4())
 
@@ -260,6 +651,20 @@ def test_platform_admin_email_requires_auth_metadata(monkeypatch) -> None:
     class FakeAuth:
         def refresh_session(self, refresh_token: str) -> FakeAuthResponse:
             return FakeAuthResponse()
+
+        def get_claims(self, token: str) -> object:
+            assert token == "new-access-token"
+            return type(
+                "ClaimsResponse",
+                (),
+                {
+                    "claims": {
+                        "sub": user_id,
+                        "email": "operator@example.com",
+                        "app_metadata": {},
+                    }
+                },
+            )()
 
     class FakeAnonClient:
         auth = FakeAuth()
@@ -445,6 +850,22 @@ def test_change_password_reauthenticates_and_updates_supabase_auth(monkeypatch) 
                             "expires_in": 3600,
                         },
                     )(),
+                },
+            )()
+
+        def get_claims(self, token: str) -> object:
+            assert token == "new-access-token"
+            return type(
+                "ClaimsResponse",
+                (),
+                {
+                    "claims": {
+                        "sub": user_id,
+                        "email": "viewer@example.com",
+                        "app_metadata": {
+                            AUTHORIZATION_KEY: {"tenant_id": tenant_id, "role": "viewer"}
+                        },
+                    }
                 },
             )()
 
