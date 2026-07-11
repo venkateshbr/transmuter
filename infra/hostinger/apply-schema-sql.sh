@@ -84,7 +84,7 @@ write_temp_env_from_project() {
   local tmp_file="$2"
   local environment
 
-  echo "Missing env file; fetching saved Hostinger environment from project '${project_name}'."
+  echo "Fetching saved Hostinger environment from project '${project_name}'."
   environment="$(fetch_hostinger_project_environment "${project_name}")"
   if [[ -z "${environment}" ]]; then
     echo "Hostinger project '${project_name}' did not return an environment." >&2
@@ -110,9 +110,22 @@ ENV_FILE="${ENV_FILE:-${ENV_FILE_DEFAULT}}"
 CALLER_OFFLINE_SCHEMA_PINNED="${OFFLINE_SCHEMA_PINNED:-0}"
 CALLER_OFFLINE_SCHEMA_GIT_REF="${OFFLINE_SCHEMA_GIT_REF:-}"
 load_hostinger_control_env "${REPO_ROOT}/.env"
-load_hostinger_control_env "${ENV_FILE}"
+if [[ "${OFFLINE_HOSTINGER_CONTROLS_LOCKED:-0}" != "1" ]]; then
+  load_hostinger_control_env "${ENV_FILE}"
+fi
 
-if [[ ! -f "${ENV_FILE}" ]]; then
+if [[ "${CALLER_OFFLINE_SCHEMA_PINNED}" == "1" ]]; then
+  assert_offline_hostinger_controls
+  PROJECT_NAME_DEFAULT="transmuter-hostinger"
+  if [[ "${ENVIRONMENT}" == "dev" ]]; then
+    PROJECT_NAME_DEFAULT="transmuter-dev-hostinger"
+  fi
+  HOSTINGER_PROJECT_NAME="${HOSTINGER_PROJECT_NAME:-${PROJECT_NAME_DEFAULT}}"
+  TEMP_ENV_FILE="$(mktemp)"
+  trap 'rm -f "${TEMP_ENV_FILE:-}"' EXIT
+  write_temp_env_from_project "${HOSTINGER_PROJECT_NAME}" "${TEMP_ENV_FILE}"
+  ENV_FILE="${TEMP_ENV_FILE}"
+elif [[ ! -f "${ENV_FILE}" ]]; then
   PROJECT_NAME_DEFAULT="transmuter-hostinger"
   if [[ "${ENVIRONMENT}" == "dev" ]]; then
     PROJECT_NAME_DEFAULT="transmuter-dev-hostinger"
@@ -124,10 +137,11 @@ if [[ ! -f "${ENV_FILE}" ]]; then
   ENV_FILE="${TEMP_ENV_FILE}"
 fi
 
-set -a
-# shellcheck source=/dev/null
-. "${ENV_FILE}"
-set +a
+SCHEMA_ENV_EXISTING_VALUE_MODE="preserve"
+if [[ "${CALLER_OFFLINE_SCHEMA_PINNED}" == "1" ]]; then
+  SCHEMA_ENV_EXISTING_VALUE_MODE="replace"
+fi
+load_hostinger_schema_env "${ENV_FILE}" "${SCHEMA_ENV_EXISTING_VALUE_MODE}"
 
 if [[ "${CALLER_OFFLINE_SCHEMA_PINNED}" == "1" ]]; then
   if [[ -z "${CALLER_OFFLINE_SCHEMA_GIT_REF}" ]]; then
@@ -140,6 +154,11 @@ fi
 
 TARGET_SCHEMA="${SCHEMA_TARGET:-${SUPABASE_SCHEMA:-${DB_SCHEMA:-${TARGET_SCHEMA_DEFAULT}}}}"
 validate_identifier TARGET_SCHEMA "${TARGET_SCHEMA}"
+if [[ "${CALLER_OFFLINE_SCHEMA_PINNED}" == "1" \
+  && "${TARGET_SCHEMA}" != "${TARGET_SCHEMA_DEFAULT}" ]]; then
+  echo "Offline ${ENVIRONMENT} schema target must be ${TARGET_SCHEMA_DEFAULT}; got ${TARGET_SCHEMA}." >&2
+  exit 1
+fi
 
 SCHEMA_DATABASE_URL="${SCHEMA_DATABASE_URL:-}"
 if [[ -z "${SCHEMA_DATABASE_URL}" ]]; then

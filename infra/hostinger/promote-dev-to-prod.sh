@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+. "${SCRIPT_DIR}/env-control.sh"
 
 SKIP_VALIDATE=0
 OFFLINE_SCHEMA=0
@@ -75,7 +76,12 @@ fi
 current_branch="$(git branch --show-current)"
 current_commit="$(git rev-parse --short HEAD)"
 echo "Promoting ${current_branch}@${current_commit} to production Hostinger stack."
-HOSTINGER_STOP_PROJECTS="${HOSTINGER_STOP_PROJECTS:-transmuter transmuter-hostinger}"
+if [[ "${OFFLINE_SCHEMA}" == "1" ]]; then
+  reject_offline_hostinger_control_overrides
+  bind_offline_hostinger_controls prod
+else
+  HOSTINGER_STOP_PROJECTS="${HOSTINGER_STOP_PROJECTS:-transmuter transmuter-hostinger}"
+fi
 
 stop_projects=()
 if [[ "${OFFLINE_SCHEMA}" == "1" ]]; then
@@ -121,9 +127,10 @@ if [[ "${#SCHEMA_FILES[@]}" -gt 0 ]]; then
     pinned_sha="$(git rev-parse HEAD)"
     export HOSTINGER_SCHEMA_GIT_REF="${pinned_sha}"
     export HOSTINGER_DEPLOY_REF="${pinned_sha}"
+    export ENV_FILE="${SCRIPT_DIR}/.env"
     unset HOSTINGER_COMPOSE_URL
     for project_name in "${stop_projects[@]}"; do
-      ENV_FILE="${ENV_FILE:-${SCRIPT_DIR}/.env}" \
+      ENV_FILE="${ENV_FILE}" \
         HOSTINGER_PROJECT_NAME="${project_name}" \
         HOSTINGER_VPS_ID="${HOSTINGER_VPS_ID:-1695814}" \
         CONFIRM_STOP_PROJECT=1 \
@@ -131,7 +138,7 @@ if [[ "${#SCHEMA_FILES[@]}" -gt 0 ]]; then
         "${SCRIPT_DIR}/stop-docker-project.sh"
     done
     for project_name in "${stop_projects[@]}"; do
-      ENV_FILE="${ENV_FILE:-${SCRIPT_DIR}/.env}" \
+      ENV_FILE="${ENV_FILE}" \
         HOSTINGER_PROJECT_NAME="${project_name}" \
         HOSTINGER_VPS_ID="${HOSTINGER_VPS_ID:-1695814}" \
         CONFIRM_STOP_PROJECT=1 \
