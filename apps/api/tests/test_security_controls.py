@@ -294,6 +294,19 @@ def test_supabase_claims_must_match_canonical_user() -> None:
     )
 
 
+def test_verified_supabase_claims_accepts_sdk_mapping_response() -> None:
+    claims = {"sub": str(uuid4()), "app_metadata": {}}
+
+    class FakeAuth:
+        def get_claims(self, token: str) -> object:
+            assert token == "exact-bearer-token"
+            return {"claims": claims, "headers": {"alg": "ES256"}, "signature": b"signature"}
+
+    fake_client = type("Client", (), {"auth": FakeAuth()})()
+
+    assert get_verified_supabase_claims(fake_client, "exact-bearer-token") == claims
+
+
 @pytest.mark.parametrize("failure", ["exception", "missing", "invalid"])
 def test_verified_supabase_claim_failures_are_generic(failure: str) -> None:
     class FakeAuth:
