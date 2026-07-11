@@ -4,13 +4,13 @@ from typing import Annotated, Any
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from jose import jwt
 from pydantic import BaseModel, EmailStr, Field
 from supabase import create_client
 
 from app.core.auth import CurrentUser, get_current_user
 from app.core.config import settings
 from app.core.database import get_supabase_admin
+from app.core.jwt_tokens import encode_token
 from app.domain.people import InviteAccept
 from app.services.demo_portfolio_bootstrap import bootstrap_demo_portfolio
 from app.services.people import PeopleInviteAcceptanceService
@@ -87,7 +87,7 @@ def _mint_token(user_id: str, tenant_id: str, role: str) -> str:
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=settings.jwt_expiry_minutes)).timestamp()),
     }
-    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+    return encode_token(payload, settings.jwt_secret, settings.jwt_algorithm)
 
 
 def _platform_admin_emails() -> set[str]:

@@ -2,8 +2,13 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+from fastapi import HTTPException
+
 from app.core.config import settings
 from app.core.crypto import encrypt_secret
+from app.core.jwt_tokens import encode_token
+from app.routers.meeting_integrations import _decode_oauth_state
 from app.services.meeting_providers import (
     MeetingInviteRequest,
     MicrosoftGraphMeetingProvider,
@@ -200,3 +205,44 @@ def test_normalize_vtt_transcript_strips_cues_and_duplicates() -> None:
 """
 
     assert normalize_vtt_transcript(content) == "Speaker: Approve the plan"
+
+
+def test_microsoft_oauth_state_validates_purpose_and_expiry() -> None:
+    valid_state = encode_token(
+        {
+            "purpose": "microsoft_graph_oauth",
+            "tenant_id": "00000000-0000-0000-0000-000000000001",
+            "user_id": "00000000-0000-0000-0000-000000000002",
+            "exp": datetime.now(UTC) + timedelta(minutes=10),
+        },
+        settings.jwt_secret,
+        settings.jwt_algorithm,
+    )
+
+    assert _decode_oauth_state(valid_state)["purpose"] == "microsoft_graph_oauth"
+
+    wrong_purpose = encode_token(
+        {
+            "purpose": "different_flow",
+            "tenant_id": "00000000-0000-0000-0000-000000000001",
+            "user_id": "00000000-0000-0000-0000-000000000002",
+            "exp": datetime.now(UTC) + timedelta(minutes=10),
+        },
+        settings.jwt_secret,
+        settings.jwt_algorithm,
+    )
+    expired_state = encode_token(
+        {
+            "purpose": "microsoft_graph_oauth",
+            "tenant_id": "00000000-0000-0000-0000-000000000001",
+            "user_id": "00000000-0000-0000-0000-000000000002",
+            "exp": datetime.now(UTC) - timedelta(seconds=1),
+        },
+        settings.jwt_secret,
+        settings.jwt_algorithm,
+    )
+
+    with pytest.raises(HTTPException, match="Invalid Microsoft OAuth state purpose"):
+        _decode_oauth_state(wrong_purpose)
+    with pytest.raises(HTTPException, match="Invalid Microsoft OAuth state"):
+        _decode_oauth_state(expired_state)
