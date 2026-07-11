@@ -8,7 +8,7 @@ from uuid import UUID
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import RedirectResponse
-from jose import JWTError, jwt
+from joserfc.errors import JoseError
 from pydantic import BaseModel
 from supabase import Client
 
@@ -16,6 +16,7 @@ from app.core.auth import CurrentUser, get_current_user
 from app.core.config import settings
 from app.core.crypto import encrypt_secret
 from app.core.database import get_supabase_admin, get_supabase_request_client
+from app.core.jwt_tokens import decode_token, encode_token
 from app.core.rbac import assert_can_manage_program_cadence, assert_can_view_portfolio
 from app.repositories.meeting import MeetingRepository
 
@@ -80,7 +81,7 @@ async def start_microsoft_oauth(
             detail=f"Missing required setting(s): {', '.join(missing)}.",
         )
 
-    state = jwt.encode(
+    state = encode_token(
         {
             "purpose": "microsoft_graph_oauth",
             "tenant_id": str(current_user.tenant_id),
@@ -88,7 +89,7 @@ async def start_microsoft_oauth(
             "exp": datetime.now(UTC) + timedelta(minutes=10),
         },
         settings.jwt_secret,
-        algorithm=settings.jwt_algorithm,
+        settings.jwt_algorithm,
     )
     params = {
         "client_id": settings.microsoft_graph_client_id,
@@ -160,8 +161,8 @@ async def microsoft_oauth_callback(
 
 def _decode_oauth_state(state: str) -> dict:
     try:
-        payload = jwt.decode(state, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
-    except JWTError as exc:
+        payload = decode_token(state, settings.jwt_secret, settings.jwt_algorithm)
+    except JoseError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid Microsoft OAuth state.",

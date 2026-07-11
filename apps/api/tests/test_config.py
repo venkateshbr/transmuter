@@ -27,12 +27,29 @@ def clear_supabase_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _settings(**values: str) -> Settings:
-    return Settings(
-        _env_file=None,
-        jwt_secret="x" * 32,
-        openrouter_api_key="sk-test",
+    settings = {
+        "jwt_secret": "x" * 32,
+        "openrouter_api_key": "sk-test",
         **values,
-    )
+    }
+    return Settings(_env_file=None, **settings)
+
+
+@pytest.mark.parametrize(
+    ("values", "message"),
+    [
+        ({"jwt_secret": "short"}, "JWT_SECRET must be at least 32 characters"),
+        ({"jwt_secret": "\u00e9" * 16}, "JWT_SECRET must be at least 32 characters"),
+        ({"jwt_algorithm": "none"}, "JWT_ALGORITHM must be HS256, HS384, or HS512"),
+        ({"jwt_algorithm": "RS256"}, "JWT_ALGORITHM must be HS256, HS384, or HS512"),
+    ],
+)
+def test_jwt_configuration_rejects_weak_secret_and_non_hmac_algorithms(
+    values: dict[str, str],
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        _settings(**values)
 
 
 def test_cloud_target_resolves_cloud_supabase_and_database_settings() -> None:

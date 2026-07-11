@@ -101,6 +101,12 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def resolve_supabase_target(self) -> "Settings":
+        self.jwt_algorithm = self.jwt_algorithm.strip().upper()
+        if self.jwt_algorithm not in {"HS256", "HS384", "HS512"}:
+            raise ValueError("JWT_ALGORITHM must be HS256, HS384, or HS512.")
+        if len(self.jwt_secret) < 32:
+            raise ValueError("JWT_SECRET must be at least 32 characters.")
+
         target = self.supabase_target.strip().lower() or "cloud"
         if target not in {"cloud", "local"}:
             raise ValueError("SUPABASE_TARGET must be either 'cloud' or 'local'.")

@@ -3,12 +3,13 @@ from uuid import UUID
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
+from joserfc.errors import JoseError
 from pydantic import BaseModel
 from supabase import create_client
 
 from app.core.config import settings
 from app.core.database import get_supabase_admin
+from app.core.jwt_tokens import decode_token
 
 bearer = HTTPBearer()
 
@@ -36,8 +37,8 @@ async def get_current_user(
 
 def _current_user_from_app_token(token: str, path: str) -> CurrentUser | None:
     try:
-        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
-    except JWTError:
+        payload = decode_token(token, settings.jwt_secret, settings.jwt_algorithm)
+    except JoseError:
         return None
 
     user_id = payload.get("sub")

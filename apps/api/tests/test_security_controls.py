@@ -3,10 +3,10 @@ from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
-from jose import jwt
 from pydantic import ValidationError
 
 from app.core.config import settings
+from app.core.jwt_tokens import decode_token
 from app.domain.initiative_intake import InitiativeIntakeRequest
 from app.domain.initiatives import InitiativeCreate
 from app.main import _login_attempts, app
@@ -20,7 +20,7 @@ client = TestClient(app)
 def test_app_jwt_excludes_email_claim() -> None:
     token = _mint_token(user_id=str(uuid4()), tenant_id=str(uuid4()), role="viewer")
 
-    payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+    payload = decode_token(token, settings.jwt_secret, settings.jwt_algorithm)
 
     assert payload["role"] == "viewer"
     assert "email" not in payload
@@ -402,9 +402,13 @@ def test_register_cleans_up_partial_tenant_when_bootstrap_fails(monkeypatch) -> 
         "financial_initiative_annual_baselines",
         "financial_tenant_annual_baselines",
         "initiative_financial_scope",
+        "financial_bridge_rows",
         "financial_cost_categories",
+        "financial_metric_definitions",
+        "financial_scenarios",
         "financial_config_items",
         "financial_config_groups",
+        "tenant_dashboard_config",
         "organizations",
     ]
 
