@@ -26,8 +26,13 @@ api_root = Path(__file__).resolve().parents[1]
 load_dotenv(repo_root / ".env")
 load_dotenv(api_root / ".env", override=True)
 
+from app.core.auth_metadata import (  # noqa: E402
+    AUTHORIZATION_SCOPES,
+    authorization_metadata_key,
+    build_auth_metadata_payload,
+)
 from app.core.config import settings  # noqa: E402
-from app.core.database import get_supabase_admin  # noqa: E402
+from app.core.database import get_supabase_admin, get_supabase_schema  # noqa: E402
 from app.services.tenant_bootstrap import TenantBootstrapService  # noqa: E402
 
 
@@ -71,8 +76,14 @@ def bootstrap(client: Client, config: BootstrapConfig) -> dict[str, Any]:
         client,
         email=config.platform_admin_email,
         password=config.platform_admin_password,
-        user_metadata={"role": "platform_admin"},
-        app_metadata={"role": "platform_admin", "platform_admin": True},
+        profile_metadata={},
+        authorization_metadata={
+            "tenant_id": None,
+            "role": "platform_admin",
+            "platform_admin": True,
+            **{authorization_metadata_key(scope): None for scope in AUTHORIZATION_SCOPES},
+        },
+        authorization_scope=None,
     )
     tenant = ensure_organization(client, config)
     tenant_id = tenant["id"]
@@ -80,12 +91,12 @@ def bootstrap(client: Client, config: BootstrapConfig) -> dict[str, Any]:
         client,
         email=config.tenant_admin_email,
         password=config.tenant_admin_password,
-        user_metadata={
+        profile_metadata={"display_name": config.tenant_admin_name},
+        authorization_metadata={
             "tenant_id": tenant_id,
             "role": "transformation_office",
-            "display_name": config.tenant_admin_name,
         },
-        app_metadata={},
+        authorization_scope=get_supabase_schema(),
     )
     ensure_tenant_admin_user(client, tenant_id, tenant_user_id, config)
     plans = ensure_subscription_plans(client, tenant_id)
@@ -109,15 +120,22 @@ def ensure_auth_user(
     *,
     email: str,
     password: str,
-    user_metadata: dict[str, Any],
-    app_metadata: dict[str, Any],
+    profile_metadata: dict[str, Any],
+    authorization_metadata: dict[str, Any],
+    authorization_scope: str | None,
 ) -> str:
     existing_user_id = find_auth_user_id_by_email(client, email)
+    metadata = build_auth_metadata_payload(
+        existing_user_id,
+        authorization=authorization_metadata,
+        profile=profile_metadata,
+        scope=authorization_scope,
+        preserve_legacy_user_authorization=authorization_scope is not None,
+    )
     payload = {
         "email_confirm": True,
         "password": password,
-        "user_metadata": user_metadata,
-        "app_metadata": app_metadata,
+        **metadata,
     }
     if existing_user_id:
         client.auth.admin.update_user_by_id(existing_user_id, payload)

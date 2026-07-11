@@ -11,7 +11,9 @@ from fastapi import HTTPException, status
 from pydantic import EmailStr, TypeAdapter
 from supabase import Client
 
+from app.core.auth_metadata import build_auth_metadata_payload, verify_scoped_authorization
 from app.core.config import settings
+from app.core.database import get_supabase_schema
 from app.services.tenant_bootstrap import TenantBootstrapService
 
 PLATFORM_TENANT_ID = "00000000-0000-0000-0000-000000000000"
@@ -767,24 +769,48 @@ class BillingProvisioningService:
     ) -> str:
         existing_user = (
             self._client.table("users")
-            .select("id")
+            .select("*")
             .eq("tenant_id", tenant_id)
             .eq("email", email)
             .maybe_single()
             .execute()
         )
         if existing_user and existing_user.data:
-            user_id = existing_user.data["id"]
-            self._client.table("users").update(
-                {
-                    "display_name": display_name,
-                    "role": "transformation_office",
-                    "status": "active",
-                    "must_change_password": False,
-                    "onboarding_completed": False,
-                    "updated_at": datetime.now(UTC).isoformat(),
-                }
-            ).eq("tenant_id", tenant_id).eq("id", user_id).execute()
+            previous = existing_user.data
+            user_id = previous["id"]
+            patch = {
+                "display_name": display_name,
+                "role": "transformation_office",
+                "status": "active",
+                "must_change_password": False,
+                "onboarding_completed": False,
+                "updated_at": datetime.now(UTC).isoformat(),
+            }
+            self._client.table("users").update(patch).eq("tenant_id", tenant_id).eq(
+                "id", user_id
+            ).execute()
+            try:
+                self._sync_initial_admin_auth(
+                    user_id=str(user_id),
+                    tenant_id=tenant_id,
+                    display_name=display_name,
+                )
+            except HTTPException:
+                rollback = {key: previous.get(key) for key in patch if key != "updated_at"}
+                rollback["updated_at"] = datetime.now(UTC).isoformat()
+                try:
+                    self._client.table("users").update(rollback).eq("tenant_id", tenant_id).eq(
+                        "id", user_id
+                    ).execute()
+                except Exception as rollback_exc:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail=(
+                            "Initial administrator and authentication metadata "
+                            "could not be synchronized"
+                        ),
+                    ) from rollback_exc
+                raise
             return user_id
 
         email_owner = (
@@ -836,27 +862,65 @@ class BillingProvisioningService:
                 detail="Signup password does not meet the minimum length requirement.",
             )
         existing_id = self._find_auth_user_id(email)
-        metadata = {
-            "tenant_id": tenant_id,
-            "role": "transformation_office",
-            "display_name": display_name,
-        }
         if existing_id:
-            self._client.auth.admin.update_user_by_id(
-                existing_id,
-                {"user_metadata": metadata},
+            self._sync_initial_admin_auth(
+                user_id=existing_id,
+                tenant_id=tenant_id,
+                display_name=display_name,
             )
             return existing_id
 
+        metadata = build_auth_metadata_payload(
+            None,
+            authorization={
+                "tenant_id": tenant_id,
+                "role": "transformation_office",
+            },
+            profile={"display_name": display_name},
+            scope=get_supabase_schema(),
+        )
         response = self._client.auth.admin.create_user(
             {
                 "email": email,
                 "password": password,
                 "email_confirm": True,
-                "user_metadata": metadata,
+                **metadata,
             }
         )
         return str(response.user.id)
+
+    def _sync_initial_admin_auth(
+        self,
+        *,
+        user_id: str,
+        tenant_id: str,
+        display_name: str,
+    ) -> None:
+        try:
+            admin = self._client.auth.admin
+            scope = get_supabase_schema()
+            authorization = {
+                "tenant_id": tenant_id,
+                "role": "transformation_office",
+            }
+            metadata = build_auth_metadata_payload(
+                user_id,
+                authorization=authorization,
+                profile={"display_name": display_name},
+                scope=scope,
+            )
+            admin.update_user_by_id(user_id, metadata)
+            verify_scoped_authorization(
+                admin,
+                user_id,
+                scope=scope,
+                authorization=authorization,
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Initial administrator authentication metadata could not be synchronized",
+            ) from exc
 
     def _assert_signup_email_available(self, email: str) -> None:
         normalized = str(self._email(email))

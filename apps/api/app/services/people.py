@@ -13,8 +13,9 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from supabase import Client
 
+from app.core.auth_metadata import build_auth_metadata_payload, verify_scoped_authorization
 from app.core.config import settings
-from app.core.database import get_supabase_admin
+from app.core.database import get_supabase_admin, get_supabase_schema
 from app.core.rbac import assert_valid_role
 from app.domain.people import (
     InviteAccept,
@@ -74,14 +75,23 @@ class PeopleService:
             assert_valid_role(str(patch["role"]))
         patch["updated_at"] = datetime.now(UTC).isoformat()
         self._repo.update_user(user_id, patch)
-        self._sync_auth_metadata(
-            user_id,
-            {
-                "tenant_id": self._tenant_id,
-                "role": patch.get("role", user.get("role")),
-                "display_name": patch.get("display_name", user.get("display_name")),
-            },
-        )
+        try:
+            self._sync_auth_metadata(
+                user_id,
+                role=str(patch.get("role", user.get("role"))),
+                display_name=patch.get("display_name", user.get("display_name")),
+            )
+        except HTTPException:
+            rollback = {key: user.get(key) for key in patch if key != "updated_at"}
+            rollback["updated_at"] = datetime.now(UTC).isoformat()
+            try:
+                self._repo.update_user(user_id, rollback)
+            except Exception as rollback_exc:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="User profile and authentication metadata could not be synchronized",
+                ) from rollback_exc
+            raise
         return self.get_profile(user_id)
 
     def ghost_user(self, user_id: str) -> dict[str, Any]:
@@ -325,12 +335,6 @@ class PeopleService:
 
     def _ensure_auth_password_user(self, data: UserCreate) -> str:
         existing_id = self._find_auth_user_id(str(data.email).lower())
-        metadata = {
-            "tenant_id": self._tenant_id,
-            "role": data.role,
-            "display_name": data.display_name,
-            "must_change_password": True,
-        }
         if existing_id:
             owner = (
                 get_supabase_admin()
@@ -350,24 +354,54 @@ class PeopleService:
                 detail="An auth account already exists for this email",
             )
 
+        metadata = build_auth_metadata_payload(
+            None,
+            authorization={"tenant_id": self._tenant_id, "role": data.role},
+            profile={
+                "display_name": data.display_name,
+                "must_change_password": True,
+            },
+            scope=get_supabase_schema(),
+        )
         response = get_supabase_admin().auth.admin.create_user(
             {
                 "email": str(data.email).lower(),
                 "password": data.temporary_password,
                 "email_confirm": True,
-                "user_metadata": metadata,
+                **metadata,
             }
         )
         return str(response.user.id)
 
-    def _sync_auth_metadata(self, user_id: str, metadata: dict[str, Any]) -> None:
+    def _sync_auth_metadata(
+        self,
+        user_id: str,
+        *,
+        role: str,
+        display_name: Any,
+    ) -> None:
         try:
-            get_supabase_admin().auth.admin.update_user_by_id(
+            admin = get_supabase_admin().auth.admin
+            scope = get_supabase_schema()
+            authorization = {"tenant_id": self._tenant_id, "role": role}
+            metadata = build_auth_metadata_payload(
                 user_id,
-                {"user_metadata": metadata},
+                authorization=authorization,
+                profile={"display_name": display_name},
+                scope=scope,
             )
-        except Exception:
-            return
+            admin.update_user_by_id(user_id, metadata)
+            verify_scoped_authorization(
+                admin,
+                user_id,
+                scope=scope,
+                authorization=authorization,
+            )
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Authentication metadata could not be synchronized",
+            ) from exc
 
     def _find_auth_user_id(self, email: str) -> str | None:
         page = 1
@@ -388,19 +422,35 @@ class PeopleService:
         *,
         must_change_password: bool,
     ) -> None:
-        metadata = {
-            "tenant_id": self._tenant_id,
-            "role": user["role"],
-            "display_name": user.get("display_name"),
-            "must_change_password": must_change_password,
-        }
         try:
-            get_supabase_admin().auth.admin.update_user_by_id(
-                str(user["id"]),
+            admin = get_supabase_admin().auth.admin
+            user_id = str(user["id"])
+            scope = get_supabase_schema()
+            authorization = {
+                "tenant_id": self._tenant_id,
+                "role": user["role"],
+            }
+            metadata = build_auth_metadata_payload(
+                user_id,
+                authorization=authorization,
+                profile={
+                    "display_name": user.get("display_name"),
+                    "must_change_password": must_change_password,
+                },
+                scope=scope,
+            )
+            admin.update_user_by_id(
+                user_id,
                 {
                     "password": password,
-                    "user_metadata": metadata,
+                    **metadata,
                 },
+            )
+            verify_scoped_authorization(
+                admin,
+                user_id,
+                scope=scope,
+                authorization=authorization,
             )
         except Exception as exc:
             raise HTTPException(
@@ -731,17 +781,34 @@ class PeopleInviteAcceptanceService:
 
     def _update_auth_password(self, user: dict[str, Any], password: str) -> None:
         try:
-            self._client.auth.admin.update_user_by_id(
-                str(user["id"]),
+            admin = self._client.auth.admin
+            user_id = str(user["id"])
+            scope = get_supabase_schema()
+            authorization = {
+                "tenant_id": str(user["tenant_id"]),
+                "role": user["role"],
+            }
+            metadata = build_auth_metadata_payload(
+                user_id,
+                authorization=authorization,
+                profile={
+                    "display_name": user.get("display_name"),
+                    "must_change_password": False,
+                },
+                scope=scope,
+            )
+            admin.update_user_by_id(
+                user_id,
                 {
                     "password": password,
-                    "user_metadata": {
-                        "tenant_id": str(user["tenant_id"]),
-                        "role": user["role"],
-                        "display_name": user.get("display_name"),
-                        "must_change_password": False,
-                    },
+                    **metadata,
                 },
+            )
+            verify_scoped_authorization(
+                admin,
+                user_id,
+                scope=scope,
+                authorization=authorization,
             )
         except Exception as exc:
             raise HTTPException(
@@ -750,16 +817,21 @@ class PeopleInviteAcceptanceService:
             ) from exc
 
     def _create_auth_user(self, invite: dict[str, Any], password: str) -> str:
+        metadata = build_auth_metadata_payload(
+            None,
+            authorization={
+                "tenant_id": str(invite["tenant_id"]),
+                "role": invite["role"],
+            },
+            profile={"display_name": invite["display_name"]},
+            scope=get_supabase_schema(),
+        )
         response = self._client.auth.admin.create_user(
             {
                 "email": str(invite["email"]).lower(),
                 "password": password,
                 "email_confirm": True,
-                "user_metadata": {
-                    "tenant_id": str(invite["tenant_id"]),
-                    "role": invite["role"],
-                    "display_name": invite["display_name"],
-                },
+                **metadata,
             }
         )
         return str(response.user.id)

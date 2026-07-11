@@ -7,7 +7,13 @@ from uuid import UUID
 import pytest
 from fastapi import HTTPException
 
-from app.domain.people import InviteAccept, InviteCreate, UserCreate, UserTemporaryPassword
+from app.domain.people import (
+    InviteAccept,
+    InviteCreate,
+    UserCreate,
+    UserTemporaryPassword,
+    UserUpdate,
+)
 from app.services.people import PeopleInviteAcceptanceService, PeopleService
 
 TENANT_ID = UUID("11111111-1111-1111-1111-111111111111")
@@ -148,6 +154,10 @@ def test_create_user_rejects_existing_orphan_auth_account(monkeypatch) -> None:
     service = PeopleService(client=object(), tenant_id=TENANT_ID)  # type: ignore[arg-type]
     service._repo = FakePeopleRepository()
     monkeypatch.setattr(service, "_find_auth_user_id", lambda email: USER_ID)
+    monkeypatch.setattr(
+        "app.services.people.get_supabase_admin",
+        lambda: SimpleNamespace(table=lambda _name: FakeEmptyUserQuery()),
+    )
 
     with pytest.raises(HTTPException) as exc:
         service.create_user(
@@ -161,6 +171,69 @@ def test_create_user_rejects_existing_orphan_auth_account(monkeypatch) -> None:
 
     assert exc.value.status_code == 409
     assert "auth account already exists" in exc.value.detail
+
+
+def test_create_user_writes_authorization_to_app_metadata(monkeypatch) -> None:
+    service = PeopleService(client=object(), tenant_id=TENANT_ID)  # type: ignore[arg-type]
+    auth_admin = FakeMetadataAuthAdmin()
+    monkeypatch.setattr(
+        "app.services.people.get_supabase_admin",
+        lambda: SimpleNamespace(auth=SimpleNamespace(admin=auth_admin)),
+    )
+    monkeypatch.setattr("app.services.people.get_supabase_schema", lambda: "public")
+
+    user_id = service._ensure_auth_password_user(
+        UserCreate(
+            email="new.user@example.com",
+            display_name="New User",
+            role="initiative_owner",
+            temporary_password="Transmuter2026!",
+        )
+    )
+
+    assert user_id == USER_ID
+    assert auth_admin.created_payload is not None
+    assert auth_admin.created_payload["app_metadata"] == {
+        "transmuter_authorization_public": {
+            "tenant_id": str(TENANT_ID),
+            "role": "initiative_owner",
+        },
+    }
+    assert auth_admin.created_payload["user_metadata"] == {
+        "display_name": "New User",
+        "must_change_password": True,
+    }
+
+
+def test_update_profile_rolls_back_when_auth_metadata_sync_fails(monkeypatch) -> None:
+    service = PeopleService(client=object(), tenant_id=TENANT_ID)  # type: ignore[arg-type]
+    repo = FakePeopleRepository()
+    repo.saved_user = {
+        "id": USER_ID,
+        "tenant_id": str(TENANT_ID),
+        "email": "owner@example.com",
+        "display_name": "Original Name",
+        "role": "viewer",
+        "status": "active",
+        "updated_at": "2026-07-01T00:00:00+00:00",
+    }
+    service._repo = repo
+    auth_admin = FakeMetadataAuthAdmin(fail_update=True)
+    monkeypatch.setattr(
+        "app.services.people.get_supabase_admin",
+        lambda: SimpleNamespace(auth=SimpleNamespace(admin=auth_admin)),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        service.update_profile(
+            USER_ID,
+            UserUpdate(display_name="Updated Name", role="initiative_owner"),
+        )
+
+    assert exc.value.status_code == 502
+    assert repo.saved_user is not None
+    assert repo.saved_user["display_name"] == "Original Name"
+    assert repo.saved_user["role"] == "viewer"
 
 
 def test_invite_user_rejects_existing_orphan_auth_account(monkeypatch) -> None:
@@ -295,7 +368,8 @@ def test_set_temporary_password_activates_user_and_forces_change(monkeypatch) ->
     assert result["status"] == "active"
 
 
-def test_accept_invite_creates_active_user_and_marks_token_used() -> None:
+def test_accept_invite_creates_active_user_and_marks_token_used(monkeypatch) -> None:
+    monkeypatch.setattr("app.services.people.get_supabase_schema", lambda: "public")
     token = "secure-token-for-acceptance-value-123456"
     token_hash = PeopleInviteAcceptanceService.hash_token(token)
     client = FakeInviteClient(
@@ -325,6 +399,13 @@ def test_accept_invite_creates_active_user_and_marks_token_used() -> None:
 
     assert result["email"] == "invitee@example.com"
     assert client.created_auth_user["email"] == "invitee@example.com"
+    assert client.created_auth_user["app_metadata"] == {
+        "transmuter_authorization_public": {
+            "tenant_id": str(TENANT_ID),
+            "role": "initiative_owner",
+        },
+    }
+    assert client.created_auth_user["user_metadata"] == {"display_name": "Invitee User"}
     assert client.inserted_user["status"] == "active"
     assert client.inserted_user["must_change_password"] is False
     assert client.invite["status"] == "accepted"
@@ -332,7 +413,8 @@ def test_accept_invite_creates_active_user_and_marks_token_used() -> None:
     assert client.workstream_rows[0]["workstream_id"] == "33333333-3333-3333-3333-333333333333"
 
 
-def test_accept_password_setup_updates_existing_user_password() -> None:
+def test_accept_password_setup_updates_existing_user_password(monkeypatch) -> None:
+    monkeypatch.setattr("app.services.people.get_supabase_schema", lambda: "public")
     token = "secure-token-for-reset-value-123456789"
     token_hash = PeopleInviteAcceptanceService.hash_token(token)
     client = FakeInviteClient(
@@ -370,6 +452,19 @@ def test_accept_password_setup_updates_existing_user_password() -> None:
     assert result["email"] == "pending.user@example.com"
     assert client.updated_auth_user["id"] == USER_ID
     assert client.updated_auth_user["payload"]["password"] == "Transmuter2026!"
+    assert client.updated_auth_user["payload"]["app_metadata"] == {
+        "transmuter_authorization_public": {
+            "tenant_id": str(TENANT_ID),
+            "role": "viewer",
+        },
+        "tenant_id": None,
+        "role": None,
+        "platform_admin": None,
+    }
+    assert client.updated_auth_user["payload"]["user_metadata"] == {
+        "display_name": "Pending User",
+        "must_change_password": False,
+    }
     assert client.existing_user["status"] == "active"
     assert client.existing_user["must_change_password"] is False
     assert client.invite["status"] == "accepted"
@@ -406,9 +501,55 @@ class FakeInviteAuthAdmin:
         self._client.created_auth_user = payload
         return SimpleNamespace(user=SimpleNamespace(id=USER_ID))
 
+    def get_user_by_id(self, user_id: str) -> SimpleNamespace:
+        payload = self._client.updated_auth_user.get("payload") or {}
+        app_metadata = {
+            key: value
+            for key, value in (payload.get("app_metadata") or {}).items()
+            if value is not None
+        }
+        return SimpleNamespace(user=SimpleNamespace(id=user_id, app_metadata=app_metadata))
+
     def update_user_by_id(self, user_id: str, payload: dict[str, object]) -> SimpleNamespace:
         self._client.updated_auth_user = {"id": user_id, "payload": payload}
         return SimpleNamespace(user=SimpleNamespace(id=user_id))
+
+
+class FakeMetadataAuthAdmin:
+    def __init__(self, *, fail_update: bool = False) -> None:
+        self.fail_update = fail_update
+        self.created_payload: dict[str, object] | None = None
+        self.updated_payload: dict[str, object] | None = None
+
+    def list_users(self, page: int, per_page: int) -> list[object]:
+        return []
+
+    def get_user_by_id(self, user_id: str) -> SimpleNamespace:
+        raise AssertionError(f"ordinary metadata writer must not read Auth user {user_id}")
+
+    def create_user(self, payload: dict[str, object]) -> SimpleNamespace:
+        self.created_payload = payload
+        return SimpleNamespace(user=SimpleNamespace(id=USER_ID))
+
+    def update_user_by_id(self, user_id: str, payload: dict[str, object]) -> SimpleNamespace:
+        if self.fail_update:
+            raise RuntimeError("Auth sync failed")
+        self.updated_payload = payload
+        return SimpleNamespace(user=SimpleNamespace(id=user_id))
+
+
+class FakeEmptyUserQuery:
+    def select(self, _columns: str) -> FakeEmptyUserQuery:
+        return self
+
+    def eq(self, _key: str, _value: object) -> FakeEmptyUserQuery:
+        return self
+
+    def maybe_single(self) -> FakeEmptyUserQuery:
+        return self
+
+    def execute(self) -> SimpleNamespace:
+        return SimpleNamespace(data=None)
 
 
 class FakeInviteQuery:

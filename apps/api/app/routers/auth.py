@@ -7,9 +7,16 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
 from supabase import create_client
 
-from app.core.auth import CurrentUser, get_current_user
+from app.core.auth import (
+    CurrentUser,
+    assert_supabase_claims_match_user,
+    get_current_user,
+    get_verified_supabase_claims,
+    is_platform_admin_claims,
+)
+from app.core.auth_metadata import authorization_metadata_key
 from app.core.config import settings
-from app.core.database import get_supabase_admin
+from app.core.database import get_supabase_admin, get_supabase_schema
 from app.core.jwt_tokens import encode_token
 from app.domain.people import InviteAccept
 from app.services.demo_portfolio_bootstrap import bootstrap_demo_portfolio
@@ -84,6 +91,7 @@ def _mint_token(user_id: str, tenant_id: str, role: str) -> str:
         "sub": user_id,
         "tenant_id": tenant_id,
         "role": role,
+        "app_role": role,
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=settings.jwt_expiry_minutes)).timestamp()),
     }
@@ -99,20 +107,6 @@ def _platform_admin_emails() -> set[str]:
 def _platform_admin_profile_email() -> str:
     configured = sorted(_platform_admin_emails())
     return configured[0] if configured else "platform-admin@transmuter.local"
-
-
-def _auth_metadata(user: Any, key: str) -> dict[str, Any]:
-    value = getattr(user, key, None) or {}
-    return value if isinstance(value, dict) else {}
-
-
-def _is_platform_admin_auth_user(user: Any, email: str | None) -> bool:
-    if (email or "").lower() not in _platform_admin_emails():
-        return False
-    app_metadata = _auth_metadata(user, "app_metadata")
-    return (
-        app_metadata.get("role") == "platform_admin" or app_metadata.get("platform_admin") is True
-    )
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -136,7 +130,7 @@ async def login(body: LoginRequest) -> TokenResponse:
     if not supabase_user or not resp.session:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    return _token_response_for_session(supabase_user, resp.session, str(body.email))
+    return _token_response_for_session(supabase_user, resp.session, anon_client)
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
@@ -209,9 +203,13 @@ async def register_blank_tenant(body: RegisterRequest) -> TokenResponse:
                 "email": str(body.admin_email),
                 "password": body.admin_password,
                 "email_confirm": True,
+                "app_metadata": {
+                    authorization_metadata_key(get_supabase_schema()): {
+                        "tenant_id": tenant_id,
+                        "role": "transformation_office",
+                    }
+                },
                 "user_metadata": {
-                    "tenant_id": tenant_id,
-                    "role": "transformation_office",
                     "display_name": body.admin_display_name,
                 },
             }
@@ -254,7 +252,7 @@ async def register_blank_tenant(body: RegisterRequest) -> TokenResponse:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Tenant created, but automatic sign-in failed. Please sign in manually.",
         ) from exc
-    return _token_response_for_session(resp.user, resp.session, str(body.admin_email))
+    return _token_response_for_session(resp.user, resp.session, anon_client)
 
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -274,7 +272,7 @@ async def refresh_session(body: RefreshRequest) -> TokenResponse:
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
         )
 
-    return _token_response_for_session(supabase_user, resp.session, supabase_user.email)
+    return _token_response_for_session(supabase_user, resp.session, anon_client)
 
 
 @router.post("/accept-invite", response_model=TokenResponse)
@@ -290,18 +288,19 @@ async def accept_invite(body: InviteAccept) -> TokenResponse:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Invite accepted, but automatic sign-in failed. Please sign in manually.",
         ) from exc
-    return _token_response_for_session(resp.user, resp.session, accepted["email"])
+    return _token_response_for_session(resp.user, resp.session, anon_client)
 
 
 def _token_response_for_session(
-    supabase_user: Any, session: Any, email: str | None
+    supabase_user: Any, session: Any, auth_client: Any
 ) -> TokenResponse:
-    if _is_platform_admin_auth_user(supabase_user, email):
+    claims = get_verified_supabase_claims(auth_client, session.access_token)
+    if is_platform_admin_claims(claims):
         return TokenResponse(
             access_token=session.access_token,
             refresh_token=session.refresh_token,
             expires_in=session.expires_in,
-            user_id=str(supabase_user.id),
+            user_id=str(claims["sub"]),
             tenant_id=str(PLATFORM_TENANT_ID),
             role="platform_admin",
             status="active",
@@ -328,6 +327,7 @@ def _token_response_for_session(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account deactivated")
     if u["status"] == "ghost":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is not active")
+    assert_supabase_claims_match_user(claims, u)
 
     return TokenResponse(
         access_token=session.access_token,
@@ -337,7 +337,7 @@ def _token_response_for_session(
         tenant_id=u["tenant_id"],
         role=u["role"],
         status=u["status"],
-        must_change_password=bool(u.get("must_change_password")),
+        must_change_password=(bool(u.get("must_change_password")) or u["status"] == "pending"),
     )
 
 
@@ -494,7 +494,7 @@ async def change_password(
             detail="Password changed, but automatic sign-in failed. Please sign in manually.",
         ) from exc
 
-    return _token_response_for_session(resp.user, resp.session, email)
+    return _token_response_for_session(resp.user, resp.session, anon_client)
 
 
 def _validate_new_password(password: str) -> None:

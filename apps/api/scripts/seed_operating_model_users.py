@@ -25,6 +25,8 @@ from uuid import uuid4
 
 from dotenv import dotenv_values, load_dotenv
 
+from app.core.auth_metadata import build_auth_metadata_payload
+
 ROLES: tuple[str, ...] = (
     "transformation_office",
     "tenant_admin",
@@ -152,24 +154,37 @@ def ensure_auth_user(
     role: str,
     display_name: str,
 ) -> str:
-    metadata = {"tenant_id": tenant_id, "role": role, "display_name": display_name}
+    from app.core.database import get_supabase_schema
+
     auth_id = find_auth_user_id_by_email(client, email)
     if auth_id:
+        metadata = build_auth_metadata_payload(
+            auth_id,
+            authorization={"tenant_id": tenant_id, "role": role},
+            profile={"display_name": display_name},
+            scope=get_supabase_schema(),
+        )
         client.auth.admin.update_user_by_id(
             auth_id,
             {
                 "password": password,
                 "email_confirm": True,
-                "user_metadata": metadata,
+                **metadata,
             },
         )
         return auth_id
+    metadata = build_auth_metadata_payload(
+        None,
+        authorization={"tenant_id": tenant_id, "role": role},
+        profile={"display_name": display_name},
+        scope=get_supabase_schema(),
+    )
     created = client.auth.admin.create_user(
         {
             "email": email,
             "password": password,
             "email_confirm": True,
-            "user_metadata": metadata,
+            **metadata,
         }
     )
     return str(created.user.id)

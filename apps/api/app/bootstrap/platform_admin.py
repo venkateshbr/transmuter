@@ -8,6 +8,13 @@ from typing import Any, Literal
 
 from supabase import Client
 
+from app.core.auth_metadata import (
+    AUTHORIZATION_METADATA_KEYS,
+    AUTHORIZATION_SCOPES,
+    authorization_metadata_key,
+    build_auth_metadata_payload,
+)
+
 logger = logging.getLogger(__name__)
 
 BootstrapStatus = Literal[
@@ -157,22 +164,19 @@ def ensure_platform_admin_user(
         user_id = str(user.id)
         app_metadata = _metadata(user, "app_metadata")
         user_metadata = _metadata(user, "user_metadata")
-        if _has_complete_platform_metadata(app_metadata):
+        metadata = build_auth_metadata_payload(
+            user,
+            authorization=_platform_admin_authorization(),
+            preserve_legacy_user_authorization=False,
+        )
+        if _has_complete_platform_metadata(app_metadata) and not any(
+            key in user_metadata for key in AUTHORIZATION_METADATA_KEYS
+        ):
             return PlatformAdminBootstrapResult(status="skipped", email=email, user_id=user_id)
 
         client.auth.admin.update_user_by_id(
             user_id,
-            {
-                "app_metadata": {
-                    **app_metadata,
-                    "role": "platform_admin",
-                    "platform_admin": True,
-                },
-                "user_metadata": {
-                    **user_metadata,
-                    "role": "platform_admin",
-                },
-            },
+            metadata,
         )
         return PlatformAdminBootstrapResult(
             status="metadata_updated",
@@ -191,13 +195,16 @@ def ensure_platform_admin_user(
             ),
         )
 
+    metadata = build_auth_metadata_payload(
+        None,
+        authorization=_platform_admin_authorization(),
+    )
     response = client.auth.admin.create_user(
         {
             "email": email,
             "email_confirm": True,
             "password": bootstrap_password,
-            "user_metadata": {"role": "platform_admin"},
-            "app_metadata": {"role": "platform_admin", "platform_admin": True},
+            **metadata,
         }
     )
     user_id = _created_user_id(response)
@@ -258,20 +265,17 @@ def rotate_platform_admin_email(
 
     if previous_user is not None:
         user_id = str(previous_user.id)
+        metadata = build_auth_metadata_payload(
+            previous_user,
+            authorization=_platform_admin_authorization(),
+            preserve_legacy_user_authorization=False,
+        )
         client.auth.admin.update_user_by_id(
             user_id,
             {
                 "email": target,
                 "email_confirm": True,
-                "app_metadata": {
-                    **_metadata(previous_user, "app_metadata"),
-                    "role": "platform_admin",
-                    "platform_admin": True,
-                },
-                "user_metadata": {
-                    **_metadata(previous_user, "user_metadata"),
-                    "role": "platform_admin",
-                },
+                **metadata,
             },
         )
         return PlatformAdminRotationResult(
@@ -328,8 +332,22 @@ def _metadata(user: Any, key: str) -> dict[str, Any]:
 
 def _has_complete_platform_metadata(app_metadata: dict[str, Any]) -> bool:
     return (
-        app_metadata.get("role") == "platform_admin" and app_metadata.get("platform_admin") is True
+        app_metadata.get("role") == "platform_admin"
+        and app_metadata.get("platform_admin") is True
+        and "tenant_id" not in app_metadata
+        and not any(
+            authorization_metadata_key(scope) in app_metadata for scope in AUTHORIZATION_SCOPES
+        )
     )
+
+
+def _platform_admin_authorization() -> dict[str, Any]:
+    return {
+        "tenant_id": None,
+        "role": "platform_admin",
+        "platform_admin": True,
+        **{authorization_metadata_key(scope): None for scope in AUTHORIZATION_SCOPES},
+    }
 
 
 def _created_user_id(response: Any) -> str | None:
@@ -339,18 +357,15 @@ def _created_user_id(response: Any) -> str | None:
 
 
 def _revoke_platform_admin_metadata(client: Client, user: Any) -> None:
-    app_metadata = _metadata(user, "app_metadata")
-    user_metadata = _metadata(user, "user_metadata")
-    if app_metadata.get("role") == "platform_admin":
-        app_metadata.pop("role", None)
-    if app_metadata.get("platform_admin") is True:
-        app_metadata.pop("platform_admin", None)
-    if user_metadata.get("role") == "platform_admin":
-        user_metadata.pop("role", None)
     client.auth.admin.update_user_by_id(
         str(user.id),
         {
-            "app_metadata": app_metadata,
-            "user_metadata": user_metadata,
+            "app_metadata": {
+                "tenant_id": None,
+                "role": None,
+                "platform_admin": None,
+                **{authorization_metadata_key(scope): None for scope in AUTHORIZATION_SCOPES},
+            },
+            "user_metadata": {"tenant_id": None, "role": None},
         },
     )
