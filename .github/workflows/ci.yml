@@ -66,6 +66,16 @@ jobs:
           LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
           LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
         run: |
+          if [ -z "$JWT_SECRET" ]; then
+            export JWT_SECRET="$(python3 - <<'PY'
+          import secrets
+
+          print(secrets.token_urlsafe(48))
+          PY
+          )"
+            echo "::notice::JWT_SECRET is not configured; generated an ephemeral secret for deterministic CI tests."
+          fi
+          test -n "$JWT_SECRET"
           if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_ANON_KEY" ] && [ -n "$SUPABASE_SERVICE_KEY" ]; then
             uv run pytest tests --ignore=tests/acceptance -v --tb=short --cov=app/routers --cov-report=xml --cov-report=term-missing --cov-fail-under=80
           else
