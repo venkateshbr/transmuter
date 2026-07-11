@@ -36,6 +36,73 @@ Deployment note:
 
 ## Current Release Entries
 
+### 2026-07-11 - Microsoft Graph OAuth Environment Isolation
+
+Status: deployed and API-verified in dev; production pending explicit approval
+
+GitHub tracking:
+- Isolation bug: `#389`.
+- Main implementation: PR `#394`, merge commit `8da8bee`.
+- Offline rollout incident fix: PR `#395`, merge commit `7c60fbc`.
+- Vastu and Prahari approved both the OAuth boundary and the final locked
+  offline rollout; both PRs passed backend, frontend, specs, secret scan, and
+  Agent eval CI gates.
+
+Runtime changes:
+- Bound Microsoft Graph tokens and OAuth state to the deployment environment,
+  schema, Entra tenant, client, callback, encryption key, scopes, actor, and
+  generation counters.
+- Added tenant-specific OIDC discovery/JWKS validation, PKCE S256, nonce,
+  single-use database state, refresh compare-and-swap, and account/scope checks.
+- Suppressed callback request bodies, query data, cookies, and access logs from
+  application and proxy observability.
+- Added a same-SHA offline migration path that stops canonical writers, rejects
+  ambient routing/control overrides, reads saved Hostinger dotenv as data, uses
+  the canonical saved runtime environment, and requires schema-job cleanup.
+
+Dev deployment:
+- Environment: `https://transmuter-dev.ishirock.tech`
+- Schema: `transmuter_dev`
+- Deployed commit: `7c60fbc`.
+- Applied offline SQL:
+  `supabase/migrations/20260711000002_harden_microsoft_graph_oauth.sql`.
+- The first attempt stopped dev with action `103646379`, but the old schema
+  runner sourced Hostinger dotenv and skipped SQL after an unquoted display-name
+  email parse error. Dev was contained offline with action `103647000`; no
+  production project, schema, consent, or credential was touched.
+- The reviewed rerun emitted the schema success marker, deleted the temporary
+  schema project, and deployed with action `103651377`.
+- The hardened API then correctly reported Graph unconfigured because the saved
+  scope line omitted `openid` and `profile`. Dev-only action `103652672` fixed
+  the exact seven-scope list on the same commit.
+- Public `/health` and `/api/health` passed after both final actions.
+
+Dev acceptance:
+- Live read-only SQL confirmed `integration_oauth_states`, all ten hardened
+  connection columns, zero Graph connections, and zero linked external events.
+- Seeded transformation-office login and `/auth/me` passed against the real API.
+- OAuth start returned the exact dev callback, tenant-specific Entra authority,
+  `form_post`, seven reviewed scopes, PKCE S256, nonce, 256-bit state, and a
+  callback-scoped `__Secure-`/Secure/HttpOnly/SameSite=None cookie.
+- A foreign environment-shaped state failed before provider exchange. The real
+  dev state was cancelled through the POST callback; final SQL showed one
+  cancelled state, zero pending states, zero terminal secret rows, zero context
+  mismatches, and zero connections.
+- Dev and production saved environments have distinct clients, client secrets,
+  callbacks, and encryption keys. Disposable verification projects were deleted.
+- The required in-app browser surface returned no available targets, so browser
+  and interactive Entra consent evidence were not substituted with another
+  backend.
+
+Production requirements:
+- Production remains on `5793115` and was not changed by this dev rollout.
+- Before promotion, obtain explicit approval, correct the production OIDC scope
+  line, and verify the callback in a redacted Entra app-registration export.
+- Promote `7c60fbc` or a later reviewed main commit with the same migration via
+  the locked offline production command.
+- Complete fresh organizer consent, invite/join URL, forced refresh, transcript,
+  and deterministic external-event cleanup before closing `#389` or `#220`.
+
 ### 2026-07-11 - Meetings Boundaries, JWT Audit, and Tenant Authorization Hardening
 
 Status: promoted to production and verified
