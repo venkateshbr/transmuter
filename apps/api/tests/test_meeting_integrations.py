@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -979,6 +980,8 @@ def test_graph_migration_requires_verified_offline_hostinger_rollout() -> None:
         assert script.index("stop-docker-project.sh") < script.index("apply-schema-sql.sh")
         assert "CONFIRM_STOP_PROJECT=1" in script
         assert "EXPECTED_HOSTINGER_PROJECT_NAME" in script
+        assert "reject_offline_hostinger_control_overrides" in script
+        assert "bind_offline_hostinger_controls" in script
 
     production = (root / "infra/hostinger/promote-dev-to-prod.sh").read_text(encoding="utf-8")
     assert "transmuter transmuter-hostinger" in production
@@ -999,9 +1002,173 @@ def test_graph_migration_requires_verified_offline_hostinger_rollout() -> None:
     assert "HOSTINGER_DEPLOY_REF" in preflight
     assert "does not permit HOSTINGER_COMPOSE_URL overrides" in preflight
     assert "does not permit SQL URL overrides" in preflight
+    assert "schema_routing_overrides" in preflight
+    assert "does not permit ${variable_name} overrides" in preflight
     assert "curl -fsSL --max-time 20" in preflight
     assert "VERIFY_STOPPED_ONLY=1" in production
 
     schema_apply = (root / "infra/hostinger/apply-schema-sql.sh").read_text(encoding="utf-8")
     assert "CALLER_OFFLINE_SCHEMA_PINNED" in schema_apply
     assert "unset HOSTINGER_SCHEMA_SQL_URL HOSTINGER_SCHEMA_SQL_BASE_URL" in schema_apply
+    assert 'load_hostinger_schema_env "${ENV_FILE}" "${SCHEMA_ENV_EXISTING_VALUE_MODE}"' in (
+        schema_apply
+    )
+    assert '"${TARGET_SCHEMA}" != "${TARGET_SCHEMA_DEFAULT}"' in schema_apply
+    assert '. "${ENV_FILE}"' not in schema_apply
+
+    deploy_remote = (root / "infra/hostinger/deploy-remote.sh").read_text(encoding="utf-8")
+    locked_environment = (
+        'if [[ "${OFFLINE_HOSTINGER_CONTROLS_LOCKED:-0}" == "1" ]]; then\n'
+        '  echo "Offline control lock active; preserving saved Hostinger project environment."\n'
+        '  remote_environment="$(fetch_project_environment)"'
+    )
+    assert locked_environment in deploy_remote
+    assert deploy_remote.index(locked_environment) < deploy_remote.index(
+        'elif [[ -f "${ENV_FILE}" ]]'
+    )
+    for script in (
+        schema_apply,
+        deploy_remote,
+        (root / "infra/hostinger/stop-docker-project.sh").read_text(encoding="utf-8"),
+    ):
+        assert 'if [[ "${OFFLINE_HOSTINGER_CONTROLS_LOCKED:-0}" != "1" ]]; then' in script
+        assert 'load_hostinger_control_env "${ENV_FILE}"' in script
+
+
+def test_hostinger_schema_env_loader_never_evaluates_remote_dotenv(tmp_path: Path) -> None:
+    root = Path(__file__).resolve().parents[3]
+    dotenv = tmp_path / "remote.env"
+    command_marker = tmp_path / "dotenv-command-ran"
+    dotenv.write_text(
+        "\n".join(
+            (
+                "SUPABASE_SCHEMA=transmuter_dev",
+                "DATABASE_LOCAL_URL=postgresql://postgres:test@db:5432/postgres?options=-csearch_path%3Dtransmuter_dev,public,extensions",
+                "SCHEMA_TARGET=transmuter_dev",
+                f"DEV_CLONE_DATABASE_URL=$(touch {command_marker})",
+                "RESEND_FROM_EMAIL=Transmuter <noreply@example.test>",
+                "MICROSOFT_GRAPH_SCOPES=openid profile offline_access User.Read",
+            )
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            """
+set -euo pipefail
+. "$1"
+export SUPABASE_SCHEMA=transmuter
+export DATABASE_LOCAL_URL=postgresql://prod.example/postgres
+export SCHEMA_TARGET=transmuter
+load_hostinger_schema_env "$2" replace
+printf '%s\\n' "$SUPABASE_SCHEMA" "$DATABASE_LOCAL_URL" "$SCHEMA_TARGET" "$DEV_CLONE_DATABASE_URL"
+if [[ -n "${RESEND_FROM_EMAIL+x}" || -n "${MICROSOFT_GRAPH_SCOPES+x}" ]]; then
+  exit 9
+fi
+""",
+            "schema-env-test",
+            str(root / "infra/hostinger/env-control.sh"),
+            str(dotenv),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.stdout.splitlines() == [
+        "transmuter_dev",
+        "postgresql://postgres:test@db:5432/postgres?options=-csearch_path%3Dtransmuter_dev,public,extensions",
+        "transmuter_dev",
+        f"$(touch {command_marker})",
+    ]
+    assert not command_marker.exists()
+
+
+def test_hostinger_offline_schema_apply_uses_saved_remote_environment(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).resolve().parents[3]
+    dotenv = tmp_path / "local.env"
+    fake_bin = tmp_path / "bin"
+    sql_file = tmp_path / "change.sql"
+    fake_bin.mkdir()
+    dotenv.write_text(
+        "SUPABASE_SCHEMA=transmuter_dev\n"
+        "DATABASE_LOCAL_URL=postgresql://postgres:test@db:5432/postgres\n",
+        encoding="utf-8",
+    )
+    sql_file.write_text("select 1;\n", encoding="utf-8")
+    fake_curl = fake_bin / "curl"
+    fake_jq = fake_bin / "jq"
+    fake_curl.write_text("#!/bin/sh\nprintf '{}\\n'\n", encoding="utf-8")
+    fake_jq.write_text(
+        "#!/bin/sh\n"
+        "cat >/dev/null\n"
+        "printf '%s\\n' 'SUPABASE_SCHEMA=transmuter' "
+        "'DATABASE_LOCAL_URL=postgresql://remote.example/postgres'\n",
+        encoding="utf-8",
+    )
+    fake_curl.chmod(0o755)
+    fake_jq.chmod(0o755)
+
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            '. "$1"; bind_offline_hostinger_controls dev; '
+            'PATH="$2:$PATH" HOSTINGER_API_TOKEN=test-token ENV_FILE="$3" '
+            'OFFLINE_SCHEMA_PINNED=1 OFFLINE_SCHEMA_GIT_REF=reviewed-sha "$4" dev "$5"',
+            "offline-target-test",
+            str(root / "infra/hostinger/env-control.sh"),
+            str(fake_bin),
+            str(dotenv),
+            str(root / "infra/hostinger/apply-schema-sql.sh"),
+            str(sql_file),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "Offline dev schema target must be transmuter_dev; got transmuter." in result.stderr
+
+
+@pytest.mark.parametrize(
+    ("override", "variable_name"),
+    (
+        ("HOSTINGER_PROJECT_NAME=other-project", "HOSTINGER_PROJECT_NAME"),
+        ("HOSTINGER_SCHEMA_APPLY_MODE=direct", "HOSTINGER_SCHEMA_APPLY_MODE"),
+        ("HOSTINGER_SCHEMA_DOCKER_NETWORK=other-network", "HOSTINGER_SCHEMA_DOCKER_NETWORK"),
+        ("HOSTINGER_SCHEMA_JOB_KEEP=1", "HOSTINGER_SCHEMA_JOB_KEEP"),
+    ),
+)
+def test_hostinger_offline_dev_rejects_control_plane_overrides_before_stop(
+    override: str,
+    variable_name: str,
+) -> None:
+    root = Path(__file__).resolve().parents[3]
+    migration = root / "supabase/migrations/20260711000002_harden_microsoft_graph_oauth.sql"
+
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'export "$1"; "$2" --offline-schema --schema "$3"',
+            "offline-control-test",
+            override,
+            str(root / "infra/hostinger/deploy-change-to-dev.sh"),
+            str(migration),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert f"does not permit {variable_name} overrides" in result.stderr
+    assert "Waiting for Hostinger stop action" not in result.stdout

@@ -2,6 +2,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/env-control.sh"
 
 REFRESH_SCHEMA=0
 SKIP_VALIDATE=0
@@ -87,12 +88,17 @@ if [[ "${REFRESH_SCHEMA}" == "1" ]]; then
   )
 fi
 
-export HOSTINGER_PROJECT_NAME="${HOSTINGER_PROJECT_NAME:-transmuter-dev-hostinger}"
-export HOSTINGER_VPS_ID="${HOSTINGER_VPS_ID:-1695814}"
-export HOSTINGER_PUBLIC_IP="${HOSTINGER_PUBLIC_IP:-76.13.208.106}"
-export HOSTINGER_SCHEMA_DATABASE_HOST="${HOSTINGER_SCHEMA_DATABASE_HOST:-${HOSTINGER_PUBLIC_IP}}"
-export HOSTINGER_SCHEMA_APPLY_MODE="${HOSTINGER_SCHEMA_APPLY_MODE:-hostinger-job}"
-export HOSTINGER_STOP_PROJECTS="${HOSTINGER_STOP_PROJECTS:-${HOSTINGER_PROJECT_NAME}}"
+if [[ "${OFFLINE_SCHEMA}" == "1" ]]; then
+  reject_offline_hostinger_control_overrides
+  bind_offline_hostinger_controls dev
+else
+  export HOSTINGER_PROJECT_NAME="${HOSTINGER_PROJECT_NAME:-transmuter-dev-hostinger}"
+  export HOSTINGER_VPS_ID="${HOSTINGER_VPS_ID:-1695814}"
+  export HOSTINGER_PUBLIC_IP="${HOSTINGER_PUBLIC_IP:-76.13.208.106}"
+  export HOSTINGER_SCHEMA_DATABASE_HOST="${HOSTINGER_SCHEMA_DATABASE_HOST:-${HOSTINGER_PUBLIC_IP}}"
+  export HOSTINGER_SCHEMA_APPLY_MODE="${HOSTINGER_SCHEMA_APPLY_MODE:-hostinger-job}"
+  export HOSTINGER_STOP_PROJECTS="${HOSTINGER_STOP_PROJECTS:-${HOSTINGER_PROJECT_NAME}}"
+fi
 
 stop_projects=()
 if [[ "${OFFLINE_SCHEMA}" == "1" ]]; then
@@ -133,16 +139,17 @@ if [[ "${#SCHEMA_FILES[@]}" -gt 0 ]]; then
     pinned_sha="$(git rev-parse HEAD)"
     export HOSTINGER_SCHEMA_GIT_REF="${pinned_sha}"
     export HOSTINGER_DEPLOY_REF="${pinned_sha}"
+    export ENV_FILE="${SCRIPT_DIR}/.env.dev"
     unset HOSTINGER_COMPOSE_URL
     for project_name in "${stop_projects[@]}"; do
-      ENV_FILE="${ENV_FILE:-${SCRIPT_DIR}/.env.dev}" \
+      ENV_FILE="${ENV_FILE}" \
         HOSTINGER_PROJECT_NAME="${project_name}" \
         CONFIRM_STOP_PROJECT=1 \
         EXPECTED_HOSTINGER_PROJECT_NAME="${project_name}" \
         "${SCRIPT_DIR}/stop-docker-project.sh"
     done
     for project_name in "${stop_projects[@]}"; do
-      ENV_FILE="${ENV_FILE:-${SCRIPT_DIR}/.env.dev}" \
+      ENV_FILE="${ENV_FILE}" \
         HOSTINGER_PROJECT_NAME="${project_name}" \
         CONFIRM_STOP_PROJECT=1 \
         EXPECTED_HOSTINGER_PROJECT_NAME="${project_name}" \

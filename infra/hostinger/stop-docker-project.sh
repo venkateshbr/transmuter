@@ -8,7 +8,9 @@ ENV_FILE="${ENV_FILE:-${SCRIPT_DIR}/.env}"
 # shellcheck source=/dev/null
 . "${SCRIPT_DIR}/env-control.sh"
 load_hostinger_control_env "${REPO_ROOT}/.env"
-load_hostinger_control_env "${ENV_FILE}"
+if [[ "${OFFLINE_HOSTINGER_CONTROLS_LOCKED:-0}" != "1" ]]; then
+  load_hostinger_control_env "${ENV_FILE}"
+fi
 
 HOSTINGER_API_BASE_URL="${HOSTINGER_API_BASE_URL:-https://developers.hostinger.com/api}"
 HOSTINGER_VPS_ID="${HOSTINGER_VPS_ID:-1695814}"

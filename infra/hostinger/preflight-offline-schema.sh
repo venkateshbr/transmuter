@@ -49,6 +49,24 @@ if [[ -n "${HOSTINGER_SCHEMA_SQL_URL:-}" || -n "${HOSTINGER_SCHEMA_SQL_BASE_URL:
   echo "Offline schema rollout does not permit SQL URL overrides." >&2
   exit 1
 fi
+schema_routing_overrides=(
+  ENV_FILE
+  SCHEMA_TARGET
+  SUPABASE_SCHEMA
+  DB_SCHEMA
+  SCHEMA_DATABASE_URL
+  DEV_SCHEMA_DATABASE_URL
+  DEV_CLONE_DATABASE_URL
+  TARGET_DATABASE_URL
+  DATABASE_LOCAL_URL
+  PROD_SCHEMA_DATABASE_URL
+)
+for variable_name in "${schema_routing_overrides[@]}"; do
+  if [[ -n "${!variable_name+x}" ]]; then
+    echo "Offline schema rollout does not permit ${variable_name} overrides." >&2
+    exit 1
+  fi
+done
 
 remote_url="$(git config --get remote.origin.url)"
 case "${remote_url}" in

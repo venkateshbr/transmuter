@@ -7,7 +7,9 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 ENV_FILE="${ENV_FILE:-${SCRIPT_DIR}/.env}"
 . "${SCRIPT_DIR}/env-control.sh"
 load_hostinger_control_env "${REPO_ROOT}/.env"
-load_hostinger_control_env "${ENV_FILE}"
+if [[ "${OFFLINE_HOSTINGER_CONTROLS_LOCKED:-0}" != "1" ]]; then
+  load_hostinger_control_env "${ENV_FILE}"
+fi
 
 HOSTINGER_API_BASE_URL="${HOSTINGER_API_BASE_URL:-https://developers.hostinger.com/api}"
 HOSTINGER_VPS_ID="${HOSTINGER_VPS_ID:-1695814}"
@@ -17,6 +19,10 @@ HOSTINGER_PROJECT_NAME="${HOSTINGER_PROJECT_NAME:-${TRANSMUTER_COMPOSE_PROJECT:-
 HOSTINGER_PRESERVE_REMOTE_ENV="${HOSTINGER_PRESERVE_REMOTE_ENV:-}"
 SKIP_GIT_REMOTE_CHECK="${SKIP_GIT_REMOTE_CHECK:-0}"
 ALLOW_DIRTY_DEPLOY="${ALLOW_DIRTY_DEPLOY:-0}"
+
+if [[ "${OFFLINE_HOSTINGER_CONTROLS_LOCKED:-0}" == "1" ]]; then
+  assert_offline_hostinger_controls
+fi
 
 usage() {
   cat <<'USAGE'
@@ -236,7 +242,10 @@ fetch_project_environment() {
 }
 
 remote_environment=""
-if [[ -f "${ENV_FILE}" ]]; then
+if [[ "${OFFLINE_HOSTINGER_CONTROLS_LOCKED:-0}" == "1" ]]; then
+  echo "Offline control lock active; preserving saved Hostinger project environment."
+  remote_environment="$(fetch_project_environment)"
+elif [[ -f "${ENV_FILE}" ]]; then
   load_env_file
   if [[ "${HOSTINGER_PRESERVE_REMOTE_ENV}" == "1" ]]; then
     remote_environment="$(fetch_project_environment)"
