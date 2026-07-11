@@ -107,6 +107,8 @@ if [[ "${ENVIRONMENT}" == "dev" ]]; then
 fi
 
 ENV_FILE="${ENV_FILE:-${ENV_FILE_DEFAULT}}"
+CALLER_OFFLINE_SCHEMA_PINNED="${OFFLINE_SCHEMA_PINNED:-0}"
+CALLER_OFFLINE_SCHEMA_GIT_REF="${OFFLINE_SCHEMA_GIT_REF:-}"
 load_hostinger_control_env "${REPO_ROOT}/.env"
 load_hostinger_control_env "${ENV_FILE}"
 
@@ -126,6 +128,15 @@ set -a
 # shellcheck source=/dev/null
 . "${ENV_FILE}"
 set +a
+
+if [[ "${CALLER_OFFLINE_SCHEMA_PINNED}" == "1" ]]; then
+  if [[ -z "${CALLER_OFFLINE_SCHEMA_GIT_REF}" ]]; then
+    echo "OFFLINE_SCHEMA_GIT_REF is required for a pinned offline rollout." >&2
+    exit 1
+  fi
+  unset HOSTINGER_SCHEMA_SQL_URL HOSTINGER_SCHEMA_SQL_BASE_URL
+  export HOSTINGER_SCHEMA_GIT_REF="${CALLER_OFFLINE_SCHEMA_GIT_REF}"
+fi
 
 TARGET_SCHEMA="${SCHEMA_TARGET:-${SUPABASE_SCHEMA:-${DB_SCHEMA:-${TARGET_SCHEMA_DEFAULT}}}}"
 validate_identifier TARGET_SCHEMA "${TARGET_SCHEMA}"

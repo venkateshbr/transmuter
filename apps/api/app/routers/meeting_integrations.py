@@ -1,26 +1,47 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
 from typing import Annotated
-from urllib.parse import quote, urlencode
+from urllib.parse import parse_qsl, urlencode
 from uuid import UUID
 
-import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
-from joserfc.errors import JoseError
 from pydantic import BaseModel
 from supabase import Client
 
 from app.core.auth import CurrentUser, get_current_user
 from app.core.config import settings
-from app.core.crypto import encrypt_secret
 from app.core.database import get_supabase_admin, get_supabase_request_client
-from app.core.jwt_tokens import decode_token, encode_token
 from app.core.rbac import assert_can_manage_program_cadence, assert_can_view_portfolio
-from app.repositories.meeting import MeetingRepository
+from app.services.meeting_integrations import (
+    OAUTH_BINDING_COOKIE_MAX_AGE_SECONDS,
+    OAUTH_BINDING_COOKIE_PATH,
+    OAUTH_MAX_CODE_LENGTH,
+    MeetingIntegrationService,
+    OAuthCallbackForm,
+    OAuthCallbackResult,
+    OAuthCallbackTransport,
+    oauth_binding_cookie_name,
+    parse_oauth_state,
+)
 
 router = APIRouter(prefix="/meeting-integrations", tags=["meeting-integrations"])
+
+OAUTH_CALLBACK_MAX_BODY_BYTES = 16_384
+OAUTH_CALLBACK_MAX_FIELDS = 20
+OAUTH_CALLBACK_ALLOWED_FIELDS = frozenset(
+    {"state", "code", "error", "error_description", "error_uri", "session_state"}
+)
+OAUTH_CALLBACK_REASON_CODES = frozenset(
+    {
+        "authorization_cancelled",
+        "configuration_error",
+        "connection_failed",
+        "consent_invalid",
+        "invalid_callback",
+        "provider_error",
+    }
+)
 
 
 class OAuthStartResponse(BaseModel):
@@ -33,178 +54,225 @@ class OAuthStartResponse(BaseModel):
 async def list_meeting_integrations(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     client: Annotated[Client, Depends(get_supabase_request_client)],
-) -> dict:
+) -> dict[str, object]:
     assert_can_view_portfolio(current_user)
-    repo = MeetingRepository(client, current_user.tenant_id)
-    connections = repo.list_integration_connections()
-    return {
-        "items": connections,
-        "providers": [
-            {
-                "provider": "microsoft_graph",
-                "configured": bool(
-                    settings.microsoft_graph_client_id
-                    and settings.microsoft_graph_client_secret
-                    and settings.encryption_key
-                ),
-            },
-            {
-                "provider": "recall_ai",
-                "enabled": settings.recall_meeting_bot_enabled,
-            },
-            {
-                "provider": "fireflies",
-                "enabled": settings.fireflies_meeting_bot_enabled,
-            },
-        ],
-    }
+    return MeetingIntegrationService(client, current_user.tenant_id).list_integrations()
 
 
 @router.post("/microsoft/oauth/start", response_model=OAuthStartResponse)
 async def start_microsoft_oauth(
+    response: Response,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> OAuthStartResponse:
     assert_can_manage_program_cadence(current_user)
-    missing = [
-        name
-        for name, value in (
-            ("MICROSOFT_GRAPH_CLIENT_ID", settings.microsoft_graph_client_id),
-            ("MICROSOFT_GRAPH_CLIENT_SECRET", settings.microsoft_graph_client_secret),
-            ("ENCRYPTION_KEY", settings.encryption_key),
-        )
-        if not value
-    ]
-    if missing:
-        return OAuthStartResponse(
-            authorization_url="",
-            configured=False,
-            detail=f"Missing required setting(s): {', '.join(missing)}.",
-        )
-
-    state = encode_token(
-        {
-            "purpose": "microsoft_graph_oauth",
-            "tenant_id": str(current_user.tenant_id),
-            "user_id": str(current_user.id),
-            "exp": datetime.now(UTC) + timedelta(minutes=10),
-        },
-        settings.jwt_secret,
-        settings.jwt_algorithm,
+    result = MeetingIntegrationService(get_supabase_admin(), current_user.tenant_id).start_oauth(
+        current_user
     )
-    params = {
-        "client_id": settings.microsoft_graph_client_id,
-        "response_type": "code",
-        "redirect_uri": _redirect_uri(),
-        "response_mode": "query",
-        "scope": settings.microsoft_graph_scopes,
-        "state": state,
-        "prompt": "select_account",
-    }
+    if result.cookie_name and result.cookie_value:
+        _set_oauth_binding_cookie(response, result.cookie_name, result.cookie_value)
     return OAuthStartResponse(
-        authorization_url=f"{_authorize_url()}?{urlencode(params)}",
-        configured=True,
+        authorization_url=result.authorization_url,
+        configured=result.configured,
+        detail=result.detail,
     )
 
 
-@router.get("/microsoft/oauth/callback")
-async def microsoft_oauth_callback(
-    code: Annotated[str | None, Query()] = None,
-    state: Annotated[str | None, Query()] = None,
-    error: Annotated[str | None, Query()] = None,
-    error_description: Annotated[str | None, Query()] = None,
-) -> RedirectResponse:
-    if error:
-        return _oauth_redirect("failed", error_description or error)
-    if not code or not state:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Microsoft OAuth callback requires code and state.",
-        )
-    payload = _decode_oauth_state(state)
-    tenant_id = UUID(payload["tenant_id"])
-
-    token_response = httpx.post(
-        _token_url(),
-        data={
-            "client_id": settings.microsoft_graph_client_id,
-            "client_secret": settings.microsoft_graph_client_secret,
-            "grant_type": "authorization_code",
-            "code": code,
-            "redirect_uri": _redirect_uri(),
-            "scope": settings.microsoft_graph_scopes,
-        },
-        timeout=10,
-    )
-    token_response.raise_for_status()
-    token_body = token_response.json()
-    access_token = token_body["access_token"]
-    profile = _graph_me(access_token)
-    repo = MeetingRepository(get_supabase_admin(), tenant_id)
-    expires_in = int(token_body.get("expires_in") or 3600)
-    organizer_email = profile.get("mail") or profile.get("userPrincipalName")
-    repo.upsert_integration_connection(
-        "microsoft_graph",
-        {
-            "organizer_email": organizer_email,
-            "external_account_id": profile.get("id"),
-            "access_token_encrypted": encrypt_secret(access_token),
-            "refresh_token_encrypted": encrypt_secret(token_body.get("refresh_token")),
-            "token_expires_at": (datetime.now(UTC) + timedelta(seconds=expires_in)).isoformat(),
-            "scopes": settings.microsoft_graph_scopes.split(),
-            "sync_status": "connected",
-            "sync_error": None,
-            "last_synced_at": datetime.now(UTC).isoformat(),
-        },
-    )
-    return _oauth_redirect("connected", None)
-
-
-def _decode_oauth_state(state: str) -> dict:
+@router.post("/microsoft/oauth/callback")
+async def microsoft_oauth_callback(request: Request) -> RedirectResponse:
+    cookie_names_to_clear: list[str] = []
     try:
-        payload = decode_token(state, settings.jwt_secret, settings.jwt_algorithm)
-    except JoseError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid Microsoft OAuth state.",
-        ) from exc
-    if payload.get("purpose") != "microsoft_graph_oauth":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid Microsoft OAuth state purpose.",
+        form = await _parse_oauth_callback_form(request)
+        cookie_name = oauth_binding_cookie_name(form.state)
+        cookie_names_to_clear = [cookie_name]
+        browser_binding = _extract_oauth_binding_cookie(request, cookie_name)
+        tenant_id, _ = parse_oauth_state(form.state)
+        transport = _oauth_callback_transport(request)
+        result = MeetingIntegrationService(get_supabase_admin(), tenant_id).complete_callback(
+            form, transport, browser_binding
         )
-    return payload
+    except ValueError:
+        result = OAuthCallbackResult("failed", "invalid_callback")
+
+    response = _oauth_redirect(result)
+    for cookie_name in cookie_names_to_clear:
+        _clear_oauth_binding_cookie(response, cookie_name)
+    return response
 
 
-def _graph_me(access_token: str) -> dict:
-    response = httpx.get(
-        "https://graph.microsoft.com/v1.0/me",
-        headers={"Authorization": f"Bearer {access_token}"},
-        timeout=10,
+@router.delete("/microsoft/{connection_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def disconnect_microsoft_graph(
+    connection_id: UUID,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> None:
+    assert_can_manage_program_cadence(current_user)
+    disconnected = MeetingIntegrationService(
+        get_supabase_admin(), current_user.tenant_id
+    ).disconnect(current_user, connection_id)
+    if not disconnected:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Connection not found")
+    return None
+
+
+async def _parse_oauth_callback_form(request: Request) -> OAuthCallbackForm:
+    if request.url.query:
+        raise ValueError("OAuth callback query parameters are not supported")
+
+    content_type_values = request.headers.getlist("content-type")
+    if len(content_type_values) != 1:
+        raise ValueError("OAuth callback content type is invalid")
+    content_type_parts = [part.strip().lower() for part in content_type_values[0].split(";")]
+    if content_type_parts[0] != "application/x-www-form-urlencoded":
+        raise ValueError("OAuth callback content type is invalid")
+    if any(part not in {"charset=utf-8", "charset=us-ascii"} for part in content_type_parts[1:]):
+        raise ValueError("OAuth callback content type is invalid")
+
+    content_length_values = request.headers.getlist("content-length")
+    if len(content_length_values) > 1:
+        raise ValueError("OAuth callback content length is invalid")
+    if content_length_values:
+        try:
+            content_length = int(content_length_values[0])
+        except ValueError:
+            raise ValueError("OAuth callback content length is invalid") from None
+        if content_length < 1 or content_length > OAUTH_CALLBACK_MAX_BODY_BYTES:
+            raise ValueError("OAuth callback body is invalid")
+
+    body = bytearray()
+    async for chunk in request.stream():
+        if len(body) + len(chunk) > OAUTH_CALLBACK_MAX_BODY_BYTES:
+            raise ValueError("OAuth callback body is invalid")
+        body.extend(chunk)
+    if not body:
+        raise ValueError("OAuth callback body is invalid")
+    if content_length_values and len(body) != content_length:
+        raise ValueError("OAuth callback content length is invalid")
+    try:
+        encoded = bytes(body).decode("ascii")
+        pairs = parse_qsl(
+            encoded,
+            keep_blank_values=True,
+            strict_parsing=True,
+            encoding="utf-8",
+            errors="strict",
+            max_num_fields=OAUTH_CALLBACK_MAX_FIELDS,
+        )
+    except (UnicodeDecodeError, UnicodeError, ValueError):
+        raise ValueError("OAuth callback body is invalid") from None
+
+    fields: dict[str, str] = {}
+    for key, value in pairs:
+        if key not in OAUTH_CALLBACK_ALLOWED_FIELDS or key in fields:
+            raise ValueError("OAuth callback fields are invalid")
+        if len(key) > 64 or len(value) > OAUTH_MAX_CODE_LENGTH:
+            raise ValueError("OAuth callback field is invalid")
+        fields[key] = value
+
+    state_value = fields.get("state")
+    code_value = fields.get("code")
+    error_value = fields.get("error")
+    if (
+        not state_value
+        or (bool(code_value) == bool(error_value))
+        or (error_value is not None and len(error_value) > 128)
+    ):
+        raise ValueError("OAuth callback fields are invalid")
+    return OAuthCallbackForm(state=state_value, code=code_value, error=error_value)
+
+
+def _oauth_callback_transport(request: Request) -> OAuthCallbackTransport:
+    return OAuthCallbackTransport(
+        origin=_single_header(request, "origin"),
+        host=_forwarded_or_direct_header(request, "x-forwarded-host", "host"),
+        scheme=_forwarded_or_request_scheme(request),
+        fetch_site=_optional_single_header(request, "sec-fetch-site"),
+        fetch_mode=_optional_single_header(request, "sec-fetch-mode"),
+        fetch_dest=_optional_single_header(request, "sec-fetch-dest"),
     )
-    response.raise_for_status()
-    return response.json()
 
 
-def _oauth_redirect(status_value: str, detail: str | None) -> RedirectResponse:
-    params = {"microsoft_graph": status_value}
-    if detail:
-        params["detail"] = detail[:200]
-    return RedirectResponse(f"{settings.app_public_url.rstrip('/')}/meetings?{urlencode(params)}")
+def _single_header(request: Request, name: str) -> str | None:
+    values = request.headers.getlist(name)
+    if len(values) != 1 or "," in values[0]:
+        return None
+    return values[0]
 
 
-def _redirect_uri() -> str:
-    if settings.microsoft_graph_redirect_uri:
-        return settings.microsoft_graph_redirect_uri
-    return (
-        f"{settings.app_public_url.rstrip('/')}/api/meeting-integrations/microsoft/oauth/callback"
+def _optional_single_header(request: Request, name: str) -> str | None:
+    values = request.headers.getlist(name)
+    if not values:
+        return None
+    if len(values) != 1 or "," in values[0]:
+        return "invalid"
+    return values[0]
+
+
+def _forwarded_or_direct_header(
+    request: Request,
+    forwarded_name: str,
+    direct_name: str,
+) -> str | None:
+    forwarded = request.headers.getlist(forwarded_name)
+    if forwarded:
+        if len(forwarded) != 1 or "," in forwarded[0]:
+            return None
+        return forwarded[0]
+    return _single_header(request, direct_name)
+
+
+def _forwarded_or_request_scheme(request: Request) -> str | None:
+    forwarded = request.headers.getlist("x-forwarded-proto")
+    if forwarded:
+        if len(forwarded) != 1 or "," in forwarded[0]:
+            return None
+        return forwarded[0]
+    return request.url.scheme
+
+
+def _extract_oauth_binding_cookie(request: Request, cookie_name: str) -> str | None:
+    matches: list[str] = []
+    for header in request.headers.getlist("cookie"):
+        for item in header.split(";"):
+            name, separator, value = item.strip().partition("=")
+            if separator and name == cookie_name:
+                matches.append(value)
+    if len(matches) != 1:
+        return None
+    return matches[0]
+
+
+def _set_oauth_binding_cookie(response: Response, cookie_name: str, cookie_value: str) -> None:
+    response.set_cookie(
+        key=cookie_name,
+        value=cookie_value,
+        max_age=OAUTH_BINDING_COOKIE_MAX_AGE_SECONDS,
+        expires=OAUTH_BINDING_COOKIE_MAX_AGE_SECONDS,
+        path=OAUTH_BINDING_COOKIE_PATH,
+        secure=True,
+        httponly=True,
+        samesite="none",
     )
 
 
-def _authorize_url() -> str:
-    tenant = settings.microsoft_graph_tenant_id or "common"
-    return f"https://login.microsoftonline.com/{quote(tenant, safe='')}/oauth2/v2.0/authorize"
+def _clear_oauth_binding_cookie(response: Response, cookie_name: str) -> None:
+    response.delete_cookie(
+        key=cookie_name,
+        path=OAUTH_BINDING_COOKIE_PATH,
+        secure=True,
+        httponly=True,
+        samesite="none",
+    )
 
 
-def _token_url() -> str:
-    tenant = settings.microsoft_graph_tenant_id or "common"
-    return f"https://login.microsoftonline.com/{quote(tenant, safe='')}/oauth2/v2.0/token"
+def _oauth_redirect(result: OAuthCallbackResult) -> RedirectResponse:
+    reason = result.reason if result.reason in OAUTH_CALLBACK_REASON_CODES else None
+    params = {"microsoft_graph": result.status}
+    if reason:
+        params["reason"] = reason
+    response = RedirectResponse(
+        f"{settings.app_public_url.rstrip('/')}/meetings?{urlencode(params)}",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response

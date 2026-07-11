@@ -5,11 +5,20 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Protocol
 from urllib.parse import quote
+from uuid import UUID
 
 import httpx
 
 from app.core.config import settings
 from app.core.crypto import decrypt_secret, encrypt_secret
+from app.core.database import get_supabase_schema
+from app.core.microsoft_graph import (
+    MicrosoftGraphConfigurationError,
+    MicrosoftGraphContext,
+    build_microsoft_graph_context,
+    has_required_graph_scopes,
+    normalize_scope_set,
+)
 from app.repositories.meeting import MeetingRepository
 
 
@@ -19,6 +28,10 @@ class MeetingProviderError(Exception):
 
 class MeetingProviderConfigurationError(MeetingProviderError):
     """Provider is not configured for the current tenant."""
+
+
+class MeetingProviderTemporaryError(MeetingProviderError):
+    """Provider failed without invalidating the stored connection."""
 
 
 @dataclass(frozen=True)
@@ -67,11 +80,20 @@ class MicrosoftGraphMeetingProvider:
         self,
         connection: dict,
         repo: MeetingRepository,
+        tenant_id: UUID,
         http_client: object = httpx,
     ) -> None:
         self._connection = connection
         self._repo = repo
+        self._tenant_id = str(tenant_id)
         self._http = http_client
+        try:
+            self._context: MicrosoftGraphContext | None = build_microsoft_graph_context(
+                settings,
+                get_supabase_schema(),
+            )
+        except MicrosoftGraphConfigurationError:
+            self._context = None
 
     def create_invite(
         self,
@@ -79,8 +101,7 @@ class MicrosoftGraphMeetingProvider:
         attendees: list[dict],
         request: MeetingInviteRequest,
     ) -> MeetingInviteResult:
-        access_token = self._access_token()
-        user_id = self._graph_user_id(request.organizer_email)
+        user_id = self._graph_user_path(request.organizer_email)
         event_payload = {
             "subject": meeting["name"],
             "body": {
@@ -95,20 +116,20 @@ class MicrosoftGraphMeetingProvider:
         }
         if request.recurrence:
             event_payload["recurrence"] = request.recurrence
-        response = self._http.post(
+        response = self._graph_request(
+            "post",
             f"https://graph.microsoft.com/v1.0/{user_id}/events",
-            headers=self._headers(access_token),
+            organizer_email=request.organizer_email,
             json=event_payload,
             timeout=10,
         )
-        response.raise_for_status()
-        body = response.json()
+        body = self._response_json(response)
         online = body.get("onlineMeeting") or {}
         return MeetingInviteResult(
             external_event_id=body.get("id"),
             online_meeting_id=online.get("id"),
             join_url=online.get("joinUrl"),
-            organizer_email=request.organizer_email or self._connection.get("organizer_email"),
+            organizer_email=self._connection.get("organizer_email"),
         )
 
     def get_join_url(self, external_event: dict) -> str | None:
@@ -120,24 +141,24 @@ class MicrosoftGraphMeetingProvider:
             raise MeetingProviderConfigurationError(
                 "The synced Teams event does not include a Microsoft event id."
             )
-        access_token = self._access_token()
-        user_id = self._graph_user_id(external_event.get("organizer_email"))
-        response = self._http.delete(
+        organizer_email = external_event.get("organizer_email")
+        user_id = self._graph_user_path(organizer_email)
+        self._graph_request(
+            "delete",
             f"https://graph.microsoft.com/v1.0/{user_id}/events/{quote(str(external_event_id), safe='')}",
-            headers=self._headers(access_token),
+            organizer_email=organizer_email,
             timeout=10,
         )
-        response.raise_for_status()
 
     def sync_transcript(self, external_event: dict) -> TranscriptSyncResult:
-        access_token = self._access_token()
-        user_id = self._graph_user_id(external_event.get("organizer_email"))
+        organizer_email = external_event.get("organizer_email")
+        user_id = self._graph_user_path(organizer_email)
         online_meeting_id = external_event.get("online_meeting_id")
         if not online_meeting_id and external_event.get("join_url"):
             online_meeting_id = self._find_online_meeting_id(
-                access_token,
                 user_id,
                 external_event["join_url"],
+                organizer_email,
             )
         if not online_meeting_id:
             return TranscriptSyncResult(
@@ -145,13 +166,13 @@ class MicrosoftGraphMeetingProvider:
                 detail="The synced Teams event does not include an online meeting id yet.",
             )
 
-        transcripts_response = self._http.get(
+        transcripts_response = self._graph_request(
+            "get",
             f"https://graph.microsoft.com/v1.0/{user_id}/onlineMeetings/{quote(online_meeting_id, safe='')}/transcripts",
-            headers=self._headers(access_token),
+            organizer_email=organizer_email,
             timeout=10,
         )
-        transcripts_response.raise_for_status()
-        transcripts = transcripts_response.json().get("value") or []
+        transcripts = self._response_json(transcripts_response).get("value") or []
         if not transcripts:
             return TranscriptSyncResult(
                 status="pending",
@@ -166,12 +187,13 @@ class MicrosoftGraphMeetingProvider:
                 detail="Microsoft returned transcript metadata without a transcript id.",
             )
 
-        content_response = self._http.get(
+        content_response = self._graph_request(
+            "get",
             f"https://graph.microsoft.com/v1.0/{user_id}/onlineMeetings/{quote(online_meeting_id, safe='')}/transcripts/{quote(transcript_id, safe='')}/content",
-            headers={**self._headers(access_token), "Accept": "text/vtt"},
+            organizer_email=organizer_email,
+            accept="text/vtt",
             timeout=15,
         )
-        content_response.raise_for_status()
         transcript_text = normalize_vtt_transcript(content_response.text)
         if not transcript_text:
             return TranscriptSyncResult(
@@ -185,72 +207,368 @@ class MicrosoftGraphMeetingProvider:
             transcript_id=transcript_id,
         )
 
-    def _access_token(self) -> str:
+    def _access_token(self, organizer_email: str | None = None) -> tuple[str, bool]:
+        self._validate_connection(organizer_email)
         token = decrypt_secret(self._connection.get("access_token_encrypted"))
         expires_at = _parse_datetime(self._connection.get("token_expires_at"))
         if token and expires_at and expires_at > datetime.now(UTC) + timedelta(minutes=5):
-            return token
+            return token, True
+        return self._refresh_access_token(), False
+
+    def _refresh_access_token(self) -> str:
+        context = self._require_context()
+        self._validate_connection()
+        expected_oauth_generation = self._oauth_generation()
+        expected_token_generation = self._token_generation()
         refresh_token = decrypt_secret(self._connection.get("refresh_token_encrypted"))
         if not refresh_token:
-            raise MeetingProviderConfigurationError(
-                "Microsoft Graph is not connected. Connect a Microsoft organizer account first."
+            if not self._clear_credentials(
+                expected_token_generation,
+                expected_oauth_generation,
+            ):
+                winner_token = self._winner_access_token()
+                if winner_token:
+                    return winner_token
+            raise MeetingProviderConfigurationError("Microsoft Graph reconnection is required.")
+        try:
+            response = self._http.post(
+                context.token_url,
+                data={
+                    "client_id": context.client_id,
+                    "client_secret": context.reveal_client_secret_for_token_exchange(),
+                    "grant_type": "refresh_token",
+                    "refresh_token": refresh_token,
+                    "scope": context.scope_value,
+                },
+                timeout=10,
+                follow_redirects=False,
             )
-        if not settings.microsoft_graph_client_id or not settings.microsoft_graph_client_secret:
-            raise MeetingProviderConfigurationError(
-                "Microsoft OAuth client id and secret are not configured."
+        except httpx.RequestError as exc:
+            raise MeetingProviderTemporaryError(
+                "Microsoft Graph is temporarily unavailable."
+            ) from exc
+
+        body = self._response_json(response)
+        response_status = self._status_code(response)
+        if 300 <= response_status < 400:
+            raise MeetingProviderTemporaryError("Microsoft Graph token endpoint redirected.")
+        if response_status >= 400:
+            if body.get("error") == "invalid_grant":
+                if not self._clear_credentials(
+                    expected_token_generation,
+                    expected_oauth_generation,
+                ):
+                    winner_token = self._winner_access_token()
+                    if winner_token:
+                        return winner_token
+                raise MeetingProviderConfigurationError("Microsoft Graph reconnection is required.")
+            if response_status == 429 or response_status >= 500:
+                raise MeetingProviderTemporaryError("Microsoft Graph is temporarily unavailable.")
+            raise MeetingProviderConfigurationError("Microsoft Graph token refresh failed.")
+
+        token = body.get("access_token")
+        if not isinstance(token, str) or not token:
+            raise MeetingProviderTemporaryError(
+                "Microsoft Graph returned an invalid token response."
             )
-        response = self._http.post(
-            _token_url(),
-            data={
-                "client_id": settings.microsoft_graph_client_id,
-                "client_secret": settings.microsoft_graph_client_secret,
-                "grant_type": "refresh_token",
-                "refresh_token": refresh_token,
-                "scope": settings.microsoft_graph_scopes,
-            },
-            timeout=10,
+        if str(body.get("token_type") or "").casefold() != "bearer":
+            raise MeetingProviderTemporaryError(
+                "Microsoft Graph returned an invalid token response."
+            )
+        expires_in = _bounded_expires_in(body.get("expires_in"))
+        previous_scopes = normalize_scope_set(self._connection.get("scopes") or [])
+        if "scope" in body:
+            returned_scope = body.get("scope")
+            if not isinstance(returned_scope, str) or not returned_scope.strip():
+                raise MeetingProviderTemporaryError(
+                    "Microsoft Graph returned an invalid token response."
+                )
+            granted_scopes = normalize_scope_set(returned_scope)
+        else:
+            granted_scopes = previous_scopes
+        if not has_required_graph_scopes(granted_scopes):
+            if not self._clear_credentials(
+                expected_token_generation,
+                expected_oauth_generation,
+            ):
+                winner_token = self._winner_access_token()
+                if winner_token:
+                    return winner_token
+            raise MeetingProviderConfigurationError("Microsoft Graph reconnection is required.")
+
+        self._validate_refreshed_account(
+            token,
+            expected_token_generation,
+            expected_oauth_generation,
         )
-        response.raise_for_status()
-        body = response.json()
-        token = body["access_token"]
-        expires_in = int(body.get("expires_in") or 3600)
         update = {
             "access_token_encrypted": encrypt_secret(token),
             "token_expires_at": (datetime.now(UTC) + timedelta(seconds=expires_in)).isoformat(),
+            "scopes": list(granted_scopes),
             "sync_status": "connected",
             "sync_error": None,
             "last_synced_at": datetime.now(UTC).isoformat(),
         }
-        if body.get("refresh_token"):
-            update["refresh_token_encrypted"] = encrypt_secret(body["refresh_token"])
-        self._connection = self._repo.update_integration_connection(self._connection["id"], update)
-        return token
+        if "refresh_token" in body:
+            replacement_refresh = body.get("refresh_token")
+            if not isinstance(replacement_refresh, str) or not replacement_refresh:
+                raise MeetingProviderTemporaryError(
+                    "Microsoft Graph returned an invalid token response."
+                )
+            update["refresh_token_encrypted"] = encrypt_secret(replacement_refresh)
+        if self._compare_and_swap_connection(
+            expected_oauth_generation,
+            expected_token_generation,
+            update,
+        ):
+            return token
+        winner_token = self._winner_access_token()
+        if winner_token:
+            return winner_token
+        raise MeetingProviderTemporaryError(
+            "Microsoft Graph authorization changed; retry the operation."
+        )
 
     def _find_online_meeting_id(
         self,
-        access_token: str,
         user_id: str,
         join_url: str,
+        organizer_email: str | None,
     ) -> str | None:
-        response = self._http.get(
+        escaped_join_url = join_url.replace("'", "''")
+        response = self._graph_request(
+            "get",
             f"https://graph.microsoft.com/v1.0/{user_id}/onlineMeetings",
-            headers=self._headers(access_token),
-            params={"$filter": f"JoinWebUrl eq '{join_url}'"},
+            organizer_email=organizer_email,
+            params={"$filter": f"JoinWebUrl eq '{escaped_join_url}'"},
             timeout=10,
         )
-        response.raise_for_status()
-        rows = response.json().get("value") or []
+        rows = self._response_json(response).get("value") or []
         return rows[0].get("id") if rows else None
 
-    def _graph_user_id(self, organizer_email: str | None) -> str:
-        raw_user_id = (
-            self._connection.get("external_account_id")
-            or settings.microsoft_graph_user_id
-            or organizer_email
-            or self._connection.get("organizer_email")
-            or "me"
+    def _graph_request(
+        self,
+        method: str,
+        url: str,
+        *,
+        organizer_email: str | None,
+        accept: str | None = None,
+        **kwargs: object,
+    ) -> object:
+        token, cached = self._access_token(organizer_email)
+        response = self._send_graph_request(method, url, token, accept=accept, **kwargs)
+        if self._status_code(response) == 401 and cached:
+            refreshed_token = self._refresh_access_token()
+            if method.casefold() == "post":
+                raise MeetingProviderTemporaryError(
+                    "Microsoft Graph authorization was refreshed; retry the operation."
+                )
+            response = self._send_graph_request(
+                method,
+                url,
+                refreshed_token,
+                accept=accept,
+                **kwargs,
+            )
+
+        response_status = self._status_code(response)
+        if 300 <= response_status < 400:
+            raise MeetingProviderTemporaryError("Microsoft Graph redirected the request.")
+        if response_status == 401 or response_status == 403:
+            self._clear_credentials()
+            raise MeetingProviderConfigurationError("Microsoft Graph reconnection is required.")
+        if response_status == 429 or response_status >= 500:
+            raise MeetingProviderTemporaryError("Microsoft Graph is temporarily unavailable.")
+        if response_status >= 400:
+            raise MeetingProviderError("Microsoft Graph rejected the request.")
+        return response
+
+    def _send_graph_request(
+        self,
+        method: str,
+        url: str,
+        token: str,
+        *,
+        accept: str | None,
+        **kwargs: object,
+    ) -> object:
+        headers = self._headers(token)
+        if accept:
+            headers["Accept"] = accept
+        try:
+            request_method = getattr(self._http, method.casefold())
+            return request_method(url, headers=headers, follow_redirects=False, **kwargs)
+        except httpx.RequestError as exc:
+            raise MeetingProviderTemporaryError(
+                "Microsoft Graph is temporarily unavailable."
+            ) from exc
+
+    def _validate_refreshed_account(
+        self,
+        token: str,
+        expected_token_generation: int,
+        expected_oauth_generation: int,
+    ) -> None:
+        try:
+            response = self._http.get(
+                "https://graph.microsoft.com/v1.0/me",
+                headers=self._headers(token),
+                params={"$select": "id"},
+                timeout=10,
+                follow_redirects=False,
+            )
+        except httpx.RequestError as exc:
+            raise MeetingProviderTemporaryError(
+                "Microsoft Graph is temporarily unavailable."
+            ) from exc
+        response_status = self._status_code(response)
+        if 300 <= response_status < 400:
+            raise MeetingProviderTemporaryError("Microsoft Graph redirected the request.")
+        if response_status == 401 or response_status == 403:
+            self._clear_credentials(expected_token_generation, expected_oauth_generation)
+            raise MeetingProviderConfigurationError("Microsoft Graph reconnection is required.")
+        if response_status == 429 or response_status >= 500:
+            raise MeetingProviderTemporaryError("Microsoft Graph is temporarily unavailable.")
+        if response_status >= 400:
+            raise MeetingProviderConfigurationError("Microsoft Graph account verification failed.")
+        account_id = self._response_json(response).get("id")
+        if account_id != self._connection.get("external_account_id"):
+            self._clear_credentials(expected_token_generation, expected_oauth_generation)
+            raise MeetingProviderConfigurationError("Microsoft Graph reconnection is required.")
+
+    def _validate_connection(self, organizer_email: str | None = None) -> None:
+        context = self._require_context()
+        expected = {
+            "provider": "microsoft_graph",
+            "tenant_id": self._tenant_id,
+            "sync_status": "connected",
+            "deployment_environment": context.environment,
+            "deployment_schema": context.deployment_schema,
+            "entra_tenant_id": context.tenant_id,
+            "oauth_client_id": context.client_id,
+            "oauth_redirect_uri": context.redirect_uri,
+            "encryption_key_fingerprint": context.encryption_key_fingerprint,
+            "context_fingerprint": context.context_fingerprint,
+        }
+        if any(str(self._connection.get(key) or "") != value for key, value in expected.items()):
+            raise MeetingProviderConfigurationError("Microsoft Graph reconnection is required.")
+        if not _canonical_uuid(self._connection.get("external_account_id")):
+            raise MeetingProviderConfigurationError("Microsoft Graph reconnection is required.")
+        if not _canonical_uuid(self._connection.get("connected_by_user_id")):
+            raise MeetingProviderConfigurationError("Microsoft Graph reconnection is required.")
+        oauth_generation = self._connection.get("oauth_generation")
+        if (
+            isinstance(oauth_generation, bool)
+            or not isinstance(oauth_generation, int)
+            or oauth_generation <= 0
+        ):
+            raise MeetingProviderConfigurationError("Microsoft Graph reconnection is required.")
+        token_generation = self._connection.get("token_generation")
+        if (
+            isinstance(token_generation, bool)
+            or not isinstance(token_generation, int)
+            or token_generation < 0
+        ):
+            raise MeetingProviderConfigurationError("Microsoft Graph reconnection is required.")
+        if not has_required_graph_scopes(self._connection.get("scopes") or []):
+            raise MeetingProviderConfigurationError("Microsoft Graph reconnection is required.")
+        if organizer_email:
+            connected_email = str(self._connection.get("organizer_email") or "")
+            if organizer_email.strip().casefold() != connected_email.strip().casefold():
+                raise MeetingProviderConfigurationError(
+                    "The selected Microsoft organizer does not match the connected account."
+                )
+
+    def _graph_user_path(self, organizer_email: str | None) -> str:
+        self._validate_connection(organizer_email)
+        return f"users/{quote(str(self._connection['external_account_id']), safe='')}"
+
+    def _require_context(self) -> MicrosoftGraphContext:
+        if self._context is None:
+            raise MeetingProviderConfigurationError("Microsoft Graph integration is unavailable.")
+        return self._context
+
+    def _clear_credentials(
+        self,
+        expected_token_generation: int | None = None,
+        expected_oauth_generation: int | None = None,
+    ) -> bool:
+        generation = (
+            self._token_generation()
+            if expected_token_generation is None
+            else expected_token_generation
         )
-        return "me" if raw_user_id == "me" else f"users/{quote(str(raw_user_id), safe='')}"
+        oauth_generation = (
+            self._oauth_generation()
+            if expected_oauth_generation is None
+            else expected_oauth_generation
+        )
+        return self._compare_and_swap_connection(
+            oauth_generation,
+            generation,
+            {
+                "access_token_encrypted": None,
+                "refresh_token_encrypted": None,
+                "token_expires_at": None,
+                "sync_status": "reconnect_required",
+                "sync_error": "Microsoft Graph reconnection is required.",
+            },
+        )
+
+    def _compare_and_swap_connection(
+        self,
+        expected_oauth_generation: int,
+        expected_token_generation: int,
+        update: dict,
+    ) -> bool:
+        updated = self._repo.compare_and_swap_integration_connection_tokens(
+            self._connection["id"],
+            expected_oauth_generation,
+            expected_token_generation,
+            update,
+        )
+        if updated:
+            self._connection = {**self._connection, **updated}
+            return True
+        reloaded = self._repo.get_integration_connection_by_id(self._connection["id"])
+        if reloaded:
+            self._connection = reloaded
+        return False
+
+    def _winner_access_token(self) -> str | None:
+        try:
+            self._validate_connection()
+        except MeetingProviderConfigurationError:
+            return None
+        token = decrypt_secret(self._connection.get("access_token_encrypted"))
+        expires_at = _parse_datetime(self._connection.get("token_expires_at"))
+        if token and expires_at and expires_at > datetime.now(UTC) + timedelta(minutes=5):
+            return token
+        return None
+
+    def _token_generation(self) -> int:
+        value = self._connection.get("token_generation")
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise MeetingProviderConfigurationError("Microsoft Graph reconnection is required.")
+        return value
+
+    def _oauth_generation(self) -> int:
+        value = self._connection.get("oauth_generation")
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            raise MeetingProviderConfigurationError("Microsoft Graph reconnection is required.")
+        return value
+
+    @staticmethod
+    def _status_code(response: object) -> int:
+        return int(getattr(response, "status_code", 200))
+
+    @staticmethod
+    def _response_json(response: object) -> dict:
+        try:
+            body = response.json()
+        except (TypeError, ValueError):
+            return {}
+        return body if isinstance(body, dict) else {}
 
     @staticmethod
     def _headers(access_token: str) -> dict[str, str]:
@@ -335,9 +653,27 @@ def normalize_vtt_transcript(content: str) -> str:
     return "\n".join(lines)
 
 
-def _token_url() -> str:
-    tenant = settings.microsoft_graph_tenant_id or "common"
-    return f"https://login.microsoftonline.com/{quote(tenant, safe='')}/oauth2/v2.0/token"
+def _bounded_expires_in(value: object) -> int:
+    if isinstance(value, bool):
+        raise MeetingProviderTemporaryError("Microsoft Graph returned an invalid token response.")
+    try:
+        expires_in = int(value)
+    except (TypeError, ValueError) as exc:
+        raise MeetingProviderTemporaryError(
+            "Microsoft Graph returned an invalid token response."
+        ) from exc
+    if expires_in <= 0 or expires_in > 86400:
+        raise MeetingProviderTemporaryError("Microsoft Graph returned an invalid token response.")
+    return expires_in
+
+
+def _canonical_uuid(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    try:
+        return str(UUID(value)) == value
+    except ValueError:
+        return False
 
 
 def _parse_datetime(value: str | None) -> datetime | None:
