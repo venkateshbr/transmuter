@@ -49,6 +49,7 @@ from app.services.email_delivery import EmailDeliveryService
 from app.services.meeting_providers import (
     MeetingInviteRequest,
     MeetingProviderConfigurationError,
+    MeetingProviderError,
     MicrosoftGraphMeetingProvider,
 )
 from app.services.risk import RiskService
@@ -196,6 +197,7 @@ class MeetingService:
                 MicrosoftGraphMeetingProvider(
                     connection,
                     self._integration_secret_repo(),
+                    self._tenant_id,
                 ).cancel_invite(event)
             except MeetingProviderConfigurationError as exc:
                 teams_status = "not_configured"
@@ -205,9 +207,17 @@ class MeetingService:
                         event["id"],
                         {"sync_status": "not_configured", "sync_error": teams_detail},
                     )
-            except Exception as exc:  # noqa: BLE001 - platform cancellation must not block.
+            except MeetingProviderError as exc:
                 teams_status = "failed"
                 teams_detail = str(exc)[:500]
+                if event.get("id"):
+                    self._repo.update_external_event(
+                        event["id"],
+                        {"sync_status": "failed", "sync_error": teams_detail},
+                    )
+            except Exception:  # noqa: BLE001 - platform cancellation must not block.
+                teams_status = "failed"
+                teams_detail = "Microsoft Graph is temporarily unavailable."
                 if event.get("id"):
                     self._repo.update_external_event(
                         event["id"],
@@ -513,6 +523,7 @@ class MeetingService:
             result = MicrosoftGraphMeetingProvider(
                 connection,
                 self._integration_secret_repo(),
+                self._tenant_id,
             ).create_invite(
                 self._meeting_invite_subject(meeting, session),
                 attendees,
@@ -546,9 +557,12 @@ class MeetingService:
         except MeetingProviderConfigurationError as exc:
             sync_status = "not_configured"
             sync_error = str(exc)
-        except Exception as exc:  # noqa: BLE001 - integration must not block meetings.
+        except MeetingProviderError as exc:
             sync_status = "failed"
             sync_error = str(exc)
+        except Exception:  # noqa: BLE001 - integration must not block meetings.
+            sync_status = "failed"
+            sync_error = "Microsoft Graph is temporarily unavailable."
 
         return self._repo.upsert_external_event(
             meeting_id,
@@ -599,10 +613,11 @@ class MeetingService:
             result = MicrosoftGraphMeetingProvider(
                 connection,
                 self._integration_secret_repo(),
+                self._tenant_id,
             ).sync_transcript(event)
         except MeetingProviderConfigurationError as exc:
             return MeetingTranscriptSyncResponse(status="unavailable", detail=str(exc))
-        except Exception as exc:  # noqa: BLE001 - transcript sync should report provider state.
+        except MeetingProviderError as exc:
             self._repo.upsert_external_event(
                 session["meeting_id"],
                 "microsoft",
@@ -615,6 +630,20 @@ class MeetingService:
                 session_id=session_id,
             )
             return MeetingTranscriptSyncResponse(status="failed", detail=str(exc)[:500])
+        except Exception:  # noqa: BLE001 - transcript sync should report provider state.
+            detail = "Microsoft Graph is temporarily unavailable."
+            self._repo.upsert_external_event(
+                session["meeting_id"],
+                "microsoft",
+                {
+                    "integration_connection_id": connection.get("id"),
+                    "organizer_email": event.get("organizer_email"),
+                    "sync_status": "failed",
+                    "sync_error": detail,
+                },
+                session_id=session_id,
+            )
+            return MeetingTranscriptSyncResponse(status="failed", detail=detail)
 
         if result.status != "synced":
             if result.status == "pending":
@@ -1550,12 +1579,9 @@ class MeetingService:
 
     def _microsoft_connection_for_event(self, event: dict) -> dict | None:
         connection_id = event.get("integration_connection_id")
-        repo = self._integration_secret_repo()
-        if connection_id:
-            connection = repo.get_integration_connection_by_id(str(connection_id))
-            if connection:
-                return connection
-        return repo.get_integration_connection("microsoft_graph", event.get("organizer_email"))
+        if not connection_id:
+            return None
+        return self._integration_secret_repo().get_integration_connection_by_id(str(connection_id))
 
     def _integration_secret_repo(self) -> MeetingRepository:
         return getattr(self, "_secret_repo", self._repo)

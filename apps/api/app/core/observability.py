@@ -5,6 +5,7 @@ from collections import defaultdict, deque
 from statistics import quantiles
 from time import perf_counter
 from typing import Any, Protocol, runtime_checkable
+from urllib.parse import urlsplit
 
 import httpx
 import logfire
@@ -65,6 +66,12 @@ _PII_PATTERNS = (
     re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.IGNORECASE),
     re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),
 )
+_MICROSOFT_OAUTH_CALLBACK_PATHS = frozenset(
+    {
+        "/api/meeting-integrations/microsoft/oauth/callback",
+        "/meeting-integrations/microsoft/oauth/callback",
+    }
+)
 
 
 @runtime_checkable
@@ -84,6 +91,10 @@ def configure_observability(app: FastAPI) -> None:
             release=settings.version,
             traces_sample_rate=settings.sentry_traces_sample_rate,
             send_default_pii=False,
+            include_local_variables=False,
+            max_request_body_size="never",
+            before_send=_sentry_before_send,
+            before_send_transaction=_sentry_before_send,
             integrations=[FastApiIntegration()],
         )
 
@@ -99,7 +110,10 @@ def configure_observability(app: FastAPI) -> None:
     logfire.instrument_fastapi(
         app,
         capture_headers=False,
-        excluded_urls="/health,/metrics",
+        excluded_urls=(
+            "/health,/metrics,/meeting-integrations/microsoft/oauth/callback,"
+            "/api/meeting-integrations/microsoft/oauth/callback"
+        ),
     )
     _configured = True
 
@@ -214,7 +228,10 @@ def notify_p1_p2_error(
         "context": _mask_value(context or {}),
     }
     _alert_counts[severity] += 1
-    sentry_sdk.capture_message(f"{severity} {source}: {message}", level="error")
+    sentry_sdk.capture_message(
+        f"{severity} {source}: {_mask_value(message)}",
+        level="error",
+    )
     if not settings.alert_webhook_url:
         return
     try:
@@ -348,3 +365,29 @@ def _mask_value(value: Any) -> Any:
     if isinstance(value, list):
         return [_mask_value(item) for item in value]
     return value
+
+
+def _sentry_before_send(event: dict[str, Any], _hint: dict[str, Any]) -> dict[str, Any]:
+    request = event.get("request")
+    if not isinstance(request, dict):
+        return event
+    raw_url = request.get("url")
+    if not isinstance(raw_url, str):
+        return event
+    try:
+        path = urlsplit(raw_url).path
+    except ValueError:
+        return event
+    if path not in _MICROSOFT_OAUTH_CALLBACK_PATHS:
+        return event
+
+    request["url"] = urlsplit(raw_url)._replace(query="", fragment="").geturl()
+    request.pop("data", None)
+    request.pop("cookies", None)
+    request.pop("query_string", None)
+    headers = request.get("headers")
+    if isinstance(headers, dict):
+        for name in tuple(headers):
+            if str(name).casefold() in {"authorization", "cookie"}:
+                headers.pop(name, None)
+    return event

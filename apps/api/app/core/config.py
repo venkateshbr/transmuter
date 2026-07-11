@@ -62,14 +62,12 @@ class Settings(BaseSettings):
     resend_from_email: str = ""
 
     # Microsoft Graph (optional)
-    microsoft_graph_access_token: str = ""
-    microsoft_graph_user_id: str = ""
     microsoft_graph_client_id: str = ""
     microsoft_graph_client_secret: str = ""
-    microsoft_graph_tenant_id: str = "common"
+    microsoft_graph_tenant_id: str = ""
     microsoft_graph_redirect_uri: str = ""
     microsoft_graph_scopes: str = (
-        "offline_access User.Read Calendars.ReadWrite OnlineMeetings.Read "
+        "openid profile offline_access User.Read Calendars.ReadWrite OnlineMeetings.Read "
         "OnlineMeetingTranscript.Read.All"
     )
 

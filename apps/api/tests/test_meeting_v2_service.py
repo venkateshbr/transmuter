@@ -226,6 +226,19 @@ def build_service(repo: FakeMeetingV2Repository) -> MeetingService:
     return service
 
 
+def test_disconnected_microsoft_event_is_not_relinked_by_organizer_email() -> None:
+    service = build_service(FakeMeetingV2Repository())
+
+    connection = service._microsoft_connection_for_event(  # noqa: SLF001
+        {
+            "integration_connection_id": None,
+            "organizer_email": "historical-organizer@example.com",
+        }
+    )
+
+    assert connection is None
+
+
 def test_create_meeting_sets_join_workstreams_and_legacy_first_id() -> None:
     repo = FakeMeetingV2Repository()
     service = build_service(repo)

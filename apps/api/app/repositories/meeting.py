@@ -801,30 +801,40 @@ class MeetingRepository:
             raise
         return result.data if result else None
 
-    def upsert_integration_connection(self, provider: str, data: dict) -> dict:
+    def compare_and_swap_integration_connection_tokens(
+        self,
+        connection_id: str,
+        expected_oauth_generation: int,
+        expected_token_generation: int,
+        data: dict,
+    ) -> dict | None:
+        allowed_fields = {
+            "access_token_encrypted",
+            "refresh_token_encrypted",
+            "token_expires_at",
+            "scopes",
+            "sync_status",
+            "sync_error",
+            "last_synced_at",
+        }
+        if set(data) - allowed_fields:
+            raise ValueError("Unsupported integration token update")
         payload = {
-            "tenant_id": self._tid,
-            "provider": provider,
             **data,
+            "token_generation": expected_token_generation + 1,
             "updated_at": datetime.now(UTC).isoformat(),
         }
         result = (
             self._c.table("integration_connections")
-            .upsert(payload, on_conflict="tenant_id,provider,organizer_email")
-            .execute()
-        )
-        return result.data[0] if result.data else {}
-
-    def update_integration_connection(self, connection_id: str, data: dict) -> dict:
-        payload = {**data, "updated_at": datetime.now(UTC).isoformat()}
-        result = (
-            self._c.table("integration_connections")
             .update(payload)
             .eq("tenant_id", self._tid)
+            .eq("provider", "microsoft_graph")
             .eq("id", connection_id)
+            .eq("oauth_generation", expected_oauth_generation)
+            .eq("token_generation", expected_token_generation)
             .execute()
         )
-        return result.data[0] if result.data else {}
+        return result.data[0] if result.data else None
 
     def list_action_items(self) -> list[dict]:
         result = (
