@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from typing import Annotated, Any, NoReturn
 from uuid import UUID
 
@@ -151,14 +152,18 @@ def get_verified_supabase_claims(client: Any, token: str) -> dict[str, Any]:
             detail="Invalid JWT",
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
-    claims = getattr(response, "claims", None)
-    if not isinstance(claims, dict):
+    claims = (
+        response.get("claims")
+        if isinstance(response, Mapping)
+        else getattr(response, "claims", None)
+    )
+    if not isinstance(claims, Mapping):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid JWT",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return claims
+    return dict(claims)
 
 
 def is_platform_admin_claims(claims: dict[str, Any]) -> bool:
