@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from email.message import Message
+from io import BytesIO
 from typing import Any
+from urllib.error import HTTPError
 
 import pytest
 
@@ -391,3 +394,28 @@ def test_http_transport_rejects_paths_that_escape_base_url() -> None:
     for path in ("https://example.test/api", "//example.test/api", "/../production"):
         with pytest.raises(acceptance.AcceptanceFailure, match="relative|escape"):
             transport.request("GET", path)
+
+
+def test_http_transport_sends_explicit_acceptance_user_agent() -> None:
+    captured_headers: dict[str, str] = {}
+
+    class _RejectingOpener:
+        def open(self, request: object, timeout: int) -> object:
+            del timeout
+            captured_headers.update(dict(request.header_items()))  # type: ignore[attr-defined]
+            raise HTTPError(
+                acceptance.DEV_API_BASE_URL + "/health",
+                401,
+                "denied",
+                Message(),
+                BytesIO(b'{"detail":"denied"}'),
+            )
+
+    transport = acceptance.HttpTransport(acceptance.DEV_API_BASE_URL)
+    transport._opener = _RejectingOpener()  # type: ignore[assignment]  # noqa: SLF001
+
+    response = transport.request("GET", "/health")
+
+    assert response.status == 401
+    assert captured_headers["User-agent"] == acceptance.HTTP_USER_AGENT
+    assert captured_headers["Accept"] == "application/json"

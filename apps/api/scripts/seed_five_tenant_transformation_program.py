@@ -36,6 +36,7 @@ DEV_HOSTINGER_PROJECT = "transmuter-dev-hostinger"
 DEV_SCHEMA = "transmuter_dev"
 DEV_SUPABASE_URL = "https://supabase.ishirock.tech"
 HOSTINGER_API_ORIGIN = "https://developers.hostinger.com/api"
+HTTP_USER_AGENT = "transmuter-five-tenant-dev-fixture/1.0"
 CONFIRMATION = "seed-five-tenant-dev-program"
 FIXTURE_OWNER = "five-tenant-qa-20260712"
 
@@ -82,7 +83,11 @@ def fetch_hostinger_environment_safely(project_name: str, vps_id: str) -> str:
         raise RuntimeError("HOSTINGER_API_KEY or HOSTINGER_API_TOKEN is required")
     request = Request(
         f"{HOSTINGER_API_ORIGIN}/vps/v1/virtual-machines/{vps_id}/docker/{project_name}",
-        headers={"Authorization": f"Bearer {token}"},
+        headers={
+            "Accept": "application/json",
+            "Authorization": f"Bearer {token}",
+            "User-Agent": HTTP_USER_AGENT,
+        },
     )
     try:
         with build_opener(_NoRedirectHandler()).open(request, timeout=30) as response:

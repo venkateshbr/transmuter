@@ -36,6 +36,7 @@ from scripts.seed_operating_model_users import (
 )
 
 DEV_API_BASE_URL = "https://transmuter-dev.ishirock.tech/api"
+HTTP_USER_AGENT = "transmuter-five-tenant-api-acceptance/1.0"
 CONFIRMATION = "verify-five-tenant-dev-api"
 PASSWORD_ENV = "TRANSMUTER_MULTI_TENANT_PASSWORD"
 FORBIDDEN_PATH_FRAGMENTS = (
@@ -123,7 +124,7 @@ class HttpTransport:
         if parsed_path.scheme or parsed_path.netloc or ".." in parsed_path.path.split("/"):
             raise AcceptanceFailure("API request path could escape the reviewed base URL")
 
-        headers = {"Accept": "application/json"}
+        headers = {"Accept": "application/json", "User-Agent": HTTP_USER_AGENT}
         data: bytes | None = None
         if body is not None:
             headers["Content-Type"] = "application/json"

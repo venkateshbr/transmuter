@@ -723,8 +723,12 @@ def test_seed_rejects_non_reserved_admin_email_before_org_write(
 def test_hostinger_environment_fetch_fails_closed_on_redirect(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    captured_headers: dict[str, str] = {}
+
     class _RedirectingOpener:
         def open(self, request: object, timeout: int) -> object:
+            del timeout
+            captured_headers.update(dict(request.header_items()))  # type: ignore[attr-defined]
             raise HTTPError(
                 "https://developers.hostinger.com/api/test",
                 302,
@@ -742,6 +746,8 @@ def test_hostinger_environment_fetch_fails_closed_on_redirect(
             "1695814",
         )
     assert "sensitive-token" not in str(exc_info.value)
+    assert captured_headers["User-agent"] == five_tenant.HTTP_USER_AGENT
+    assert captured_headers["Accept"] == "application/json"
     with pytest.raises(RuntimeError, match="reviewed dev target"):
         five_tenant.fetch_hostinger_environment_safely(
             five_tenant.DEV_HOSTINGER_PROJECT,
