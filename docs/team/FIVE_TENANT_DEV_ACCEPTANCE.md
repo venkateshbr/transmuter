@@ -404,33 +404,33 @@ must still exclude browser storage and authorization headers.
 
 ### Run evidence
 
-| Evidence                                      | Result  |
-| --------------------------------------------- | ------- |
-| Application commit / PR                       | Pending |
-| Hostinger dev action / completion time        | Pending |
-| API and web health                            | Pending |
-| Email migration dry-run / apply / postflight  | Pending |
-| Redacted migration journal validation         | Pending |
-| Initial seed manifest / count summary         | Pending |
-| Repeat-seed logical diff                      | Pending |
-| 50-user guarded API verifier                  | Pending |
-| 50-user role/RBAC results                     | Pending |
-| Cross-tenant isolation matrix                 | Pending |
-| Browser target / desktop and mobile viewports | Pending |
-| Light/dark and accessibility checks           | Pending |
-| Console/network error log                     | Pending |
-| Export/import artifacts and reconciliation    | Pending |
-| Final canonical reseed / read verification    | Pending |
+| Evidence                                      | Result                                                                                       |
+| --------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Application commit / PR                       | `2d9ce9e` / [#402](https://github.com/venkateshbr/transmuter/pull/402), CI green             |
+| Hostinger dev action / completion time        | `103813494`, success at `2026-07-12T08:50:35Z`                                               |
+| API and web health                            | Pass at `https://transmuter-dev.ishirock.tech`                                               |
+| Email migration dry-run / apply / postflight  | `50/0` pending/complete, apply success, then `0/50`                                          |
+| Redacted migration journal validation         | Pass, `complete` with 50 identities                                                          |
+| Initial seed manifest / count summary         | Pass, five tenants and ten initiatives each                                                  |
+| Repeat-seed logical diff                      | Byte-identical SHA-256 `3ef52dd7015ee7c8953ccf7893e8d62b03a8fe9fa6588e3ab95707098cf58a50`    |
+| 50-user guarded API verifier                  | Pass, 2,636 mutable-run requests; 2,450 final read-only requests                             |
+| 50-user role/RBAC results                     | Pass across the admin plus nine operating-model identities per tenant                        |
+| Cross-tenant isolation matrix                 | Pass, 55 foreign-initiative/user denials in each full run                                    |
+| Browser target / desktop and mobile viewports | Pending: in-app Browser target is not attached                                               |
+| Light/dark and accessibility checks           | Pending with Browser acceptance                                                              |
+| Console/network error log                     | Pending with Browser acceptance                                                              |
+| Export/import artifacts and reconciliation    | API export signatures and financial reconciliation pass; UI import/export roundtrips pending |
+| Final canonical reseed / read verification    | Pass, canonical manifest hash restored and 2,450-request read-only verifier passed           |
 
 ### Per-tenant result
 
-| Tenant                     | Seed    | API/data | RBAC    | Isolation | All UI routes | Dashboards/reconciliation | Imports/exports | Result  |
-| -------------------------- | ------- | -------- | ------- | --------- | ------------- | ------------------------- | --------------- | ------- |
-| Acme Global Manufacturing  | Pending | Pending  | Pending | Pending   | Pending       | Pending                   | Pending         | Pending |
-| Northstar Retail Group     | Pending | Pending  | Pending | Pending   | Pending       | Pending                   | Pending         | Pending |
-| Meridian Commercial Bank   | Pending | Pending  | Pending | Pending   | Pending       | Pending                   | Pending         | Pending |
-| Solstice Health Network    | Pending | Pending  | Pending | Pending   | Pending       | Pending                   | Pending         | Pending |
-| Horizon Energy & Utilities | Pending | Pending  | Pending | Pending   | Pending       | Pending                   | Pending         | Pending |
+| Tenant                     | Seed | API/data | RBAC | Isolation | All UI routes | Dashboards/reconciliation | Imports/exports      | Result          |
+| -------------------------- | ---- | -------- | ---- | --------- | ------------- | ------------------------- | -------------------- | --------------- |
+| Acme Global Manufacturing  | Pass | Pass     | Pass | Pass      | Pending       | API pass; UI pending      | API pass; UI pending | Browser pending |
+| Northstar Retail Group     | Pass | Pass     | Pass | Pass      | Pending       | API pass; UI pending      | API pass; UI pending | Browser pending |
+| Meridian Commercial Bank   | Pass | Pass     | Pass | Pass      | Pending       | API pass; UI pending      | API pass; UI pending | Browser pending |
+| Solstice Health Network    | Pass | Pass     | Pass | Pass      | Pending       | API pass; UI pending      | API pass; UI pending | Browser pending |
+| Horizon Energy & Utilities | Pass | Pass     | Pass | Pass      | Pending       | API pass; UI pending      | API pass; UI pending | Browser pending |
 
 ### Finding log
 
@@ -439,10 +439,19 @@ P0 for security/data loss or a release stop, P1 for a broken critical workflow,
 P2 for a material workaround or incorrect report, and P3 for minor usability or
 cosmetic defects.
 
-| ID / issue                                                   | Severity | Tenant / role                                | Route                                           | Steps and evidence                                                                  | Expected                                                                | Actual                                                                                                         | Fix / retest                                                                          | Status  |
-| ------------------------------------------------------------ | -------- | -------------------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------- |
-| [#401](https://github.com/venkateshbr/transmuter/issues/401) | P1       | Northstar, Meridian, Horizon / finance roles | `/financials`, financial dashboards and reports | Compare configured July/April fiscal starts with reporting-year periods and totals. | Periods and annual totals follow the configured tenant fiscal calendar. | Known limitation: reporting services aggregate by calendar year/month despite the stored fiscal-start setting. | Fix and rerun affected API/UI/dashboard rows before shifted-fiscal accuracy can pass. | Open    |
-| Pending                                                      | Pending  | Pending                                      | Pending                                         | Pending                                                                             | Pending                                                                 | Pending                                                                                                        | Pending                                                                               | Pending |
+| ID / issue                                                   | Severity | Tenant / role                                 | Route                                           | Steps and evidence                                                                                 | Expected                                                                    | Actual                                                                                                         | Fix / retest                                                                          | Status |
+| ------------------------------------------------------------ | -------- | --------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------ |
+| [#401](https://github.com/venkateshbr/transmuter/issues/401) | P1       | Northstar, Meridian, Horizon / finance roles  | `/financials`, financial dashboards and reports | Compare configured July/April fiscal starts with reporting-year periods and totals.                | Periods and annual totals follow the configured tenant fiscal calendar.     | Known limitation: reporting services aggregate by calendar year/month despite the stored fiscal-start setting. | Fix and rerun affected API/UI/dashboard rows before shifted-fiscal accuracy can pass. | Open   |
+| [#403](https://github.com/venkateshbr/transmuter/issues/403) | P2       | Acme / transformation office                  | `/portfolio/financials/contributors`            | Request monthly contributors with noncanonical `period=2028-01`; canonical `2028-M01` returns 200. | Reject invalid input with 422 or explicitly support the alternate format.   | Noncanonical monthly period raises HTTP 500; the normal UI path uses the canonical format.                     | Add bounded period validation and a real route regression test.                       | Open   |
+| [#404](https://github.com/venkateshbr/transmuter/issues/404) | P1       | All tenants / admin-capable roles             | `/admin`                                        | Inspect the Admin initial-load request set.                                                        | General Admin load makes no meeting-related request.                        | Admin unconditionally loads meeting-cleanup candidates, violating this run's exclusion.                        | Lazy-load the meeting section and prove startup has no excluded requests.             | Open   |
+| [#405](https://github.com/venkateshbr/transmuter/issues/405) | P1       | Northstar, Meridian, Solstice, Horizon        | Financial dashboards, grids, and shared costs   | Compare configured SGD/GBP/EUR/AUD currencies with frontend formatters/defaults.                   | All financial UI uses tenant reporting currency.                            | Multiple components hardcode USD or `$`; portfolio response lacks currency context.                            | Propagate reporting currency and retest every financial surface.                      | Open   |
+| [#406](https://github.com/venkateshbr/transmuter/issues/406) | P1       | Read-only/scoped roles                        | Initiative tabs and `/admin`                    | Inspect capability gating for viewer/executive/benefit/finance/PMO/setup roles.                    | Unauthorized controls and requests are hidden or denied before dispatch.    | KPI/risk mutations and unrelated Admin sections are exposed without exact capability gates.                    | Add section/tab/control guards and complete Prahari plus Browser RBAC review.         | Open   |
+| [#407](https://github.com/venkateshbr/transmuter/issues/407) | P2       | All tenants / finance roles                   | Benefit Tracking bankable-plan link             | Follow the rendered `/initiatives/:id/bankable-plan` target against Angular routes.                | Link opens the selected initiative plan.                                    | No matching route exists; wildcard redirects to Dashboard.                                                     | Use a valid route or add the missing route and router test.                           | Open   |
+| [#408](https://github.com/venkateshbr/transmuter/issues/408) | P1       | All tenants / PMO roles                       | `/pmo/risks`, `/pmo/kpis`                       | Inspect primary create, drilldown, search, and filter controls.                                    | Visible controls execute supported, role-gated workflows.                   | Primary buttons/chevrons are inert and required portfolio filters are absent.                                  | Wire controls and cover create/cancel/drilldown/filter flows.                         | Open   |
+| [#409](https://github.com/venkateshbr/transmuter/issues/409) | P2       | All tenants / portfolio roles                 | `/initiatives/matrix`                           | Compare the current quadrant with the workstream-by-tag reconciliation contract.                   | Matrix totals and contributor drilldowns reconcile with pipeline/dashboard. | Current hardcoded 2x2 impact/stage quadrant is a different surface.                                            | Confirm product intent and implement or relocate the reconciliation matrix.           | Open   |
+| [#410](https://github.com/venkateshbr/transmuter/issues/410) | P1       | All tenants / executive and finance roles     | `/dashboard`, `/financials`                     | Inspect primary API subscription error handling.                                                   | Failures render explicit bounded error/retry state.                         | Missing error branches can present failed requests as legitimate zero/empty portfolios.                        | Add error states and Browser failure/recovery verification.                           | Open   |
+| [#411](https://github.com/venkateshbr/transmuter/issues/411) | P2       | Large portfolios / transformation office      | `/initiatives/pipeline`                         | Inspect sort, page, and archive-state controls beyond the fixed `page_size=200` load.              | Users can sort, page, and include/exclude archived initiatives.             | Controls are absent; the current ten-row fixture hides the scale limitation.                                   | Add server-backed controls and >200-row coverage.                                     | Open   |
+| [#412](https://github.com/venkateshbr/transmuter/issues/412) | P3       | Public login / keyboard and screen-reader use | `/auth/login`                                   | Resolve visible Email/Password labels through the accessibility tree.                              | Labels and validation errors programmatically name their inputs.            | Inputs rely on name/placeholder rather than associated visible labels.                                         | Associate labels/errors and add keyboard/accessibility coverage.                      | Open   |
 
 Aksha may mark #399 accepted only when every required row has evidence, all P0/P1
 findings are resolved and retested, remaining P2/P3 items have explicit issue and
