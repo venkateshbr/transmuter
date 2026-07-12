@@ -75,13 +75,13 @@ The fixture must leave `meetings`, `meeting_sessions`, `agenda_items`, and
 Each tenant has initiative codes `ENT-001` through `ENT-010`, with sector-specific
 names, structures, values, risks, KPIs, and financial assumptions.
 
-| Tenant                     | Slug and login domain                                                                      | Country/region | Currency / fiscal start | Baseline revenue / gross margin | Program theme                                            |
-| -------------------------- | ------------------------------------------------------------------------------------------ | -------------- | ----------------------- | ------------------------------- | -------------------------------------------------------- |
-| Acme Global Manufacturing  | `qa-e2e-20260712-acme-global-manufacturing`<br>`acme-global-manufacturing.transmuter.test` | United States  | USD / January           | 20,000,000 / 9,000,000          | Manufacturing productivity and profitable growth         |
-| Northstar Retail Group     | `qa-e2e-20260712-northstar-retail-group`<br>`northstar-retail-group.transmuter.test`       | Singapore      | SGD / July              | 160,000,000 / 72,000,000        | Omnichannel retail growth and operating efficiency       |
-| Meridian Commercial Bank   | `qa-e2e-20260712-meridian-commercial-bank`<br>`meridian-commercial-bank.transmuter.test`   | United Kingdom | GBP / April             | 240,000,000 / 108,000,000       | Digital banking growth, control, and productivity        |
-| Solstice Health Network    | `qa-e2e-20260712-solstice-health-network`<br>`solstice-health-network.transmuter.test`     | European Union | EUR / January           | 120,000,000 / 54,000,000        | Patient access, clinical capacity, and sustainable value |
-| Horizon Energy & Utilities | `qa-e2e-20260712-horizon-energy-utilities`<br>`horizon-energy-utilities.transmuter.test`   | Australia      | AUD / July              | 300,000,000 / 135,000,000       | Reliable energy transition and asset productivity        |
+| Tenant                     | Slug and login domain                                                                                      | Country/region | Currency / fiscal start | Baseline revenue / gross margin | Program theme                                            |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------- | -------------- | ----------------------- | ------------------------------- | -------------------------------------------------------- |
+| Acme Global Manufacturing  | `qa-e2e-20260712-acme-global-manufacturing`<br>`acme-global-manufacturing.qa.transmuter-dev.ishirock.tech` | United States  | USD / January           | 20,000,000 / 9,000,000          | Manufacturing productivity and profitable growth         |
+| Northstar Retail Group     | `qa-e2e-20260712-northstar-retail-group`<br>`northstar-retail-group.qa.transmuter-dev.ishirock.tech`       | Singapore      | SGD / July              | 160,000,000 / 72,000,000        | Omnichannel retail growth and operating efficiency       |
+| Meridian Commercial Bank   | `qa-e2e-20260712-meridian-commercial-bank`<br>`meridian-commercial-bank.qa.transmuter-dev.ishirock.tech`   | United Kingdom | GBP / April             | 240,000,000 / 108,000,000       | Digital banking growth, control, and productivity        |
+| Solstice Health Network    | `qa-e2e-20260712-solstice-health-network`<br>`solstice-health-network.qa.transmuter-dev.ishirock.tech`     | European Union | EUR / January           | 120,000,000 / 54,000,000        | Patient access, clinical capacity, and sustainable value |
+| Horizon Energy & Utilities | `qa-e2e-20260712-horizon-energy-utilities`<br>`horizon-energy-utilities.qa.transmuter-dev.ishirock.tech`   | Australia      | AUD / July              | 300,000,000 / 135,000,000       | Reliable energy transition and asset productivity        |
 
 Login conventions:
 
@@ -90,8 +90,93 @@ Login conventions:
 - Seeded roles: `transformation_office`, `tenant_admin`, `pmo_lead`,
   `finance_lead`, `workstream_lead`, `initiative_owner`,
   `business_benefit_owner`, `executive_sponsor`, and `viewer`.
-- All fixture identities use the reserved `.transmuter.test` suffix and the same
-  runtime-provided fixture password.
+- All fixture identities use the exact controlled
+  `*.qa.transmuter-dev.ishirock.tech` domain allowlist and the same
+  runtime-provided fixture password. The QA subdomains do not resolve for mail;
+  no workflow may send an invitation or notification to them.
+
+## Controlled Email Migration
+
+Run this migration only when the five owned fixture tenants already exist with
+the legacy `*.transmuter.test` emails. It changes the same 50 Auth subjects and
+platform-user rows to the controlled login-safe domains above; it does not
+create identities, change passwords, or change subject IDs or authorization
+metadata. A new environment with no legacy fixture tenants skips this section.
+
+Load the approved Hostinger credential without placing it in shell history, then
+run the default dry-run from `apps/api`:
+
+```bash
+cd /Users/vramakrishnaiah/dev/transmuter
+read -rs 'HOSTINGER_API_KEY?Dev Hostinger API token: '
+export HOSTINGER_API_KEY
+printf '\n'
+
+cd apps/api
+uv run python scripts/migrate_five_tenant_fixture_email_domains.py \
+  --environment dev \
+  --hostinger-project transmuter-dev-hostinger \
+  --confirm migrate-five-tenant-fixture-emails-dev
+```
+
+For an unmigrated legacy fixture, the exact result is:
+
+```text
+Fixture email migration dry-run passed: 50 pending, 0 complete
+```
+
+If the dry-run instead reports `0 pending, 50 complete`, the migration is already
+complete; do not apply it again. Stop on every other count. After quiescing dev
+authentication, provisioning, invitation, and integration activity, apply the
+reviewed plan with a redacted local journal:
+
+```bash
+uv run python scripts/migrate_five_tenant_fixture_email_domains.py \
+  --environment dev \
+  --hostinger-project transmuter-dev-hostinger \
+  --confirm migrate-five-tenant-fixture-emails-dev \
+  --apply \
+  --journal ../../scratch/five-tenant-fixture-email-migration.redacted.json
+```
+
+The exact apply result is:
+
+```text
+Fixture email migration completed for 5 tenants and 50 identities
+```
+
+Run the same dry-run command again as the postflight:
+
+```bash
+uv run python scripts/migrate_five_tenant_fixture_email_domains.py \
+  --environment dev \
+  --hostinger-project transmuter-dev-hostinger \
+  --confirm migrate-five-tenant-fixture-emails-dev
+```
+
+The exact postflight result is:
+
+```text
+Fixture email migration dry-run passed: 0 pending, 50 complete
+```
+
+Verify the redacted journal without printing its contents:
+
+```bash
+jq -e \
+  '.environment == "dev" and .status == "complete" and (.completed | length) == 50' \
+  ../../scratch/five-tenant-fixture-email-migration.redacted.json >/dev/null
+```
+
+Dev and production share one Supabase Auth directory. The email change is
+therefore globally visible at the Auth layer even though these subjects are
+owned, development-scoped fixtures. Do not run the migration against a real
+person, production tenant, production schema, a target email already in use, or
+any fixture with invites, integrations, OAuth state, unexpected users, or a
+non-dev authorization scope. The reviewed script must preserve every unrelated
+shared-Auth identity and will attempt a full rollback on failure; a
+`rollback_failed` journal is a release stop requiring Prahari review. Never copy
+the journal to production or treat it as authorization to promote.
 
 ## Seed Command
 
@@ -184,16 +269,16 @@ Capture status, tenant ID, counts, and reconciliation results without recording
 tokens. Repeat the read matrix for every tenant admin; use the role identities
 for permission checks.
 
-| Surface                  | Required checks                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Authentication           | `POST /api/auth/login` and `GET /api/auth/me` return the expected subject, tenant, and role. Invalid and anonymous requests fail with 401. Dev identities have only the `transmuter_authorization_transmuter_dev` authorization scope.                                                                                                                                                                                                 |
-| Portfolio                | Initiative list/detail returns exactly the tenant's ten codes and sector-specific names. Dashboard, matrix, roadmap, risk, KPI, milestone, status, governance, dependency, and search results contain no other tenant's IDs or labels.                                                                                                                                                                                                 |
-| Financials               | Portfolio financials, value bridge, value ramp, benefits register, initiative portfolio, investments/payback, contributor, board-pack, initiative grid, cost lines, forecasts, assumptions, benefit ledger, bankable plan/history, and target lock endpoints return coherent tenant currency and calendar reporting periods. Decimal money is represented as JSON strings. Non-January fiscal reporting is the known limitation below. |
-| Governance               | Gate 1-4 history is approved for every initiative; criteria snapshots are present; `ENT-005` has the approved rebaseline submission and two bankable plan versions.                                                                                                                                                                                                                                                                    |
-| Delivery controls        | Every initiative has three milestones, checklist coverage, two KPIs with quarterly entries, two risks, one submitted plus one draft status update, and expected cross-initiative dependency coverage.                                                                                                                                                                                                                                  |
-| Shared costs and reports | Four pools reconcile plan/actual allocations to their pool totals; preview/approved/locked state is explainable; Control Tower direct, allocated, burdened, and net values reconcile.                                                                                                                                                                                                                                                  |
-| Admin and people         | Setup is complete, configuration is tenant-specific, ten users are present, workstream/team assignments are correct, and audit output contains only tenant events. Integration connections, OAuth state, and pending invites remain zero.                                                                                                                                                                                              |
-| Excluded data            | Meeting, meeting-session, agenda, and action-item counts remain zero. Do not call their mutation APIs.                                                                                                                                                                                                                                                                                                                                 |
+| Surface                  | Required checks                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Authentication           | `POST /api/auth/login` and `GET /api/auth/me` return the expected subject, tenant, and role. Invalid and anonymous requests fail with 401. Dev identities have only the `transmuter_authorization_transmuter_dev` authorization scope.                                                                                                                                                                                                                                                                                                   |
+| Portfolio                | Initiative list/detail returns exactly the tenant's ten codes and sector-specific names. Dashboard, matrix, roadmap, risk, KPI, milestone, status, governance, dependency, and search results contain no other tenant's IDs or labels.                                                                                                                                                                                                                                                                                                   |
+| Financials               | Portfolio financials, value bridge, value ramp, benefits register, initiative portfolio, investments/payback, contributor, board-pack, initiative grid, cost lines, forecasts, assumptions, benefit ledger, bankable plan/history, and target lock endpoints return coherent tenant currency and calendar reporting periods. Every seeded financial grid reports `locked=true`; no API mutation is attempted against the lock. Decimal money is represented as JSON strings. Non-January fiscal reporting is the known limitation below. |
+| Governance               | Gate 1-4 history is approved for every initiative; criteria snapshots are present; `ENT-005` has the approved rebaseline submission and two bankable plan versions.                                                                                                                                                                                                                                                                                                                                                                      |
+| Delivery controls        | Every initiative has three milestones, checklist coverage, two KPIs with quarterly entries, two risks, one submitted plus one draft status update, and expected cross-initiative dependency coverage.                                                                                                                                                                                                                                                                                                                                    |
+| Shared costs and reports | Four pools reconcile plan/actual allocations to their pool totals; preview/approved/locked state is explainable; Control Tower direct, allocated, burdened, and net values reconcile.                                                                                                                                                                                                                                                                                                                                                    |
+| Admin and people         | Setup is complete, configuration is tenant-specific, ten users are present, workstream/team assignments are correct, and audit output contains only tenant events. Integration connections, OAuth state, and pending invites remain zero.                                                                                                                                                                                                                                                                                                |
+| Excluded data            | Meeting, meeting-session, agenda, and action-item counts remain zero. Do not call their mutation APIs.                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 
 April and July fiscal starts are edge-case inputs, not a claim that current
 reports are fiscal-calendar correct. The platform currently persists the tenant
@@ -237,34 +322,34 @@ loading/empty/error states, keyboard access, visible focus, responsive text, and
 the browser console/network log. No unexplained 4xx/5xx, uncaught exception,
 tenant leak, overlap, clipped control, or blank visualization is acceptable.
 
-| Route                                                      | Required UI checks                                                                                                                                                                                                                                                                                                                                          |
-| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/`, `/auth/login`, `/profile`                             | Public shell and login render; valid/invalid login and logout work; tenant/name/role are correct; profile/theme changes persist or are restored.                                                                                                                                                                                                            |
-| `/dashboard`                                               | Summary, pipeline, RAG, pressure, risk heatmap, value matrix, KPI pulse, decision/action areas, recent activity, all BU/workstream/priority/tag filters, cell drilldown, reset, and executive PDF/XLSX export reconcile to the selected tenant.                                                                                                             |
-| `/initiatives/pipeline`                                    | Ten initiatives, stage/RAG/value labels, search/filter/sort, pagination, detail navigation, and archive state. Open/cancel create on all tenants; complete one temporary create/governance flow and reset afterward.                                                                                                                                        |
-| `/initiatives/matrix`                                      | Workstream-by-tag cells, totals, empty cells, filters, and contributor drilldowns reconcile to pipeline and dashboard values.                                                                                                                                                                                                                               |
-| `/initiatives/new`                                         | Guided fields, required validation, financial setup readiness, AI-assisted intake graceful degradation, create/cancel, permissions, and navigation. Create only a temporary test initiative and remove it with the final reseed.                                                                                                                            |
-| `/initiatives/:id`, `/initiatives/:id/edit`                | Summary, team, milestones/checklists, dependencies, KPIs, risks, status, governance, financials, benefit evidence, ownership, save/cancel, validation, and permissions. Test one controlled CRUD cycle for each non-meeting child type.                                                                                                                     |
-| `/initiatives/:id/financial-scope`                         | Active metrics, formula rows, scenarios, cost categories, baseline, save/reload, and role restrictions. Formula rows remain read-only while calculated values update.                                                                                                                                                                                       |
-| `/financials`                                              | Monthly/quarterly/yearly, reporting year, plan as-of, stage/category, benefit/actual toggles, baselines, summary, trend, in-year value, run-rate, plan-vs-actual, cost/metric breakdown, contributor drawer, value bridge, and board-pack export reconcile under the current calendar-period contract. Record the non-January fiscal limitation separately. |
-| `/financials/initiative-portfolio`                         | Ten rows, tenant currency, baselines, metric columns, one-time/recurring cost, net run-rate, completeness flags, sort/filter, and detail navigation reconcile.                                                                                                                                                                                              |
-| `/financials/benefits-register`                            | Thirty lines, metric/class, validation statuses and history, evidence, plan/actual, risk adjustment, filter/sort, submit/validate/reject/handoff permissions, and totals reconcile.                                                                                                                                                                         |
-| `/financials/benefit-tracking`                             | Portfolio/workstream/initiative scopes, locked baseline, actual realization, variance, reporting-period filters, evidence/notes, and 240 ledger rows reconcile to bankable plans and actuals.                                                                                                                                                               |
-| `/financials/bankable-plan`                                | Ten initiatives, eleven versions, Gate 2 locks, locked snapshot detail, history, `ENT-005` version 2 and 8% FY2028 GM rebaseline, audit reason, and permission boundaries.                                                                                                                                                                                  |
-| `/financials/investments-payback`                          | Investment, benefit, payback, break-even, filter/sort, negative/zero state, and initiative drilldown reconcile to cost and benefit data.                                                                                                                                                                                                                    |
-| `/financials/waterline`                                    | Five workstream locks, cutoff/reporting-year filters, approved initiatives, committed versus actual value, variance, preview, and locked state reconcile.                                                                                                                                                                                                   |
-| `/shared-costs`                                            | Four pools, periods, category/scenario, policies, targets, weights, all seeded allocation methods, preview reconciliation, approve/lock/void permissions, audit trail, and reporting treatment. Use a temporary pool for mutation tests and reset it.                                                                                                       |
-| `/reports/control-tower`                                   | Portfolio filters, dependency/governance attention, direct benefits/costs, allocated costs, burdened costs, net after allocation, owner/investor views where linked, exports, and dashboard reconciliation.                                                                                                                                                 |
-| `/progress`, `/progress/roadmap`, `/progress/dependencies` | Thirty milestones, checklist state, overdue/in-progress/completed chronology, pressure, dependency lines, filters, zoom/date behavior, detail navigation, CRUD permissions, and the dependencies-to-roadmap redirect.                                                                                                                                       |
-| `/progress/status-updates`                                 | Ten submitted and ten draft updates, compliance/recency, RAG narrative, draft/generate/edit/submit workflow, filters, nudges where permitted, and scenario chronology. Agent failure must degrade gracefully.                                                                                                                                               |
-| `/progress/action-items`                                   | Valid zero-count empty state only. Do not create, edit, complete, cancel, or delete action items.                                                                                                                                                                                                                                                           |
-| `/pmo/governance`                                          | Portfolio gate history, criteria snapshots, approved decisions, stage state, filters, submission/decision permissions, and bankable-plan linkage. Use a temporary initiative for a write flow, then reset.                                                                                                                                                  |
-| `/pmo/risks`                                               | Twenty risks, matrix/heatmap, owner/mitigation, severity and status filters, initiative link, CRUD, and role restrictions.                                                                                                                                                                                                                                  |
-| `/pmo/kpis`                                                | Twenty KPIs and 240 quarterly entries, targets/actuals/trends, configured fiscal-start display versus current calendar-period behavior, filters, initiative link, CRUD, and role restrictions.                                                                                                                                                              |
-| `/pmo/ai-insights`                                         | Read/suggestion experience, loading/failure/disabled states, traceable responses, and graceful degradation. Any agent-proposed database write requires an explicit HITL confirmation.                                                                                                                                                                       |
-| `/people`                                                  | Ten users, role/title/status/workstream/team assignments, filters/detail, admin affordances, and role denial. Test one synthetic invite through the UI, revoke it in the same flow, and confirm no invite or Auth identity remains.                                                                                                                         |
-| `/admin`                                                   | Setup `8/8`, organization settings, business units, workstreams, markets/themes/tags, reporting currency/fiscal start, metrics/formulas, baselines, scenarios, cost categories, value bridge, attributes, stage gates/criteria, dashboard configuration, audit log, billing status, and non-destructive cleanup preview. Restore changes or reseed.         |
-| `/platform`                                                | Tenant users are denied. With the existing dev platform-admin only, verify all five tenants are listed and do not invoke tenant deletion.                                                                                                                                                                                                                   |
+| Route                                                      | Required UI checks                                                                                                                                                                                                                                                                                                                                                                                            |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`, `/auth/login`, `/profile`                             | Public shell and login render; valid/invalid login and logout work; tenant/name/role are correct; profile/theme changes persist or are restored.                                                                                                                                                                                                                                                              |
+| `/dashboard`                                               | Summary, pipeline, RAG, pressure, risk heatmap, value matrix, KPI pulse, decision/action areas, recent activity, all BU/workstream/priority/tag filters, cell drilldown, reset, and executive PDF/XLSX export reconcile to the selected tenant.                                                                                                                                                               |
+| `/initiatives/pipeline`                                    | Ten initiatives, stage/RAG/value labels, search/filter/sort, pagination, detail navigation, and archive state. Open/cancel create on all tenants; complete one temporary create/governance flow and reset afterward.                                                                                                                                                                                          |
+| `/initiatives/matrix`                                      | Workstream-by-tag cells, totals, empty cells, filters, and contributor drilldowns reconcile to pipeline and dashboard values.                                                                                                                                                                                                                                                                                 |
+| `/initiatives/new`                                         | Guided fields, required validation, financial setup readiness, AI-assisted intake graceful degradation, create/cancel, permissions, and navigation. Create only a temporary test initiative and remove it with the final reseed.                                                                                                                                                                              |
+| `/initiatives/:id`, `/initiatives/:id/edit`                | Summary, team, milestones/checklists, dependencies, KPIs, risks, status, governance, financials, benefit evidence, ownership, save/cancel, validation, and permissions. Verify every seeded financial grid reports locked and its edit affordances are disabled; use only a temporary unlocked initiative for financial mutation tests. Test one controlled CRUD cycle for each other non-meeting child type. |
+| `/initiatives/:id/financial-scope`                         | Active metrics, formula rows, scenarios, cost categories, baseline, save/reload, and role restrictions. Formula rows remain read-only while calculated values update.                                                                                                                                                                                                                                         |
+| `/financials`                                              | Monthly/quarterly/yearly, reporting year, plan as-of, stage/category, benefit/actual toggles, baselines, summary, trend, in-year value, run-rate, plan-vs-actual, cost/metric breakdown, contributor drawer, value bridge, and board-pack export reconcile under the current calendar-period contract. Record the non-January fiscal limitation separately.                                                   |
+| `/financials/initiative-portfolio`                         | Ten rows, tenant currency, baselines, metric columns, one-time/recurring cost, net run-rate, completeness flags, sort/filter, and detail navigation reconcile.                                                                                                                                                                                                                                                |
+| `/financials/benefits-register`                            | Thirty lines, metric/class, validation statuses and history, evidence, plan/actual, risk adjustment, filter/sort, submit/validate/reject/handoff permissions, and totals reconcile.                                                                                                                                                                                                                           |
+| `/financials/benefit-tracking`                             | Portfolio/workstream/initiative scopes, locked baseline, actual realization, variance, reporting-period filters, evidence/notes, and 240 ledger rows reconcile to bankable plans and actuals.                                                                                                                                                                                                                 |
+| `/financials/bankable-plan`                                | Ten initiatives, eleven versions, Gate 2 locks, locked snapshot detail, history, `ENT-005` version 2 and 8% FY2028 GM rebaseline, audit reason, and permission boundaries.                                                                                                                                                                                                                                    |
+| `/financials/investments-payback`                          | Investment, benefit, payback, break-even, filter/sort, negative/zero state, and initiative drilldown reconcile to cost and benefit data.                                                                                                                                                                                                                                                                      |
+| `/financials/waterline`                                    | Five workstream locks, cutoff/reporting-year filters, approved initiatives, committed versus actual value, variance, preview, and locked state reconcile.                                                                                                                                                                                                                                                     |
+| `/shared-costs`                                            | Four pools, periods, category/scenario, policies, targets, weights, all seeded allocation methods, preview reconciliation, approve/lock/void permissions, audit trail, and reporting treatment. Use a temporary pool for mutation tests and reset it.                                                                                                                                                         |
+| `/reports/control-tower`                                   | Portfolio filters, dependency/governance attention, direct benefits/costs, allocated costs, burdened costs, net after allocation, owner/investor views where linked, exports, and dashboard reconciliation.                                                                                                                                                                                                   |
+| `/progress`, `/progress/roadmap`, `/progress/dependencies` | Thirty milestones, checklist state, overdue/in-progress/completed chronology, pressure, dependency lines, filters, zoom/date behavior, detail navigation, CRUD permissions, and the dependencies-to-roadmap redirect.                                                                                                                                                                                         |
+| `/progress/status-updates`                                 | Ten submitted and ten draft updates, compliance/recency, RAG narrative, draft/generate/edit/submit workflow, filters, nudges where permitted, and scenario chronology. Agent failure must degrade gracefully.                                                                                                                                                                                                 |
+| `/progress/action-items`                                   | Valid zero-count empty state only. Do not create, edit, complete, cancel, or delete action items.                                                                                                                                                                                                                                                                                                             |
+| `/pmo/governance`                                          | Portfolio gate history, criteria snapshots, approved decisions, stage state, filters, submission/decision permissions, and bankable-plan linkage. Use a temporary initiative for a write flow, then reset.                                                                                                                                                                                                    |
+| `/pmo/risks`                                               | Twenty risks, matrix/heatmap, owner/mitigation, severity and status filters, initiative link, CRUD, and role restrictions.                                                                                                                                                                                                                                                                                    |
+| `/pmo/kpis`                                                | Twenty KPIs and 240 quarterly entries, targets/actuals/trends, configured fiscal-start display versus current calendar-period behavior, filters, initiative link, CRUD, and role restrictions.                                                                                                                                                                                                                |
+| `/pmo/ai-insights`                                         | Read/suggestion experience, loading/failure/disabled states, traceable responses, and graceful degradation. Any agent-proposed database write requires an explicit HITL confirmation.                                                                                                                                                                                                                         |
+| `/people`                                                  | Ten users, role/title/status/workstream/team assignments, filters/detail, admin affordances, and role denial. Test one synthetic invite through the UI, revoke it in the same flow, and confirm no invite or Auth identity remains.                                                                                                                                                                           |
+| `/admin`                                                   | Setup `8/8`, organization settings, business units, workstreams, markets/themes/tags, reporting currency/fiscal start, metrics/formulas, baselines, scenarios, cost categories, value bridge, attributes, stage gates/criteria, dashboard configuration, audit log, billing status, and non-destructive cleanup preview. Restore changes or reseed.                                                           |
+| `/platform`                                                | Tenant users are denied. With the existing dev platform-admin only, verify all five tenants are listed and do not invoke tenant deletion.                                                                                                                                                                                                                                                                     |
 
 Imports and exports must include a portfolio/initiative export, initiative import
 preview, one initiative workbook roundtrip, financial XLSX roundtrip, board-pack
@@ -277,7 +362,7 @@ The full seed is repeatable but intentionally destructive inside its owned
 fixture tenants:
 
 - Before any write, all five profiles are checked for exact fixture ownership,
-  reserved email domains, Auth/platform subject parity, dev-scoped roles, and
+  approved dev QA email domains, Auth/platform subject parity, dev-scoped roles, and
   absence of unexpected users, invites, integrations, or OAuth state.
 - The script refuses a tenant without the exact `qa_fixture` owner/slug marker or
   an Auth identity without the matching `transmuter_fixture` marker. It also
@@ -324,6 +409,8 @@ must still exclude browser storage and authorization headers.
 | Application commit / PR                       | Pending |
 | Hostinger dev action / completion time        | Pending |
 | API and web health                            | Pending |
+| Email migration dry-run / apply / postflight  | Pending |
+| Redacted migration journal validation         | Pending |
 | Initial seed manifest / count summary         | Pending |
 | Repeat-seed logical diff                      | Pending |
 | 50-user guarded API verifier                  | Pending |

@@ -29,11 +29,15 @@ from app.core.database import get_supabase_admin, get_supabase_schema  # noqa: E
 from app.domain.financials import WorkstreamTargetLockRequest  # noqa: E402
 from app.services.dashboard_config import DashboardConfigService  # noqa: E402
 from app.services.financial import FinancialService  # noqa: E402
+from scripts.multi_tenant_transformation_profiles import (  # noqa: E402
+    DEV_FIXTURE_EMAIL_DOMAINS,
+)
 
 ORG_NAME = os.environ.get("TRANSMUTER_SEED_ORG_NAME", "Acme Global Manufacturing")
 ORG_SLUG = os.environ.get("TRANSMUTER_SEED_ORG_SLUG", "acme-transformation-lab")
 ADMIN_EMAIL = os.environ.get(
-    "TRANSMUTER_SEED_ADMIN_EMAIL", "admin@acme-transformation.transmuter.test"
+    "TRANSMUTER_SEED_ADMIN_EMAIL",
+    "admin@acme-transformation.qa.transmuter-dev.ishirock.tech",
 )
 ADMIN_PASSWORD = os.environ.get("TRANSMUTER_SEED_ADMIN_PASSWORD", "")
 BASELINE_YEAR = 2026
@@ -2921,9 +2925,9 @@ def seed_enterprise_transformation_scenario(
     if (
         len(email_parts) != 2
         or not email_parts[0]
-        or not email_parts[1].endswith(".transmuter.test")
+        or email_parts[1] not in DEV_FIXTURE_EMAIL_DOMAINS
     ):
-        raise RuntimeError("Seed admin email must use the reserved .transmuter.test suffix")
+        raise RuntimeError("Seed admin email must use an approved dev QA domain")
     if len(initiatives) != 10:
         raise ValueError("Enterprise transformation scenario requires exactly 10 initiatives")
     expected_codes = [f"ENT-{index:03d}" for index in range(1, 11)]

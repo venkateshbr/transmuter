@@ -374,7 +374,7 @@ def test_login_honors_bounded_retry_after_without_exposing_credentials() -> None
     session = runner._login(  # noqa: SLF001
         identity="role:viewer",
         expected_role="viewer",
-        email="viewer@fixture.transmuter.test",
+        email="viewer@acme-global-manufacturing.qa.transmuter-dev.ishirock.tech",
         tenant_slug="fixture-tenant",
     )
 

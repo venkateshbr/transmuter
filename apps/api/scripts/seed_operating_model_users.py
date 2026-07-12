@@ -9,7 +9,7 @@ Examples:
       --confirm seed-enterprise-transformation-dev \
       --hostinger-project transmuter-dev-hostinger \
       --tenant-slug qa-e2e-20260712-acme-global-manufacturing \
-      --email-domain acme-global-manufacturing.transmuter.test \
+      --email-domain acme-global-manufacturing.qa.transmuter-dev.ishirock.tech \
       --probe-api
 """
 
@@ -30,6 +30,7 @@ from uuid import uuid4
 from dotenv import dotenv_values, load_dotenv
 
 from app.core.auth_metadata import build_auth_metadata_payload
+from scripts.multi_tenant_transformation_profiles import DEV_FIXTURE_EMAIL_DOMAINS
 
 ROLES: tuple[str, ...] = (
     "transformation_office",
@@ -466,8 +467,8 @@ def main() -> None:
     password = os.environ.get("TRANSMUTER_RBAC_SAMPLE_PASSWORD", "")
     if len(password) < 12:
         raise RuntimeError("TRANSMUTER_RBAC_SAMPLE_PASSWORD must be at least 12 characters")
-    if not args.email_domain.endswith(".transmuter.test"):
-        raise RuntimeError("--email-domain must use the reserved .transmuter.test suffix")
+    if args.email_domain not in DEV_FIXTURE_EMAIL_DOMAINS:
+        raise RuntimeError("--email-domain must use an approved dev QA domain")
     client = import_app_clients()
     tenant = find_tenant(client, args.tenant_slug)
     tenant_id = str(tenant["id"])

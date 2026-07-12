@@ -524,7 +524,7 @@ class _AuthUser:
         app_metadata: dict[str, object],
         *,
         user_id: str = "auth-user-1",
-        email: str = "existing@fixture.transmuter.test",
+        email: str = "existing@acme-global-manufacturing.qa.transmuter-dev.ishirock.tech",
         user_metadata: dict[str, object] | None = None,
         is_super_admin: bool = False,
     ) -> None:
@@ -718,7 +718,7 @@ def test_owned_fixture_identity_preflight_accepts_exact_subject_parity() -> None
 
 def test_fixture_identity_preflight_rejects_subject_mismatch() -> None:
     platform, auth_user = _owned_admin_identity()
-    auth_user.email = "changed@acme-global-manufacturing.transmuter.test"
+    auth_user.email = "changed@acme-global-manufacturing.qa.transmuter-dev.ishirock.tech"
     client = _SecurityClient(
         tables=_owned_fixture_tables([platform]),
         auth_users=[auth_user],
@@ -752,12 +752,12 @@ def test_fixture_preflight_rejects_protected_tenant_state(protected_table: str) 
         five_tenant.assert_profile_auth_emails_safe(client, five_tenant.COMPANY_PROFILES[0])
 
 
-def test_seed_rejects_non_reserved_admin_email_before_org_write(
+def test_seed_rejects_non_qa_admin_email_before_org_write(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls = _patch_seed_orchestration(monkeypatch)
 
-    with pytest.raises(RuntimeError, match="reserved"):
+    with pytest.raises(RuntimeError, match="approved dev QA domain"):
         enterprise.seed_enterprise_transformation_scenario(
             object(),  # type: ignore[arg-type]
             fixture_owner="unit-test-fixture",

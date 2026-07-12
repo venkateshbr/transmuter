@@ -5,9 +5,11 @@ from decimal import Decimal
 from typing import cast
 
 import pytest
+from pydantic import EmailStr, TypeAdapter
 
 from scripts.multi_tenant_transformation_profiles import (
     COMPANY_PROFILES,
+    DEV_FIXTURE_EMAIL_DOMAINS,
     CompanyProfile,
     InitiativeSeedRow,
     build_profile_initiative_rows,
@@ -53,7 +55,10 @@ def test_company_profiles_define_five_unique_valid_companies() -> None:
         assert len(set(profile.initiative_names)) == 10
         assert len(profile.initiative_structures) == 10
         assert len(profile.initiative_value_factors) == 10
-        assert profile.email_domain.endswith(".transmuter.test")
+        assert profile.email_domain in DEV_FIXTURE_EMAIL_DOMAINS
+        assert str(TypeAdapter(EmailStr).validate_python(f"admin@{profile.email_domain}")) == (
+            f"admin@{profile.email_domain}"
+        )
         assert "@" not in profile.email_domain
         assert profile.currency in supported_currencies
         assert 1 <= profile.fiscal_start_month <= 12

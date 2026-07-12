@@ -30,6 +30,16 @@ type InitiativeStructure = tuple[str, str, str, str]
 
 _EXPECTED_CODES = tuple(f"ENT-{index:03d}" for index in range(1, 11))
 _SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+DEV_FIXTURE_EMAIL_DOMAINS = frozenset(
+    {
+        "acme-transformation.qa.transmuter-dev.ishirock.tech",
+        "acme-global-manufacturing.qa.transmuter-dev.ishirock.tech",
+        "northstar-retail-group.qa.transmuter-dev.ishirock.tech",
+        "meridian-commercial-bank.qa.transmuter-dev.ishirock.tech",
+        "solstice-health-network.qa.transmuter-dev.ishirock.tech",
+        "horizon-energy-utilities.qa.transmuter-dev.ishirock.tech",
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,10 +74,8 @@ class CompanyProfile:
             raise ValueError("Company profile text fields must not be blank")
         if not _SLUG_PATTERN.fullmatch(self.slug):
             raise ValueError("Company profile slug must use lowercase letters, digits, and hyphens")
-        if "@" in self.email_domain or not self.email_domain.endswith(".transmuter.test"):
-            raise ValueError(
-                "Company profile email domain must use the reserved .transmuter.test suffix"
-            )
+        if self.email_domain not in DEV_FIXTURE_EMAIL_DOMAINS:
+            raise ValueError("Company profile email domain is not an approved dev QA domain")
         if len(self.currency) != 3 or not self.currency.isalpha() or not self.currency.isupper():
             raise ValueError("Company profile currency must be an uppercase 3-letter code")
         if not 1 <= self.fiscal_start_month <= 12:
@@ -190,7 +198,7 @@ COMPANY_PROFILES: tuple[CompanyProfile, ...] = (
     CompanyProfile(
         name="Acme Global Manufacturing",
         slug="qa-e2e-20260712-acme-global-manufacturing",
-        email_domain="acme-global-manufacturing.transmuter.test",
+        email_domain="acme-global-manufacturing.qa.transmuter-dev.ishirock.tech",
         admin_display_name="Acme Transformation Admin",
         admin_title="VP, Enterprise Transformation",
         currency="USD",
@@ -218,7 +226,7 @@ COMPANY_PROFILES: tuple[CompanyProfile, ...] = (
     CompanyProfile(
         name="Northstar Retail Group",
         slug="qa-e2e-20260712-northstar-retail-group",
-        email_domain="northstar-retail-group.transmuter.test",
+        email_domain="northstar-retail-group.qa.transmuter-dev.ishirock.tech",
         admin_display_name="Northstar Transformation Admin",
         admin_title="Chief Transformation Officer",
         currency="SGD",
@@ -249,7 +257,7 @@ COMPANY_PROFILES: tuple[CompanyProfile, ...] = (
     CompanyProfile(
         name="Meridian Commercial Bank",
         slug="qa-e2e-20260712-meridian-commercial-bank",
-        email_domain="meridian-commercial-bank.transmuter.test",
+        email_domain="meridian-commercial-bank.qa.transmuter-dev.ishirock.tech",
         admin_display_name="Meridian Transformation Admin",
         admin_title="Group Transformation Director",
         currency="GBP",
@@ -280,7 +288,7 @@ COMPANY_PROFILES: tuple[CompanyProfile, ...] = (
     CompanyProfile(
         name="Solstice Health Network",
         slug="qa-e2e-20260712-solstice-health-network",
-        email_domain="solstice-health-network.transmuter.test",
+        email_domain="solstice-health-network.qa.transmuter-dev.ishirock.tech",
         admin_display_name="Solstice Transformation Admin",
         admin_title="SVP, Transformation and Performance",
         currency="EUR",
@@ -311,7 +319,7 @@ COMPANY_PROFILES: tuple[CompanyProfile, ...] = (
     CompanyProfile(
         name="Horizon Energy & Utilities",
         slug="qa-e2e-20260712-horizon-energy-utilities",
-        email_domain="horizon-energy-utilities.transmuter.test",
+        email_domain="horizon-energy-utilities.qa.transmuter-dev.ishirock.tech",
         admin_display_name="Horizon Transformation Admin",
         admin_title="Executive Director, Transformation",
         currency="AUD",
