@@ -144,6 +144,55 @@ def test_non_meeting_guard_accepts_reviewed_surfaces(path: str) -> None:
     acceptance.assert_non_meeting_path(path)
 
 
+def test_financial_contributor_probe_uses_canonical_monthly_period() -> None:
+    assert acceptance.PORTFOLIO_CONTRIBUTORS_PROBE_PATH == (
+        "/portfolio/financials/contributors?period=2028-M01&granularity=monthly&year=2028"
+    )
+
+
+def test_milestone_checklists_reconcile_across_realistic_distribution() -> None:
+    assert (
+        acceptance._assert_milestone_checklist_total(  # noqa: SLF001
+            [
+                {"checklist_total": 0},
+                {"checklist_total": 2},
+                {"checklist_total": 1},
+            ],
+            expected=3,
+            label="ENT-001 milestones",
+        )
+        == 3
+    )
+
+    with pytest.raises(acceptance.AcceptanceFailure, match="exactly 3"):
+        acceptance._assert_milestone_checklist_total(  # noqa: SLF001
+            [{"checklist_total": 0}, {"checklist_total": 1}],
+            expected=3,
+            label="ENT-001 milestones",
+        )
+
+
+def test_status_update_fixture_counts_history_and_draft_separately() -> None:
+    history = {"items": [{"id": "submitted-1"}], "total": 1}
+    draft = {"id": "draft-1", "is_draft": True}
+
+    assert (
+        acceptance._assert_status_update_fixture(  # noqa: SLF001
+            history,
+            draft,
+            label="ENT-001",
+        )
+        == 2
+    )
+
+    with pytest.raises(acceptance.AcceptanceFailure, match="submitted status updates"):
+        acceptance._assert_status_update_fixture(  # noqa: SLF001
+            {"items": [*history["items"], draft], "total": 2},
+            draft,
+            label="ENT-001",
+        )
+
+
 def test_report_guard_rejects_secrets_emails_and_tokens() -> None:
     acceptance.assert_secret_free_report(
         {"environment": "dev", "tenants": [{"slug": "qa-fixture", "count": 10}]}

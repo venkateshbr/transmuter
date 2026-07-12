@@ -48,6 +48,9 @@ FORBIDDEN_PATH_FRAGMENTS = (
 )
 
 EXPECTED_CODES = tuple(f"ENT-{index:03d}" for index in range(1, 11))
+PORTFOLIO_CONTRIBUTORS_PROBE_PATH = (
+    "/portfolio/financials/contributors?period=2028-M01&granularity=monthly&year=2028"
+)
 FULL_PORTFOLIO_ROLES = PORTFOLIO_VIEW_ROLES - {"workstream_lead"}
 FINANCIAL_CONFIGURATION_ROLES = {
     "transformation_office",
@@ -235,6 +238,29 @@ def _assert_total(payload: Any, expected: int, label: str) -> list[dict[str, Any
     if result.get("total") != expected or len(items) != expected:
         raise AcceptanceFailure(f"{label} did not contain exactly {expected} records")
     return items
+
+
+def _assert_milestone_checklist_total(
+    milestones: Sequence[Mapping[str, Any]],
+    *,
+    expected: int,
+    label: str,
+) -> int:
+    total = sum(int(milestone.get("checklist_total") or 0) for milestone in milestones)
+    if total != expected:
+        raise AcceptanceFailure(f"{label} did not contain exactly {expected} checklist items")
+    return total
+
+
+def _assert_status_update_fixture(
+    history_payload: Any,
+    draft_payload: Any,
+    *,
+    label: str,
+) -> int:
+    submitted_updates = _assert_total(history_payload, 1, f"{label} submitted status updates")
+    _mapping(draft_payload, f"{label} status draft")
+    return len(submitted_updates) + 1
 
 
 def _assert_minimum_total(payload: Any, minimum: int, label: str) -> list[dict[str, Any]]:
@@ -761,7 +787,7 @@ class AcceptanceRunner:
             ("/portfolio/initiative-portfolio", "financial.initiative-portfolio"),
             ("/portfolio/value-ramp?granularity=monthly", "financial.value-ramp"),
             (
-                "/portfolio/financials/contributors?period=2028-01&granularity=monthly&year=2028",
+                PORTFOLIO_CONTRIBUTORS_PROBE_PATH,
                 "financial.contributors",
             ),
             ("/shared-costs/config", "shared-costs.config"),
@@ -857,10 +883,6 @@ class AcceptanceRunner:
                 (f"/initiatives/{initiative_id}/ai-context", "initiative.ai-context"),
                 (f"/initiatives/{initiative_id}/governance", "initiative.governance"),
                 (f"/initiatives/{initiative_id}/gates", "initiative.gates"),
-                (
-                    f"/initiatives/{initiative_id}/gates/1/criteria",
-                    "initiative.gate-criteria",
-                ),
                 (f"/initiatives/{initiative_id}/financials/baseline", "financial.baseline"),
                 (f"/initiatives/{initiative_id}/bankable-plan", "financial.bankable-plan"),
                 (
@@ -890,6 +912,15 @@ class AcceptanceRunner:
                 _, payload = self._json("GET", path, token=token, surface=surface)
                 _mapping(payload, f"{surface} for {code}")
 
+            _, criteria_payload = self._json(
+                "GET",
+                f"/initiatives/{initiative_id}/gates/1/criteria",
+                token=token,
+                surface="initiative.gate-criteria",
+            )
+            if not _list(criteria_payload, f"initiative.gate-criteria for {code}"):
+                raise AcceptanceFailure(f"{code} Gate 1 criteria are empty")
+
             _, kpis_payload = self._json(
                 "GET",
                 f"/initiatives/{initiative_id}/kpis",
@@ -916,8 +947,11 @@ class AcceptanceRunner:
                 surface="initiative.milestones",
             )
             milestones = _assert_total(milestones_payload, 3, f"{code} milestones")
-            if any(milestone.get("checklist_total") != 1 for milestone in milestones):
-                raise AcceptanceFailure(f"{code} milestones do not each have one checklist item")
+            _assert_milestone_checklist_total(
+                milestones,
+                expected=3,
+                label=f"{code} milestones",
+            )
             totals["milestones"] += len(milestones)
             first_milestone_id = str(milestones[0]["id"])
             for suffix, surface in (
@@ -938,17 +972,17 @@ class AcceptanceRunner:
                 token=token,
                 surface="initiative.status-updates",
             )
-            totals["status_updates"] += len(
-                _assert_total(status_payload, 2, f"{code} status updates")
-            )
             _, draft_payload = self._json(
                 "GET",
                 f"/initiatives/{initiative_id}/status-updates/draft",
                 token=token,
                 surface="initiative.status-draft",
             )
-            if draft_payload is not None:
-                _mapping(draft_payload, f"{code} status draft")
+            totals["status_updates"] += _assert_status_update_fixture(
+                status_payload,
+                draft_payload,
+                label=code,
+            )
 
             _, grid_payload = self._json(
                 "GET",
