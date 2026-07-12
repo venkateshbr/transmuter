@@ -303,9 +303,15 @@ def test_financial_actuals_and_costs_apply_the_scenario_cutoff_consistently() ->
 
 
 class _DeleteQuery:
-    def __init__(self, tables: list[str], table: str) -> None:
+    def __init__(
+        self,
+        tables: list[str],
+        table: str,
+        failures: dict[str, str],
+    ) -> None:
         self._tables = tables
         self._table = table
+        self._failures = failures
 
     def delete(self) -> _DeleteQuery:
         return self
@@ -314,16 +320,25 @@ class _DeleteQuery:
         return self
 
     def execute(self) -> _Result:
+        if code := self._failures.get(self._table):
+            raise _DeleteError(code)
         self._tables.append(self._table)
         return _Result()
 
 
+class _DeleteError(RuntimeError):
+    def __init__(self, code: str) -> None:
+        self.code = code
+        super().__init__(f"delete failed with {code}")
+
+
 class _DeleteClient:
-    def __init__(self) -> None:
+    def __init__(self, failures: dict[str, str] | None = None) -> None:
         self.tables: list[str] = []
+        self.failures = failures or {}
 
     def table(self, name: str) -> _DeleteQuery:
-        return _DeleteQuery(self.tables, name)
+        return _DeleteQuery(self.tables, name, self.failures)
 
 
 def test_tenant_reset_clears_dashboard_configuration_but_not_integrations() -> None:
@@ -334,6 +349,22 @@ def test_tenant_reset_clears_dashboard_configuration_but_not_integrations() -> N
     assert "tenant_dashboard_config" in client.tables
     assert "integration_connections" not in client.tables
     assert "integration_oauth_states" not in client.tables
+
+
+def test_tenant_reset_ignores_only_explicit_missing_relation_errors() -> None:
+    missing_optional = _DeleteClient({"ai_copilot_actions": "PGRST205"})
+
+    enterprise.delete_tenant_rows(missing_optional, "tenant-1")  # type: ignore[arg-type]
+
+    assert "tenant_dashboard_config" in missing_optional.tables
+
+    permission_failure = _DeleteClient({"ai_copilot_actions": "42501"})
+    with pytest.raises(_DeleteError, match="42501"):
+        enterprise.delete_tenant_rows(permission_failure, "tenant-1")  # type: ignore[arg-type]
+
+    missing_required = _DeleteClient({"tenant_dashboard_config": "PGRST205"})
+    with pytest.raises(_DeleteError, match="PGRST205"):
+        enterprise.delete_tenant_rows(missing_required, "tenant-1")  # type: ignore[arg-type]
 
 
 class _ScopeQuery:

@@ -47,6 +47,7 @@ DEV_SEED_CONFIRMATION = "seed-enterprise-transformation-dev"
 AUTH_FIXTURE_MARKER_KEY = "transmuter_fixture"
 ORG_FIXTURE_MARKER_KEY = "qa_fixture"
 DEFAULT_FIXTURE_OWNER = "enterprise-transformation-scenario"
+OPTIONAL_RESET_TABLES = frozenset({"ai_copilot_actions"})
 
 BASELINE_REVENUE = Decimal("20000000")
 BASELINE_GROSS_MARGIN = Decimal("9000000")
@@ -497,7 +498,10 @@ def delete_tenant_rows(client: Client, tenant_id: str) -> None:
         try:
             client.table(table).delete().eq("tenant_id", tenant_id).execute()
         except Exception as exc:
-            if "does not exist" not in str(exc):
+            if table not in OPTIONAL_RESET_TABLES or getattr(exc, "code", None) not in {
+                "42P01",
+                "PGRST205",
+            }:
                 raise
 
 
