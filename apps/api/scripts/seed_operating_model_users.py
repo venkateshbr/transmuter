@@ -3,9 +3,13 @@ Seed and probe deterministic operating-model users for a tenant.
 
 Examples:
     cd apps/api
-    HOSTINGER_API_KEY=... uv run python scripts/seed_operating_model_users.py \
+    HOSTINGER_API_KEY=... TRANSMUTER_RBAC_SAMPLE_PASSWORD=... \
+      uv run python scripts/seed_operating_model_users.py \
+      --environment dev \
+      --confirm seed-enterprise-transformation-dev \
       --hostinger-project transmuter-dev-hostinger \
-      --tenant-slug acme-transformation-lab \
+      --tenant-slug qa-e2e-20260712-acme-global-manufacturing \
+      --email-domain acme-global-manufacturing.transmuter.test \
       --probe-api
 """
 
@@ -14,7 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import subprocess
+from collections.abc import Callable
 from datetime import UTC, datetime
 from io import StringIO
 from pathlib import Path
@@ -63,6 +67,10 @@ PORTFOLIO_VIEW_ROLES = {
     "executive_sponsor",
     "viewer",
 }
+ALLOWED_FIXTURE_OWNERS = {
+    "enterprise-transformation-scenario",
+    "five-tenant-qa-20260712",
+}
 
 
 def now() -> str:
@@ -82,28 +90,11 @@ def load_runtime_environment(args: argparse.Namespace) -> None:
 
 
 def fetch_hostinger_environment(project_name: str, vps_id: str) -> str:
-    token = os.environ.get("HOSTINGER_API_TOKEN") or os.environ.get("HOSTINGER_API_KEY")
-    if not token:
-        raise RuntimeError("HOSTINGER_API_KEY or HOSTINGER_API_TOKEN is required")
-    api_base = os.environ.get("HOSTINGER_API_BASE_URL", "https://developers.hostinger.com/api")
-    completed = subprocess.run(
-        [
-            "curl",
-            "-fsS",
-            "-H",
-            f"Authorization: Bearer {token}",
-            f"{api_base}/vps/v1/virtual-machines/{vps_id}/docker/{project_name}",
-        ],
-        check=True,
-        capture_output=True,
-        text=True,
-        timeout=30,
+    from scripts.seed_five_tenant_transformation_program import (
+        fetch_hostinger_environment_safely,
     )
-    payload = json.loads(completed.stdout)
-    environment = str(payload.get("environment") or "")
-    if not environment:
-        raise RuntimeError(f"Hostinger project {project_name!r} did not return an environment")
-    return environment
+
+    return fetch_hostinger_environment_safely(project_name, vps_id)
 
 
 def import_app_clients():
@@ -113,24 +104,21 @@ def import_app_clients():
 
 
 def find_tenant(client: Any, tenant_slug: str | None) -> dict[str, Any]:
-    if tenant_slug:
-        result = (
-            client.table("organizations")
-            .select("id,name,slug")
-            .eq("slug", tenant_slug)
-            .maybe_single()
-            .execute()
-        )
-        if result and result.data:
-            return result.data
-        raise RuntimeError(f"Tenant slug not found: {tenant_slug}")
-    result = client.table("organizations").select("id,name,slug").limit(1).execute()
-    if not result.data:
-        raise RuntimeError("No tenant organizations found")
-    return result.data[0]
+    if not tenant_slug:
+        raise RuntimeError("--tenant-slug is required")
+    result = (
+        client.table("organizations")
+        .select("id,name,slug,settings")
+        .eq("slug", tenant_slug)
+        .maybe_single()
+        .execute()
+    )
+    if result and result.data:
+        return result.data
+    raise RuntimeError(f"Tenant slug not found: {tenant_slug}")
 
 
-def find_auth_user_id_by_email(client: Any, email: str) -> str | None:
+def find_auth_user_by_email(client: Any, email: str) -> Any | None:
     page = 1
     per_page = 100
     while True:
@@ -139,10 +127,15 @@ def find_auth_user_id_by_email(client: Any, email: str) -> str | None:
             return None
         for user in users:
             if (getattr(user, "email", "") or "").lower() == email.lower():
-                return str(user.id)
+                return user
         if len(users) < per_page:
             return None
         page += 1
+
+
+def find_auth_user_id_by_email(client: Any, email: str) -> str | None:
+    user = find_auth_user_by_email(client, email)
+    return str(user.id) if user else None
 
 
 def ensure_auth_user(
@@ -153,17 +146,28 @@ def ensure_auth_user(
     tenant_id: str,
     role: str,
     display_name: str,
+    fixture_owner: str,
+    platform_user_payload: dict[str, Any],
+    existing_user_validator: Callable[[Any], None],
 ) -> str:
     from app.core.database import get_supabase_schema
 
-    auth_id = find_auth_user_id_by_email(client, email)
-    if auth_id:
+    auth_user = find_auth_user_by_email(client, email)
+    created_auth_user = False
+    if auth_user:
+        existing_user_validator(auth_user)
+        auth_id = str(auth_user.id)
         metadata = build_auth_metadata_payload(
             auth_id,
             authorization={"tenant_id": tenant_id, "role": role},
             profile={"display_name": display_name},
             scope=get_supabase_schema(),
+            preserve_legacy_user_authorization=False,
         )
+        metadata["app_metadata"]["transmuter_fixture"] = {
+            "owner": fixture_owner,
+            "tenant_id": tenant_id,
+        }
         client.auth.admin.update_user_by_id(
             auth_id,
             {
@@ -172,22 +176,37 @@ def ensure_auth_user(
                 **metadata,
             },
         )
-        return auth_id
-    metadata = build_auth_metadata_payload(
-        None,
-        authorization={"tenant_id": tenant_id, "role": role},
-        profile={"display_name": display_name},
-        scope=get_supabase_schema(),
-    )
-    created = client.auth.admin.create_user(
-        {
-            "email": email,
-            "password": password,
-            "email_confirm": True,
-            **metadata,
+    else:
+        metadata = build_auth_metadata_payload(
+            None,
+            authorization={"tenant_id": tenant_id, "role": role},
+            profile={"display_name": display_name},
+            scope=get_supabase_schema(),
+            preserve_legacy_user_authorization=False,
+        )
+        metadata["app_metadata"]["transmuter_fixture"] = {
+            "owner": fixture_owner,
+            "tenant_id": tenant_id,
         }
-    )
-    return str(created.user.id)
+        created = client.auth.admin.create_user(
+            {
+                "email": email,
+                "password": password,
+                "email_confirm": True,
+                **metadata,
+            }
+        )
+        auth_id = str(created.user.id)
+        created_auth_user = True
+    try:
+        client.table("users").upsert(
+            {"id": auth_id, **platform_user_payload}, on_conflict="id"
+        ).execute()
+    except Exception:
+        if created_auth_user:
+            client.auth.admin.delete_user(auth_id)
+        raise
+    return auth_id
 
 
 def first_row(client: Any, table: str, tenant_id: str, select: str = "*") -> dict[str, Any] | None:
@@ -217,6 +236,9 @@ def seed_users(
     tenant_id: str,
     email_domain: str,
     password: str,
+    fixture_owner: str,
+    existing_auth_validator: Callable[[Any, str, str], None],
+    auth_user_finalizer: Callable[[str, str, str], None],
 ) -> dict[str, str]:
     workstream = first_row(client, "workstreams", tenant_id, "id,name")
     initiative = first_row(client, "initiatives", tenant_id, "id,name,workstream_id")
@@ -225,6 +247,19 @@ def seed_users(
     for role in ROLES:
         display_name = f"RBAC {ROLE_NAMES[role]}"
         email = f"rbac-{role.replace('_', '-')}@{email_domain}".lower()
+        platform_user_payload = {
+            "tenant_id": tenant_id,
+            "email": email,
+            "display_name": display_name,
+            "title": ROLE_NAMES[role],
+            "department": "Transformation Office RBAC Test",
+            "timezone": "UTC",
+            "role": role,
+            "status": "active",
+            "must_change_password": False,
+            "onboarding_completed": True,
+            "updated_at": now(),
+        }
         user_id = ensure_auth_user(
             client,
             email=email,
@@ -232,24 +267,13 @@ def seed_users(
             tenant_id=tenant_id,
             role=role,
             display_name=display_name,
+            fixture_owner=fixture_owner,
+            platform_user_payload=platform_user_payload,
+            existing_user_validator=lambda user, role=role, email=email: existing_auth_validator(
+                user, email, role
+            ),
         )
-        client.table("users").upsert(
-            {
-                "id": user_id,
-                "tenant_id": tenant_id,
-                "email": email,
-                "display_name": display_name,
-                "title": ROLE_NAMES[role],
-                "department": "Transformation Office RBAC Test",
-                "timezone": "UTC",
-                "role": role,
-                "status": "active",
-                "must_change_password": False,
-                "onboarding_completed": True,
-                "updated_at": now(),
-            },
-            on_conflict="id",
-        ).execute()
+        auth_user_finalizer(user_id, email, role)
         seeded[role] = user_id
 
     if workstream and seeded.get("workstream_lead"):
@@ -331,7 +355,9 @@ def probe_api(
         token = login(api_base_url, email, password)
         _, profile = request_json("GET", f"{api_base_url}/auth/me", token=token, expected={200})
         if profile["role"] != role:
-            raise AssertionError(f"{email} authenticated with role {profile['role']}, expected {role}")
+            raise AssertionError(
+                f"{email} authenticated with role {profile['role']}, expected {role}"
+            )
 
         dashboard_status, _ = request_json(
             "GET", f"{api_base_url}/dashboard", token=token, expected={200, 403, 404}
@@ -414,12 +440,10 @@ def cleanup_probe_invite(client: Any, tenant_id: str, email: str) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--environment", choices=("dev",), required=True)
+    parser.add_argument("--confirm", required=True)
     parser.add_argument("--tenant-slug", default=os.environ.get("TRANSMUTER_RBAC_TENANT_SLUG"))
-    parser.add_argument("--email-domain", default="acme-transformation.dev")
-    parser.add_argument(
-        "--password",
-        default=os.environ.get("TRANSMUTER_RBAC_SAMPLE_PASSWORD", "Transmuter2026!"),
-    )
+    parser.add_argument("--email-domain", required=True)
     parser.add_argument("--env-file")
     parser.add_argument("--hostinger-project")
     parser.add_argument("--hostinger-vps-id", default=os.environ.get("HOSTINGER_VPS_ID", "1695814"))
@@ -436,19 +460,51 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     load_runtime_environment(args)
+    from scripts import seed_enterprise_transformation_scenario as enterprise
+
+    enterprise.assert_seed_target_allowed(args.environment, args.confirm)
+    password = os.environ.get("TRANSMUTER_RBAC_SAMPLE_PASSWORD", "")
+    if len(password) < 12:
+        raise RuntimeError("TRANSMUTER_RBAC_SAMPLE_PASSWORD must be at least 12 characters")
+    if not args.email_domain.endswith(".transmuter.test"):
+        raise RuntimeError("--email-domain must use the reserved .transmuter.test suffix")
     client = import_app_clients()
     tenant = find_tenant(client, args.tenant_slug)
     tenant_id = str(tenant["id"])
+    fixture_marker = (tenant.get("settings") or {}).get(enterprise.ORG_FIXTURE_MARKER_KEY)
+    if (
+        not isinstance(fixture_marker, dict)
+        or set(fixture_marker) != {"owner", "slug"}
+        or fixture_marker.get("slug") != tenant.get("slug")
+        or fixture_marker.get("owner") not in ALLOWED_FIXTURE_OWNERS
+    ):
+        raise RuntimeError("Operating-model users can only be seeded into an owned QA fixture")
+    fixture_owner = str(fixture_marker["owner"])
     seeded = seed_users(
         client,
         tenant_id=tenant_id,
         email_domain=args.email_domain,
-        password=args.password,
+        password=password,
+        fixture_owner=fixture_owner,
+        existing_auth_validator=lambda user, email, role: enterprise.assert_owned_auth_identity(
+            client,
+            user,
+            email=email,
+            tenant_id=tenant_id,
+            role=role,
+            fixture_owner=fixture_owner,
+        ),
+        auth_user_finalizer=lambda user_id, _email, _role: enterprise.mark_auth_fixture_owner(
+            client,
+            user_id,
+            tenant_id=tenant_id,
+            fixture_owner=fixture_owner,
+        ),
     )
     print(
         json.dumps(
             {
-                "tenant": tenant,
+                "tenant": {key: tenant[key] for key in ("id", "name", "slug")},
                 "seeded_roles": sorted(seeded),
                 "sample_email_domain": args.email_domain,
             },
@@ -460,7 +516,7 @@ def main() -> None:
             client,
             api_base_url=args.api_base_url,
             email_domain=args.email_domain,
-            password=args.password,
+            password=password,
             tenant_id=tenant_id,
         )
         print(json.dumps({"api_probe_results": results}, indent=2))
