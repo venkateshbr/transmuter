@@ -523,23 +523,22 @@ def insert_business_units(client: Client, tenant_id: str) -> dict[str, str]:
     return result
 
 
-def insert_workstreams(client: Client, tenant_id: str, bus: dict[str, str]) -> dict[str, str]:
+def insert_workstreams(client: Client, tenant_id: str) -> dict[str, str]:
     rows = [
-        ("Automation", bus["TECH"]),
-        ("Offshoring & Operating Model", bus["SHR"]),
-        ("Commercial Growth", bus["COM"]),
-        ("ERP & Data Platform", bus["TECH"]),
-        ("Procurement & Supply Chain", bus["OPS"]),
+        "Automation",
+        "Offshoring & Operating Model",
+        "Commercial Growth",
+        "ERP & Data Platform",
+        "Procurement & Supply Chain",
     ]
     result: dict[str, str] = {}
-    for name, business_unit_id in rows:
+    for name in rows:
         row_id = str(uuid4())
         client.table("workstreams").insert(
             {
                 "id": row_id,
                 "tenant_id": tenant_id,
                 "name": name,
-                "business_unit_id": business_unit_id,
             }
         ).execute()
         result[name] = row_id
@@ -2956,7 +2955,7 @@ def seed_enterprise_transformation_scenario(
     )
     delete_tenant_rows(client, tenant_id)
     business_units = insert_business_units(client, tenant_id)
-    workstreams = insert_workstreams(client, tenant_id, business_units)
+    workstreams = insert_workstreams(client, tenant_id)
     insert_stage_gates(client, tenant_id)
     gate_criteria = insert_gate_criteria(client, tenant_id)
     insert_financial_config(client, tenant_id)

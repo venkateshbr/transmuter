@@ -160,6 +160,22 @@ def test_dependency_seed_never_writes_meeting_tables() -> None:
     assert set(client.rows) == {"initiative_dependencies"}
 
 
+def test_workstreams_use_the_decoupled_current_schema() -> None:
+    client = _InsertClient()
+
+    workstreams = enterprise.insert_workstreams(client, "tenant-1")  # type: ignore[arg-type]
+
+    assert len(workstreams) == 5
+    assert set(workstreams) == {
+        "Automation",
+        "Offshoring & Operating Model",
+        "Commercial Growth",
+        "ERP & Data Platform",
+        "Procurement & Supply Chain",
+    }
+    assert all(set(row) == {"id", "tenant_id", "name"} for row in client.rows["workstreams"])
+
+
 def test_reporting_year_helpers_match_the_platform_year_period_contract() -> None:
     assert enterprise.reporting_year_months(2028) == [(2028, month) for month in range(1, 13)]
     assert enterprise.reporting_year_bounds(2028) == (

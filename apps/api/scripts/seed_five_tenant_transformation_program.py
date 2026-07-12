@@ -307,16 +307,6 @@ def assign_operating_model(
             for workstream in lead_workstreams
         ]
     ).execute()
-    for index, workstream in enumerate(workstreams):
-        client.table("workstreams").update(
-            {
-                "lead_user_id": (
-                    role_user_ids["workstream_lead"] if index < 2 else role_user_ids["pmo_lead"]
-                ),
-                "sponsor_user_id": role_user_ids["executive_sponsor"],
-            }
-        ).eq("tenant_id", tenant_id).eq("id", workstream["id"]).execute()
-
     client.table("initiative_team").delete().eq("tenant_id", tenant_id).execute()
     team_rows: list[dict[str, object]] = []
     for index, initiative in enumerate(initiatives, start=1):
