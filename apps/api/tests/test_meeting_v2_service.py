@@ -470,8 +470,16 @@ def test_generate_minutes_summarizes_transcript_by_agenda_without_raw_dump() -> 
         "meetings": {"name": "Weekly review"},
     }
     repo.get_session_agenda = lambda session_id: [  # type: ignore[method-assign]
-        {"id": "agenda-benefits", "text": "Benefits tracking"},
-        {"id": "agenda-risk", "text": "Migration risk"},
+        {
+            "id": "session-agenda-benefits",
+            "source_agenda_item_id": "agenda-benefits",
+            "text": "Benefits tracking",
+        },
+        {
+            "id": "session-agenda-risk",
+            "source_agenda_item_id": "agenda-risk",
+            "text": "Migration risk",
+        },
     ]
     repo.list_session_artifacts = lambda session_id: [  # type: ignore[method-assign]
         {
