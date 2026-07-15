@@ -169,11 +169,15 @@ const PIPELINE_SORT_FIELDS = new Set([
              class="px-3 py-1.5 rounded-md transition-colors duration-150"
              style="color:var(--t-text-secondary)">Matrix</a>
         </div>
-        <a href="/api/initiatives/export"
-           class="text-xs transition-colors duration-150"
-           style="color:var(--t-text-secondary)">
-          Export CSV ↗
-        </a>
+        <button
+          type="button"
+          class="text-xs transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-50"
+          style="color:var(--t-text-secondary)"
+          [disabled]="exportingCsv()"
+          (click)="exportCsv()"
+          aria-label="Export initiatives CSV">
+          {{ exportingCsv() ? 'Exporting CSV…' : 'Export CSV ↗' }}
+        </button>
         @if (canManageInitiatives()) {
           <button class="btn-primary text-sm flex items-center gap-2"
                   (click)="openNewInitiative()"
@@ -211,6 +215,11 @@ const PIPELINE_SORT_FIELDS = new Set([
       </label>
       <label class="flex items-center gap-2 pb-2 text-xs font-bold text-[var(--t-text-primary)]"><input type="checkbox" [(ngModel)]="includeArchived" (ngModelChange)="onListControlsChange()" aria-label="Include archived initiatives">Include archived</label>
     </div>
+    @if (exportError()) {
+      <p class="mt-3 border border-[var(--t-red)] bg-[var(--t-surface-raised)] p-3 text-sm font-bold text-[var(--t-red)]" role="alert">
+        {{ exportError() }}
+      </p>
+    }
   </div>
 
   <!-- PIPELINE -->
@@ -484,6 +493,8 @@ export class PipelineComponent {
   private readonly route = inject(ActivatedRoute);
 
   readonly loading = signal(true);
+  readonly exportingCsv = signal(false);
+  readonly exportError = signal<string | null>(null);
   readonly total = signal(0);
   readonly initiatives = signal<InitiativeItem[]>([]);
   readonly expandedRows = signal(new Set<string>());
@@ -574,6 +585,27 @@ export class PipelineComponent {
 
   canManageInitiatives(): boolean {
     return this.auth.hasPermission('initiatives.manage_all');
+  }
+
+  exportCsv(): void {
+    if (this.exportingCsv()) return;
+    this.exportingCsv.set(true);
+    this.exportError.set(null);
+    this.api.getBlob('/initiatives/export').subscribe({
+      next: blob => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'transmuter-initiatives.csv';
+        link.click();
+        URL.revokeObjectURL(url);
+        this.exportingCsv.set(false);
+      },
+      error: () => {
+        this.exportError.set('Initiative CSV export failed. Try again.');
+        this.exportingCsv.set(false);
+      },
+    });
   }
 
   reload(syncState = true): void {
