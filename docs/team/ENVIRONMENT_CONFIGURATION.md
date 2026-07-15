@@ -211,7 +211,7 @@ These are not required for normal runtime, but are useful for regression tests.
 | `TRANSMUTER_UI_BASE_URL` | UI E2E | `http://localhost:4300` | Angular URL for browser tests. |
 | `DB_SCHEMA` | RLS verification | `public` | Schema inspected by RLS metadata/behavior checks. Use `transmuter` for Hostinger local Supabase. |
 | `TRANSMUTER_E2E_EMAIL` | Tests | Test default in code | Seeded test user email. |
-| `TRANSMUTER_E2E_PASSWORD` | Tests | Test default in code | Seeded test user password. Do not commit real values. |
+| `TRANSMUTER_E2E_PASSWORD` | Tests | No default | Seeded test user password. Load it from the ignored, mode-`0600` `scratch/test-credentials.json` file or an ephemeral environment variable; never commit a real value. |
 
 ## Pre-Run Checklist
 

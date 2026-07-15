@@ -1,6 +1,6 @@
 # Admin Financial Configuration User Guide
 
-Last updated: 2026-06-20
+Last updated: 2026-07-15
 
 Audience: tenant admins, transformation office users, finance leads, benefits
 controllers, and implementation teams configuring a new tenant.
@@ -20,6 +20,11 @@ Related guides:
 - `docs/user-guides/acme-transformation-office-detailed-setup-and-demo-guide.md`
 - `docs/user-guides/financial-engine-end-to-end-walkthrough.md`
 - `docs/team/CLEAN_CONFIGURABLE_FINANCIAL_ENGINE.md`
+
+Validation note: reporting currency propagation and fiscal ending-year mapping
+passed the final five-tenant API and headed-browser run on dev commit `1f3330b`.
+Northstar/Horizon use July starts, Meridian uses April, and Acme/Solstice use
+January. The examples below remain ACME/USD-specific unless stated otherwise.
 
 ---
 

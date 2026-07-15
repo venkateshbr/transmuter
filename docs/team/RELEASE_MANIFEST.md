@@ -36,6 +36,59 @@ Deployment note:
 
 ## Current Release Entries
 
+### 2026-07-15 - Five-Tenant Launch Readiness And Browser Acceptance
+
+Status: dev deployed and accepted; production not touched; promotion requires
+review/merge and separate explicit approval
+
+GitHub tracking:
+
+- Integration PR: draft `#416`, commit `1f3330b`.
+- Release findings: `#401`, `#403`-`#412`, `#414`, and `#417`.
+- Invite/password acceptance: `#216`.
+- Admin bulk-meeting cleanup: `#224`.
+- Parent acceptance: `#399`; browser execution: `#413`.
+- External Microsoft Graph gates: `#220`, `#389`, and `#390`.
+
+Dev deployment:
+
+- Environment: `https://transmuter-dev.ishirock.tech`.
+- Schema: `transmuter_dev`.
+- Deployed commit: `1f3330b`.
+- Hostinger action: `104300670`, success at `2026-07-15T08:55:20Z`.
+- No schema migration was required for the final People pointer-action fix.
+- Production project, schema, data, configuration, and consent were untouched.
+
+Acceptance evidence:
+
+- Focused backend: 87 passing fiscal, portfolio, benefit-ledger, operating-RBAC,
+  and pipeline-control tests; Ruff format/check and mypy passed.
+- Frontend: 28/28 unit tests and Angular production build passed.
+- Real mutable API run: 2,635 requests, 50 authenticated users, 55 isolation
+  denials across five tenants.
+- External headed Google Chrome: one process/worker, 29 routes per tenant,
+  desktop/mobile and dark mode, USD/SGD/GBP/EUR/AUD, January/April/July fiscal
+  starts, error/retry probes, viewer RBAC, and zero unexplained 5xx/page errors.
+- People: real delivered Resend setup link, account activation, temporary
+  password forced-change, fixture password restoration, invite list/resend/
+  revoke, and guarded cleanup.
+- Meetings: weekly Saturday series, `ENT-005` agenda, notes autosave, agenda-
+  linked decision, AI minutes generation/edit/save/reload, completion, and a
+  two-series Admin cleanup.
+- Dedicated headed controls: risk/KPI filter and create navigation, matrix
+  contributor drilldown, and Benefit Tracking bankable-plan navigation passed.
+- Final deterministic reseed restored zero meetings/sessions/agendas/actions/
+  invites. Manifest SHA-256 remained
+  `3ef52dd7015ee7c8953ccf7893e8d62b03a8fe9fa6588e3ab95707098cf58a50`.
+- Final read-only API run: 2,450 requests, 50 users, 55 isolation denials.
+
+Promotion blockers:
+
+- PR review/CI/merge and normal Sthira/Vishwa release transitions.
+- Microsoft Graph callback registration, fresh consent, live Teams invite/
+  join-link refresh, and transcript acceptance require external coordination.
+- Production promotion is not authorized by this entry.
+
 ### 2026-07-11 - Microsoft Graph OAuth Environment Isolation
 
 Status: deployed and API-verified in dev; production pending explicit approval
@@ -947,7 +1000,7 @@ Dev deployment:
   - `test_real_api_seeded_dashboard_and_meetings`
   - `test_real_api_executive_control_tower_phase_2a`
 - Real dev browser validation passed:
-  - `CHROME_BIN=/usr/bin/chromium-browser TRANSMUTER_UI_BASE_URL=https://transmuter-dev.ishirock.tech TRANSMUTER_API_BASE_URL=https://transmuter-dev.ishirock.tech/api TRANSMUTER_E2E_EMAIL=admin@acme3-transformation.dev TRANSMUTER_E2E_PASSWORD=Transmuter2026! CHROME_DEBUG_PORT=9334 node apps/web/e2e/phase2a-ui-acceptance.mjs`
+  - `CHROME_BIN=/usr/bin/chromium-browser TRANSMUTER_UI_BASE_URL=https://transmuter-dev.ishirock.tech TRANSMUTER_API_BASE_URL=https://transmuter-dev.ishirock.tech/api TRANSMUTER_E2E_EMAIL=admin@acme3-transformation.dev TRANSMUTER_E2E_PASSWORD=<local-secret> CHROME_DEBUG_PORT=9334 node apps/web/e2e/phase2a-ui-acceptance.mjs`
 - ACME3 reconciliation validation passed:
   - 4 FY2028 shared-cost pools.
   - Methods covered: `benefit_weighted`, `equal_split`, `fixed_percentage`,

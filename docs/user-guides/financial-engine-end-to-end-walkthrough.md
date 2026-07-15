@@ -8,6 +8,12 @@ This guide documents a concrete example in the **Vish Demo Lab** tenant using on
 
 No credentials are included in this guide.
 
+Current validation note (`2026-07-15`): the financial engine passed the real
+five-tenant API matrix and headed-browser route sweep on dev commit `1f3330b`.
+Currency and fiscal-period behavior are tenant-driven; the Vish example below
+is intentionally a fixed worked scenario and should not be read as a global
+USD/calendar-year default.
+
 ---
 
 ## 1. The scenario we configured

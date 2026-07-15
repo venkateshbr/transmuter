@@ -15,11 +15,14 @@ It expands the shorter ACME value guide with:
 
 No credentials are included in this guide.
 
-Launch-readiness note (`2026-07-15`): the deterministic ACME/five-tenant data
-and real-API acceptance are complete, but the current in-app Browser acceptance
-is still tracked in GitHub issue `#413`. Steps marked **Browser acceptance
-pending** describe the current UI contract and must not be presented as fresh
-deployed-browser evidence until that issue records a passing run.
+Launch-readiness note (`2026-07-15`): the deterministic ACME/five-tenant data,
+real-API matrix, and external headed-Chrome acceptance are complete on dev
+commit `1f3330b` (Hostinger action `104300670`). One uninterrupted browser run
+covered all five tenants, 29 routes per tenant, responsive/dark-mode checks,
+role boundaries, invite/password lifecycle, and the full Saturday meeting flow.
+Production was not touched. Microsoft Graph live consent, Teams invite/join-link
+refresh, and transcript acceptance remain separate external gates under
+`#220`, `#389`, and `#390`; they do not block the native meeting demo below.
 
 For a UI-only blank-tenant setup path that skips meetings, see
 [`acme-demo-tenant-ui-setup-guide.md`](acme-demo-tenant-ui-setup-guide.md).
@@ -51,7 +54,9 @@ uses historical `ENT-*` scenario codes, map them by row order to the ACME4
 | Benefits Register | Configured | Portfolio-wide benefit lines show gross, validated, risk-adjusted, bankable, and realized values with evidence and owner metadata. |
 | Shared Costs | Configured in dev | Current ACME4 dev data includes four FY2028 shared-cost pools covering `benefit_weighted`, `equal_split`, `fixed_percentage`, and `manual_amount` methods. Total shared-cost plan is `$1.45M`, actual is `$1.305M`, and Control Tower allocated plan is `$1.45M`. |
 | Board pack export | Configured | Financial Overview can export a non-empty XLSX board pack using the same selected year and value basis. |
-| Core meeting command center | Development browser pass | Headed browser acceptance created the Saturday series, linked `ENT-005`, generated an initiative agenda, saved notes and an agenda-linked decision, generated minutes, completed the session, and verified persistence. Agenda-scoped minutes and ISO-date masking passed on deployed dev commit `f6736a2`; Aksha/Prahari release transitions remain. |
+| Core meeting command center | Development browser pass | Headed browser acceptance created the Saturday series, linked `ENT-005`, added and generated an initiative agenda, autosaved notes and an agenda-linked decision, generated/edited/reloaded minutes, completed the session, and bulk-deleted two test series. Passed on `1f3330b`; no meeting residue remains. |
+| People access lifecycle | Development browser pass | A real Resend setup email opened the dev app, password setup succeeded, a temporary password forced first-login change, the fixture password was restored, and a separate invite was listed, resent, and revoked. |
+| Five-tenant reporting context | Development browser pass | ACME USD/January, Northstar SGD/July, Meridian GBP/April, Solstice EUR/January, and Horizon AUD/July loaded correctly across the route sweep. |
 
 ---
 
@@ -59,6 +64,35 @@ Production note: the Shared Costs schema, API, and UI are live on
 `https://transmuter.ishirock.tech`, but production ACME demo data is not yet at
 dev ACME4 parity. Production ACME currently has 0 shared-cost pools and 0
 initiative dependencies; that seeded-data drift is tracked in issue `#304`.
+
+### Before you start the live demo
+
+1. Use the dev URL unless production promotion and production demo data have
+   been separately approved: `https://transmuter-dev.ishirock.tech`.
+2. Confirm `/health` and `/api/health` both return a healthy response.
+3. Put approved dev-only login details in the gitignored local file
+   `scratch/test-credentials.json` and set its permissions to `0600`. Never put
+   the password in this guide, Git, a screenshot, a meeting note, or a shell
+   command that prints it.
+4. Sign in as the Acme `transformation_office` persona. Wait for the **Strategic
+   Yield Dashboard** heading before using a direct link; this confirms the role
+   profile has hydrated.
+5. Open **Profile** and confirm the tenant is **Acme Global Manufacturing**.
+   Stop if the tenant or role is different.
+6. Use a 1440-pixel-wide browser window for the main presentation. Test the
+   responsive layout at about 390 pixels before the audience joins, then return
+   to desktop width.
+7. Choose whether the meeting segment will use a fresh temporary series or a
+   pre-created demo series. If fresh, use the exact cleanup steps in Screen 14.
+8. Keep the browser network/console closed during the audience demo. For formal
+   acceptance evidence, capture errors separately and never expose tokens,
+   headers, local storage, or invite URLs.
+9. Do not select **Sync Invite** or promise a Teams transcript unless Microsoft
+   Graph consent has been completed for the environment. Native agendas, notes,
+   decisions, AI draft minutes, and completion work without Teams.
+10. Rehearse the 15-screen route in section 7 once without changing data. A
+    route that redirects, shows a retry panel, or displays the wrong currency is
+    a stop condition, not a valid empty state.
 
 ## 2. Executive Storyline
 
@@ -360,12 +394,19 @@ Actions:
 1. Set **Currency** to `USD`.
 2. Set **Fiscal Start** to `January`.
 3. Click **Save Settings**.
+4. Reload **Financial Overview** and confirm money uses USD. For a shifted
+   fiscal tenant, also confirm the displayed fiscal year is the year in which
+   the fiscal period ends: July 2027 through June 2028 is FY2028, and April 2027
+   through March 2028 is FY2028.
+5. Change monthly, quarterly, and yearly grains once and confirm they all retain
+   the same tenant currency and fiscal-year selection.
 
 Speaker notes:
 
 > The fiscal calendar and reporting currency make every screen consistent:
 > initiative financials, portfolio trend, value ramp, bridge rows, and exports
-> all use the same reporting basis.
+> all use the same reporting basis. The platform uses fiscal ending-year
+> semantics, which is especially important for April and July tenants.
 
 ### Step 4: Configure financial metric definitions
 
@@ -658,19 +699,40 @@ Actions:
 1. Open **People** as the initial administrator, transformation office user, or
    tenant administrator.
 2. Click **Add User** to open the **Add Platform User** modal.
-3. Select **Temp Password** / **Create User**. Do not use invite links for the
-   ACME role walkthrough; the demo needs deterministic users that can log in
-   immediately.
-4. Create each user in the matrix with a controlled temporary password for the
-   demo environment.
-5. Assign each operating-model role according to the accountability table in
+3. Choose one access mode deliberately:
+
+   - **Temp Password** creates the user immediately. Enter a unique password of
+     at least 12 characters containing upper- and lower-case letters and a
+     number. Give it to the synthetic test user through the approved test
+     channel. On first login, confirm the app redirects to **Change password**;
+     the user must enter the temporary password and a different permanent one.
+   - **Invite Link** creates a pending, app-owned invitation. Enter the email,
+     display name, title, role, and any workstream assignment, then select
+     **Send Invite** once. The email link must open
+     `/auth/accept-invite?token=...` on the current Transmuter hostname—never
+     `localhost`. The recipient enters and confirms a password, selects
+     **Activate account**, and lands on the dashboard.
+
+4. For deterministic role rehearsals, prefer **Temp Password** and store only
+   the shared fixture credential in the ignored local
+   `scratch/test-credentials.json` file. Do not put it in a committed `.env`, a
+   guide, or macOS Keychain for this test workflow.
+5. For an invite rehearsal, open **Pending Access** and locate the exact
+   synthetic address. Select **Resend** once and confirm the status remains
+   `PENDING`; the old token must no longer work. Select **Revoke** and confirm
+   `REVOKED`; the latest token must no longer activate the account.
+6. Create each required persona in the matrix and assign each operating-model
+   role according to the accountability table in
    section 4.
-6. Assign workstream scope to the Workstream Lead in the People modal.
-7. Assign initiative ownership on the relevant initiative master-data screens
+7. Assign workstream scope to the Workstream Lead in the People modal.
+8. Assign initiative ownership on the relevant initiative master-data screens
    for the Initiative Owner.
-8. Use **Admin > Access Control** to review user status and role assignment.
-9. Log in once as each persona and confirm the role-specific navigation and
+9. Use **Admin > Access Control** to review user status and role assignment.
+10. Log in once as each persona and confirm the role-specific navigation and
    permissions described in section 4.
+11. After testing, revoke disposable pending invites. Do not leave an extra Auth
+    identity or person row in the canonical demo tenant; use the approved reset
+    process rather than direct production database deletion.
 
 Speaker notes:
 
@@ -1578,10 +1640,12 @@ Speaker notes:
 #### Saturday meeting command-center demo
 
 Status: **Headed-browser workflow passed on development on 2026-07-15** using
-commit `f6736a2` and Hostinger action `104263239`. The generated minutes retained
-the selected `ENT-005` decision in both the agenda discussion and global
-decision summary, and fresh ISO dates remained intact. Production was not
-touched.
+commit `1f3330b` and Hostinger action `104300670`. The uninterrupted run used
+the external Playwright CLI with headed Google Chrome. Generated minutes
+retained the selected `ENT-005` decision in the agenda discussion and global
+decision summary; **Save Draft** displayed a success message and survived
+reload. A two-series Admin deletion passed, followed by a canonical reseed.
+Production was not touched.
 
 Use a PMO Lead or Transformation Office user. Use a temporary series name with
 the date so it is easy to find and remove. For the current launch test, use the
@@ -1590,10 +1654,11 @@ and keep the same sequence.
 
 ##### A. Create the meeting series
 
-1. Open `/meetings` and wait for the **Meetings** heading and **New Series**
-   button. If either is missing, stop and confirm that the signed-in role can
-   manage the program cadence.
-2. Select **New Series**. Confirm the **New meeting series** dialog opens.
+1. Open `/meetings` and wait for the **Meetings** heading and **Create meeting
+   series** button. If either is missing, stop and confirm that the signed-in
+   role can manage the program cadence.
+2. Select **Create meeting series**. Confirm the **New meeting series** dialog
+   opens.
 3. Enter the following safe demo values:
 
    | Field | Demo value |
@@ -1609,7 +1674,7 @@ and keep the same sequence.
    | Timezone | The browser/user timezone used for the demo; record it in the evidence. |
    | Owner | The current PMO Lead or Transformation Office user. |
    | Participants | Select at least one synthetic ACME demo user. |
-   | Default agenda | Leave blank; add initiative-linked agenda items after creation so the link is visible. |
+   | Default agenda | Leave blank; add an initiative-linked item after creation. |
    | Description | `Launch-readiness steering review for ACME value, delivery, and risks.` |
 
 4. Select **Create series** once. Wait for navigation to `/meetings/<id>` and
@@ -1625,25 +1690,25 @@ and keep the same sequence.
 2. Choose `ENT-005 Enterprise Data and ERP Modernization` and confirm it appears
    in the linked-initiative list. This series link is required before generated
    agenda suggestions can carry initiative context.
-3. Add at least one attendee in the **Attendees** card. For the prepared Acme
-   demo, use the synthetic Transformation Office, Finance Lead, and PMO Lead
-   users only.
-4. In **Default Agenda**, add the plain-language topics `Value realization`,
-   `Migration risk`, and `Owner decision`. A default item added after sessions
-   already exist does not retroactively appear in those materialized sessions.
-5. In the **Sessions** list, open the Saturday session you intend to run, then
-   select **Generate Agenda**. Wait for the generated rows to appear.
-6. Confirm at least one generated row displays `ENT-005`. Select that row and
+3. Confirm at least one synthetic participant is selected for the series. Add
+   more attendees only when needed for the demo; do not use real customer or
+   employee addresses in the deterministic fixture.
+4. Select **Add agenda item**. Enter `ENT-005 migration risk and value
+   realization for 2028-03-31`, choose `ENT-005` in **Agenda initiative**, and
+   select **Add**. Confirm the exact topic and `ENT-005` appear on the series.
+5. Start the Saturday session as described below, then select **Generate
+   Agenda** in the live session. Wait for the generated rows to appear.
+6. Confirm the agenda displays `ENT-005`. Select that row and
    verify that its initiative context contains the initiative name, delivery
    status, plan/actual financial context, milestones, and risks.
-7. Reload the series/session once. Confirm the linked initiative, attendees,
-   and generated agenda remain present before beginning the live demo.
+7. Reload the live session once after notes have autosaved. Confirm the linked
+   initiative, agenda, and notes remain present before generating minutes.
 
 ##### C. Open the Saturday session
 
-1. From the selected scheduled-session row, select **Open** and then **Start
-   Session**. For the retained acceptance artifact, the completed session date
-   is Saturday `2026-07-25`; for a fresh demo, use the next scheduled Saturday.
+1. From the series, select **Start Session**. In the dialog, enter the scheduled
+   Saturday date and select **Start** once. For the validated run the date was
+   `2026-07-18`; for a fresh demo, use the next scheduled Saturday.
 2. Confirm navigation to `/meetings/sessions/<id>`.
 3. Confirm the header date is Saturday, the state is **Live** or
    `in_progress`, and the agenda contains an `ENT-005` topic.
@@ -1663,8 +1728,8 @@ and keep the same sequence.
    The steering committee decided to keep the weekly Saturday checkpoint until the risk is green.
    ```
 
-2. Wait until the header save state no longer says **Saving...**. Reload the
-   session and confirm the notes are still present.
+2. Wait for **Saved** or **All changes saved**. Reload the session and confirm
+   the notes are still present.
 3. Keep the `ENT-005` agenda item selected. In **Action Center**, choose
    **Decision**, priority **High**, enter `Keep the Saturday checkpoint until
    migration risk is green`, and select **Add Decision**.
@@ -1677,7 +1742,7 @@ and keep the same sequence.
 1. Select **Generate Minutes**. This UI action creates a draft with an **AI
    Summary** and agenda-organized discussion from the saved notes/transcript and
    captured items. It does not send email and does not require a Teams invite.
-2. Wait for `Draft minutes generated.` and the **Draft Minutes** editor.
+2. Wait for `Draft minutes generated.` and the **Draft meeting minutes** editor.
 3. Confirm the draft contains all of the following:
 
    - `## AI Summary`;
@@ -1688,7 +1753,8 @@ and keep the same sequence.
    - global **Decisions** and **Risks And Issues** sections.
 
 4. Correct wording in **Draft meeting minutes** if needed and select **Save
-   Draft**. Reload and confirm the edited draft persists with status `draft`.
+   Draft**. Wait for `Draft minutes saved.`, reload, and confirm the edited draft
+   persists with status `draft`.
 5. Do not select **Send Minutes** during routine demo preparation. That action
    sends external email when Resend and attendee email addresses are configured.
 
@@ -1696,8 +1762,7 @@ and keep the same sequence.
 
 1. Select **Complete Session** once.
 2. Confirm navigation back to `/meetings/<meeting-id>`.
-3. In **Sessions**, confirm the selected Saturday row is `COMPLETED` (the
-   retained acceptance artifacts are `18 Jul` and `25 Jul`).
+3. In **Sessions**, confirm the selected Saturday row is `COMPLETED`.
 4. Open the completed row again and confirm notes, draft minutes, agenda,
    attendee, decision, and risk are still visible and the session is no longer
    presented as a new live session.
@@ -1710,11 +1775,18 @@ and keep the same sequence.
 1. Preserve screenshots, console/network results, session ID, and meeting ID in
    the acceptance evidence without recording tokens or participant email
    addresses.
-2. Open `/admin`, enter **Data Cleanup**, select only the temporary series, and
-   use the exact confirmation phrase `DELETE MEETINGS`.
-3. Return to `/meetings`; confirm the temporary series is gone and unrelated
+2. Open `/admin`, select **Data Cleanup**, and select the checkbox whose
+   accessible name begins **Select meeting** followed by your exact temporary
+   series name. To validate bulk cleanup, create a second disposable series and
+   select both. Verify the count says `2 meetings selected`.
+3. Enter the exact confirmation phrase `DELETE MEETINGS`. Confirm **Delete
+   selected meetings** remains disabled until at least one meeting is selected
+   and the phrase matches exactly, then select it once.
+4. Wait for `Deleted 1 meeting series.` or `Deleted 2 meeting series.` and for
+   the selected rows to disappear.
+5. Return to `/meetings`; confirm the temporary series is gone and unrelated
    meetings remain.
-4. Confirm the linked temporary session records and meeting-created artifacts
+6. Confirm the linked temporary session records and meeting-created artifacts
    are removed through the approved real-API verifier. Do not use production.
 
 ### Screen 15: Control Tower

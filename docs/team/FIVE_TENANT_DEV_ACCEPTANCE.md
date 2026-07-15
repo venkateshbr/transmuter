@@ -25,26 +25,31 @@ The scenario and checks are based on:
 
 ## Scope
 
-Test every non-meeting tenant route on all five tenants, including dashboard,
+Test every tenant route on all five tenants, including dashboard,
 initiative, progress, governance, finance, shared-cost, control-tower, people,
 profile, and administration views. Exercise controlled create/update/delete,
 import/export, filters, drilldowns, approval, and role-boundary workflows where
-the role permits them.
+the role permits them. On Acme, additionally exercise the complete native
+meeting command center, invite/password lifecycle, and Admin bulk meeting
+cleanup through the browser.
 
-Explicit exclusions:
+External-integration exclusions:
 
-- Do not open or call `/meetings`, meeting-series, meeting-session, agenda,
-  attendee, transcript, minutes, Microsoft Graph, or meeting-artifact workflows.
-- Do not exercise meeting-backed action-item CRUD. Open
-  `/progress/action-items` only to verify its valid empty state.
-- Do not call Admin meeting-cleanup actions.
+- Do not grant Microsoft Graph consent, create a live Teams event, or fetch a
+  live Teams transcript unless the environment owner has separately approved
+  the tenant registration and consent window under #220/#389/#390.
+- Core Transmuter meeting series, sessions, agenda, notes, AI draft minutes,
+  artifacts, completion, and tenant-scoped Admin cleanup are in scope and do
+  not depend on Teams.
+- Do not leave meeting-backed actions, invite rows, or temporary meeting series
+  in the canonical fixture after acceptance.
 - Paid signup/Stripe provisioning is independent of this deterministic fixture.
   Test the public home and login boundary, but use
   [`STRIPE_ONBOARDING_E2E_REGRESSION.md`](STRIPE_ONBOARDING_E2E_REGRESSION.md)
   for checkout acceptance.
 
-The fixture must leave `meetings`, `meeting_sessions`, `agenda_items`, and
-`action_items` at exactly zero for every tenant.
+The final reset must leave `meetings`, `meeting_sessions`, `agenda_items`,
+`action_items`, and `user_invites` at exactly zero for every tenant.
 
 ## Prerequisites
 
@@ -67,8 +72,9 @@ The fixture must leave `meetings`, `meeting_sessions`, `agenda_items`, and
 5. Quiesce dev tenant provisioning, invitation, and integration activity for the
    seed window. The script preflights all five profiles before the first write,
    but the preflight is not protected by a cross-tenant transaction lock.
-6. Make the in-app Browser target available. Acceptance evidence from a mocked
-   API, a manually prepared browser state, or a smoke-only check does not count.
+6. Install Playwright locally under ignored `scratch/` and launch one headed
+   Chrome process from the CLI. Acceptance evidence from a mocked API, a
+   manually prepared browser state, or a smoke-only check does not count.
 
 ## Tenant Profiles
 
@@ -92,8 +98,11 @@ Login conventions:
   `business_benefit_owner`, `executive_sponsor`, and `viewer`.
 - All fixture identities use the exact controlled
   `*.qa.transmuter-dev.ishirock.tech` domain allowlist and the same
-  runtime-provided fixture password. The QA subdomains do not resolve for mail;
-  no workflow may send an invitation or notification to them.
+  runtime-provided fixture password. Store the dev-only password in the ignored
+  `scratch/test-credentials.json` file with mode `0600`; never commit it or put
+  it in a guide, manifest, issue, screenshot, or command output. The headed
+  invite test may send only to these synthetic QA identities and must retrieve
+  the link through the configured delivery provider without logging its token.
 
 ## Controlled Email Migration
 
@@ -273,20 +282,19 @@ for permission checks.
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Authentication           | `POST /api/auth/login` and `GET /api/auth/me` return the expected subject, tenant, and role. Invalid and anonymous requests fail with 401. Dev identities have only the `transmuter_authorization_transmuter_dev` authorization scope.                                                                                                                                                                                                                                                                                                   |
 | Portfolio                | Initiative list/detail returns exactly the tenant's ten codes and sector-specific names. Dashboard, matrix, roadmap, risk, KPI, milestone, status, governance, dependency, and search results contain no other tenant's IDs or labels.                                                                                                                                                                                                                                                                                                   |
-| Financials               | Portfolio financials, value bridge, value ramp, benefits register, initiative portfolio, investments/payback, contributor, board-pack, initiative grid, cost lines, forecasts, assumptions, benefit ledger, bankable plan/history, and target lock endpoints return coherent tenant currency and calendar reporting periods. Every seeded financial grid reports `locked=true`; no API mutation is attempted against the lock. Decimal money is represented as JSON strings. Non-January fiscal reporting is the known limitation below. |
+| Financials               | Portfolio financials, value bridge, value ramp, benefits register, initiative portfolio, investments/payback, contributor, board-pack, initiative grid, cost lines, forecasts, assumptions, benefit ledger, bankable plan/history, and target lock endpoints return coherent tenant currency and fiscal reporting periods. Every seeded financial grid reports `locked=true`; no API mutation is attempted against the lock. Decimal money is represented as JSON strings. April and July starts must shift monthly, quarterly, and annual periods consistently. |
 | Governance               | Gate 1-4 history is approved for every initiative; criteria snapshots are present; `ENT-005` has the approved rebaseline submission and two bankable plan versions.                                                                                                                                                                                                                                                                                                                                                                      |
 | Delivery controls        | Every initiative has three milestones, checklist coverage, two KPIs with quarterly entries, two risks, one submitted plus one draft status update, and expected cross-initiative dependency coverage.                                                                                                                                                                                                                                                                                                                                    |
 | Shared costs and reports | Four pools reconcile plan/actual allocations to their pool totals; preview/approved/locked state is explainable; Control Tower direct, allocated, burdened, and net values reconcile.                                                                                                                                                                                                                                                                                                                                                    |
 | Admin and people         | Setup is complete, configuration is tenant-specific, ten users are present, workstream/team assignments are correct, and audit output contains only tenant events. Integration connections, OAuth state, and pending invites remain zero.                                                                                                                                                                                                                                                                                                |
-| Excluded data            | Meeting, meeting-session, agenda, and action-item counts remain zero. Do not call their mutation APIs.                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Final canonical state    | Meeting, meeting-session, agenda, action-item, and invite counts return to zero after the accepted browser workflows and guarded cleanup.                                                                                                                                                                                                                                                                                                                                                                                               |
 
-April and July fiscal starts are edge-case inputs, not a claim that current
-reports are fiscal-calendar correct. The platform currently persists the tenant
-setting but its reporting services aggregate by calendar year and month. Confirm
-the behavior on Northstar, Meridian, and Horizon under
-[#401](https://github.com/venkateshbr/transmuter/issues/401), and do not sign off
-shifted-fiscal-period accuracy until that high-severity defect is fixed and
-retested.
+April and July fiscal starts are mandatory edge cases. Northstar and Horizon
+use July starts; Meridian uses April. The reporting year uses the fiscal
+ending-year convention, so monthly, quarterly, yearly, contributor, shared-cost,
+and dashboard periods must all shift from the same tenant configuration. This
+behavior passed the final API and headed-browser run under
+[#401](https://github.com/venkateshbr/transmuter/issues/401).
 
 ### Permission and isolation matrix
 
@@ -331,7 +339,7 @@ tenant leak, overlap, clipped control, or blank visualization is acceptable.
 | `/initiatives/new`                                         | Guided fields, required validation, financial setup readiness, AI-assisted intake graceful degradation, create/cancel, permissions, and navigation. Create only a temporary test initiative and remove it with the final reseed.                                                                                                                                                                              |
 | `/initiatives/:id`, `/initiatives/:id/edit`                | Summary, team, milestones/checklists, dependencies, KPIs, risks, status, governance, financials, benefit evidence, ownership, save/cancel, validation, and permissions. Verify every seeded financial grid reports locked and its edit affordances are disabled; use only a temporary unlocked initiative for financial mutation tests. Test one controlled CRUD cycle for each other non-meeting child type. |
 | `/initiatives/:id/financial-scope`                         | Active metrics, formula rows, scenarios, cost categories, baseline, save/reload, and role restrictions. Formula rows remain read-only while calculated values update.                                                                                                                                                                                                                                         |
-| `/financials`                                              | Monthly/quarterly/yearly, reporting year, plan as-of, stage/category, benefit/actual toggles, baselines, summary, trend, in-year value, run-rate, plan-vs-actual, cost/metric breakdown, contributor drawer, value bridge, and board-pack export reconcile under the current calendar-period contract. Record the non-January fiscal limitation separately.                                                   |
+| `/financials`                                              | Monthly/quarterly/yearly, fiscal reporting year, plan as-of, stage/category, benefit/actual toggles, baselines, summary, trend, in-year value, run-rate, plan-vs-actual, cost/metric breakdown, contributor drawer, value bridge, and board-pack export reconcile under the tenant fiscal-calendar contract.                                                                                               |
 | `/financials/initiative-portfolio`                         | Ten rows, tenant currency, baselines, metric columns, one-time/recurring cost, net run-rate, completeness flags, sort/filter, and detail navigation reconcile.                                                                                                                                                                                                                                                |
 | `/financials/benefits-register`                            | Thirty lines, metric/class, validation statuses and history, evidence, plan/actual, risk adjustment, filter/sort, submit/validate/reject/handoff permissions, and totals reconcile.                                                                                                                                                                                                                           |
 | `/financials/benefit-tracking`                             | Portfolio/workstream/initiative scopes, locked baseline, actual realization, variance, reporting-period filters, evidence/notes, and 240 ledger rows reconcile to bankable plans and actuals.                                                                                                                                                                                                                 |
@@ -406,63 +414,67 @@ must still exclude browser storage and authorization headers.
 
 | Evidence                                      | Result                                                                                       |
 | --------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Application commit / PR                       | `f6736a2` / draft [#416](https://github.com/venkateshbr/transmuter/pull/416); checks not reported |
-| Hostinger dev action / completion time        | `104263239`, success at `2026-07-15T05:48:46Z`                                               |
+| Application commit / PR                       | `1f3330b` / draft [#416](https://github.com/venkateshbr/transmuter/pull/416)                  |
+| Hostinger dev action / completion time        | `104300670`, success at `2026-07-15T08:55:20Z`                                               |
 | API and web health                            | Pass at `https://transmuter-dev.ishirock.tech`                                               |
 | Email migration dry-run / apply / postflight  | `50/0` pending/complete, apply success, then `0/50`                                          |
 | Redacted migration journal validation         | Pass, `complete` with 50 identities                                                          |
 | Initial seed manifest / count summary         | Pass, five tenants and ten initiatives each                                                  |
 | Repeat-seed logical diff                      | Byte-identical SHA-256 `3ef52dd7015ee7c8953ccf7893e8d62b03a8fe9fa6588e3ab95707098cf58a50`    |
-| 50-user guarded API verifier                  | Pass, 2,636 mutable-run requests; 2,450 final read-only requests                             |
+| 50-user guarded API verifier                  | Pass, 2,635 mutable-run requests; 2,450 final post-reset read-only requests                  |
 | 50-user role/RBAC results                     | Pass across the admin plus nine operating-model identities per tenant                        |
 | Cross-tenant isolation matrix                 | Pass, 55 foreign-initiative/user denials in each full run                                    |
-| Browser target / desktop and mobile viewports | Headed Playwright CLI pass at 1440x1000 for the five-tenant route sweep; mobile remains pending |
-| Light/dark and accessibility checks           | Pending with Browser acceptance                                                              |
-| Console/network error log                     | Captured; common failures recorded in #401, #404-#406, #408, #410, #414, and #417            |
+| Browser target / desktop and mobile viewports | One external headed Chrome process: five tenants at 1440x1000, plus 390x844 responsive checks |
+| Light/dark and accessibility checks           | Pass: dark theme, login names/autocomplete/error alert/focus, keyboard-resolvable controls   |
+| Console/network error log                     | Zero page errors and zero unexplained 5xx; two intentional 503 recovery probes passed         |
 | Export/import artifacts and reconciliation    | API export signatures and financial reconciliation pass; UI import/export roundtrips pending |
-| Final canonical reseed / read verification    | Pre-meeting pass with canonical hash and 2,450-request verifier; Acme Saturday demo series intentionally added afterward |
+| Invite/password lifecycle                     | Pass through delivered Resend setup link, forced temporary-password change, and restoration   |
+| Acme meeting / Admin cleanup                  | Pass: Saturday session plus two-series browser deletion; no meeting residue                   |
+| Final canonical reseed / read verification    | Pass; SHA-256 `3ef52dd7015ee7c8953ccf7893e8d62b03a8fe9fa6588e3ab95707098cf58a50`; 2,450 requests / 55 denials |
 
 ### Per-tenant result
 
-| Tenant                     | Seed | API/data | RBAC | Isolation | All UI routes | Dashboards/reconciliation | Imports/exports      | Result          |
-| -------------------------- | ---- | -------- | ---- | --------- | ------------- | ------------------------- | -------------------- | --------------- |
-| Acme Global Manufacturing  | Pass | Pass     | Pass | Pass      | 20/25 clean   | UI loaded 10 initiatives; blockers open | API pass; UI pending | Partial |
-| Northstar Retail Group     | Pass | Pass     | Pass | Pass      | 20/25 clean   | UI loaded 10; fiscal/currency blockers open | API pass; UI pending | Partial |
-| Meridian Commercial Bank   | Pass | Pass     | Pass | Pass      | 20/25 clean   | UI loaded 10; fiscal/currency blockers open | API pass; UI pending | Partial |
-| Solstice Health Network    | Pass | Pass     | Pass | Pass      | 20/25 clean   | UI loaded 10; currency blocker open | API pass; UI pending | Partial |
-| Horizon Energy & Utilities | Pass | Pass     | Pass | Pass      | 20/25 clean   | UI loaded 10; fiscal/currency blockers open | API pass; UI pending | Partial |
+| Tenant                     | Seed | API/data | RBAC | Isolation | Browser routes | Currency / fiscal start | Result |
+| -------------------------- | ---- | -------- | ---- | --------- | -------------- | ----------------------- | ------ |
+| Acme Global Manufacturing  | Pass | Pass     | Pass | Pass      | 29/29          | USD / January           | Pass   |
+| Northstar Retail Group     | Pass | Pass     | Pass | Pass      | 29/29          | SGD / July              | Pass   |
+| Meridian Commercial Bank   | Pass | Pass     | Pass | Pass      | 29/29          | GBP / April             | Pass   |
+| Solstice Health Network    | Pass | Pass     | Pass | Pass      | 29/29          | EUR / January           | Pass   |
+| Horizon Energy & Utilities | Pass | Pass     | Pass | Pass      | 29/29          | AUD / July              | Pass   |
 
-### 2026-07-15 headed-browser addendum
+### 2026-07-15 final headed-browser addendum
 
-The first full headed Playwright CLI sweep used each tenant's real
-Transformation Office identity and the public Angular/API deployment. Each
-tenant loaded 20 of 25 non-meeting routes cleanly and showed the expected ten
-initiatives. The same five defects reproduced everywhere: the matrix request
-used an invalid `page_size=500`, and cold direct navigation to
-`/initiatives/new`, `/shared-costs`, `/people`, and `/admin` redirected to the
-dashboard before `/auth/me` hydrated the canonical role. The non-USD tenants
-also displayed USD on `/financials`. These are findings, not accepted rows.
+The final uninterrupted Playwright CLI run used one externally launched headed
+Google Chrome process, one worker, isolated browser contexts, real seeded users,
+the public Angular application, and the public dev API. All five Transformation
+Office identities loaded 29 tenant routes, ten initiatives, their configured
+currency, and January/April/July fiscal starts. Desktop, mobile, light/dark,
+pipeline controls, workstream-by-tag matrix, bankable-plan navigation, dashboard
+and financial failure/retry states, and viewer RBAC passed. No page error or
+unexplained server error occurred.
 
-Acme received a separate, intentionally post-manifest meeting acceptance run.
-Through the browser, QA created the weekly Saturday series
-`ACME Saturday Value Steering - 2026-07-18`, linked `ENT-005`, generated an
-initiative-backed agenda for the 2026-07-25 session, started the session,
-captured and persisted notes, added an agenda-linked decision, generated and
-saved AI-assisted minutes, completed the session, reopened it, and verified
-that the notes, minutes, decision, and initiative context persisted. The run
-reproduced #414 and discovered #417. The series is intentionally retained as a
-demo artifact, so the original zero-meeting manifest invariant applies only to
-the canonical pre-meeting snapshot.
+Acme browser acceptance created a weekly Saturday series, linked `ENT-005`,
+added an initiative agenda item, opened the Saturday session, generated the
+agenda, autosaved notes, attached a high-priority decision to the active agenda,
+generated and edited AI minutes, observed the explicit draft-save confirmation,
+reloaded the draft, completed the session, and confirmed `COMPLETED`. It then
+created a second series and selected both series in Admin Data Cleanup; the
+single confirmed operation reported two deleted series and removed all dependent
+meeting data.
 
-The People browser flow created and revoked a disposable invite. A separate
-disposable temporary-password user was forced to `/auth/change-password` on
-first login; password change and a second clean login succeeded. Guarded cleanup
-then removed the disposable Auth/platform user and invite records and restored
-Acme to ten users. Admin Data Cleanup also deleted a disposable one-off meeting
-while preserving the Saturday demo series. Microsoft Teams correctly reported
-that development has no connected organizer and did not create an external
-event; live Graph consent, invite, join-link, and transcript acceptance remain
-blocked by #389/#390. Production was not touched.
+People acceptance sent a real password-setup email through Resend to an existing
+synthetic Acme fixture identity, followed the delivered dev-host invite URL,
+activated the account, assigned a distinct temporary password in People, proved
+the first login was forced to `/auth/change-password`, and restored the shared
+fixture password. A separate synthetic pending invite was created, listed,
+resent, and revoked. Seven accepted/revoked acceptance-only invite rows were
+guard-checked and removed before the final reseed. The deterministic post-reset
+manifest retained SHA-256 `3ef52dd…`, and the 2,450-request read-only verifier
+confirmed 50 users, zero invites/meetings/actions, and 55 isolation denials.
+
+Microsoft Teams correctly remained disconnected in dev. Live Microsoft Graph
+consent, event/join-link refresh, and transcript acceptance remain external
+release gates under #220/#389/#390. Production was not touched.
 
 ### Finding log
 
@@ -473,19 +485,21 @@ cosmetic defects.
 
 | ID / issue                                                   | Severity | Tenant / role                                 | Route                                           | Steps and evidence                                                                                 | Expected                                                                    | Actual                                                                                                         | Fix / retest                                                                          | Status |
 | ------------------------------------------------------------ | -------- | --------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- | ------ |
-| [#401](https://github.com/venkateshbr/transmuter/issues/401) | P1       | Northstar, Meridian, Horizon / finance roles  | `/financials`, financial dashboards and reports | Compare configured July/April fiscal starts with reporting-year periods and totals.                | Periods and annual totals follow the configured tenant fiscal calendar.     | Known limitation: reporting services aggregate by calendar year/month despite the stored fiscal-start setting. | Fix and rerun affected API/UI/dashboard rows before shifted-fiscal accuracy can pass. | Open   |
-| [#403](https://github.com/venkateshbr/transmuter/issues/403) | P2       | Acme / transformation office                  | `/portfolio/financials/contributors`            | Request monthly contributors with noncanonical `period=2028-01`; canonical `2028-M01` returns 200. | Reject invalid input with 422 or explicitly support the alternate format.   | Noncanonical monthly period raises HTTP 500; the normal UI path uses the canonical format.                     | Add bounded period validation and a real route regression test.                       | Open   |
-| [#404](https://github.com/venkateshbr/transmuter/issues/404) | P1       | All tenants / admin-capable roles             | `/admin`                                        | Inspect the Admin initial-load request set.                                                        | General Admin load makes no meeting-related request.                        | Fixed on dev: initial load makes zero cleanup-candidate calls; Data Cleanup makes one.                          | Deployed browser pass on `f6736a2`; Aksha transition pending.                         | Dev pass |
-| [#405](https://github.com/venkateshbr/transmuter/issues/405) | P1       | Northstar, Meridian, Solstice, Horizon        | Financial dashboards, grids, and shared costs   | Compare configured SGD/GBP/EUR/AUD currencies with frontend formatters/defaults.                   | All financial UI uses tenant reporting currency.                            | Multiple components hardcode USD or `$`; portfolio response lacks currency context.                            | Propagate reporting currency and retest every financial surface.                      | Open   |
-| [#406](https://github.com/venkateshbr/transmuter/issues/406) | P1       | Read-only/scoped roles                        | Initiative tabs and `/admin`                    | Inspect capability gating for viewer/executive/benefit/finance/PMO/setup roles.                    | Unauthorized controls and requests are hidden or denied before dispatch.    | KPI/risk mutations and unrelated Admin sections are exposed without exact capability gates.                    | Add section/tab/control guards and complete Prahari plus Browser RBAC review.         | Open   |
-| [#407](https://github.com/venkateshbr/transmuter/issues/407) | P2       | All tenants / finance roles                   | Benefit Tracking bankable-plan link             | Follow the rendered `/initiatives/:id/bankable-plan` target against Angular routes.                | Link opens the selected initiative plan.                                    | No matching route exists; wildcard redirects to Dashboard.                                                     | Use a valid route or add the missing route and router test.                           | Open   |
-| [#408](https://github.com/venkateshbr/transmuter/issues/408) | P1       | All tenants / PMO roles                       | `/pmo/risks`, `/pmo/kpis`                       | Inspect primary create, drilldown, search, and filter controls.                                    | Visible controls execute supported, role-gated workflows.                   | Primary buttons/chevrons are inert and required portfolio filters are absent.                                  | Wire controls and cover create/cancel/drilldown/filter flows.                         | Open   |
-| [#409](https://github.com/venkateshbr/transmuter/issues/409) | P2       | All tenants / portfolio roles                 | `/initiatives/matrix`                           | Compare the current quadrant with the workstream-by-tag reconciliation contract.                   | Matrix totals and contributor drilldowns reconcile with pipeline/dashboard. | Current hardcoded 2x2 impact/stage quadrant is a different surface.                                            | Confirm product intent and implement or relocate the reconciliation matrix.           | Open   |
-| [#410](https://github.com/venkateshbr/transmuter/issues/410) | P1       | All tenants / executive and finance roles     | `/dashboard`, `/financials`                     | Inspect primary API subscription error handling.                                                   | Failures render explicit bounded error/retry state.                         | Missing error branches can present failed requests as legitimate zero/empty portfolios.                        | Add error states and Browser failure/recovery verification.                           | Open   |
-| [#414](https://github.com/venkateshbr/transmuter/issues/414) | P1       | Acme / Transformation Office                  | Meeting generated minutes                       | Add a decision while a generated initiative agenda item is active, then generate minutes.           | Captured item appears under that agenda discussion and the global summary.   | Fixed on dev with an explicit session-agenda artifact reference and tenant/session validation.              | Deployed browser pass on `f6736a2`; Aksha transition pending.                         | Dev pass |
-| [#417](https://github.com/venkateshbr/transmuter/issues/417) | P1       | Acme / Transformation Office                  | Meeting agenda suggestions and minutes          | Generate agenda/minutes containing ISO dates and a date-bearing meeting title.                      | Dates remain intact while phone numbers and email addresses are masked.      | Fixed on dev; fresh agenda and minutes preserve `2028-03-31`, `2028-12-15`, and `2026-07-18`.              | Deployed browser pass on `f6736a2`; Aksha transition pending.                         | Dev pass |
-| [#411](https://github.com/venkateshbr/transmuter/issues/411) | P2       | Large portfolios / transformation office      | `/initiatives/pipeline`                         | Inspect sort, page, and archive-state controls beyond the fixed `page_size=200` load.              | Users can sort, page, and include/exclude archived initiatives.             | Controls are absent; the current ten-row fixture hides the scale limitation.                                   | Add server-backed controls and >200-row coverage.                                     | Open   |
-| [#412](https://github.com/venkateshbr/transmuter/issues/412) | P3       | Public login / keyboard and screen-reader use | `/auth/login`                                   | Resolve visible Email/Password labels through the accessibility tree.                              | Labels and validation errors programmatically name their inputs.            | Inputs rely on name/placeholder rather than associated visible labels.                                         | Associate labels/errors and add keyboard/accessibility coverage.                      | Open   |
+| [#401](https://github.com/venkateshbr/transmuter/issues/401) | P1       | Northstar, Meridian, Horizon / finance roles  | `/financials`, financial dashboards and reports | Compare configured July/April fiscal starts with reporting-year periods and totals.                | Periods and annual totals follow the configured tenant fiscal calendar.     | Fiscal ending-year mapping now drives monthly, quarterly, yearly, contributor, and shared-cost periods.         | Unit/API matrix plus 29-route browser pass on `1f3330b`.                                 | Dev pass |
+| [#403](https://github.com/venkateshbr/transmuter/issues/403) | P2       | Acme / transformation office                  | `/portfolio/financials/contributors`            | Request monthly contributors with noncanonical `period=2028-01`; canonical `2028-M01` returns 200. | Reject invalid input with 422 or explicitly support the alternate format.   | Invalid contributor periods now return bounded HTTP 422; canonical fiscal periods return 200.                  | Focused route regression and full API matrix passed.                                  | Dev pass |
+| [#404](https://github.com/venkateshbr/transmuter/issues/404) | P1       | All tenants / admin-capable roles             | `/admin`                                        | Inspect the Admin initial-load request set.                                                        | General Admin load makes no meeting-related request.                        | General/Admin route load makes no meeting-cleanup request; Data Cleanup loads candidates on demand.             | Five-tenant route sweep and Acme Data Cleanup pass on `1f3330b`.                       | Dev pass |
+| [#405](https://github.com/venkateshbr/transmuter/issues/405) | P1       | Northstar, Meridian, Solstice, Horizon        | Financial dashboards, grids, and shared costs   | Compare configured SGD/GBP/EUR/AUD currencies with frontend formatters/defaults.                   | All financial UI uses tenant reporting currency.                            | Currency context now propagates through API responses, financial UI, and shared-cost defaults.                 | USD/SGD/GBP/EUR/AUD browser and API checks passed.                                    | Dev pass |
+| [#406](https://github.com/venkateshbr/transmuter/issues/406) | P1       | Read-only/scoped roles                        | Initiative tabs and `/admin`                    | Inspect capability gating for viewer/executive/benefit/finance/PMO/setup roles.                    | Unauthorized controls and requests are hidden or denied before dispatch.    | Exact backend capabilities now gate frontend controls and lazy Admin tabs.                                      | Viewer KPI mutation hidden, Admin denied, focused permission tests and Prahari review passed. | Dev pass |
+| [#407](https://github.com/venkateshbr/transmuter/issues/407) | P2       | All tenants / finance roles                   | Benefit Tracking bankable-plan link             | Follow the rendered target against Angular routes.                                                 | Link opens the selected initiative plan.                                    | Link now targets `/financials/bankable-plan?initiative_id=<id>` and preserves selection.                        | Headed click/navigation check passed.                                                 | Dev pass |
+| [#408](https://github.com/venkateshbr/transmuter/issues/408) | P1       | All tenants / PMO roles                       | `/pmo/risks`, `/pmo/kpis`                       | Inspect primary create, drilldown, search, and filter controls.                                    | Visible controls execute supported, role-gated workflows.                   | Controls now navigate to initiative create/detail state; risk/KPI portfolio filters execute.                   | Dedicated headed navigation/filter/drilldown pass on `1f3330b`.                       | Dev pass |
+| [#409](https://github.com/venkateshbr/transmuter/issues/409) | P2       | All tenants / portfolio roles                 | `/initiatives/matrix`                           | Compare the matrix with the workstream-by-tag reconciliation contract.                              | Matrix totals and contributor drilldowns reconcile with pipeline/dashboard. | Workstream-by-tag cells, totals, ranges, and contributor drawer now use the real portfolio matrix API.          | Five-tenant render plus headed contributor drilldown passed.                          | Dev pass |
+| [#410](https://github.com/venkateshbr/transmuter/issues/410) | P1       | All tenants / executive and finance roles     | `/dashboard`, `/financials`                     | Induce 503 responses on primary dashboard and portfolio-financial requests.                         | Failures render explicit bounded error/retry state.                         | Explicit error panels and retry actions now distinguish failed requests from valid zero data.                  | Two intentional 503/recovery browser probes passed.                                   | Dev pass |
+| [#414](https://github.com/venkateshbr/transmuter/issues/414) | P1       | Acme / Transformation Office                  | Meeting generated minutes                       | Add a decision while an initiative agenda item is active, then generate minutes.                     | Captured item appears under that agenda discussion and the global summary.   | Explicit session-agenda artifact reference and tenant/session validation retain the decision context.           | Fresh Saturday headed-browser pass on `1f3330b`.                                     | Dev pass |
+| [#417](https://github.com/venkateshbr/transmuter/issues/417) | P1       | Acme / Transformation Office                  | Meeting agenda suggestions and minutes          | Generate agenda/minutes containing ISO dates and a date-bearing meeting title.                      | Dates remain intact while phone numbers and email addresses are masked.      | Agenda/minutes preserve the tested ISO dates while the masking boundary remains active.                          | Fresh Saturday headed-browser pass on `1f3330b`.                                     | Dev pass |
+| [#216](https://github.com/venkateshbr/transmuter/issues/216) | P1       | Acme / tenant admin and initiative owner      | `/people`, invite email, auth setup/change       | Send setup link, activate, assign temporary password, force change, restore; create/resend/revoke.   | Tokens are app-owned, single-use, tenant-scoped, expirable, and never localhost. | Real delivered-email link and browser password lifecycle passed; fixture password restored.                  | Prahari security tests plus final zero-invite verifier passed.                        | Dev pass |
+| [#224](https://github.com/venkateshbr/transmuter/issues/224) | P1       | Acme / tenant admin                            | `/admin`, Data Cleanup                          | Select a completed dependent meeting and a second series, confirm one bulk deletion.                 | Both series and tenant-scoped dependants are removed in one action.          | Browser reported two deleted series; final canonical verifier found zero meeting/session/agenda/action rows.     | Real API coverage and deployed headed-browser pass.                                   | Dev pass |
+| [#411](https://github.com/venkateshbr/transmuter/issues/411) | P2       | Large portfolios / transformation office      | `/initiatives/pipeline`                         | Inspect server sort, page, archive inclusion, and restore contracts.                                | Users can sort, page, and include/exclude archived initiatives.             | Server-backed controls and restore behavior are implemented; the five-tenant fixture remains ten rows each.     | Service/repository regressions and browser control pass; >200 real-row performance remains follow-up scope. | Accepted follow-up |
+| [#412](https://github.com/venkateshbr/transmuter/issues/412) | P3       | Public login / keyboard and screen-reader use | `/auth/login`                                   | Resolve labels, autocomplete, invalid error, and focus behavior through the accessibility tree.     | Labels and validation errors programmatically name their inputs.            | Associated labels, autocomplete hints, alert semantics, and invalid-login focus are implemented.               | Headed accessibility assertions passed.                                               | Dev pass |
 
 Aksha may mark #399 accepted only when every required row has evidence, all P0/P1
 findings are resolved and retested, remaining P2/P3 items have explicit issue and

@@ -1,6 +1,6 @@
 # Codex Context - Transmuter
 
-Last updated: 2026-07-11
+Last updated: 2026-07-15
 
 This file captures durable working context for future Codex sessions. It supplements
 `AGENTS.md`, `docs/team/SDLC_PROTOCOL.md`, and `team/DESIGN_SYSTEM.md`; it does not
@@ -20,15 +20,13 @@ replace them.
   and web image `transmuter-web:hostinger`.
 - Hostinger dev Docker project uses API image `transmuter-api:hostinger-dev`
   and web image `transmuter-web:hostinger-dev`.
-- Current deployed application commit is `7c60fbc` in dev and `5793115` in
-  production. Dev includes the Microsoft Graph OAuth isolation and locked
-  offline-rollout controls; production remains on the prior tenant authorization
-  release pending explicit Graph promotion approval.
-- Current Hostinger Docker actions are `103652672` for dev and `103623550` for
-  production. Dev action `103651377` deployed `7c60fbc` after the offline Graph
-  migration; action `103652672` corrected the dev OIDC scope list on the same
-  commit. Production action `103623550` remains the earlier environment-only
-  Graph configuration redeploy of `5793115`.
+- Current deployed application commit is `1f3330b` in dev and `5793115` in
+  production. Dev includes the five-tenant launch fixes, native meeting/browser
+  acceptance, and the earlier Microsoft Graph isolation controls. Production
+  remains on the prior tenant authorization release pending explicit promotion.
+- Current Hostinger Docker actions are `104300670` for dev and `103623550` for
+  production. Dev action `104300670` completed successfully at
+  `2026-07-15T08:55:20Z`; production action `103623550` remains unchanged.
 - Hostinger VPS / domain context:
   - Primary domain owned for the VPS: `ishirock.tech`.
   - VPS hostname: `srv1695814.hstgr.cloud`.
@@ -86,7 +84,7 @@ replace them.
 - Graphifyy is installed for this repository. The local generated graph lives at
   `graphify-out/` and is intentionally ignored by git because it is generated
   source-derived context.
-- Current graph baseline was built from commit `7c60fbc` with `graphify update .`;
+- Current graph baseline was refreshed after commit `1f3330b` with `graphify update .`;
   it contains the code/navigation graph used by `graphify query`, `graphify path`,
   and `graphify explain`.
 - Agents should use the graph before broad source searches when
@@ -202,17 +200,20 @@ replace them.
     cost acceptance scenario is dev-only until production demo data is
     backfilled.
 - Current launch follow-ups:
-  - `#216`: app-owned invite/password browser closeout is still required.
+  - `#216`: app-owned invite/password lifecycle passed in external headed Chrome
+    with a real delivered Resend setup link, forced password change, restoration,
+    resend/revoke, and final zero-invite reset; issue workflow closeout remains.
   - `#220`, `#389`, `#390`: Microsoft Graph production consent and live
     invite/transcript acceptance remain open. Dev is migrated to the hardened
     schema on `7c60fbc`, intentionally disconnected, and verified at zero Graph
     connections. Its callback, client, secret, exact seven-scope list, and
-    encryption key are isolated. The in-app browser target and redacted Entra
-    callback-registration proof remain unavailable. Production is still on
+    encryption key are isolated. Redacted Entra callback-registration proof and
+    fresh organizer consent remain unavailable. Production is still on
     `5793115`; its saved scope line omits `openid`/`profile`, the stored expired
     consent lacks `OnlineMeetings.Read`, and neither should be changed or
     refreshed before explicit approval and fresh organizer consent.
-  - `#224`: Admin bulk-meeting cleanup still needs its specific deployed-browser
-    destructive-flow evidence.
+  - `#224`: Admin bulk-meeting cleanup passed in deployed headed Chrome with two
+    selected series and final zero meeting/session/agenda/action state; issue
+    workflow closeout remains.
 - `scratch/` contains local helper scripts and should not be included in release
   commits unless explicitly requested.

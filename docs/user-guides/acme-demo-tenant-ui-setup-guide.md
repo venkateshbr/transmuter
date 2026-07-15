@@ -1,6 +1,6 @@
 # Transformation Tenant UI Setup Guide With ACME Example
 
-Last updated: 2026-06-29
+Last updated: 2026-07-15
 
 This guide explains how a normal tenant user can create a blank tenant and
 configure a transformation office through the Transmuter UI. ACME is used as a
@@ -20,6 +20,12 @@ rebaseline history. ACME3 remains the legacy reference tenant for the original
 `ENT-*` initiative-code sequence.
 
 No credentials are included in this guide.
+
+Dev validation update: the five-tenant real API and external headed-Chrome
+acceptance passed on commit `1f3330b`. Tenant reporting currency, January/April/
+July fiscal calendars, People invite/password flows, RBAC controls, and native
+meeting workflows were included. For the exact live-demo clicks and cleanup,
+use the detailed ACME guide; production was not changed.
 
 ## 1. Setup Outcome
 

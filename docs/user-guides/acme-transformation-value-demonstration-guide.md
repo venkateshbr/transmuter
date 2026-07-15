@@ -16,6 +16,9 @@ Validation note: the full ACME4 demo state is validated in dev at
 `https://transmuter-dev.ishirock.tech`. ACME4 uses generated `TRN-001` through
 `TRN-010` initiative codes; where this guide shows the historical `ENT-*`
 scenario sequence, map each row to the matching `TRN-*` row for ACME4.
+The five-tenant API and headed-browser release matrix passed on dev commit
+`1f3330b`, including tenant currencies, fiscal calendars, financial failure/
+retry states, and role boundaries.
 Production at
 `https://transmuter.ishirock.tech` has the Shared Costs schema, API, and UI
 promoted, but production ACME seeded data is not yet at dev ACME4 parity; that
