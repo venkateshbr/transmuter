@@ -505,7 +505,14 @@ def test_generate_minutes_summarizes_transcript_by_agenda_without_raw_dump() -> 
             "artifact_type": "risk",
             "title": "Cutover rollback owner missing",
             "status": "open",
-        }
+        },
+        {
+            "id": "artifact-2",
+            "agenda_item_id": "session-agenda-risk",
+            "artifact_type": "decision",
+            "title": "Retain the governed baseline",
+            "status": "open",
+        },
     ]
 
     service = build_service(repo)
@@ -524,6 +531,7 @@ def test_generate_minutes_summarizes_transcript_by_agenda_without_raw_dump() -> 
     assert "Discussed the migration risk is high" in minutes
     assert "Captured items:" in minutes
     assert "Cutover rollback owner missing" in minutes
+    assert "Retain the governed baseline" in minutes
     assert "## Transcript Summary Source" not in minutes
     assert "Rupa Menon:" not in minutes
     assert "Vishwa Rao:" not in minutes
