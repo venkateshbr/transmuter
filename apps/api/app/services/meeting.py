@@ -1412,7 +1412,7 @@ class MeetingService:
         used_indexes: set[int] = set()
         for item in agenda:
             title = self._mask_pii(str(item.get("text") or "Agenda item"))
-            agenda_id = item.get("id") or item.get("source_agenda_item_id")
+            agenda_id = item.get("source_agenda_item_id") or item.get("id")
             matched = self._sentences_for_agenda(title, sentences)
             for index, _score, _sentence in matched:
                 used_indexes.add(index)
