@@ -51,6 +51,7 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
       content: '';
       position: absolute;
       inset: 0;
+      pointer-events: none;
       background: var(--t-accent-gradient);
       opacity: 0;
       transition: opacity 0.25s ease;
