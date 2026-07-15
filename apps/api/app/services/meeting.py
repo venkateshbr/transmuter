@@ -455,6 +455,24 @@ class MeetingService:
     def create_artifact(self, session_id: str, data: MeetingArtifactCreate) -> dict:
         session = self._assert_session(session_id)
         payload = data.model_dump(exclude_none=True)
+        session_agenda = self._repo.get_session_agenda(session_id)
+        session_agenda_item_id = payload.get("session_agenda_item_id")
+        if session_agenda_item_id and not any(
+            str(item.get("id")) == str(session_agenda_item_id) for item in session_agenda
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Session agenda item not found",
+            )
+        agenda_item_id = payload.get("agenda_item_id")
+        if agenda_item_id and not any(
+            str(item.get("source_agenda_item_id")) == str(agenda_item_id)
+            for item in session_agenda
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Agenda item not found in this session",
+            )
         payload["session_id"] = session_id
         payload["meeting_id"] = session["meeting_id"]
 
@@ -1329,7 +1347,10 @@ class MeetingService:
             rows = [
                 item
                 for item in artifacts
-                if str(item.get("agenda_item_id") or "") in agenda_ids
+                if (
+                    str(item.get("agenda_item_id") or "") in agenda_ids
+                    or str(item.get("session_agenda_item_id") or "") in agenda_ids
+                )
                 and (kind is None or item.get("artifact_type") == kind)
             ]
             return [

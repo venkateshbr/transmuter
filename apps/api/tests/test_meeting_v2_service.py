@@ -508,7 +508,8 @@ def test_generate_minutes_summarizes_transcript_by_agenda_without_raw_dump() -> 
         },
         {
             "id": "artifact-2",
-            "agenda_item_id": "session-agenda-risk",
+            "agenda_item_id": None,
+            "session_agenda_item_id": "session-agenda-risk",
             "artifact_type": "decision",
             "title": "Retain the governed baseline",
             "status": "open",
