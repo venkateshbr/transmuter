@@ -51,7 +51,7 @@ uses historical `ENT-*` scenario codes, map them by row order to the ACME4
 | Benefits Register | Configured | Portfolio-wide benefit lines show gross, validated, risk-adjusted, bankable, and realized values with evidence and owner metadata. |
 | Shared Costs | Configured in dev | Current ACME4 dev data includes four FY2028 shared-cost pools covering `benefit_weighted`, `equal_split`, `fixed_percentage`, and `manual_amount` methods. Total shared-cost plan is `$1.45M`, actual is `$1.305M`, and Control Tower allocated plan is `$1.45M`. |
 | Board pack export | Configured | Financial Overview can export a non-empty XLSX board pack using the same selected year and value basis. |
-| Core meeting command center | Core browser flow accepted; fix retest pending | Headed browser acceptance created the Saturday series, linked `ENT-005`, generated an initiative agenda, saved notes and an agenda-linked decision, generated minutes, completed the session, and verified persistence. Deployed retest remains required for `#414` and ISO-date masking defect `#417`. |
+| Core meeting command center | Development browser pass | Headed browser acceptance created the Saturday series, linked `ENT-005`, generated an initiative agenda, saved notes and an agenda-linked decision, generated minutes, completed the session, and verified persistence. Agenda-scoped minutes and ISO-date masking passed on deployed dev commit `f6736a2`; Aksha/Prahari release transitions remain. |
 
 ---
 
@@ -1577,9 +1577,11 @@ Speaker notes:
 
 #### Saturday meeting command-center demo
 
-Status: **Core headed-browser workflow accepted on development on 2026-07-15**.
-Do not call the platform launch-ready until the fixes for `#414` and `#417`
-have been deployed and this exact generation sequence has passed again.
+Status: **Headed-browser workflow passed on development on 2026-07-15** using
+commit `f6736a2` and Hostinger action `104263239`. The generated minutes retained
+the selected `ENT-005` decision in both the agenda discussion and global
+decision summary, and fresh ISO dates remained intact. Production was not
+touched.
 
 Use a PMO Lead or Transformation Office user. Use a temporary series name with
 the date so it is easy to find and remove. For the current launch test, use the
@@ -1695,7 +1697,7 @@ and keep the same sequence.
 1. Select **Complete Session** once.
 2. Confirm navigation back to `/meetings/<meeting-id>`.
 3. In **Sessions**, confirm the selected Saturday row is `COMPLETED` (the
-   retained acceptance artifact is `25 Jul`).
+   retained acceptance artifacts are `18 Jul` and `25 Jul`).
 4. Open the completed row again and confirm notes, draft minutes, agenda,
    attendee, decision, and risk are still visible and the session is no longer
    presented as a new live session.
