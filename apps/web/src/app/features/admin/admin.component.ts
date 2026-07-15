@@ -1848,7 +1848,10 @@ export class AdminComponent implements OnInit {
     }).subscribe({
       next: () => {
         this.strategicParameterSaving.set(false);
-        this.loadSettings();
+        // Keep the exact state that was acknowledged by the server. An
+        // asynchronous reload here can return after the user has started the
+        // next market/theme/tag edit and overwrite that newer local value.
+        this.settings.set({ ...current, settings: nextSettings });
         this.loadAuditLogs();
         this.strategicParameterMessage.set('Strategic parameters saved.');
         if (this.strategicParameterSaveQueued) {
