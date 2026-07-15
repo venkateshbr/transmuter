@@ -416,9 +416,9 @@ must still exclude browser storage and authorization headers.
 | 50-user guarded API verifier                  | Pass, 2,636 mutable-run requests; 2,450 final read-only requests                             |
 | 50-user role/RBAC results                     | Pass across the admin plus nine operating-model identities per tenant                        |
 | Cross-tenant isolation matrix                 | Pass, 55 foreign-initiative/user denials in each full run                                    |
-| Browser target / desktop and mobile viewports | Pending: in-app Browser target is not attached                                               |
+| Browser target / desktop and mobile viewports | Headed Playwright CLI pass at 1440x1000 for the five-tenant route sweep; mobile remains pending |
 | Light/dark and accessibility checks           | Pending with Browser acceptance                                                              |
-| Console/network error log                     | Pending with Browser acceptance                                                              |
+| Console/network error log                     | Captured; common failures recorded in #401, #404-#406, #408, #410, #414, and #417            |
 | Export/import artifacts and reconciliation    | API export signatures and financial reconciliation pass; UI import/export roundtrips pending |
 | Final canonical reseed / read verification    | Pass, canonical manifest hash restored and 2,450-request read-only verifier passed           |
 
@@ -426,11 +426,43 @@ must still exclude browser storage and authorization headers.
 
 | Tenant                     | Seed | API/data | RBAC | Isolation | All UI routes | Dashboards/reconciliation | Imports/exports      | Result          |
 | -------------------------- | ---- | -------- | ---- | --------- | ------------- | ------------------------- | -------------------- | --------------- |
-| Acme Global Manufacturing  | Pass | Pass     | Pass | Pass      | Pending       | API pass; UI pending      | API pass; UI pending | Browser pending |
-| Northstar Retail Group     | Pass | Pass     | Pass | Pass      | Pending       | API pass; UI pending      | API pass; UI pending | Browser pending |
-| Meridian Commercial Bank   | Pass | Pass     | Pass | Pass      | Pending       | API pass; UI pending      | API pass; UI pending | Browser pending |
-| Solstice Health Network    | Pass | Pass     | Pass | Pass      | Pending       | API pass; UI pending      | API pass; UI pending | Browser pending |
-| Horizon Energy & Utilities | Pass | Pass     | Pass | Pass      | Pending       | API pass; UI pending      | API pass; UI pending | Browser pending |
+| Acme Global Manufacturing  | Pass | Pass     | Pass | Pass      | 20/25 clean   | UI loaded 10 initiatives; blockers open | API pass; UI pending | Partial |
+| Northstar Retail Group     | Pass | Pass     | Pass | Pass      | 20/25 clean   | UI loaded 10; fiscal/currency blockers open | API pass; UI pending | Partial |
+| Meridian Commercial Bank   | Pass | Pass     | Pass | Pass      | 20/25 clean   | UI loaded 10; fiscal/currency blockers open | API pass; UI pending | Partial |
+| Solstice Health Network    | Pass | Pass     | Pass | Pass      | 20/25 clean   | UI loaded 10; currency blocker open | API pass; UI pending | Partial |
+| Horizon Energy & Utilities | Pass | Pass     | Pass | Pass      | 20/25 clean   | UI loaded 10; fiscal/currency blockers open | API pass; UI pending | Partial |
+
+### 2026-07-15 headed-browser addendum
+
+The first full headed Playwright CLI sweep used each tenant's real
+Transformation Office identity and the public Angular/API deployment. Each
+tenant loaded 20 of 25 non-meeting routes cleanly and showed the expected ten
+initiatives. The same five defects reproduced everywhere: the matrix request
+used an invalid `page_size=500`, and cold direct navigation to
+`/initiatives/new`, `/shared-costs`, `/people`, and `/admin` redirected to the
+dashboard before `/auth/me` hydrated the canonical role. The non-USD tenants
+also displayed USD on `/financials`. These are findings, not accepted rows.
+
+Acme received a separate, intentionally post-manifest meeting acceptance run.
+Through the browser, QA created the weekly Saturday series
+`ACME Saturday Value Steering - 2026-07-18`, linked `ENT-005`, generated an
+initiative-backed agenda for the 2026-07-25 session, started the session,
+captured and persisted notes, added an agenda-linked decision, generated and
+saved AI-assisted minutes, completed the session, reopened it, and verified
+that the notes, minutes, decision, and initiative context persisted. The run
+reproduced #414 and discovered #417. The series is intentionally retained as a
+demo artifact, so the original zero-meeting manifest invariant applies only to
+the canonical pre-meeting snapshot.
+
+The People browser flow created and revoked a disposable invite. A separate
+disposable temporary-password user was forced to `/auth/change-password` on
+first login; password change and a second clean login succeeded. Guarded cleanup
+then removed the disposable Auth/platform user and invite records and restored
+Acme to ten users. Admin Data Cleanup also deleted a disposable one-off meeting
+while preserving the Saturday demo series. Microsoft Teams correctly reported
+that development has no connected organizer and did not create an external
+event; live Graph consent, invite, join-link, and transcript acceptance remain
+blocked by #389/#390. Production was not touched.
 
 ### Finding log
 
@@ -450,6 +482,8 @@ cosmetic defects.
 | [#408](https://github.com/venkateshbr/transmuter/issues/408) | P1       | All tenants / PMO roles                       | `/pmo/risks`, `/pmo/kpis`                       | Inspect primary create, drilldown, search, and filter controls.                                    | Visible controls execute supported, role-gated workflows.                   | Primary buttons/chevrons are inert and required portfolio filters are absent.                                  | Wire controls and cover create/cancel/drilldown/filter flows.                         | Open   |
 | [#409](https://github.com/venkateshbr/transmuter/issues/409) | P2       | All tenants / portfolio roles                 | `/initiatives/matrix`                           | Compare the current quadrant with the workstream-by-tag reconciliation contract.                   | Matrix totals and contributor drilldowns reconcile with pipeline/dashboard. | Current hardcoded 2x2 impact/stage quadrant is a different surface.                                            | Confirm product intent and implement or relocate the reconciliation matrix.           | Open   |
 | [#410](https://github.com/venkateshbr/transmuter/issues/410) | P1       | All tenants / executive and finance roles     | `/dashboard`, `/financials`                     | Inspect primary API subscription error handling.                                                   | Failures render explicit bounded error/retry state.                         | Missing error branches can present failed requests as legitimate zero/empty portfolios.                        | Add error states and Browser failure/recovery verification.                           | Open   |
+| [#414](https://github.com/venkateshbr/transmuter/issues/414) | P1       | Acme / Transformation Office                  | Meeting generated minutes                       | Add a decision while an initiative agenda item is active, then generate minutes.                    | Captured item appears under that agenda discussion and the global summary.   | Deployed build shows the decision only in the global section.                                               | Fix is stacked; deploy and repeat the Saturday generation check.                       | Open   |
+| [#417](https://github.com/venkateshbr/transmuter/issues/417) | P1       | Acme / Transformation Office                  | Meeting agenda suggestions and minutes          | Generate agenda/minutes containing ISO dates and a date-bearing meeting title.                      | Dates remain intact while phone numbers and email addresses are masked.      | Phone masking replaces ISO dates and title dates with `[phone]`.                                           | Date-safe mask and regression test are in `050da73`; deploy and browser-retest.        | Open   |
 | [#411](https://github.com/venkateshbr/transmuter/issues/411) | P2       | Large portfolios / transformation office      | `/initiatives/pipeline`                         | Inspect sort, page, and archive-state controls beyond the fixed `page_size=200` load.              | Users can sort, page, and include/exclude archived initiatives.             | Controls are absent; the current ten-row fixture hides the scale limitation.                                   | Add server-backed controls and >200-row coverage.                                     | Open   |
 | [#412](https://github.com/venkateshbr/transmuter/issues/412) | P3       | Public login / keyboard and screen-reader use | `/auth/login`                                   | Resolve visible Email/Password labels through the accessibility tree.                              | Labels and validation errors programmatically name their inputs.            | Inputs rely on name/placeholder rather than associated visible labels.                                         | Associate labels/errors and add keyboard/accessibility coverage.                      | Open   |
 

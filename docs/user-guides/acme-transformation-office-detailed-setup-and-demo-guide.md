@@ -51,7 +51,7 @@ uses historical `ENT-*` scenario codes, map them by row order to the ACME4
 | Benefits Register | Configured | Portfolio-wide benefit lines show gross, validated, risk-adjusted, bankable, and realized values with evidence and owner metadata. |
 | Shared Costs | Configured in dev | Current ACME4 dev data includes four FY2028 shared-cost pools covering `benefit_weighted`, `equal_split`, `fixed_percentage`, and `manual_amount` methods. Total shared-cost plan is `$1.45M`, actual is `$1.305M`, and Control Tower allocated plan is `$1.45M`. |
 | Board pack export | Configured | Financial Overview can export a non-empty XLSX board pack using the same selected year and value basis. |
-| Core meeting command center | Browser acceptance pending | The real API and focused service tests cover series, sessions, agenda, notes, generated minutes, artifacts, actions, and completion. The exact Saturday browser workflow below remains the acceptance gate in `#413`; agenda-scoped generated-minutes defect `#414` is fixed in draft PR `#415` pending deployed QA. |
+| Core meeting command center | Core browser flow accepted; fix retest pending | Headed browser acceptance created the Saturday series, linked `ENT-005`, generated an initiative agenda, saved notes and an agenda-linked decision, generated minutes, completed the session, and verified persistence. Deployed retest remains required for `#414` and ISO-date masking defect `#417`. |
 
 ---
 
@@ -1577,7 +1577,9 @@ Speaker notes:
 
 #### Saturday meeting command-center demo
 
-Status: **Browser acceptance pending** under `#413`.
+Status: **Core headed-browser workflow accepted on development on 2026-07-15**.
+Do not call the platform launch-ready until the fixes for `#414` and `#417`
+have been deployed and this exact generation sequence has passed again.
 
 Use a PMO Lead or Transformation Office user. Use a temporary series name with
 the date so it is easy to find and remove. For the current launch test, use the
@@ -1615,29 +1617,35 @@ and keep the same sequence.
 5. Reload the page. Confirm the same series details remain visible. A value
    shown only before reload does not count as persisted.
 
-##### B. Link an initiative to the agenda
+##### B. Link `ENT-005` and prepare an initiative-backed agenda
 
-1. In **Default Agenda**, select **+ Add Item**.
-2. Enter `TRN-005 value realization, migration risk, and owner decision`.
-3. In **Agenda initiative**, select ACME4 `TRN-005` (the Enterprise Data
-   Platform row; the exact displayed name may use the current fixture name).
-4. Select **Add**. Confirm the new agenda row shows both the topic and the
-   `TRN-005` initiative code/name.
-5. In the meeting's **Initiatives** card, use **Link initiative** to link the
-   same initiative to the series if it is not already linked. Agenda linkage
-   drives the live context panel; series linkage makes the wider meeting scope
-   explicit.
-6. Add at least one attendee in the **Attendees** card and reload once more.
-   Confirm the agenda, initiative link, and attendee all persist.
+1. In the meeting's **Initiatives** card, select **Link initiative**.
+2. Choose `ENT-005 Enterprise Data and ERP Modernization` and confirm it appears
+   in the linked-initiative list. This series link is required before generated
+   agenda suggestions can carry initiative context.
+3. Add at least one attendee in the **Attendees** card. For the prepared Acme
+   demo, use the synthetic Transformation Office, Finance Lead, and PMO Lead
+   users only.
+4. In **Default Agenda**, add the plain-language topics `Value realization`,
+   `Migration risk`, and `Owner decision`. A default item added after sessions
+   already exist does not retroactively appear in those materialized sessions.
+5. In the **Sessions** list, open the Saturday session you intend to run, then
+   select **Generate Agenda**. Wait for the generated rows to appear.
+6. Confirm at least one generated row displays `ENT-005`. Select that row and
+   verify that its initiative context contains the initiative name, delivery
+   status, plan/actual financial context, milestones, and risks.
+7. Reload the series/session once. Confirm the linked initiative, attendees,
+   and generated agenda remain present before beginning the live demo.
 
 ##### C. Open the Saturday session
 
-1. Select **Start Session** on the series page.
-2. In the date dialog, enter `2026-07-18` and select **Start**.
-3. Confirm navigation to `/meetings/sessions/<id>`.
-4. Confirm the header date is Saturday, the state is **Live** or
-   `in_progress`, and the agenda contains the `TRN-005` topic.
-5. Select the agenda topic. Confirm **Current Topic** changes and the center
+1. From the selected scheduled-session row, select **Open** and then **Start
+   Session**. For the retained acceptance artifact, the completed session date
+   is Saturday `2026-07-25`; for a fresh demo, use the next scheduled Saturday.
+2. Confirm navigation to `/meetings/sessions/<id>`.
+3. Confirm the header date is Saturday, the state is **Live** or
+   `in_progress`, and the agenda contains an `ENT-005` topic.
+4. Select the agenda topic. Confirm **Current Topic** changes and the center
    panel loads initiative summary, financial context, milestones, and risks.
    If it instead says to select an initiative-linked item, return to the series
    and repair the agenda-to-initiative link before continuing.
@@ -1648,14 +1656,14 @@ and keep the same sequence.
    the generated agenda summary can associate them reliably:
 
    ```text
-   TRN-005 value realization remains on plan, subject to Finance confirming the benefit owner.
+   ENT-005 value realization remains on plan, subject to Finance confirming the benefit owner.
    The migration risk needs a named rollback owner before the next gate review.
    The steering committee decided to keep the weekly Saturday checkpoint until the risk is green.
    ```
 
 2. Wait until the header save state no longer says **Saving...**. Reload the
    session and confirm the notes are still present.
-3. Keep the `TRN-005` agenda item selected. In **Action Center**, choose
+3. Keep the `ENT-005` agenda item selected. In **Action Center**, choose
    **Decision**, priority **High**, enter `Keep the Saturday checkpoint until
    migration risk is green`, and select **Add Decision**.
 4. Add a second item with type **Risk**, priority **High**, and text `Migration
@@ -1672,7 +1680,7 @@ and keep the same sequence.
 
    - `## AI Summary`;
    - `## Agenda Discussion`;
-   - a heading for the `TRN-005` agenda topic;
+   - a heading for the `ENT-005` agenda topic;
    - the rollback-owner discussion;
    - `Captured items:` followed by the decision and risk;
    - global **Decisions** and **Risks And Issues** sections.
@@ -1686,7 +1694,8 @@ and keep the same sequence.
 
 1. Select **Complete Session** once.
 2. Confirm navigation back to `/meetings/<meeting-id>`.
-3. In **Sessions**, confirm the `18 Jul` row is `COMPLETED`.
+3. In **Sessions**, confirm the selected Saturday row is `COMPLETED` (the
+   retained acceptance artifact is `25 Jul`).
 4. Open the completed row again and confirm notes, draft minutes, agenda,
    attendee, decision, and risk are still visible and the session is no longer
    presented as a new live session.

@@ -172,6 +172,33 @@ describe('AuthService', () => {
     expect(service.isAuthenticated()).toBe(false);
   });
 
+  it('should prefer the single signed Transmuter authorization role over the generic Supabase role', () => {
+    const service = TestBed.inject(AuthService);
+    service.user.set(null);
+    localStorage.setItem('access_token', token({
+      exp: future(),
+      role: 'authenticated',
+      app_metadata: {
+        transmuter_authorization_transmuter_dev: {
+          tenant_id: 'tenant-1',
+          role: 'transformation_office',
+        },
+      },
+    }));
+
+    expect(service.getRole()).toBe('transformation_office');
+
+    localStorage.setItem('access_token', token({
+      exp: future(),
+      role: 'authenticated',
+      app_metadata: {
+        transmuter_authorization_transmuter_dev: { role: 'transformation_office' },
+        transmuter_authorization_transmuter: { role: 'viewer' },
+      },
+    }));
+    expect(service.getRole()).toBeNull();
+  });
+
   it('should evaluate operating-model permissions from the active role', () => {
     const service = TestBed.inject(AuthService);
     localStorage.setItem('access_token', token({ exp: future(), role: 'finance_lead' }));

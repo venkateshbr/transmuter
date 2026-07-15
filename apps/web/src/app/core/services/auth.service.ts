@@ -225,6 +225,21 @@ export class AuthService {
 
     try {
       const payload = this.tokenPayload(token);
+      const appMetadata = payload?.['app_metadata'];
+      if (appMetadata && typeof appMetadata === 'object') {
+        const scopedRoles = new Set(
+          Object.entries(appMetadata)
+            .filter(([key]) => key.startsWith('transmuter_authorization_'))
+            .map(([, value]) => (
+              value && typeof value === 'object' && 'role' in value && typeof value.role === 'string'
+                ? value.role
+                : null
+            ))
+            .filter((role): role is string => Boolean(role)),
+        );
+        if (scopedRoles.size === 1) return Array.from(scopedRoles)[0];
+        if (scopedRoles.size > 1) return null;
+      }
       const metadataRole = payload?.['user_metadata'];
       if (
         metadataRole &&
@@ -234,7 +249,10 @@ export class AuthService {
       ) {
         return metadataRole.role;
       }
-      return typeof payload?.['role'] === 'string' ? payload['role'] : null;
+      const topLevelRole = payload?.['role'];
+      return typeof topLevelRole === 'string' && topLevelRole !== 'authenticated'
+        ? topLevelRole
+        : null;
     } catch {
       return null;
     }
