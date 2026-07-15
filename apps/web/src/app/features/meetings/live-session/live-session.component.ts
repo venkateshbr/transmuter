@@ -693,7 +693,7 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
       description: title,
       priority: this.artifactDraft.priority,
       status: 'open',
-      agenda_item_id: active?.source_agenda_item_id || null,
+      agenda_item_id: active?.source_agenda_item_id || active?.id || null,
       initiative_id: active?.initiative_id || null,
     };
     this.api.post<MeetingArtifact>(`/meetings/sessions/${session.id}/artifacts`, body).subscribe(item => {
