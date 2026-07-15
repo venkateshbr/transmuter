@@ -44,20 +44,22 @@ review/merge and separate explicit approval
 GitHub tracking:
 
 - Integration PR: `#416`, full-sweep commit `1f3330b`, artifact follow-up
-  commit `5cbabe5`.
+  commit `5cbabe5`, and initiative-baseline/ACME-guide runtime commit `1c5f184`.
 - Release findings: `#401`, `#403`-`#412`, `#414`, and `#417`-`#419`.
 - Invite/password acceptance: `#216`.
 - Admin bulk-meeting cleanup: `#224`.
-- Parent acceptance: `#399`; browser execution: `#413`.
+- Parent acceptance: `#399`; browser execution: `#413`; initiative annual
+  baseline UI: `#420`.
 - External Microsoft Graph gates: `#220`, `#389`, and `#390`.
 
 Dev deployment:
 
 - Environment: `https://transmuter-dev.ishirock.tech`.
 - Schema: `transmuter_dev`.
-- Deployed commit: `5cbabe5` (`1f3330b` was the uninterrupted five-tenant
+- Deployed commit: `1c5f184` (`1f3330b` was the uninterrupted five-tenant
   browser-sweep runtime).
-- Hostinger action: `104308750`, success at `2026-07-15T09:50:16Z`; full-sweep action
+- Hostinger action: `104346054`, success at `2026-07-15T12:41:26Z`; artifact action
+  `104308750` succeeded at `2026-07-15T09:50:16Z`; full-sweep action
   `104300670` succeeded at `2026-07-15T08:55:20Z`.
 - No schema migration was required for the final People pointer-action fix.
 - Production project, schema, data, configuration, and consent were untouched.
@@ -78,6 +80,12 @@ Acceptance evidence:
 - Meetings: weekly Saturday series, `ENT-005` agenda, notes autosave, agenda-
   linked decision, AI minutes generation/edit/save/reload, completion, and a
   two-series Admin cleanup.
+- Dedicated ACME guide acceptance on `1c5f184`: all 20 named scenarios passed
+  in one external headed Chromium session in 2.0 minutes with zero page errors
+  or observed 5xx responses. It covered a fresh HITL initiative, persisted
+  annual baseline, benefit line, twelve monthly cost rows, Saturday meeting
+  with agenda-linked decision and risk, and browser cleanup back to ten
+  initiatives with no temporary meeting.
 - Dedicated headed controls: risk/KPI filter and create navigation, matrix
   contributor drilldown, and Benefit Tracking bankable-plan navigation passed.
 - Headed artifact acceptance downloaded authenticated pipeline CSV, board-pack,

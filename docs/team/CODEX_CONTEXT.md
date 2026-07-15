@@ -20,14 +20,15 @@ replace them.
   and web image `transmuter-web:hostinger`.
 - Hostinger dev Docker project uses API image `transmuter-api:hostinger-dev`
   and web image `transmuter-web:hostinger-dev`.
-- Current deployed application commit is `5cbabe5` in dev and `5793115` in
+- Current deployed application commit is `1c5f184` in dev and `5793115` in
   production. Dev includes the five-tenant launch fixes, native meeting/browser
   acceptance, authenticated export and template-upload browser fixes, and the
-  earlier Microsoft Graph isolation controls. Production
+  initiative Annual Baseline editor required for the ACME end-to-end demo, plus
+  the earlier Microsoft Graph isolation controls. Production
   remains on the prior tenant authorization release pending explicit promotion.
-- Current Hostinger Docker actions are `104308750` for dev and `103623550` for
-  production. Dev action `104308750` completed successfully at
-  `2026-07-15T09:50:16Z`;
+- Current Hostinger Docker actions are `104346054` for dev and `103623550` for
+  production. Dev action `104346054` completed successfully at
+  `2026-07-15T12:41:26Z`;
   production action `103623550` remains unchanged.
 - Hostinger VPS / domain context:
   - Primary domain owned for the VPS: `ishirock.tech`.
@@ -86,7 +87,8 @@ replace them.
 - Graphifyy is installed for this repository. The local generated graph lives at
   `graphify-out/` and is intentionally ignored by git because it is generated
   source-derived context.
-- Current graph baseline was refreshed after commit `5cbabe5` with `graphify update .`;
+- Current graph baseline was refreshed after commit `1c5f184` and the ACME guide
+  acceptance documentation with `graphify update .`;
   it contains the code/navigation graph used by `graphify query`, `graphify path`,
   and `graphify explain`.
 - Agents should use the graph before broad source searches when
@@ -202,6 +204,10 @@ replace them.
     cost acceptance scenario is dev-only until production demo data is
     backfilled.
 - Current launch follow-ups:
+  - `#413` / `#420`: the dedicated ACME guide passed all 20 scenarios in one
+    external headed browser session on deployed `1c5f184`; the temporary
+    initiative and Saturday meeting were removed through Admin and the Pipeline
+    returned to ten initiatives. Workflow closeout remains.
   - `#216`: app-owned invite/password lifecycle passed in external headed Chrome
     with a real delivered Resend setup link, forced password change, restoration,
     resend/revoke, and final zero-invite reset; issue workflow closeout remains.

@@ -486,6 +486,40 @@ real import endpoint with an intentionally unknown initiative code and returned
 one bounded row error with zero created and zero updated rows, preserving the
 canonical fixture. The run passed in 18.8 seconds.
 
+### 2026-07-15 ACME client-demo guide acceptance
+
+A second uninterrupted run validated the detailed ACME guide itself rather
+than treating the broader five-tenant route sweep as a substitute. It used one
+external headed Playwright Chromium session against public dev commit
+`1c5f184`, deployed by successful Hostinger action `104346054`. All 20 named
+transformation-office scenarios passed in 2.0 minutes with visible UI or reload
+persistence assertions, zero browser page errors, and zero observed HTTP 5xx
+responses.
+
+The browser covered health and login; Profile and tenant context; General,
+Strategic Parameters, Financial Configuration, Governance Engine, and Access
+Control; the ten-person roster; Dashboard; Pipeline filters; FY28 Financial
+Overview and the `2028-M01` contributor drawer; an `ENT-006` locked initiative
+baseline; `ENT-005` bankable-plan version 2; Benefits Register and Benefit
+Tracking; Waterline preview and Initiative Portfolio; all four shared-cost
+pools; Progress, PMO, and Control Tower routes; and a complete guided
+initiative intake with HITL review.
+
+The run then configured financial scope for the temporary initiative, saved a
+FY26 `$3.0M` revenue / `$1.35M` gross-margin original baseline through the new
+initiative Annual Baseline UI from #420, reloaded and proved persistence, added
+the named benefit `Regional price realization uplift`, generated twelve monthly
+`Pricing analytics subscription` cost rows, reloaded, and opened the detailed
+financial grid. It created a weekly Saturday meeting, linked `ENT-005`, added
+and generated its agenda, autosaved notes, attached a decision and risk to the
+active agenda, generated and edited AI minutes, saved and reloaded the draft,
+completed the session, and confirmed `COMPLETED`.
+
+Finally, Admin Data Cleanup deleted the temporary meeting and initiative. The
+browser returned to a ten-initiative Pipeline and verified both temporary names
+were absent. Microsoft Graph sync, live Teams invite/join-link behavior, and
+transcripts remained explicitly excluded; production was not touched.
+
 ### Finding log
 
 Create a GitHub issue for each reproducible product defect and link it here. Use
@@ -512,6 +546,7 @@ cosmetic defects.
 | [#412](https://github.com/venkateshbr/transmuter/issues/412) | P3       | Public login / keyboard and screen-reader use | `/auth/login`                                   | Resolve labels, autocomplete, invalid error, and focus behavior through the accessibility tree.     | Labels and validation errors programmatically name their inputs.            | Associated labels, autocomplete hints, alert semantics, and invalid-login focus are implemented.               | Headed accessibility assertions passed.                                               | Dev pass |
 | [#418](https://github.com/venkateshbr/transmuter/issues/418) | P1       | All tenants / portfolio export roles          | `/initiatives/pipeline`                         | Click portfolio CSV export while authenticated through the Angular application.                     | The browser downloads the tenant-scoped CSV using the active bearer session. | Export now uses the authenticated API blob client and surfaces a bounded failure alert.                         | Headed Chrome downloaded and inspected the 1,398-byte CSV on `5cbabe5`.                 | Dev pass |
 | [#419](https://github.com/venkateshbr/transmuter/issues/419) | P1       | All tenants / initiative creators             | `/initiatives/new`                              | Click the blank-template control inside the Excel upload card.                                      | Template download and upload selection are independent pointer/keyboard controls. | Sibling buttons replace nested interactivity; the decorative overlay ignores pointer events.                | DOM regression, 31/31 frontend tests, production build, and headed download/preview passed. | Dev pass |
+| [#420](https://github.com/venkateshbr/transmuter/issues/420) | P1       | All tenants / Finance and initiative authors  | Initiative **Financials** tab                    | Create a new initiative, select annual baseline metrics, and attempt to save the original operating denominator. | Editable, scoped initiatives expose fiscal year and annual baseline inputs; governed plans remain locked. | Annual Baseline panel now saves decimal-string values through the existing baseline API and clearly disables governed fixtures. | 31/31 frontend tests, production build, focused deployed headed pass, and the full 20-scenario ACME guide pass on `1c5f184`. | Dev pass |
 
 Aksha may mark #399 accepted only when every required row has evidence, all P0/P1
 findings are resolved and retested, remaining P2/P3 items have explicit issue and
