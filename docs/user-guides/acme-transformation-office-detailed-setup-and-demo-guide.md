@@ -15,6 +15,12 @@ It expands the shorter ACME value guide with:
 
 No credentials are included in this guide.
 
+Launch-readiness note (`2026-07-15`): the deterministic ACME/five-tenant data
+and real-API acceptance are complete, but the current in-app Browser acceptance
+is still tracked in GitHub issue `#413`. Steps marked **Browser acceptance
+pending** describe the current UI contract and must not be presented as fresh
+deployed-browser evidence until that issue records a passing run.
+
 For a UI-only blank-tenant setup path that skips meetings, see
 [`acme-demo-tenant-ui-setup-guide.md`](acme-demo-tenant-ui-setup-guide.md).
 
@@ -45,6 +51,7 @@ uses historical `ENT-*` scenario codes, map them by row order to the ACME4
 | Benefits Register | Configured | Portfolio-wide benefit lines show gross, validated, risk-adjusted, bankable, and realized values with evidence and owner metadata. |
 | Shared Costs | Configured in dev | Current ACME4 dev data includes four FY2028 shared-cost pools covering `benefit_weighted`, `equal_split`, `fixed_percentage`, and `manual_amount` methods. Total shared-cost plan is `$1.45M`, actual is `$1.305M`, and Control Tower allocated plan is `$1.45M`. |
 | Board pack export | Configured | Financial Overview can export a non-empty XLSX board pack using the same selected year and value basis. |
+| Core meeting command center | Browser acceptance pending | The real API and focused service tests cover series, sessions, agenda, notes, generated minutes, artifacts, actions, and completion. The exact Saturday browser workflow below remains the acceptance gate in `#413`; agenda-scoped generated-minutes defect `#414` is fixed in draft PR `#415` pending deployed QA. |
 
 ---
 
@@ -1568,6 +1575,137 @@ Speaker notes:
 > is rarely self-explanatory; the PMO views connect the value story to delivery
 > evidence, blockers, actions, risks, and decisions.
 
+#### Saturday meeting command-center demo
+
+Status: **Browser acceptance pending** under `#413`.
+
+Use a PMO Lead or Transformation Office user. Use a temporary series name with
+the date so it is easy to find and remove. For the current launch test, use the
+upcoming Saturday `2026-07-18`; for a later demo, substitute the next Saturday
+and keep the same sequence.
+
+##### A. Create the meeting series
+
+1. Open `/meetings` and wait for the **Meetings** heading and **New Series**
+   button. If either is missing, stop and confirm that the signed-in role can
+   manage the program cadence.
+2. Select **New Series**. Confirm the **New meeting series** dialog opens.
+3. Enter the following safe demo values:
+
+   | Field | Demo value |
+   |---|---|
+   | Name | `ACME Saturday Value Steering - 2026-07-18` |
+   | Scope | `All` |
+   | Recurrence | `Weekly` |
+   | Day | `Saturday` |
+   | Series start | `2026-07-18` |
+   | Series end | `2026-08-29` |
+   | Start | `09:00` |
+   | Duration | `60` |
+   | Timezone | The browser/user timezone used for the demo; record it in the evidence. |
+   | Owner | The current PMO Lead or Transformation Office user. |
+   | Participants | Select at least one synthetic ACME demo user. |
+   | Default agenda | Leave blank; add initiative-linked agenda items after creation so the link is visible. |
+   | Description | `Launch-readiness steering review for ACME value, delivery, and risks.` |
+
+4. Select **Create series** once. Wait for navigation to `/meetings/<id>` and
+   confirm the series name, `Weekly`, `Sat`, start time, timezone, and owner are
+   visible. Do not press **Sync Invite**; Microsoft Teams is a separate external
+   integration and is not required for this core workflow.
+5. Reload the page. Confirm the same series details remain visible. A value
+   shown only before reload does not count as persisted.
+
+##### B. Link an initiative to the agenda
+
+1. In **Default Agenda**, select **+ Add Item**.
+2. Enter `TRN-005 value realization, migration risk, and owner decision`.
+3. In **Agenda initiative**, select ACME4 `TRN-005` (the Enterprise Data
+   Platform row; the exact displayed name may use the current fixture name).
+4. Select **Add**. Confirm the new agenda row shows both the topic and the
+   `TRN-005` initiative code/name.
+5. In the meeting's **Initiatives** card, use **Link initiative** to link the
+   same initiative to the series if it is not already linked. Agenda linkage
+   drives the live context panel; series linkage makes the wider meeting scope
+   explicit.
+6. Add at least one attendee in the **Attendees** card and reload once more.
+   Confirm the agenda, initiative link, and attendee all persist.
+
+##### C. Open the Saturday session
+
+1. Select **Start Session** on the series page.
+2. In the date dialog, enter `2026-07-18` and select **Start**.
+3. Confirm navigation to `/meetings/sessions/<id>`.
+4. Confirm the header date is Saturday, the state is **Live** or
+   `in_progress`, and the agenda contains the `TRN-005` topic.
+5. Select the agenda topic. Confirm **Current Topic** changes and the center
+   panel loads initiative summary, financial context, milestones, and risks.
+   If it instead says to select an initiative-linked item, return to the series
+   and repair the agenda-to-initiative link before continuing.
+
+##### D. Capture notes and agenda-scoped items
+
+1. In **Notes**, enter complete sentences that repeat the agenda language so
+   the generated agenda summary can associate them reliably:
+
+   ```text
+   TRN-005 value realization remains on plan, subject to Finance confirming the benefit owner.
+   The migration risk needs a named rollback owner before the next gate review.
+   The steering committee decided to keep the weekly Saturday checkpoint until the risk is green.
+   ```
+
+2. Wait until the header save state no longer says **Saving...**. Reload the
+   session and confirm the notes are still present.
+3. Keep the `TRN-005` agenda item selected. In **Action Center**, choose
+   **Decision**, priority **High**, enter `Keep the Saturday checkpoint until
+   migration risk is green`, and select **Add Decision**.
+4. Add a second item with type **Risk**, priority **High**, and text `Migration
+   rollback owner is not confirmed`. Confirm both cards appear under **Action
+   Center**. These records are attached to the active source agenda item.
+
+##### E. Generate and review AI-assisted minutes
+
+1. Select **Generate Minutes**. This UI action creates a draft with an **AI
+   Summary** and agenda-organized discussion from the saved notes/transcript and
+   captured items. It does not send email and does not require a Teams invite.
+2. Wait for `Draft minutes generated.` and the **Draft Minutes** editor.
+3. Confirm the draft contains all of the following:
+
+   - `## AI Summary`;
+   - `## Agenda Discussion`;
+   - a heading for the `TRN-005` agenda topic;
+   - the rollback-owner discussion;
+   - `Captured items:` followed by the decision and risk;
+   - global **Decisions** and **Risks And Issues** sections.
+
+4. Correct wording in **Draft meeting minutes** if needed and select **Save
+   Draft**. Reload and confirm the edited draft persists with status `draft`.
+5. Do not select **Send Minutes** during routine demo preparation. That action
+   sends external email when Resend and attendee email addresses are configured.
+
+##### F. Complete and verify the session
+
+1. Select **Complete Session** once.
+2. Confirm navigation back to `/meetings/<meeting-id>`.
+3. In **Sessions**, confirm the `18 Jul` row is `COMPLETED`.
+4. Open the completed row again and confirm notes, draft minutes, agenda,
+   attendee, decision, and risk are still visible and the session is no longer
+   presented as a new live session.
+5. Open `/progress/action-items` only if an **Action** artifact was created;
+   confirm it appears with the expected status and initiative. Decisions and
+   risks should be checked in their respective meeting/PMO views.
+
+##### G. Deterministic cleanup
+
+1. Preserve screenshots, console/network results, session ID, and meeting ID in
+   the acceptance evidence without recording tokens or participant email
+   addresses.
+2. Open `/admin`, enter **Data Cleanup**, select only the temporary series, and
+   use the exact confirmation phrase `DELETE MEETINGS`.
+3. Return to `/meetings`; confirm the temporary series is gone and unrelated
+   meetings remain.
+4. Confirm the linked temporary session records and meeting-created artifacts
+   are removed through the approved real-API verifier. Do not use production.
+
 ### Screen 15: Control Tower
 
 Screen:
@@ -1792,6 +1930,37 @@ Speaker notes:
 > Benefit Tracking shows actual realization against the locked baseline. The
 > locked plan is not an actuals lock; actual scenario values and actual cost
 > amounts continue to be entered in initiative Financials.
+
+### Segment 8: Run the management cadence in Meetings
+
+Screens:
+
+- `/meetings`
+- `/meetings/sessions/:id`
+
+Actions:
+
+1. Open the pre-created Saturday ACME steering series from the meeting list.
+2. Show the Saturday schedule, owner, attendees, linked initiative, and
+   `TRN-005` agenda item.
+3. Open the completed Saturday session; do not create a second live session in
+   a normal presentation.
+4. Select the `TRN-005` agenda topic and show the initiative context panel.
+5. Show saved notes, the agenda-scoped decision and risk, and the generated
+   draft minutes.
+6. Point out the agenda-specific **Captured items** section and explain that
+   actions and risks can flow into portfolio follow-up while the meeting retains
+   the decision record.
+
+Speaker notes:
+
+> The financial and delivery views become an operating cadence here. The PMO
+> prepares an initiative-linked agenda, runs the review with live portfolio
+> context, records decisions and risks against the active topic, and generates
+> a reviewable draft rather than losing the meeting outcome in personal notes.
+> Microsoft Teams is optional: the platform meeting, agenda, notes, decisions,
+> and completion flow works independently and degrades gracefully when no
+> organizer integration is connected.
 
 ### Close
 
