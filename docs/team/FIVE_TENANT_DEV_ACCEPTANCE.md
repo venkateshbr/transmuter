@@ -414,8 +414,8 @@ must still exclude browser storage and authorization headers.
 
 | Evidence                                      | Result                                                                                       |
 | --------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Application commit / PR                       | `1f3330b` / draft [#416](https://github.com/venkateshbr/transmuter/pull/416)                  |
-| Hostinger dev action / completion time        | `104300670`, success at `2026-07-15T08:55:20Z`                                               |
+| Application commit / PR                       | Full sweep `1f3330b`; artifact follow-up `5cbabe5` / [#416](https://github.com/venkateshbr/transmuter/pull/416) |
+| Hostinger dev action / completion time        | `104308750`, success at `2026-07-15T09:50:16Z`; full-sweep action `104300670`                 |
 | API and web health                            | Pass at `https://transmuter-dev.ishirock.tech`                                               |
 | Email migration dry-run / apply / postflight  | `50/0` pending/complete, apply success, then `0/50`                                          |
 | Redacted migration journal validation         | Pass, `complete` with 50 identities                                                          |
@@ -427,7 +427,7 @@ must still exclude browser storage and authorization headers.
 | Browser target / desktop and mobile viewports | One external headed Chrome process: five tenants at 1440x1000, plus 390x844 responsive checks |
 | Light/dark and accessibility checks           | Pass: dark theme, login names/autocomplete/error alert/focus, keyboard-resolvable controls   |
 | Console/network error log                     | Zero page errors and zero unexplained 5xx; two intentional 503 recovery probes passed         |
-| Export/import artifacts and reconciliation    | API export signatures and financial reconciliation pass; UI import/export roundtrips pending |
+| Export/import artifacts and reconciliation    | Pass in headed Chrome: CSV/XLSX downloads, initiative preview, locked denial, safe ledger validation |
 | Invite/password lifecycle                     | Pass through delivered Resend setup link, forced temporary-password change, and restoration   |
 | Acme meeting / Admin cleanup                  | Pass: Saturday session plus two-series browser deletion; no meeting residue                   |
 | Final canonical reseed / read verification    | Pass; SHA-256 `3ef52dd7015ee7c8953ccf7893e8d62b03a8fe9fa6588e3ab95707098cf58a50`; 2,450 requests / 55 denials |
@@ -476,6 +476,16 @@ Microsoft Teams correctly remained disconnected in dev. Live Microsoft Graph
 consent, event/join-link refresh, and transcript acceptance remain external
 release gates under #220/#389/#390. Production was not touched.
 
+The follow-up headed artifact run on `5cbabe5` used the same public dev app and
+one external Google Chrome worker. It downloaded and inspected the authenticated
+portfolio CSV (1,398 bytes), board pack XLSX (6,449 bytes), initiative workbook
+(24,784 bytes), blank initiative template, and locked financial workbook (3,042
+bytes). The blank template reached the real import-preview endpoint; the locked
+financial import remained disabled. Benefit-ledger template upload reached the
+real import endpoint with an intentionally unknown initiative code and returned
+one bounded row error with zero created and zero updated rows, preserving the
+canonical fixture. The run passed in 18.8 seconds.
+
 ### Finding log
 
 Create a GitHub issue for each reproducible product defect and link it here. Use
@@ -500,6 +510,8 @@ cosmetic defects.
 | [#224](https://github.com/venkateshbr/transmuter/issues/224) | P1       | Acme / tenant admin                            | `/admin`, Data Cleanup                          | Select a completed dependent meeting and a second series, confirm one bulk deletion.                 | Both series and tenant-scoped dependants are removed in one action.          | Browser reported two deleted series; final canonical verifier found zero meeting/session/agenda/action rows.     | Real API coverage and deployed headed-browser pass.                                   | Dev pass |
 | [#411](https://github.com/venkateshbr/transmuter/issues/411) | P2       | Large portfolios / transformation office      | `/initiatives/pipeline`                         | Inspect server sort, page, archive inclusion, and restore contracts.                                | Users can sort, page, and include/exclude archived initiatives.             | Server-backed controls and restore behavior are implemented; the five-tenant fixture remains ten rows each.     | Service/repository regressions and browser control pass; >200 real-row performance remains follow-up scope. | Accepted follow-up |
 | [#412](https://github.com/venkateshbr/transmuter/issues/412) | P3       | Public login / keyboard and screen-reader use | `/auth/login`                                   | Resolve labels, autocomplete, invalid error, and focus behavior through the accessibility tree.     | Labels and validation errors programmatically name their inputs.            | Associated labels, autocomplete hints, alert semantics, and invalid-login focus are implemented.               | Headed accessibility assertions passed.                                               | Dev pass |
+| [#418](https://github.com/venkateshbr/transmuter/issues/418) | P1       | All tenants / portfolio export roles          | `/initiatives/pipeline`                         | Click portfolio CSV export while authenticated through the Angular application.                     | The browser downloads the tenant-scoped CSV using the active bearer session. | Export now uses the authenticated API blob client and surfaces a bounded failure alert.                         | Headed Chrome downloaded and inspected the 1,398-byte CSV on `5cbabe5`.                 | Dev pass |
+| [#419](https://github.com/venkateshbr/transmuter/issues/419) | P1       | All tenants / initiative creators             | `/initiatives/new`                              | Click the blank-template control inside the Excel upload card.                                      | Template download and upload selection are independent pointer/keyboard controls. | Sibling buttons replace nested interactivity; the decorative overlay ignores pointer events.                | DOM regression, 31/31 frontend tests, production build, and headed download/preview passed. | Dev pass |
 
 Aksha may mark #399 accepted only when every required row has evidence, all P0/P1
 findings are resolved and retested, remaining P2/P3 items have explicit issue and

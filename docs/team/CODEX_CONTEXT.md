@@ -20,13 +20,15 @@ replace them.
   and web image `transmuter-web:hostinger`.
 - Hostinger dev Docker project uses API image `transmuter-api:hostinger-dev`
   and web image `transmuter-web:hostinger-dev`.
-- Current deployed application commit is `1f3330b` in dev and `5793115` in
+- Current deployed application commit is `5cbabe5` in dev and `5793115` in
   production. Dev includes the five-tenant launch fixes, native meeting/browser
-  acceptance, and the earlier Microsoft Graph isolation controls. Production
+  acceptance, authenticated export and template-upload browser fixes, and the
+  earlier Microsoft Graph isolation controls. Production
   remains on the prior tenant authorization release pending explicit promotion.
-- Current Hostinger Docker actions are `104300670` for dev and `103623550` for
-  production. Dev action `104300670` completed successfully at
-  `2026-07-15T08:55:20Z`; production action `103623550` remains unchanged.
+- Current Hostinger Docker actions are `104308750` for dev and `103623550` for
+  production. Dev action `104308750` completed successfully at
+  `2026-07-15T09:50:16Z`;
+  production action `103623550` remains unchanged.
 - Hostinger VPS / domain context:
   - Primary domain owned for the VPS: `ishirock.tech`.
   - VPS hostname: `srv1695814.hstgr.cloud`.
@@ -84,7 +86,7 @@ replace them.
 - Graphifyy is installed for this repository. The local generated graph lives at
   `graphify-out/` and is intentionally ignored by git because it is generated
   source-derived context.
-- Current graph baseline was refreshed after commit `1f3330b` with `graphify update .`;
+- Current graph baseline was refreshed after commit `5cbabe5` with `graphify update .`;
   it contains the code/navigation graph used by `graphify query`, `graphify path`,
   and `graphify explain`.
 - Agents should use the graph before broad source searches when

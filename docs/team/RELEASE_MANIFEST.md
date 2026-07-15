@@ -43,8 +43,9 @@ review/merge and separate explicit approval
 
 GitHub tracking:
 
-- Integration PR: draft `#416`, commit `1f3330b`.
-- Release findings: `#401`, `#403`-`#412`, `#414`, and `#417`.
+- Integration PR: `#416`, full-sweep commit `1f3330b`, artifact follow-up
+  commit `5cbabe5`.
+- Release findings: `#401`, `#403`-`#412`, `#414`, and `#417`-`#419`.
 - Invite/password acceptance: `#216`.
 - Admin bulk-meeting cleanup: `#224`.
 - Parent acceptance: `#399`; browser execution: `#413`.
@@ -54,8 +55,10 @@ Dev deployment:
 
 - Environment: `https://transmuter-dev.ishirock.tech`.
 - Schema: `transmuter_dev`.
-- Deployed commit: `1f3330b`.
-- Hostinger action: `104300670`, success at `2026-07-15T08:55:20Z`.
+- Deployed commit: `5cbabe5` (`1f3330b` was the uninterrupted five-tenant
+  browser-sweep runtime).
+- Hostinger action: `104308750`, success at `2026-07-15T09:50:16Z`; full-sweep action
+  `104300670` succeeded at `2026-07-15T08:55:20Z`.
 - No schema migration was required for the final People pointer-action fix.
 - Production project, schema, data, configuration, and consent were untouched.
 
@@ -63,7 +66,7 @@ Acceptance evidence:
 
 - Focused backend: 87 passing fiscal, portfolio, benefit-ledger, operating-RBAC,
   and pipeline-control tests; Ruff format/check and mypy passed.
-- Frontend: 28/28 unit tests and Angular production build passed.
+- Frontend: 31/31 unit tests and Angular production build passed.
 - Real mutable API run: 2,635 requests, 50 authenticated users, 55 isolation
   denials across five tenants.
 - External headed Google Chrome: one process/worker, 29 routes per tenant,
@@ -77,6 +80,10 @@ Acceptance evidence:
   two-series Admin cleanup.
 - Dedicated headed controls: risk/KPI filter and create navigation, matrix
   contributor drilldown, and Benefit Tracking bankable-plan navigation passed.
+- Headed artifact acceptance downloaded authenticated pipeline CSV, board-pack,
+  initiative, blank-template, and financial workbooks; previewed the blank
+  initiative import; enforced the financial lock; and exercised benefit-ledger
+  import validation with zero fixture mutations.
 - Final deterministic reseed restored zero meetings/sessions/agendas/actions/
   invites. Manifest SHA-256 remained
   `3ef52dd7015ee7c8953ccf7893e8d62b03a8fe9fa6588e3ab95707098cf58a50`.
