@@ -2,6 +2,8 @@ import { Component, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ApiService } from '../../../core/services/api.service';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
+import { AuthService } from '../../../core/services/auth.service';
 
 @Component({
   selector: 'app-kpis',
@@ -23,11 +25,24 @@ import { FormsModule } from '@angular/forms';
             <span class="material-icons text-xs">trending_up</span>
             <span class="text-[10px] font-black uppercase tracking-widest">{{ pulse()?.health_score }}% PORTFOLIO EFFICIENCY</span>
           </div>
-          <button class="btn-primary text-sm flex items-center gap-2 h-10">
+          @if (canCreate()) {
+          <select class="input-field h-10 min-w-56 py-2 text-xs" [(ngModel)]="selectedInitiativeId" aria-label="Select initiative for new KPI">
+            <option value="">Select initiative</option>
+            @for (initiative of initiatives(); track initiative.id) {
+              <option [value]="initiative.id">{{ initiative.initiative_code }} · {{ initiative.name }}</option>
+            }
+          </select>
+          <button class="btn-primary text-sm flex items-center gap-2 h-10" type="button" (click)="createMetric()" [disabled]="!selectedInitiativeId" aria-label="Define KPI for selected initiative">
             <span>+</span> Define Metric
           </button>
+          }
         </div>
       </div>
+
+      <section class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4">
+        <label for="portfolio-kpi-search" class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Search metrics</label>
+        <input id="portfolio-kpi-search" class="input-field mt-2 w-full max-w-md" type="search" [(ngModel)]="searchQuery" placeholder="KPI name or initiative code" aria-label="Search portfolio KPIs">
+      </section>
 
       <!-- High-Fidelity KPI Pulse -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" *ngIf="pulse()">
@@ -117,7 +132,7 @@ import { FormsModule } from '@angular/forms';
                   <span class="text-[9px] font-black text-[var(--t-text-tertiary)] uppercase">Initiative</span>
                   <span class="text-[9px] font-black text-[var(--t-text-secondary)]">{{ kpi.initiative_code || 'PORTFOLIO' }}</span>
                </div>
-               <button class="w-8 h-8 rounded-lg bg-[var(--t-surface-raised)] flex items-center justify-center text-[var(--t-text-tertiary)] hover:text-[var(--t-accent)] hover:bg-[var(--t-accent-soft)] transition-all">
+               <button type="button" class="w-8 h-8 border border-[var(--t-border)] bg-[var(--t-surface-raised)] flex items-center justify-center text-[var(--t-text-tertiary)] hover:text-[var(--t-accent)] hover:bg-[var(--t-accent-soft)] transition-all" (click)="openMetric(kpi)" [attr.aria-label]="'Open ' + kpi.name + ' in its initiative'">
                  <span class="material-icons text-xs">open_in_new</span>
                </button>
             </div>
@@ -141,11 +156,15 @@ import { FormsModule } from '@angular/forms';
 })
 export class KPIsComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly router = inject(Router);
+  private readonly auth = inject(AuthService);
   protected readonly parseFloat = parseFloat;
   
   kpis = signal<any[]>([]);
   pulse = signal<any | null>(null);
+  initiatives = signal<any[]>([]);
   searchQuery = '';
+  selectedInitiativeId = '';
 
   filteredKpis = computed(() => {
     const query = this.searchQuery.toLowerCase();
@@ -159,6 +178,26 @@ export class KPIsComponent implements OnInit {
   ngOnInit() {
     this.loadPulse();
     this.loadKpis();
+    this.api.get<any>('/initiatives', { page_size: 200 }).subscribe(res => {
+      this.initiatives.set(res.items || []);
+      if ((res.items || []).length === 1) this.selectedInitiativeId = res.items[0].id;
+    });
+  }
+
+  canCreate(): boolean {
+    return this.auth.hasPermission('execution_evidence.manage')
+      || this.auth.hasPermission('execution_evidence.manage_assigned')
+      || this.auth.hasPermission('execution_evidence.manage_workstream');
+  }
+
+  createMetric(): void {
+    if (!this.selectedInitiativeId) return;
+    void this.router.navigate(['/initiatives', this.selectedInitiativeId], { queryParams: { tab: 'kpis', action: 'new' } });
+  }
+
+  openMetric(kpi: any): void {
+    if (!kpi?.initiative_id) return;
+    void this.router.navigate(['/initiatives', kpi.initiative_id], { queryParams: { tab: 'kpis' } });
   }
 
   loadPulse() {

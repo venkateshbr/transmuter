@@ -2,6 +2,8 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ApiService } from '../../../core/services/api.service';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
+import { AuthService } from '../../../core/services/auth.service';
 
 @Component({
   selector: 'app-risks',
@@ -23,11 +25,34 @@ import { FormsModule } from '@angular/forms';
             <span class="material-icons text-xs">shield</span>
             <span class="text-[10px] font-black uppercase tracking-widest">{{ risks().length }} ACTIVE THREATS</span>
           </div>
-          <button class="btn-primary text-sm flex items-center gap-2 h-10">
+          @if (canCreate()) {
+          <select class="input-field h-10 min-w-56 py-2 text-xs" [(ngModel)]="selectedInitiativeId" aria-label="Select initiative for new risk">
+            <option value="">Select initiative</option>
+            @for (initiative of initiatives(); track initiative.id) {
+              <option [value]="initiative.id">{{ initiative.initiative_code }} · {{ initiative.name }}</option>
+            }
+          </select>
+          <button class="btn-primary text-sm flex items-center gap-2 h-10" type="button" (click)="captureRisk()" [disabled]="!selectedInitiativeId" aria-label="Capture risk for selected initiative">
             <span>+</span> Capture Risk
           </button>
+          }
         </div>
       </div>
+
+      <section class="grid gap-3 border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4 md:grid-cols-4">
+        <label class="grid gap-1 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Search
+          <input class="input-field text-xs" type="search" [(ngModel)]="searchQuery" (ngModelChange)="applyClientFilters()" aria-label="Search portfolio risks">
+        </label>
+        <label class="grid gap-1 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Status
+          <select class="input-field text-xs" [(ngModel)]="statusFilter" (ngModelChange)="applyFilters()" aria-label="Filter risks by status"><option value="open">Open</option><option value="closed">Closed</option><option value="">All</option></select>
+        </label>
+        <label class="grid gap-1 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Type
+          <select class="input-field text-xs" [(ngModel)]="typeFilter" (ngModelChange)="applyClientFilters()" aria-label="Filter risks by type"><option value="">All types</option>@for (type of riskTypes; track type) { <option [value]="type">{{ type }}</option> }</select>
+        </label>
+        <label class="grid gap-1 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Rating
+          <select class="input-field text-xs" [(ngModel)]="ratingFilter" (ngModelChange)="applyClientFilters()" aria-label="Filter risks by rating"><option value="">All ratings</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
+        </label>
+      </section>
 
       <!-- Risk Summary & Heatmap -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -157,7 +182,7 @@ import { FormsModule } from '@angular/forms';
                  </div>
                </div>
                
-               <button class="w-10 h-10 rounded-xl bg-[var(--t-surface-raised)] border border-[var(--t-border)] flex items-center justify-center text-[var(--t-text-tertiary)] hover:text-[var(--t-accent)] hover:border-[var(--t-accent)] transition-all">
+               <button type="button" class="w-10 h-10 bg-[var(--t-surface-raised)] border border-[var(--t-border)] flex items-center justify-center text-[var(--t-text-tertiary)] hover:text-[var(--t-accent)] hover:border-[var(--t-accent)] transition-all" (click)="openRisk(r)" [attr.aria-label]="'Open risk for ' + (r.initiative_name || 'initiative')">
                  <span class="material-icons text-sm">chevron_right</span>
                </button>
             </div>
@@ -173,12 +198,19 @@ import { FormsModule } from '@angular/forms';
 })
 export class RisksComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly router = inject(Router);
+  private readonly auth = inject(AuthService);
   
   risks = signal<any[]>([]);
   filteredRisks = signal<any[]>([]);
   heatmap = signal<any[]>([]);
+  initiatives = signal<any[]>([]);
   
   statusFilter = 'open';
+  searchQuery = '';
+  typeFilter = '';
+  ratingFilter = '';
+  selectedInitiativeId = '';
   riskTypes = ['operational', 'people', 'financial', 'technology'];
   impactLevels = ['high', 'medium', 'low'];
   likelihoodLevels = ['low', 'medium', 'high'];
@@ -186,12 +218,13 @@ export class RisksComponent implements OnInit {
   ngOnInit() {
     this.loadRisks();
     this.loadHeatmap();
+    this.api.get<any>('/initiatives', { page_size: 200 }).subscribe(res => this.initiatives.set(res.items || []));
   }
 
   loadRisks() {
     this.api.get<any>('/portfolio/risks', { status: this.statusFilter }).subscribe(res => {
       this.risks.set(res.items || []);
-      this.filteredRisks.set(res.items || []);
+      this.applyClientFilters();
     });
   }
 
@@ -203,6 +236,31 @@ export class RisksComponent implements OnInit {
 
   applyFilters() {
     this.loadRisks();
+  }
+
+  applyClientFilters(): void {
+    const query = this.searchQuery.trim().toLowerCase();
+    this.filteredRisks.set(this.risks().filter(risk =>
+      (!query || String(risk.description || '').toLowerCase().includes(query) || String(risk.initiative_name || '').toLowerCase().includes(query))
+      && (!this.typeFilter || risk.type === this.typeFilter)
+      && (!this.ratingFilter || risk.rating === this.ratingFilter)
+    ));
+  }
+
+  canCreate(): boolean {
+    return this.auth.hasPermission('execution_evidence.manage')
+      || this.auth.hasPermission('execution_evidence.manage_assigned')
+      || this.auth.hasPermission('execution_evidence.manage_workstream');
+  }
+
+  captureRisk(): void {
+    if (!this.selectedInitiativeId) return;
+    void this.router.navigate(['/initiatives', this.selectedInitiativeId], { queryParams: { tab: 'risks', action: 'new' } });
+  }
+
+  openRisk(risk: any): void {
+    if (!risk?.initiative_id) return;
+    void this.router.navigate(['/initiatives', risk.initiative_id], { queryParams: { tab: 'risks' } });
   }
 
   getRiskCount(impact: string, likelihood: string): number {

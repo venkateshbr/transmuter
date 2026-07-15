@@ -466,8 +466,7 @@ class MeetingService:
             )
         agenda_item_id = payload.get("agenda_item_id")
         if agenda_item_id and not any(
-            str(item.get("source_agenda_item_id")) == str(agenda_item_id)
-            for item in session_agenda
+            str(item.get("source_agenda_item_id")) == str(agenda_item_id) for item in session_agenda
         ):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,

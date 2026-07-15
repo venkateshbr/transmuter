@@ -493,6 +493,16 @@ class ExecutiveControlRepository:
         )
         return inserted.data[0]
 
+    def get_financial_reporting_settings(self) -> dict:
+        result = (
+            self._c.table("organizations")
+            .select("fiscal_year_start_month,reporting_currency")
+            .eq("id", self._tid)
+            .maybe_single()
+            .execute()
+        )
+        return result.data if result and result.data else {}
+
     def update_reporting_settings(self, data: dict) -> dict:
         payload = {**data, "updated_at": datetime.now(UTC).isoformat()}
         existing = self.get_reporting_settings()

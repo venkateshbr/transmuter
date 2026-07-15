@@ -58,6 +58,18 @@ from app.services.status_update import StatusUpdateService
 
 
 class InitiativeService:
+    _SORT_FIELDS = {
+        "initiative_code",
+        "name",
+        "priority",
+        "rag_status",
+        "stage",
+        "planned_start",
+        "planned_end",
+        "created_at",
+        "updated_at",
+    }
+
     def __init__(self, client: Client, tenant_id: UUID, user_id: UUID | None = None) -> None:
         self._client = client
         self._repo = InitiativeRepository(client, tenant_id)
@@ -77,10 +89,13 @@ class InitiativeService:
         search: str | None = None,
         sort_by: str = "initiative_code",
         sort_desc: bool = False,
+        include_archived: bool = False,
         page: int = 1,
         page_size: int = 50,
         current_user: CurrentUser | None = None,
     ) -> InitiativeListResponse:
+        if sort_by not in self._SORT_FIELDS:
+            raise HTTPException(status_code=422, detail="Unsupported initiative sort field")
         owner_user_id = (
             str(current_user.id)
             if current_user and current_user.role == "initiative_owner"
@@ -113,6 +128,7 @@ class InitiativeService:
             search=search,
             sort_by=sort_by,
             sort_desc=sort_desc,
+            include_archived=include_archived,
             page=page,
             page_size=page_size,
             owner_user_id=owner_user_id,
@@ -263,6 +279,19 @@ class InitiativeService:
         initiative = self.get_initiative(initiative_id)
         self._audit_change(
             "archive",
+            "initiative",
+            initiative_id,
+            before_data=existing,
+            after_data=initiative.model_dump(mode="json"),
+        )
+        return initiative
+
+    def restore_initiative(self, initiative_id: str) -> InitiativeDetail:
+        existing = self._assert_exists(initiative_id)
+        self._repo.restore(initiative_id)
+        initiative = self.get_initiative(initiative_id)
+        self._audit_change(
+            "restore",
             "initiative",
             initiative_id,
             before_data=existing,

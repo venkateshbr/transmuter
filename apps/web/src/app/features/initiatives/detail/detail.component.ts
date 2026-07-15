@@ -1,6 +1,6 @@
 import { Component, Input, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { ApiService } from '../../../core/services/api.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { MilestonesTabComponent } from './milestones/milestones-tab.component';
@@ -89,8 +89,8 @@ import { DependenciesTabComponent } from './dependencies/dependencies-tab.compon
           <app-overview-tab *ngIf="activeTab === 'overview'" [initiativeId]="id"></app-overview-tab>
           <app-financials-tab *ngIf="activeTab === 'financials'" [initiativeId]="id"></app-financials-tab>
           <app-milestones-tab *ngIf="activeTab === 'milestones'" [initiativeId]="id"></app-milestones-tab>
-          <app-kpis-tab *ngIf="activeTab === 'kpis'" [initiativeId]="id"></app-kpis-tab>
-          <app-risks-tab *ngIf="activeTab === 'risks'" [initiativeId]="id"></app-risks-tab>
+          <app-kpis-tab *ngIf="activeTab === 'kpis'" [initiativeId]="id" [canManage]="!!initiative()?.capabilities?.manage_execution" [startCreate]="action === 'new'"></app-kpis-tab>
+          <app-risks-tab *ngIf="activeTab === 'risks'" [initiativeId]="id" [canManage]="!!initiative()?.capabilities?.manage_execution" [startCreate]="action === 'new'"></app-risks-tab>
           <app-dependencies-tab *ngIf="activeTab === 'dependencies'" [initiativeId]="id"></app-dependencies-tab>
           <app-status-updates-tab *ngIf="activeTab === 'status-updates'" [initiativeId]="id"></app-status-updates-tab>
           <app-governance-tab *ngIf="activeTab === 'governance'" [initiativeId]="id"></app-governance-tab>
@@ -106,13 +106,20 @@ export class InitiativeDetailComponent implements OnInit {
   
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
+  private readonly route = inject(ActivatedRoute);
   initiative = signal<any | null>(null);
   loadError = signal(false);
   exporting = signal(false);
 
   activeTab = 'overview';
+  action = '';
   
   ngOnInit(): void {
+    this.route.queryParamMap.subscribe(params => {
+      const requestedTab = params.get('tab') || '';
+      if (this.tabs.some(tab => tab.id === requestedTab)) this.activeTab = requestedTab;
+      this.action = params.get('action') || '';
+    });
     if (this.id) {
       this.api.get(`/initiatives/${this.id}`).subscribe({
         next: (res: any) => {
@@ -141,9 +148,7 @@ export class InitiativeDetailComponent implements OnInit {
   ];
 
   canEditInitiative(): boolean {
-    return this.auth.hasPermission('initiatives.manage_all')
-      || this.auth.hasPermission('initiatives.manage_assigned')
-      || this.auth.hasPermission('initiatives.manage_workstream');
+    return Boolean(this.initiative()?.capabilities?.manage_master_data);
   }
 
   exportWorkbook(): void {

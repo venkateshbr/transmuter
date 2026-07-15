@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { AuthService } from '../../core/services/auth.service';
 import { ApiService } from '../../core/services/api.service';
 import { FormsModule } from '@angular/forms';
-import { OPERATING_MODEL_ROLES } from '../../core/rbac/operating-model-permissions';
+import { OPERATING_MODEL_ROLES, type OperatingModelPermission } from '../../core/rbac/operating-model-permissions';
 
 const DEFAULT_ROLE_IDS = OPERATING_MODEL_ROLES.map(role => role.id);
 const DEFAULT_REBASELINE_ROLES = ['transformation_office', 'finance_lead', 'pmo_lead'];
@@ -34,14 +34,14 @@ const DEFAULT_REBASELINE_ROLES = ['transformation_office', 'finance_lead', 'pmo_
       <!-- Admin Navigation -->
       <div class="border-b border-[var(--t-border)]">
         <nav class="-mb-px flex space-x-8">
-          @for (tab of ['General', 'Billing', 'Data Cleanup', 'Strategic Parameters', 'Financial Configuration', 'Dashboard Configuration', 'Access Control', 'Governance Engine', 'Audit Logs']; track tab) {
+          @for (tab of visibleTabs(); track tab.label) {
             <button
               type="button"
-              (click)="openTab(tab)"
-              [ngClass]="activeTab === tab ? 'border-[var(--t-accent)] text-[var(--t-accent)]' : 'border-transparent text-[var(--t-text-tertiary)]'"
-              [attr.aria-label]="'Open ' + tab + ' admin tab'"
+              (click)="openTab(tab.label)"
+              [ngClass]="activeTab === tab.label ? 'border-[var(--t-accent)] text-[var(--t-accent)]' : 'border-transparent text-[var(--t-text-tertiary)]'"
+              [attr.aria-label]="'Open ' + tab.label + ' admin tab'"
               class="whitespace-nowrap pb-4 px-1 border-b-2 font-black text-[10px] uppercase tracking-widest transition-all">
-              {{ tab }}
+              {{ tab.label }}
             </button>
           }
         </nav>
@@ -1311,6 +1311,18 @@ export class AdminComponent implements OnInit {
   private readonly api = inject(ApiService);
 
   activeTab = 'General';
+  readonly tabs: Array<{ label: string; permissions: OperatingModelPermission[] }> = [
+    { label: 'General', permissions: ['tenant_setup.manage'] },
+    { label: 'Billing', permissions: ['tenant_setup.manage'] },
+    { label: 'Data Cleanup', permissions: ['tenant_setup.manage'] },
+    { label: 'Strategic Parameters', permissions: ['tenant_setup.manage'] },
+    { label: 'Financial Configuration', permissions: ['financials.manage', 'tenant_setup.manage'] },
+    { label: 'Dashboard Configuration', permissions: ['tenant_setup.manage'] },
+    { label: 'Access Control', permissions: ['users.manage'] },
+    { label: 'Governance Engine', permissions: ['governance.manage'] },
+    { label: 'Audit Logs', permissions: ['audit_log.view'] },
+  ];
+  readonly visibleTabs = signal<Array<{ label: string; permissions: OperatingModelPermission[] }>>([]);
   
   // Signals for data
   workstreams = signal<any[]>([]);
@@ -1353,7 +1365,7 @@ export class AdminComponent implements OnInit {
   dashboardConfiguration = signal<any[]>([]);
   reportingSettings = signal<any>({
     fiscal_year_start_month: 1,
-    reporting_currency: 'USD',
+    reporting_currency: '',
     recurring_cost_inflation_mode: 'manual_entry',
     default_annual_inflation_rate_pct: '0.0000',
     allow_cost_line_inflation_override: true,
@@ -1416,31 +1428,46 @@ export class AdminComponent implements OnInit {
   ];
 
   ngOnInit() {
-    this.loadAll();
+    const visible = this.tabs.filter(tab => tab.permissions.some(permission => this.auth.hasPermission(permission)));
+    this.visibleTabs.set(visible);
+    if (visible.length) this.openTab(visible[0].label);
   }
 
   loadAll() {
-    this.loadWorkstreams();
-    this.loadBusinessUnits();
-    this.loadUsers();
-    this.loadSettings();
-    this.loadBilling();
-    this.loadSetupStatus();
-    this.loadCleanupPreview();
-    this.loadInitiativeDeleteCandidates();
-    this.loadGateCriteria();
-    this.loadStageGateDefinitions();
-    this.loadAuditLogs();
-    this.loadFinancialConfiguration();
-    this.loadFinancialEngineConfiguration();
-    this.loadFinancialGovernance();
-    this.loadDashboardConfiguration();
+    this.openTab(this.activeTab);
   }
 
   openTab(tab: string): void {
+    if (!this.visibleTabs().some(item => item.label === tab)) return;
     this.activeTab = tab;
-    if (tab === 'Data Cleanup') {
+    if (tab === 'General') {
+      this.loadWorkstreams();
+      this.loadBusinessUnits();
+      this.loadSettings();
+      this.loadSetupStatus();
+    } else if (tab === 'Billing') {
+      this.loadBilling();
+    } else if (tab === 'Data Cleanup') {
+      this.loadCleanupPreview();
+      this.loadInitiativeDeleteCandidates();
       this.loadMeetingCleanupCandidates();
+    } else if (tab === 'Strategic Parameters') {
+      this.loadWorkstreams();
+      this.loadBusinessUnits();
+      this.loadSettings();
+    } else if (tab === 'Financial Configuration') {
+      this.loadFinancialConfiguration();
+      this.loadFinancialEngineConfiguration();
+      this.loadFinancialGovernance();
+    } else if (tab === 'Dashboard Configuration') {
+      this.loadDashboardConfiguration();
+    } else if (tab === 'Access Control') {
+      this.loadUsers();
+    } else if (tab === 'Governance Engine') {
+      this.loadGateCriteria();
+      this.loadStageGateDefinitions();
+    } else if (tab === 'Audit Logs') {
+      this.loadAuditLogs();
     }
   }
 
@@ -1523,6 +1550,7 @@ export class AdminComponent implements OnInit {
   }
 
   loadAuditLogs() {
+    if (!this.auth.hasPermission('audit_log.view')) return;
     this.api.get<any>('/admin/audit-logs').subscribe(res => this.auditLogs.set(res.items || []));
   }
 
@@ -1542,7 +1570,7 @@ export class AdminComponent implements OnInit {
       this.attributeDefinitions.set(res.attribute_definitions || []);
       this.reportingSettings.set({
         fiscal_year_start_month: 1,
-        reporting_currency: 'USD',
+        reporting_currency: '',
         recurring_cost_inflation_mode: 'manual_entry',
         default_annual_inflation_rate_pct: '0.0000',
         allow_cost_line_inflation_override: true,
@@ -1895,12 +1923,17 @@ export class AdminComponent implements OnInit {
   saveReportingSettings() {
     if (this.reportingSettingsSaving()) return;
     const settings = this.reportingSettings();
+    const reportingCurrency = String(settings.reporting_currency || '').trim().toUpperCase();
+    if (!/^[A-Z]{3}$/.test(reportingCurrency)) {
+      this.reportingSettingsError.set('Enter a valid three-letter ISO reporting currency.');
+      return;
+    }
     this.reportingSettingsSaving.set(true);
     this.reportingSettingsMessage.set(null);
     this.reportingSettingsError.set(null);
     this.api.put('/admin/financial-engine/reporting-settings', {
       fiscal_year_start_month: Number(settings.fiscal_year_start_month || 1),
-      reporting_currency: String(settings.reporting_currency || 'USD').toUpperCase().slice(0, 3),
+      reporting_currency: reportingCurrency,
       recurring_cost_inflation_mode: settings.recurring_cost_inflation_mode || 'manual_entry',
       default_annual_inflation_rate_pct: Number(settings.default_annual_inflation_rate_pct || 0),
       allow_cost_line_inflation_override: settings.allow_cost_line_inflation_override !== false,
@@ -1909,7 +1942,7 @@ export class AdminComponent implements OnInit {
         this.reportingSettingsSaving.set(false);
         this.reportingSettings.set({
           fiscal_year_start_month: 1,
-          reporting_currency: 'USD',
+          reporting_currency: '',
           recurring_cost_inflation_mode: 'manual_entry',
           default_annual_inflation_rate_pct: '0.0000',
           allow_cost_line_inflation_override: true,

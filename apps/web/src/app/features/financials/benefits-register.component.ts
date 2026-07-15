@@ -3,6 +3,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
+import { TenantReportingContextService } from '../../core/services/tenant-reporting-context.service';
 
 type BenefitValidationStatus = 'draft' | 'submitted' | 'finance_validated' | 'rejected';
 
@@ -143,12 +144,14 @@ interface BenefitsRegisterResponse {
 })
 export class BenefitsRegisterComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly reportingContext = inject(TenantReportingContextService);
 
   data = signal<BenefitsRegisterResponse | null>(null);
   year = signal<number | null>(null);
   validationStatus = signal('');
 
   ngOnInit(): void {
+    this.reportingContext.ensureLoaded();
     this.load();
   }
 
@@ -185,12 +188,7 @@ export class BenefitsRegisterComponent implements OnInit {
   }
 
   formatMoney(value: string | number | null | undefined): string {
-    const parsed = Number(value || 0);
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      maximumFractionDigits: 0,
-    }).format(Number.isFinite(parsed) ? parsed : 0);
+    return this.reportingContext.formatMoney(value);
   }
 
   validationLabel(status: BenefitValidationStatus): string {

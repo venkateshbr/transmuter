@@ -117,7 +117,7 @@ export class PortfolioFinancialTrendComponent implements AfterViewInit, OnChange
   @Input() rows: FinancialTrendRow[] = [];
   @Input() granularity: FinancialTrendGranularity = 'monthly';
   @Input() showActuals = false;
-  @Input() currency = 'USD';
+  @Input() currency = '';
   @Input() baselineValue: string | number | null = null;
   @Input() baselineLabel = 'Gross margin baseline';
 
@@ -345,24 +345,28 @@ export class PortfolioFinancialTrendComponent implements AfterViewInit, OnChange
   }
 
   formatMoney(value: string | number | null | undefined): string {
+    const currency = this.normalizedCurrency();
+    if (!currency) return '—';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: this.normalizedCurrency(),
+      currency,
       maximumFractionDigits: 0,
     }).format(this.parseMoney(value));
   }
 
   private formatCompactMoney(value: number): string {
+    const currency = this.normalizedCurrency();
+    if (!currency) return '—';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: this.normalizedCurrency(),
+      currency,
       notation: 'compact',
       maximumFractionDigits: 1,
     }).format(value);
   }
 
-  private normalizedCurrency(): string {
-    const currency = String(this.currency || 'USD').trim().toUpperCase();
-    return /^[A-Z]{3}$/.test(currency) ? currency : 'USD';
+  private normalizedCurrency(): string | null {
+    const currency = String(this.currency || '').trim().toUpperCase();
+    return /^[A-Z]{3}$/.test(currency) ? currency : null;
   }
 }

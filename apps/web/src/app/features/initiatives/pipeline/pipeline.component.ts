@@ -47,6 +47,10 @@ const FALLBACK_STAGES: FilterOption[] = [
   { id: 'complete', name: 'Complete' },
 ];
 const FILTER_STATE_KEY = 'transmuter.filters.initiatives.pipeline';
+const PIPELINE_SORT_FIELDS = new Set([
+  'initiative_code', 'name', 'priority', 'rag_status', 'stage',
+  'planned_start', 'planned_end', 'created_at', 'updated_at',
+]);
 
 @Component({
   selector: 'app-pipeline',
@@ -192,6 +196,21 @@ const FILTER_STATE_KEY = 'transmuter.filters.initiatives.pipeline';
       (searchValueChange)="onSearchChange($event)"
       (groupSelectionChange)="onFilterGroupChange($event)"
       (clearFilters)="clearFilters()" />
+
+    <div class="mt-4 flex flex-wrap items-end gap-3 border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-3">
+      <label class="grid gap-1 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Sort by
+        <select class="input-field py-2 text-xs" [(ngModel)]="sortBy" (ngModelChange)="onListControlsChange()" aria-label="Sort initiatives">
+          <option value="initiative_code">Initiative code</option><option value="name">Name</option><option value="priority">Priority</option><option value="rag_status">RAG status</option><option value="stage">Stage</option><option value="planned_start">Planned start</option><option value="updated_at">Last updated</option>
+        </select>
+      </label>
+      <label class="grid gap-1 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Direction
+        <select class="input-field py-2 text-xs" [(ngModel)]="sortDirection" (ngModelChange)="onListControlsChange()" aria-label="Sort direction"><option value="asc">Ascending</option><option value="desc">Descending</option></select>
+      </label>
+      <label class="grid gap-1 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Rows
+        <select class="input-field py-2 text-xs" [(ngModel)]="pageSize" (ngModelChange)="onListControlsChange()" aria-label="Initiatives per page"><option [ngValue]="25">25</option><option [ngValue]="50">50</option><option [ngValue]="100">100</option><option [ngValue]="200">200</option></select>
+      </label>
+      <label class="flex items-center gap-2 pb-2 text-xs font-bold text-[var(--t-text-primary)]"><input type="checkbox" [(ngModel)]="includeArchived" (ngModelChange)="onListControlsChange()" aria-label="Include archived initiatives">Include archived</label>
+    </div>
   </div>
 
   <!-- PIPELINE -->
@@ -435,6 +454,9 @@ const FILTER_STATE_KEY = 'transmuter.filters.initiatives.pipeline';
                                     stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
                           </a>
+                          @if (canManageInitiatives()) {
+                            <button type="button" class="btn-ghost ml-3 text-[10px]" (click)="$event.stopPropagation(); toggleArchive(item)" [attr.aria-label]="(item.archived_at ? 'Restore ' : 'Archive ') + item.name">{{ item.archived_at ? 'Restore' : 'Archive' }}</button>
+                          }
                         </div>
                       </div>
                     </div>
@@ -446,6 +468,10 @@ const FILTER_STATE_KEY = 'transmuter.filters.initiatives.pipeline';
           }
         }
       </div>
+      <nav class="mt-6 flex items-center justify-between border-t border-[var(--t-border)] pt-4" aria-label="Initiative pagination">
+        <p class="text-xs font-bold text-[var(--t-text-secondary)]">Page {{ page }} of {{ totalPages() }} · {{ total() }} initiatives</p>
+        <div class="flex gap-2"><button type="button" class="btn-secondary text-xs" (click)="goToPage(page - 1)" [disabled]="page <= 1" aria-label="Previous initiative page">Previous</button><button type="button" class="btn-secondary text-xs" (click)="goToPage(page + 1)" [disabled]="page >= totalPages()" aria-label="Next initiative page">Next</button></div>
+      </nav>
     }
   </div>
 
@@ -508,10 +534,23 @@ export class PipelineComponent {
   private readonly router = inject(Router);
 
   private searchTimer: ReturnType<typeof setTimeout> | null = null;
+  page = 1;
+  pageSize = 25;
+  sortBy = 'initiative_code';
+  sortDirection: 'asc' | 'desc' = 'asc';
+  includeArchived = false;
+  readonly totalPages = computed(() => Math.max(1, Math.ceil(this.total() / this.pageSize)));
 
   constructor() {
     this.loadFilterOptions();
     this.route.queryParamMap.subscribe(params => {
+      const requestedPage = Number(params.get('page') || 1);
+      this.page = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+      this.pageSize = [25, 50, 100, 200].includes(Number(params.get('page_size'))) ? Number(params.get('page_size')) : 25;
+      const requestedSort = params.get('sort_by') || 'initiative_code';
+      this.sortBy = PIPELINE_SORT_FIELDS.has(requestedSort) ? requestedSort : 'initiative_code';
+      this.sortDirection = params.get('sort_desc') === 'true' ? 'desc' : 'asc';
+      this.includeArchived = params.get('include_archived') === 'true';
       const hasQueryFilters = this.hasQueryFilters(params);
       if (hasQueryFilters) {
         this.searchValue = params.get('search') ?? '';
@@ -538,8 +577,17 @@ export class PipelineComponent {
   }
 
   reload(syncState = true): void {
-    if (syncState) this.persistFilters();
-    const params: Record<string, string | number> = { page_size: 200 };
+    if (syncState) {
+      this.persistFilters();
+      return;
+    }
+    const params: Record<string, string | number | boolean> = {
+      page: this.page,
+      page_size: this.pageSize,
+      sort_by: this.sortBy,
+      sort_desc: this.sortDirection === 'desc',
+      include_archived: this.includeArchived,
+    };
     if (this.searchValue.trim()) params['search'] = this.searchValue.trim();
     if (this.ragFilter) params['rag_status'] = this.ragFilter;
     if (this.businessUnitFilter.length) params['business_unit_id'] = this.businessUnitFilter.join(',');
@@ -564,7 +612,24 @@ export class PipelineComponent {
 
   onSearchChange(value: string): void {
     this.searchValue = value;
+    this.page = 1;
     this.scheduleReload();
+  }
+
+  onListControlsChange(): void {
+    this.page = 1;
+    this.reload();
+  }
+
+  goToPage(page: number): void {
+    if (page < 1 || page > this.totalPages() || page === this.page) return;
+    this.page = page;
+    this.reload();
+  }
+
+  toggleArchive(item: InitiativeItem): void {
+    const action = item.archived_at ? 'restore' : 'archive';
+    this.api.post(`/initiatives/${item.id}/${action}`, {}).subscribe(() => this.reload(false));
   }
 
   filterGroups(): CompactFilterGroup[] {
@@ -635,6 +700,7 @@ export class PipelineComponent {
   }
 
   onFilterGroupChange(change: { key: string; selected: string[] }): void {
+    this.page = 1;
     if (change.key === 'stage') {
       this.stageFilter = change.selected[0] || '';
       this.reload();
@@ -676,16 +742,19 @@ export class PipelineComponent {
     this.stageFilter = '';
     this.priorityFilter = [];
     this.tagFilter = [];
+    this.page = 1;
     this.reload();
   }
 
   private persistFilters(): void {
     const state = this.currentFilterState();
     localStorage.setItem(FILTER_STATE_KEY, JSON.stringify(state));
-    this.router.navigate([], {
+    void this.router.navigate([], {
       relativeTo: this.route,
       queryParams: this.queryParamsFromState(state),
       replaceUrl: true,
+    }).then(changed => {
+      if (!changed) this.reload(false);
     });
   }
 
@@ -715,6 +784,11 @@ export class PipelineComponent {
       stage: this.stageFilter,
       priority: this.priorityFilter,
       tag: this.tagFilter,
+      page: String(this.page),
+      page_size: String(this.pageSize),
+      sort_by: this.sortBy,
+      sort_desc: String(this.sortDirection === 'desc'),
+      include_archived: String(this.includeArchived),
     };
   }
 
@@ -728,7 +802,7 @@ export class PipelineComponent {
   }
 
   private hasQueryFilters(params: { get: (key: string) => string | null }): boolean {
-    return ['search', 'rag_status', 'business_unit_id', 'workstream_id', 'stage', 'priority', 'tag']
+    return ['search', 'rag_status', 'business_unit_id', 'workstream_id', 'stage', 'priority', 'tag', 'page', 'page_size', 'sort_by', 'sort_desc', 'include_archived']
       .some(key => params.get(key));
   }
 

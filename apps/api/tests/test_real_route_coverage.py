@@ -1,32 +1,20 @@
 from __future__ import annotations
 
-import os
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.testing.credentials import fixture_credentials
 
 client = TestClient(app)
 
 
 def _headers() -> dict[str, str]:
-    credentials = [
-        (
-            os.environ.get("TRANSMUTER_TEST_EMAIL", "admin@ishirock.dev"),
-            os.environ.get("TRANSMUTER_TEST_PASSWORD", "Transmuter2026!"),
-        ),
-        ("admin@acme3-transformation.dev", "Transmuter2026!"),
-        ("admin@acme-transformation.dev", "Transmuter2026!"),
-    ]
-    response = None
-    for email, password in dict.fromkeys(credentials):
-        response = client.post("/auth/login", json={"email": email, "password": password})
-        if response.is_success:
-            return {"Authorization": f"Bearer {response.json()['access_token']}"}
-    assert response is not None
+    email, password = fixture_credentials()
+    response = client.post("/auth/login", json={"email": email, "password": password})
     response.raise_for_status()
-    return {}
+    return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
 def _first_initiative(headers: dict[str, str]) -> str:

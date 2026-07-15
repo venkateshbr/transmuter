@@ -6,6 +6,7 @@ import { Subject, forkJoin, interval, of } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { ApiService } from '../../../core/services/api.service';
 import { TimezoneOptionsService } from '../../../core/services/timezone-options.service';
+import { TenantReportingContextService } from '../../../core/services/tenant-reporting-context.service';
 
 type ArtifactType = 'action' | 'decision' | 'risk' | 'assumption' | 'issue';
 
@@ -462,6 +463,7 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly timezones = inject(TimezoneOptionsService);
+  private readonly reportingContext = inject(TenantReportingContextService);
   private readonly destroy$ = new Subject<void>();
   private readonly notesChanged$ = new Subject<string>();
 
@@ -528,6 +530,7 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
   });
 
   ngOnInit() {
+    this.reportingContext.ensureLoaded();
     this.timezones.load();
     const id = this.route.snapshot.paramMap.get('id');
     if (id) this.loadSession(id);
@@ -963,12 +966,7 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
   }
 
   formatCurrency(value: string | number): string {
-    const amount = Number(value) || 0;
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      maximumFractionDigits: 0,
-    }).format(amount);
+    return this.reportingContext.formatMoney(value);
   }
 
   endTime(start: string, durationMinutes: number): string {

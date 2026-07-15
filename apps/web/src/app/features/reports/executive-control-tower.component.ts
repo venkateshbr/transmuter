@@ -3,6 +3,7 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
+import { TenantReportingContextService } from '../../core/services/tenant-reporting-context.service';
 import { financialModeUsesActuals, resolveFinancialMode, type FinancialModeDescriptor } from '../financials/financials-view.models';
 
 type Persona = 'management' | 'investor' | 'owner';
@@ -165,6 +166,7 @@ type Persona = 'management' | 'investor' | 'owner';
 })
 export class ExecutiveControlTowerComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly reportingContext = inject(TenantReportingContextService);
   data = signal<any | null>(null);
   persona = signal<Persona>('management');
   targetYear = signal<number | null>(null);
@@ -220,6 +222,7 @@ export class ExecutiveControlTowerComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.reportingContext.ensureLoaded();
     this.load();
   }
 
@@ -262,7 +265,6 @@ export class ExecutiveControlTowerComponent implements OnInit {
   }
 
   formatMoney(value: string | number | null | undefined): string {
-    const n = Number(value || 0);
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
+    return this.reportingContext.formatMoney(value);
   }
 }

@@ -3,6 +3,7 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
+import { TenantReportingContextService } from '../../core/services/tenant-reporting-context.service';
 import {
   BenefitLedgerRollupSummaryResponse,
   BenefitLedgerSummaryResponse,
@@ -10,7 +11,6 @@ import {
   InitiativeOption,
   delta,
   formatDateOnly,
-  formatMoney,
   initiativeLabel,
   parseNumeric,
   selectDefaultInitiative,
@@ -289,7 +289,11 @@ interface BenefitLedgerImportResult {
               @for (row of summary().initiatives; track row.initiative_id) {
                 <tr class="hover:bg-[var(--t-surface-raised)]">
                   <td class="px-4 py-3">
-                    <a [routerLink]="['/initiatives', row.initiative_id, 'bankable-plan']" class="font-black text-[var(--t-text-primary)] hover:text-[var(--t-accent)]">
+                    <a
+                      routerLink="/financials/bankable-plan"
+                      [queryParams]="{ initiative_id: row.initiative_id }"
+                      class="font-black text-[var(--t-text-primary)] hover:text-[var(--t-accent)]"
+                      [attr.aria-label]="'Open bankable plan for ' + row.name">
                       {{ row.initiative_code || 'INIT' }} - {{ row.name }}
                     </a>
                     <p class="mt-1 text-[10px] font-bold uppercase tracking-widest text-[var(--t-text-tertiary)]">
@@ -543,9 +547,10 @@ interface BenefitLedgerImportResult {
 })
 export class BenefitTrackingComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly reportingContext = inject(TenantReportingContextService);
 
   readonly initiativeLabel = initiativeLabel;
-  readonly formatMoney = formatMoney;
+  readonly formatMoney = (value: string | number | null | undefined) => this.reportingContext.formatMoney(value);
   readonly delta = delta;
   readonly Math = Math;
 
@@ -582,6 +587,7 @@ export class BenefitTrackingComponent implements OnInit {
   ];
 
   ngOnInit(): void {
+    this.reportingContext.ensureLoaded();
     this.loadOptions();
   }
 

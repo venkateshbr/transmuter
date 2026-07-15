@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, ElementRef, ViewChild, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -24,33 +24,42 @@ import { AuthService } from '../../../core/services/auth.service';
         <div class="card p-8 glass-panel shadow-2xl border border-[var(--t-border)]">
           <h2 class="text-2xl font-bold text-[var(--t-text-primary)] mb-6">Welcome back</h2>
           
-          <form (ngSubmit)="onSubmit()" class="space-y-5">
+          <form (ngSubmit)="onSubmit()" class="space-y-5" aria-label="Sign in to Transmuter">
             <div>
-              <label class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Email Address</label>
+              <label for="login-email" class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Email Address</label>
               <input 
+                #emailInput
+                id="login-email"
                 type="email" 
                 [(ngModel)]="email" 
                 name="email"
                 required
+                autocomplete="username"
+                [attr.aria-invalid]="error() ? 'true' : null"
+                [attr.aria-describedby]="error() ? 'login-error' : null"
                 placeholder="admin@ishirock.dev"
                 class="input-field w-full"
               />
             </div>
 
             <div>
-              <label class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Password</label>
+              <label for="login-password" class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Password</label>
               <input 
+                id="login-password"
                 type="password" 
                 [(ngModel)]="password" 
                 name="password"
                 required
+                autocomplete="current-password"
+                [attr.aria-invalid]="error() ? 'true' : null"
+                [attr.aria-describedby]="error() ? 'login-error' : null"
                 placeholder="••••••••"
                 class="input-field w-full"
               />
             </div>
 
             @if (error()) {
-              <div class="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-sm">
+              <div id="login-error" role="alert" aria-live="assertive" class="p-3 border border-red-500/20 bg-red-500/10 text-sm text-red-500">
                 {{ error() }}
               </div>
             }
@@ -64,6 +73,7 @@ import { AuthService } from '../../../core/services/auth.service';
             <button 
               type="submit" 
               [disabled]="loading()"
+              aria-label="Sign in to Transmuter"
               class="btn-primary w-full py-3 mt-4 flex items-center justify-center gap-2">
               @if (loading()) {
                 <svg class="animate-spin h-5 w-5" viewBox="0 0 24 24">
@@ -96,6 +106,8 @@ export class LoginComponent {
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
 
+  @ViewChild('emailInput') private emailInput?: ElementRef<HTMLInputElement>;
+
   email = '';
   password = '';
   loading = signal(false);
@@ -122,6 +134,7 @@ export class LoginComponent {
       error: (err) => {
         this.error.set(err.error?.detail || 'Authentication failed');
         this.loading.set(false);
+        queueMicrotask(() => this.emailInput?.nativeElement.focus());
       }
     });
   }

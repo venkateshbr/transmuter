@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "../../../.env"))
 
 from app.main import app
+from app.testing.credentials import fixture_credentials
 
 client = TestClient(app, raise_server_exceptions=True)
 
@@ -18,7 +19,10 @@ ORG_ID = "9a739f1b-cba1-45e9-af8d-ec0c9807f56e"
 # ── Auth helper ───────────────────────────────────────────────────────────────
 
 
-def get_token(email: str = "admin@ishirock.dev", password: str = "Transmuter2026!") -> str:
+def get_token(email: str | None = None, password: str | None = None) -> str:
+    default_email, default_password = fixture_credentials()
+    email = email or default_email
+    password = password or default_password
     resp = client.post("/auth/login", json={"email": email, "password": password})
     assert resp.status_code == 200, resp.text
     return resp.json()["access_token"]
@@ -26,7 +30,7 @@ def get_token(email: str = "admin@ishirock.dev", password: str = "Transmuter2026
 
 @pytest.fixture(scope="module")
 def admin_token() -> str:
-    return get_token("admin@ishirock.dev")
+    return get_token()
 
 
 @pytest.fixture(scope="module")

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from supabase import Client
 
@@ -21,6 +21,7 @@ from app.core.auth import CurrentUser, get_current_user
 from app.core.database import get_supabase_request_client
 from app.core.rbac import (
     assert_can_manage_initiative_execution,
+    assert_can_manage_initiative_financials,
     assert_can_manage_initiative_master_data,
     assert_can_manage_initiatives,
     assert_can_view_initiative,
@@ -71,8 +72,19 @@ async def list_initiatives(
     priority: str | None = Query(None),
     tag: str | None = Query(None),
     search: str | None = Query(None),
-    sort_by: str = Query("initiative_code"),
+    sort_by: Literal[
+        "initiative_code",
+        "name",
+        "priority",
+        "rag_status",
+        "stage",
+        "planned_start",
+        "planned_end",
+        "created_at",
+        "updated_at",
+    ] = Query("initiative_code"),
     sort_desc: bool = Query(False),
+    include_archived: bool = Query(False),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
 ) -> InitiativeListResponse:
@@ -86,6 +98,7 @@ async def list_initiatives(
         search=search,
         sort_by=sort_by,
         sort_desc=sort_desc,
+        include_archived=include_archived,
         page=page,
         page_size=page_size,
         current_user=current_user,
@@ -229,8 +242,23 @@ async def get_initiative(
     initiative_id: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     svc: Annotated[InitiativeService, Depends(_svc)],
+    client: Annotated[Client, Depends(get_supabase_request_client)],
 ) -> InitiativeDetail:
-    return svc.get_initiative(initiative_id, current_user)
+    detail = svc.get_initiative(initiative_id, current_user)
+
+    def allowed(check: object) -> bool:
+        try:
+            check(client, current_user, initiative_id)  # type: ignore[operator]
+            return True
+        except HTTPException as exc:
+            if exc.status_code in {403, 404}:
+                return False
+            raise
+
+    detail.capabilities.manage_master_data = allowed(assert_can_manage_initiative_master_data)
+    detail.capabilities.manage_execution = allowed(assert_can_manage_initiative_execution)
+    detail.capabilities.manage_financials = allowed(assert_can_manage_initiative_financials)
+    return detail
 
 
 @router.get("/{initiative_id}/export")
@@ -288,6 +316,16 @@ async def archive_initiative(
 ) -> InitiativeDetail:
     assert_can_manage_initiatives(current_user)
     return svc.archive_initiative(initiative_id)
+
+
+@router.post("/{initiative_id}/restore", response_model=InitiativeDetail)
+async def restore_initiative(
+    initiative_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[InitiativeService, Depends(_svc)],
+) -> InitiativeDetail:
+    assert_can_manage_initiatives(current_user)
+    return svc.restore_initiative(initiative_id)
 
 
 # ── Summary & Lessons Learned ────────────────────────────────────────────────

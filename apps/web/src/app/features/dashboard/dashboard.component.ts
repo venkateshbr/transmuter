@@ -6,6 +6,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DashboardEchartCardComponent } from './dashboard-echart-card.component';
 import { CompactFilterToolbarComponent, type CompactFilterGroup } from '../../shared/components/compact-filter-toolbar/compact-filter-toolbar.component';
 import { resolveFinancialMode, type FinancialModeDescriptor } from '../financials/financials-view.models';
+import { TenantReportingContextService } from '../../core/services/tenant-reporting-context.service';
 
 type DashboardMultiFilterKey = 'business_unit_id' | 'workstream_id' | 'priority' | 'tag';
 type ExecutiveBriefPersona = 'management' | 'investor' | 'owner';
@@ -1002,6 +1003,7 @@ export class DashboardComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly reportingContext = inject(TenantReportingContextService);
   readonly Math = Math;
   
   data = signal<any>(null);
@@ -1187,6 +1189,7 @@ export class DashboardComponent implements OnInit {
   });
 
   ngOnInit() {
+    this.reportingContext.ensureLoaded();
     this.route.queryParamMap.subscribe(params => {
       if (this.hasQueryFilters(params)) {
         this.filters.set({
@@ -1632,21 +1635,11 @@ export class DashboardComponent implements OnInit {
   }
 
   formatMoney(value: string | null | undefined): string {
-    const amount = Number(value || 0);
-    return new Intl.NumberFormat('en-US', {
-      notation: 'compact',
-      maximumFractionDigits: 1,
-    }).format(amount);
+    return this.reportingContext.formatMoney(value, { notation: 'compact', maximumFractionDigits: 1 });
   }
 
   formatCurrency(value: string | number | null | undefined): string {
-    const amount = Number(value || 0);
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      notation: 'compact',
-      maximumFractionDigits: 1,
-    }).format(amount);
+    return this.reportingContext.formatMoney(value, { notation: 'compact', maximumFractionDigits: 1 });
   }
 
   formatRange(cell: any): string {

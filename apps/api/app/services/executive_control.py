@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from calendar import monthrange
 from collections import defaultdict
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -54,6 +53,7 @@ from app.domain.executive_control import (
     ValueRealizationNoteCreate,
     ValueRealizationNoteItem,
 )
+from app.domain.fiscal_calendar import FiscalCalendar
 from app.repositories.executive_control import ExecutiveControlRepository
 
 
@@ -200,7 +200,16 @@ class ExecutiveControlService:
         return SharedCostPoolListResponse(items=pools, total=len(pools))
 
     def create_pool(self, data: SharedCostPoolCreate) -> SharedCostPoolItem:
-        row = self._repo.create_pool(self._pool_payload(data.model_dump()))
+        payload = data.model_dump()
+        if not payload.get("currency_code"):
+            settings = getattr(self._repo, "get_financial_reporting_settings", lambda: {})() or {}
+            currency = str(settings.get("reporting_currency") or "").upper()
+            if len(currency) != 3:
+                raise HTTPException(
+                    status_code=500, detail="Tenant reporting currency is not configured"
+                )
+            payload["currency_code"] = currency
+        row = self._repo.create_pool(self._pool_payload(payload))
         return self._pool_item(row)
 
     def update_pool(self, pool_id: str, data: SharedCostPoolUpdate) -> SharedCostPoolItem:
@@ -548,7 +557,10 @@ class ExecutiveControlService:
                 for year in [
                     *[row.get("year") for row in entries],
                     *[row.get("year") for row in costs],
-                    *[self._allocation_year(row) for row in allocations],
+                    *[
+                        self._allocation_year(row, self._fiscal_calendar().start_month)
+                        for row in allocations
+                    ],
                 ]
                 if year is not None
             }
@@ -562,7 +574,9 @@ class ExecutiveControlService:
             entries = [row for row in entries if row.get("year") == selected_year]
             costs = [row for row in costs if row.get("year") == selected_year]
             allocations = [
-                row for row in allocations if self._allocation_year(row) == selected_year
+                row
+                for row in allocations
+                if self._allocation_year(row, self._fiscal_calendar().start_month) == selected_year
             ]
         dependencies = self.list_dependencies(current_user, filters=filters).rollups
         value_bridge = self._value_bridge(entries, costs, allocations)
@@ -617,7 +631,7 @@ class ExecutiveControlService:
                     message="Allocation policy did not select any initiatives.",
                 )
             )
-        basis = self._basis_values(candidates, rule, scenario_id, period_start.year)
+        basis = self._basis_values(candidates, rule, scenario_id, int(pool["year"]))
         exceptions.extend(basis["exceptions"])
         allocations = self._allocation_rows(
             candidates,
@@ -1138,17 +1152,15 @@ class ExecutiveControlService:
         match = next((row["id"] for row in scenarios if row.get("kind") == kind), None)
         return str(match) if match else None
 
-    @staticmethod
-    def _period_bounds(pool: dict) -> tuple[date, date]:
-        year = int(pool.get("year") or date.today().year)
+    def _period_bounds(self, pool: dict) -> tuple[date, date]:
+        calendar = self._fiscal_calendar()
+        calendar = self._fiscal_calendar()
+        year = int(pool.get("year") or calendar.fiscal_year_for_date(date.today()))
         if pool.get("month"):
-            month = int(pool["month"])
-            return date(year, month, 1), date(year, month, monthrange(year, month)[1])
+            return calendar.month_bounds(year, int(pool["month"]))
         if pool.get("quarter"):
-            start_month = (int(pool["quarter"]) - 1) * 3 + 1
-            end_month = start_month + 2
-            return date(year, start_month, 1), date(year, end_month, monthrange(year, end_month)[1])
-        return date(year, 1, 1), date(year, 12, 31)
+            return calendar.quarter_bounds(year, int(pool["quarter"]))
+        return calendar.year_bounds(year)
 
     def _require_rule_for_pool(self, pool_id: str, rule_id: str) -> dict:
         rule = self._repo.get_rule(rule_id)
@@ -1568,23 +1580,17 @@ class ExecutiveControlService:
             ]
         return payload
 
-    @staticmethod
-    def _period_payload(data: dict) -> dict:
+    def _period_payload(self, data: dict) -> dict:
         payload = {key: value for key, value in data.items() if value is not None}
         year = int(payload["year"])
         month = payload.get("month")
         quarter = payload.get("quarter")
         if month:
-            start = date(year, int(month), 1)
-            end = date(year, int(month), monthrange(year, int(month))[1])
+            start, end = self._fiscal_calendar().month_bounds(year, int(month))
         elif quarter:
-            start_month = (int(quarter) - 1) * 3 + 1
-            end_month = start_month + 2
-            start = date(year, start_month, 1)
-            end = date(year, end_month, monthrange(year, end_month)[1])
+            start, end = self._fiscal_calendar().quarter_bounds(year, int(quarter))
         else:
-            start = date(year, 1, 1)
-            end = date(year, 12, 31)
+            start, end = self._fiscal_calendar().year_bounds(year)
         payload["period_start"] = start.isoformat()
         payload["period_end"] = end.isoformat()
         for key in ("amount_plan", "amount_actual"):
@@ -1709,11 +1715,16 @@ class ExecutiveControlService:
         return attention
 
     @staticmethod
-    def _allocation_year(row: dict) -> int | None:  # type: ignore[type-arg]
+    def _allocation_year(
+        row: dict,
+        fiscal_year_start_month: int = 1,  # type: ignore[type-arg]
+    ) -> int | None:
         period_start = (row.get("shared_cost_allocation_runs") or {}).get("period_start")
         if period_start:
             try:
-                return int(str(period_start)[:4])
+                return FiscalCalendar(fiscal_year_start_month).fiscal_year_for_date(
+                    date.fromisoformat(str(period_start)[:10])
+                )
             except ValueError:
                 return None
         pool_year = (row.get("shared_cost_pools") or {}).get("year")
@@ -1721,6 +1732,11 @@ class ExecutiveControlService:
             return int(pool_year) if pool_year is not None else None
         except (TypeError, ValueError):
             return None
+
+    def _fiscal_calendar(self) -> FiscalCalendar:
+        getter = getattr(self._repo, "get_financial_reporting_settings", lambda: {})
+        settings = getter() or {}
+        return FiscalCalendar(int(settings.get("fiscal_year_start_month") or 1))
 
     def _initiative_report_rows(
         self,

@@ -129,7 +129,7 @@ class SharedCostPoolCreate(BaseModel):
     status: Literal["draft", "active", "archived"] = "draft"
     period_grain: SharedCostPeriodGrain = "annual"
     reporting_treatment: SharedCostReportingTreatment = "report_only"
-    currency_code: str = Field("USD", min_length=3, max_length=3)
+    currency_code: str | None = Field(None, min_length=3, max_length=3)
     owner_id: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 

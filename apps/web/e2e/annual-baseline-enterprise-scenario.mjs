@@ -2,12 +2,12 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
+import { loadTestCredentials } from './test-credentials.mjs';
 
 const uiBaseUrl = process.env.TRANSMUTER_UI_BASE_URL ?? 'http://localhost:4300';
 const apiBaseUrl = process.env.TRANSMUTER_API_BASE_URL ?? 'http://localhost:8000';
 const chromeBin = process.env.CHROME_BIN ?? '/usr/bin/chromium-browser';
-const email = process.env.TRANSMUTER_E2E_EMAIL ?? 'admin@acme-transformation.dev';
-const password = process.env.TRANSMUTER_E2E_PASSWORD ?? 'Transmuter2026!';
+const { email, password } = loadTestCredentials({ tenant: 'acme' });
 const debugPort = Number(process.env.CHROME_DEBUG_PORT ?? 9224);
 const baselineYear = Number(process.env.TRANSMUTER_BASELINE_YEAR ?? 2026);
 

@@ -1,11 +1,12 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
+import { loadTestCredentials } from './test-credentials.mjs';
 
 const uiBaseUrl = process.env.TRANSMUTER_UI_BASE_URL ?? 'https://transmuter-dev.ishirock.tech';
 const apiBaseUrl = process.env.TRANSMUTER_API_BASE_URL ?? `${uiBaseUrl}/api`;
 const chromeBin = process.env.CHROME_BIN ?? '/snap/bin/chromium';
-const password = process.env.TRANSMUTER_E2E_PASSWORD;
+const { password } = loadTestCredentials({ tenant: 'acme' });
 const debugPort = Number(process.env.CHROME_DEBUG_PORT ?? 9254);
 
 const tenants = {
@@ -758,7 +759,6 @@ async function validateCrossTenantIsolation(page, sourceTenant, targetTenant, ta
 }
 
 async function main() {
-  assert(password, 'TRANSMUTER_E2E_PASSWORD is required');
   await requestJson(`${apiBaseUrl}/health`);
   const userDataDir = await mkdtemp(`${tmpdir()}/transmuter-runbook-remediation-`);
   const chrome = spawn(chromeBin, [

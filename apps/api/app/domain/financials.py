@@ -676,6 +676,8 @@ class PortfolioInYearValueCard(BaseModel):
 
 class PortfolioValueRampResponse(BaseModel):
     granularity: PortfolioGranularity
+    reporting_currency: str
+    fiscal_year_start_month: int
     run_rate_year: int | None = None
     as_of_date: date | None = None
     stage: str | None = None
@@ -746,6 +748,8 @@ class PortfolioFinancialContributorsResponse(BaseModel):
 
 class PortfolioFinancialsResponse(BaseModel):
     granularity: PortfolioGranularity
+    reporting_currency: str
+    fiscal_year_start_month: int
     selected_year: int | None = None
     available_years: list[int] = Field(default_factory=list)
     summary: list[PortfolioFinancialSummaryCard]

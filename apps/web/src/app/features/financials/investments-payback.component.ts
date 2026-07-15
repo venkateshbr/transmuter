@@ -3,6 +3,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
+import { TenantReportingContextService } from '../../core/services/tenant-reporting-context.service';
 
 interface PaybackSummary {
   benefits_total: string;
@@ -137,11 +138,13 @@ interface PaybackResponse {
 })
 export class InvestmentsPaybackComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly reportingContext = inject(TenantReportingContextService);
   response = signal<PaybackResponse | null>(null);
   valueYear = signal<number | null>(null);
   scenario = signal('plan_base');
 
   ngOnInit(): void {
+    this.reportingContext.ensureLoaded();
     this.load();
   }
 
@@ -190,11 +193,6 @@ export class InvestmentsPaybackComponent implements OnInit {
   }
 
   formatMoney(value: string | number | null | undefined): string {
-    const amount = Number(value || 0);
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      maximumFractionDigits: 0,
-    }).format(amount);
+    return this.reportingContext.formatMoney(value);
   }
 }
