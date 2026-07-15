@@ -194,9 +194,7 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
         </div>
 
         <!-- Path B: Excel Upload -->
-        <div class="card path-card p-6" (click)="currentPath = 'upload'"
-             role="button" tabindex="0" aria-label="Upload Excel template"
-             (keydown.enter)="currentPath = 'upload'">
+        <div class="card path-card p-6">
           <div class="w-12 h-12 rounded-xl flex items-center justify-center mb-4"
                style="background:rgba(16,185,129,0.08)">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
@@ -211,12 +209,23 @@ type CreationPath = 'chooser' | 'form' | 'upload' | 'ai';
           <p class="text-sm" style="color:var(--t-text-secondary)">
             Upload a pre-filled Transmuter Excel template with all initiative data.
           </p>
-          <button class="text-xs mt-3 inline-block underline"
-                  style="color:var(--t-accent)"
-                  (click)="downloadTemplate($event)"
-                  aria-label="Download blank initiative template">
-            Download blank template
-          </button>
+          <div class="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              class="btn-secondary text-xs"
+              (click)="currentPath = 'upload'"
+              aria-label="Choose Excel upload">
+              Choose upload
+            </button>
+            <button
+              type="button"
+              class="btn-ghost text-xs underline"
+              style="color:var(--t-accent)"
+              (click)="downloadTemplate($event)"
+              aria-label="Download blank initiative template">
+              Download blank template
+            </button>
+          </div>
         </div>
       </div>
     </div>

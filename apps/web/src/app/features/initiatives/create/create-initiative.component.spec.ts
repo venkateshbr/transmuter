@@ -36,13 +36,13 @@ describe('CreateInitiativeComponent', () => {
         },
       ],
     });
-    return TestBed.createComponent(CreateInitiativeComponent).componentInstance;
+    return TestBed.createComponent(CreateInitiativeComponent);
   }
 
   afterEach(() => TestBed.resetTestingModule());
 
   it('allows creation when operational setup is complete without financial engine configuration', () => {
-    const component = configure({
+    const fixture = configure({
       '/workstreams': { data: [{ id: 'ws-1', name: 'Automation' }] },
       '/business-units': { data: [{ id: 'bu-1', name: 'Corporate' }] },
       '/admin/settings': { settings: { strategic_parameters: {} } },
@@ -65,11 +65,11 @@ describe('CreateInitiativeComponent', () => {
       },
     });
 
-    expect(component.isCreationBlocked()).toBe(false);
+    expect(fixture.componentInstance.isCreationBlocked()).toBe(false);
   });
 
   it('blocks creation when stage gate criteria are missing', () => {
-    const component = configure({
+    const fixture = configure({
       '/workstreams': { data: [{ id: 'ws-1', name: 'Automation' }] },
       '/business-units': { data: [{ id: 'bu-1', name: 'Corporate' }] },
       '/admin/settings': { settings: { strategic_parameters: {} } },
@@ -92,6 +92,30 @@ describe('CreateInitiativeComponent', () => {
       },
     });
 
-    expect(component.isCreationBlocked()).toBe(true);
+    expect(fixture.componentInstance.isCreationBlocked()).toBe(true);
+  });
+
+  it('renders upload and template download as independent controls', () => {
+    const fixture = configure({
+      '/workstreams': { data: [] },
+      '/business-units': { data: [] },
+      '/admin/settings': { settings: { strategic_parameters: {} } },
+      '/users': { data: [] },
+      '/governance/stage-gates': [],
+      '/admin/governance/gate-criteria': [],
+      '/admin/setup-status': { complete: true, checks: [] },
+    });
+
+    fixture.detectChanges();
+    const upload = fixture.nativeElement.querySelector(
+      'button[aria-label="Choose Excel upload"]',
+    );
+    const download = fixture.nativeElement.querySelector(
+      'button[aria-label="Download blank initiative template"]',
+    );
+
+    expect(upload).toBeTruthy();
+    expect(download).toBeTruthy();
+    expect(download.closest('[role="button"]')).toBeNull();
   });
 });
