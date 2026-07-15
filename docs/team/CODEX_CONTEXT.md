@@ -20,15 +20,15 @@ replace them.
   and web image `transmuter-web:hostinger`.
 - Hostinger dev Docker project uses API image `transmuter-api:hostinger-dev`
   and web image `transmuter-web:hostinger-dev`.
-- Current deployed application commit is `1c5f184` in dev and `5793115` in
+- Current deployed application commit is `e5a769d` in dev and `5793115` in
   production. Dev includes the five-tenant launch fixes, native meeting/browser
   acceptance, authenticated export and template-upload browser fixes, and the
-  initiative Annual Baseline editor required for the ACME end-to-end demo, plus
-  the earlier Microsoft Graph isolation controls. Production
+  initiative Annual Baseline editor required for the ACME end-to-end demo, the
+  sequential strategic-parameter persistence fix from issue `#422`, plus the
+  earlier Microsoft Graph isolation controls. Production
   remains on the prior tenant authorization release pending explicit promotion.
-- Current Hostinger Docker actions are `104346054` for dev and `103623550` for
-  production. Dev action `104346054` completed successfully at
-  `2026-07-15T12:41:26Z`;
+- Current Hostinger Docker actions are `104365210` for dev and `103623550` for
+  production. Dev action `104365210` completed successfully on `2026-07-15`;
   production action `103623550` remains unchanged.
 - Hostinger VPS / domain context:
   - Primary domain owned for the VPS: `ishirock.tech`.
@@ -87,7 +87,7 @@ replace them.
 - Graphifyy is installed for this repository. The local generated graph lives at
   `graphify-out/` and is intentionally ignored by git because it is generated
   source-derived context.
-- Current graph baseline was refreshed after commit `1c5f184` and the ACME guide
+- Current graph baseline was refreshed after commit `e5a769d` and the ACME guide
   acceptance documentation with `graphify update .`;
   it contains the code/navigation graph used by `graphify query`, `graphify path`,
   and `graphify explain`.
@@ -208,6 +208,17 @@ replace them.
     external headed browser session on deployed `1c5f184`; the temporary
     initiative and Saturday meeting were removed through Admin and the Pipeline
     returned to ten initiatives. Workflow closeout remains.
+  - `#421`: the fresh-tenant setup guide passed in one external headed Chromium
+    worker on deployed `e5a769d`: Stripe sandbox provisioning, first login,
+    strategic and financial setup, five gates, ten people, ten guided
+    initiatives, representative value/delivery/governance records, four locked
+    Shared Costs runs, 21 current routes, board-pack export, and exact-slug
+    Platform cleanup. The 4.1-minute run had no browser page or observed server
+    errors. Documentation and workflow closeout remain.
+  - `#422`: the fresh browser run exposed and fixed an Admin strategic-parameter
+    save race that could restore stale settings after a successful save. The
+    frontend build, deployed browser persistence test, and full fresh-tenant run
+    passed on `e5a769d`; workflow closeout remains.
   - `#216`: app-owned invite/password lifecycle passed in external headed Chrome
     with a real delivered Resend setup link, forced password change, restoration,
     resend/revoke, and final zero-invite reset; issue workflow closeout remains.
