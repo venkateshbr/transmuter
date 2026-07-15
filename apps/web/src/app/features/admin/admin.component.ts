@@ -37,7 +37,7 @@ const DEFAULT_REBASELINE_ROLES = ['transformation_office', 'finance_lead', 'pmo_
           @for (tab of ['General', 'Billing', 'Data Cleanup', 'Strategic Parameters', 'Financial Configuration', 'Dashboard Configuration', 'Access Control', 'Governance Engine', 'Audit Logs']; track tab) {
             <button
               type="button"
-              (click)="activeTab = tab"
+              (click)="openTab(tab)"
               [ngClass]="activeTab === tab ? 'border-[var(--t-accent)] text-[var(--t-accent)]' : 'border-transparent text-[var(--t-text-tertiary)]'"
               [attr.aria-label]="'Open ' + tab + ' admin tab'"
               class="whitespace-nowrap pb-4 px-1 border-b-2 font-black text-[10px] uppercase tracking-widest transition-all">
@@ -1428,7 +1428,6 @@ export class AdminComponent implements OnInit {
     this.loadSetupStatus();
     this.loadCleanupPreview();
     this.loadInitiativeDeleteCandidates();
-    this.loadMeetingCleanupCandidates();
     this.loadGateCriteria();
     this.loadStageGateDefinitions();
     this.loadAuditLogs();
@@ -1436,6 +1435,13 @@ export class AdminComponent implements OnInit {
     this.loadFinancialEngineConfiguration();
     this.loadFinancialGovernance();
     this.loadDashboardConfiguration();
+  }
+
+  openTab(tab: string): void {
+    this.activeTab = tab;
+    if (tab === 'Data Cleanup') {
+      this.loadMeetingCleanupCandidates();
+    }
   }
 
   loadWorkstreams() {

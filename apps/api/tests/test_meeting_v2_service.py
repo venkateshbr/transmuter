@@ -443,6 +443,23 @@ def test_agenda_suggestions_use_actions_workstreams_and_mask_pii() -> None:
     assert response.trace_id is not None
 
 
+def test_meeting_pii_mask_preserves_iso_dates_while_masking_phone_numbers() -> None:
+    text = (
+        "ACME Saturday Value Steering - 2026-07-18; target 2028-03-31; "
+        "call +65 6123 4567 or (212) 555-0199; owner@example.com"
+    )
+
+    masked = MeetingService._mask_pii(text)
+
+    assert "2026-07-18" in masked
+    assert "2028-03-31" in masked
+    assert "+65 6123 4567" not in masked
+    assert "(212) 555-0199" not in masked
+    assert masked.count("[phone]") == 2
+    assert "owner@example.com" not in masked
+    assert "[email]" in masked
+
+
 def test_generate_minutes_requires_real_source_material() -> None:
     repo = FakeMeetingV2Repository()
     service = build_service(repo)

@@ -103,6 +103,7 @@ interface ContributorsResponse {
 
 interface FinancialConfiguration {
   cost_categories?: Array<{ id?: string; key: string; label: string; is_active: boolean }>;
+  settings?: { reporting_currency?: string };
 }
 
 interface StageGateDefinition {
@@ -302,6 +303,7 @@ interface ValueBridgeResponse {
         [rows]="response()?.periods || []"
         [granularity]="granularity()"
         [showActuals]="showActuals()"
+        [currency]="reportingCurrency()"
         [baselineValue]="grossMarginBaselinePerPeriod()"
         [baselineLabel]="trendBaselineLabel()"
         (periodSelected)="openTrendPeriod($event)" />
@@ -678,6 +680,7 @@ export class PortfolioFinancialsComponent implements OnInit {
   selectedPeriod = signal<PeriodRow | null>(null);
   contributorsLoading = signal(false);
   configuration = signal<FinancialConfiguration | null>(null);
+  reportingCurrency = signal('USD');
   tenantAnnualBaselines = signal<AnnualBaselineValue[]>([]);
   stageGateDefinitions = signal<StageGateDefinition[]>([]);
   granularity = signal<Granularity>('monthly');
@@ -731,7 +734,10 @@ export class PortfolioFinancialsComponent implements OnInit {
 
   ngOnInit(): void {
     this.api.get<FinancialConfiguration>('/financial-engine-configuration').subscribe({
-      next: config => this.configuration.set(config),
+      next: config => {
+        this.configuration.set(config);
+        this.reportingCurrency.set(this.normalizeCurrency(config.settings?.reporting_currency));
+      },
       error: () => this.configuration.set({ cost_categories: [] }),
     });
     this.api.get<StageGateDefinition[]>('/governance/stage-gates').subscribe({
@@ -862,9 +868,14 @@ export class PortfolioFinancialsComponent implements OnInit {
     const parsed = this.parseMoney(value);
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: this.reportingCurrency(),
       maximumFractionDigits: 0,
     }).format(parsed);
+  }
+
+  private normalizeCurrency(value: string | null | undefined): string {
+    const currency = String(value || 'USD').trim().toUpperCase();
+    return /^[A-Z]{3}$/.test(currency) ? currency : 'USD';
   }
 
   parseMoney(value: string | number | null | undefined): number {

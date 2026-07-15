@@ -2002,7 +2002,12 @@ export class FinancialsTabComponent implements OnInit {
     if (val === null || val === undefined) return '—';
     const num = typeof val === 'string' ? parseFloat(val) : val;
     if (isNaN(num)) return '—';
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(num);
+    const currency = String(this.grid()?.settings?.reporting_currency || 'USD').toUpperCase();
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: /^[A-Z]{3}$/.test(currency) ? currency : 'USD',
+      maximumFractionDigits: 0,
+    }).format(num);
   }
 
   formatMetricValue(val: string | number | null, valueType: FinancialMetricDefinition['value_type']): string {

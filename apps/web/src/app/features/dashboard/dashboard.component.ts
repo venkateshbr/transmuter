@@ -36,7 +36,16 @@ const DASHBOARD_FILTER_STATE_KEY = 'transmuter.filters.dashboard';
   standalone: true,
   imports: [CommonModule, RouterLink, DashboardEchartCardComponent, CompactFilterToolbarComponent],
   template: `
-    <div class="p-8 space-y-10 animate-fade-in" style="background:var(--t-bg)">
+    @if (dashboardError()) {
+      <section class="m-8 border border-red-500/40 bg-red-500/10 p-6" role="alert" data-testid="dashboard-load-error">
+        <p class="text-xs font-black uppercase tracking-widest text-red-600">Portfolio data unavailable</p>
+        <p class="mt-2 text-sm font-semibold text-[var(--t-text-primary)]">{{ dashboardError() }}</p>
+        <button type="button" class="btn-secondary mt-5 text-sm" (click)="loadDashboard(false)" [disabled]="dashboardLoading()" aria-label="Retry dashboard data">
+          {{ dashboardLoading() ? 'Retrying...' : 'Try again' }}
+        </button>
+      </section>
+    }
+    <div class="p-8 space-y-10 animate-fade-in" [class.hidden]="dashboardError()" style="background:var(--t-bg)">
       
       <!-- Executive Hero Section -->
       <section class="executive-surface relative overflow-hidden p-8 shadow-2xl lg:p-10">
@@ -996,6 +1005,8 @@ export class DashboardComponent implements OnInit {
   readonly Math = Math;
   
   data = signal<any>(null);
+  dashboardLoading = signal(false);
+  dashboardError = signal<string | null>(null);
   reporting = signal(false);
   reportReady = signal(false);
   showWelcome = signal(false);
@@ -1210,13 +1221,25 @@ export class DashboardComponent implements OnInit {
 
   loadDashboard(syncState = true) {
     if (syncState) this.persistFilters();
+    this.dashboardLoading.set(true);
+    this.dashboardError.set(null);
     const current = this.filters();
     const params: Record<string, string> = {};
     (['business_unit_id', 'workstream_id', 'priority', 'tag'] as DashboardMultiFilterKey[]).forEach(key => {
       if (current[key].length) params[key] = current[key].join(',');
     });
     if (current.target_year) params['target_year'] = current.target_year;
-    this.api.get<any>('/dashboard', params).subscribe(d => this.data.set(d));
+    this.api.get<any>('/dashboard', params).subscribe({
+      next: dashboard => {
+        this.data.set(dashboard);
+        this.dashboardLoading.set(false);
+      },
+      error: () => {
+        this.data.set(null);
+        this.dashboardLoading.set(false);
+        this.dashboardError.set('The dashboard could not load current portfolio data. Try again before using these figures.');
+      },
+    });
   }
 
   openExecutiveBrief(): void {

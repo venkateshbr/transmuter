@@ -1,7 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { ApiService } from './api.service';
 import { Router } from '@angular/router';
-import { Observable, tap } from 'rxjs';
+import { Observable, finalize, of, shareReplay, tap } from 'rxjs';
 import {
   hasOperatingModelPermission,
   operatingModelRoleLabel,
@@ -39,13 +39,14 @@ export class AuthService {
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
   private sessionExpiryHandled = false;
+  private profileRequest$: Observable<UserProfile> | null = null;
 
   readonly user = signal<CurrentAuthUser | null>(null);
   readonly isAuthenticated = signal<boolean>(this.hasValidStoredToken());
 
   constructor() {
     if (this.isAuthenticated()) {
-      this.loadProfile().subscribe();
+      this.ensureProfile().subscribe({ error: () => undefined });
     }
   }
 
@@ -139,6 +140,22 @@ export class AuthService {
     return this.api.get<UserProfile>('/auth/me').pipe(
       tap(profile => this.user.set(profile))
     );
+  }
+
+  ensureProfile(): Observable<UserProfile> {
+    const current = this.user();
+    if (current?.id && current.role) {
+      return of(current as UserProfile);
+    }
+    if (!this.profileRequest$) {
+      this.profileRequest$ = this.loadProfile().pipe(
+        finalize(() => {
+          this.profileRequest$ = null;
+        }),
+        shareReplay({ bufferSize: 1, refCount: false }),
+      );
+    }
+    return this.profileRequest$;
   }
 
   updateProfile(patch: Pick<Partial<UserProfile>, 'display_name' | 'title' | 'onboarding_completed'>): Observable<UserProfile> {

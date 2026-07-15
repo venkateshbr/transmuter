@@ -1519,7 +1519,11 @@ class MeetingService:
     @staticmethod
     def _mask_pii(text: str) -> str:
         text = re.sub(r"[\w.+-]+@[\w-]+\.[\w.-]+", "[email]", text)
-        text = re.sub(r"\+?\d[\d\s().-]{7,}\d", "[phone]", text)
+        text = re.sub(
+            r"(?<![\w-])(?!\d{4}-\d{2}-\d{2}(?!\d))\+?\d(?:[\s().-]{0,3}\d){7,14}(?![\w-])",
+            "[phone]",
+            text,
+        )
         return text
 
     @staticmethod
