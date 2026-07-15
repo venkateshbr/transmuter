@@ -304,7 +304,7 @@ interface MeetingArtifact {
                 <button
                   class="btn-primary w-full text-xs"
                   [disabled]="!newActionItem.trim()"
-                  aria-label="Add action item"
+                  [attr.aria-label]="'Add ' + artifactLabel(artifactDraft.artifact_type).toLowerCase()"
                   (click)="addActionItem()"
                 >
                   Add {{ artifactLabel(artifactDraft.artifact_type) }}
@@ -882,10 +882,17 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
   saveMinutesDraft() {
     const id = this.session()?.id;
     if (!id) return;
+    this.sessionError.set(null);
     this.api.patch<any>(`/meetings/sessions/${id}`, {
       minutes_markdown: this.minutesDraft,
       minutes_status: 'draft',
-    }).subscribe(s => this.session.set({ ...this.session(), ...s }));
+    }).subscribe({
+      next: s => {
+        this.session.set({ ...this.session(), ...s });
+        this.sessionMessage.set('Draft minutes saved.');
+      },
+      error: err => this.sessionError.set(err.error?.detail || 'Could not save draft minutes.'),
+    });
   }
 
   sendMinutes() {
