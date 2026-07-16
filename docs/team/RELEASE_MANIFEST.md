@@ -36,32 +36,38 @@ Deployment note:
 
 ## Current Release Entries
 
-### 2026-07-15 - Five-Tenant Launch Readiness And Browser Acceptance
+### 2026-07-16 - Five-Tenant Launch Readiness And Browser Acceptance
 
-Status: dev deployed and accepted; production not touched; promotion requires
-review/merge and separate explicit approval
+Status: dev deployed and accepted; production promotion explicitly approved by
+the founder on 2026-07-16; PR merge and the schema-before-code rollout below
+must complete before production validation
 
 GitHub tracking:
 
 - Integration PR: `#416`, full-sweep commit `1f3330b`, artifact follow-up
-  commit `5cbabe5`, and initiative-baseline/ACME-guide runtime commit `1c5f184`.
+  commit `5cbabe5`, initiative-baseline/ACME-guide runtime commit `1c5f184`,
+  and final dev runtime commit `e5a769d`.
 - Release findings: `#401`, `#403`-`#412`, `#414`, and `#417`-`#419`.
 - Invite/password acceptance: `#216`.
 - Admin bulk-meeting cleanup: `#224`.
 - Parent acceptance: `#399`; browser execution: `#413`; initiative annual
-  baseline UI: `#420`.
+  baseline UI: `#420`; fresh-tenant setup acceptance: `#421`; sequential
+  strategic-parameter persistence: `#422`.
 - External Microsoft Graph gates: `#220`, `#389`, and `#390`.
 
 Dev deployment:
 
 - Environment: `https://transmuter-dev.ishirock.tech`.
 - Schema: `transmuter_dev`.
-- Deployed commit: `1c5f184` (`1f3330b` was the uninterrupted five-tenant
-  browser-sweep runtime).
-- Hostinger action: `104346054`, success at `2026-07-15T12:41:26Z`; artifact action
+- Deployed commit: `e5a769d` (`1f3330b` was the uninterrupted five-tenant
+  browser-sweep runtime and `1c5f184` the configured ACME runtime).
+- Hostinger action: `104365210`, successful on `2026-07-15`; configured ACME
+  action `104346054` succeeded at `2026-07-15T12:41:26Z`; artifact action
   `104308750` succeeded at `2026-07-15T09:50:16Z`; full-sweep action
   `104300670` succeeded at `2026-07-15T08:55:20Z`.
-- No schema migration was required for the final People pointer-action fix.
+- Dev already has the two migrations required by the production rollout:
+  `supabase/migrations/20260711000002_harden_microsoft_graph_oauth.sql` and
+  `supabase/migrations/20260715000001_meeting_artifact_session_agenda.sql`.
 - Production project, schema, data, configuration, and consent were untouched.
 
 Acceptance evidence:
@@ -86,6 +92,16 @@ Acceptance evidence:
   annual baseline, benefit line, twelve monthly cost rows, Saturday meeting
   with agenda-linked decision and risk, and browser cleanup back to ten
   initiatives with no temporary meeting.
+- Fresh-tenant setup-guide acceptance on deployed `e5a769d`: one external
+  headed Chromium worker completed Stripe sandbox provisioning, first login,
+  master data, five gates, ten people, ten guided initiatives, a representative
+  value/delivery/governance case, four reconciled Shared Costs runs, 21 current
+  routes, board-pack export, and exact-slug Platform cleanup in 4.1 minutes.
+  It reported no browser page errors or observed server errors and used no API
+  or database mutation shortcuts.
+- The same run exposed the Admin strategic-parameter save race tracked in
+  `#422`; the fix was deployed at `e5a769d` and browser-retested through route
+  reload and initiative authoring.
 - Dedicated headed controls: risk/KPI filter and create navigation, matrix
   contributor drilldown, and Benefit Tracking bankable-plan navigation passed.
 - Headed artifact acceptance downloaded authenticated pipeline CSV, board-pack,
@@ -97,12 +113,27 @@ Acceptance evidence:
   `3ef52dd7015ee7c8953ccf7893e8d62b03a8fe9fa6588e3ab95707098cf58a50`.
 - Final read-only API run: 2,450 requests, 50 users, 55 isolation denials.
 
-Promotion blockers:
+Production rollout plan:
 
-- PR review/CI/merge and normal Sthira/Vishwa release transitions.
-- Microsoft Graph callback registration, fresh consent, live Teams invite/
-  join-link refresh, and transcript acceptance require external coordination.
-- Production promotion is not authorized by this entry.
+- Final-head CI run `29428043985` passed backend, frontend, specs, secret scan,
+  Agent eval, and policy checks on documentation head `917001f`.
+- Squash-merge PR `#416` into `main`; deploy only the resulting pushed merge
+  commit.
+- Stop and verify both production project aliases, then apply the forward-only
+  Graph migration with `--offline-schema` before new application code starts.
+- In the same stopped migration window apply the additive meeting-artifact
+  migration after the Graph migration:
+  `supabase/migrations/20260711000002_harden_microsoft_graph_oauth.sql`, then
+  `supabase/migrations/20260715000001_meeting_artifact_session_agenda.sql`.
+- Recreate production from the exact merged commit, correct the saved Graph
+  scope line to the reviewed seven-scope set, and keep Microsoft Graph
+  disconnected. Do not create or refresh organizer consent during this release.
+- Validate public web/API health and a real read-only headed-browser login and
+  route sweep. Record the action, merge commit, and result in this entry.
+- Microsoft Graph callback-registration evidence, fresh organizer consent,
+  live invite/join-link refresh, and transcript acceptance remain external
+  follow-ups under `#220`, `#389`, and `#390`; they do not authorize weakening
+  the disconnected fail-closed behavior.
 
 ### 2026-07-11 - Microsoft Graph OAuth Environment Isolation
 
