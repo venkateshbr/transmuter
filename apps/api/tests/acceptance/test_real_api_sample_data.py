@@ -16,14 +16,14 @@ from zipfile import ZIP_DEFLATED, ZipFile
 import httpx
 import pytest
 
+from app.testing.credentials import fixture_credentials
+
 pytestmark = pytest.mark.skipif(
     os.environ.get("RUN_REAL_ACCEPTANCE") != "1",
     reason="real API acceptance requires a running API and RUN_REAL_ACCEPTANCE=1",
 )
 
 BASE_URL = os.environ.get("TRANSMUTER_API_BASE_URL", "http://localhost:8000")
-EMAIL = os.environ.get("TRANSMUTER_E2E_EMAIL", "admin@ishirock.dev")
-PASSWORD = os.environ.get("TRANSMUTER_E2E_PASSWORD", "Transmuter2026!")
 XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 SHEET_NS = {"main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 _AUTH_HEADERS: dict[str, str] | None = None
@@ -37,7 +37,8 @@ def _auth_headers(client: httpx.Client) -> dict[str, str]:
     global _AUTH_HEADERS
     if _AUTH_HEADERS is not None:
         return _AUTH_HEADERS
-    response = client.post("/auth/login", json={"email": EMAIL, "password": PASSWORD})
+    email, password = fixture_credentials()
+    response = client.post("/auth/login", json={"email": email, "password": password})
     response.raise_for_status()
     token = response.json()["access_token"]
     _AUTH_HEADERS = {"Authorization": f"Bearer {token}"}

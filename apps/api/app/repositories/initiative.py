@@ -298,6 +298,9 @@ class InitiativeRepository:
 
         return self.update(initiative_id, {"archived_at": datetime.now(UTC).isoformat()})
 
+    def restore(self, initiative_id: str) -> dict:  # type: ignore[type-arg]
+        return self.update(initiative_id, {"archived_at": None})
+
     def delete(self, initiative_id: str) -> None:
         for table in ("action_items", "agenda_items"):
             (

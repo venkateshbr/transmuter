@@ -8,6 +8,12 @@ demo guide:
 
 No credentials are included in this runbook.
 
+Validated operating state (`2026-07-15`): the dev tenant passed the complete
+headed-browser cadence on commit `1f3330b`, including Saturday meeting setup,
+agenda, notes, AI draft minutes, completion, and Admin cleanup. Microsoft Teams
+consent/transcripts remain optional external integration steps; the native
+meeting cadence in this runbook does not require them.
+
 ---
 
 ## 1. Purpose

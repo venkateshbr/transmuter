@@ -16,6 +16,7 @@ import {
   Trash2,
 } from 'lucide-angular';
 import { ApiService } from '../../core/services/api.service';
+import { TenantReportingContextService } from '../../core/services/tenant-reporting-context.service';
 
 type SharedCostReportingTreatment = 'report_only' | 'post_cost_lines' | 'report_and_post';
 type AllocationMethod =
@@ -678,6 +679,7 @@ const DEFAULT_REPORTING_SETTINGS: SharedCostReportingSettings = {
 })
 export class SharedCostsComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly reportingContext = inject(TenantReportingContextService);
 
   readonly plusIcon = Plus;
   readonly saveIcon = Save;
@@ -740,6 +742,10 @@ export class SharedCostsComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    this.reportingContext.load().subscribe({
+      next: context => { this.poolDraft.currency_code = context.reportingCurrency; },
+      error: () => undefined,
+    });
     this.loadAll();
   }
 
@@ -1173,11 +1179,7 @@ export class SharedCostsComponent implements OnInit {
   }
 
   formatMoney(value: string | number | null | undefined): string {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      maximumFractionDigits: 0,
-    }).format(this.parseMoney(value));
+    return this.reportingContext.formatMoney(value);
   }
 
   formatPercent(value: string | number | null | undefined): string {
@@ -1226,7 +1228,7 @@ export class SharedCostsComponent implements OnInit {
       amount_actual: '',
       period_grain: 'annual',
       reporting_treatment: 'report_only',
-      currency_code: 'USD',
+      currency_code: this.reportingContext.currency() || '',
     };
   }
 

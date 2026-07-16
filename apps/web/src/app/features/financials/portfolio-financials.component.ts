@@ -44,6 +44,8 @@ interface BreakdownRow {
 
 interface PortfolioFinancialsResponse {
   granularity: Granularity;
+  reporting_currency?: string;
+  fiscal_year_start_month?: number;
   selected_year?: number | null;
   available_years?: number[];
   summary: SummaryCard[];
@@ -103,6 +105,7 @@ interface ContributorsResponse {
 
 interface FinancialConfiguration {
   cost_categories?: Array<{ id?: string; key: string; label: string; is_active: boolean }>;
+  settings?: { reporting_currency?: string };
 }
 
 interface StageGateDefinition {
@@ -175,6 +178,16 @@ interface ValueBridgeResponse {
   imports: [CommonModule, FormsModule, RouterLink, PortfolioFinancialTrendComponent],
   template: `
     <div class="min-h-screen p-8 space-y-8" style="background:var(--t-bg)">
+      @if (loadError()) {
+        <section class="border border-red-500/40 bg-red-500/10 p-6" role="alert" data-testid="portfolio-financials-load-error">
+          <p class="text-xs font-black uppercase tracking-widest text-red-600">Financial data unavailable</p>
+          <p class="mt-2 text-sm font-semibold text-[var(--t-text-primary)]">{{ loadError() }}</p>
+          <button type="button" class="btn-secondary mt-5 text-sm" (click)="load()" [disabled]="loading()" aria-label="Retry portfolio financial data">
+            {{ loading() ? 'Retrying...' : 'Try again' }}
+          </button>
+        </section>
+      }
+      <div class="contents" [class.hidden]="!!loadError()">
       <header class="flex flex-wrap items-end justify-between gap-5 border-b border-[var(--t-border)] pb-6">
         <div>
           <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">Portfolio Office</p>
@@ -302,6 +315,7 @@ interface ValueBridgeResponse {
         [rows]="response()?.periods || []"
         [granularity]="granularity()"
         [showActuals]="showActuals()"
+        [currency]="reportingCurrency()"
         [baselineValue]="grossMarginBaselinePerPeriod()"
         [baselineLabel]="trendBaselineLabel()"
         (periodSelected)="openTrendPeriod($event)" />
@@ -665,6 +679,7 @@ interface ValueBridgeResponse {
           }
         </aside>
       }
+      </div>
     </div>
   `,
 })
@@ -672,12 +687,15 @@ export class PortfolioFinancialsComponent implements OnInit {
   private readonly api = inject(ApiService);
 
   response = signal<PortfolioFinancialsResponse | null>(null);
+  loading = signal(false);
+  loadError = signal<string | null>(null);
   valueRamp = signal<ValueRampResponse | null>(null);
   valueBridge = signal<ValueBridgeResponse | null>(null);
   contributors = signal<ContributorsResponse | null>(null);
   selectedPeriod = signal<PeriodRow | null>(null);
   contributorsLoading = signal(false);
   configuration = signal<FinancialConfiguration | null>(null);
+  reportingCurrency = signal('');
   tenantAnnualBaselines = signal<AnnualBaselineValue[]>([]);
   stageGateDefinitions = signal<StageGateDefinition[]>([]);
   granularity = signal<Granularity>('monthly');
@@ -731,7 +749,11 @@ export class PortfolioFinancialsComponent implements OnInit {
 
   ngOnInit(): void {
     this.api.get<FinancialConfiguration>('/financial-engine-configuration').subscribe({
-      next: config => this.configuration.set(config),
+      next: config => {
+        this.configuration.set(config);
+        const currency = this.normalizeCurrency(config.settings?.reporting_currency);
+        if (currency) this.reportingCurrency.set(currency);
+      },
       error: () => this.configuration.set({ cost_categories: [] }),
     });
     this.api.get<StageGateDefinition[]>('/governance/stage-gates').subscribe({
@@ -781,18 +803,32 @@ export class PortfolioFinancialsComponent implements OnInit {
   }
 
   load(): void {
+    this.loading.set(true);
+    this.loadError.set(null);
     const params = new URLSearchParams({ granularity: this.granularity() });
     if (this.year()) params.set('year', String(this.year()));
     if (this.categoryKey()) params.set('category_key', this.categoryKey());
     if (this.stage()) params.set('stage', this.stage());
     this.api.get<PortfolioFinancialsResponse>(`/portfolio/financials?${params.toString()}`)
-      .subscribe(res => {
-        this.response.set(res);
-        if (this.year() === null && res.selected_year) {
-          this.year.set(res.selected_year);
-        }
-        this.loadValueRamp();
-        this.loadValueBridge();
+      .subscribe({
+        next: res => {
+          const currency = this.normalizeCurrency(res.reporting_currency);
+          if (!currency) {
+            this.showLoadError('Tenant reporting currency is unavailable. Correct the tenant financial settings before using portfolio financials.');
+            return;
+          }
+          this.response.set(res);
+          this.reportingCurrency.set(currency);
+          this.loading.set(false);
+          if (this.year() === null && res.selected_year) {
+            this.year.set(res.selected_year);
+          }
+          this.loadValueRamp();
+          this.loadValueBridge();
+        },
+        error: () => {
+          this.showLoadError('Current portfolio financials could not be loaded. Retry before using or presenting financial figures.');
+        },
       });
   }
 
@@ -862,9 +898,22 @@ export class PortfolioFinancialsComponent implements OnInit {
     const parsed = this.parseMoney(value);
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: this.reportingCurrency(),
       maximumFractionDigits: 0,
     }).format(parsed);
+  }
+
+  private normalizeCurrency(value: string | null | undefined): string | null {
+    const currency = String(value || '').trim().toUpperCase();
+    return /^[A-Z]{3}$/.test(currency) ? currency : null;
+  }
+
+  private showLoadError(message: string): void {
+    this.response.set(null);
+    this.valueRamp.set(null);
+    this.valueBridge.set(null);
+    this.loading.set(false);
+    this.loadError.set(message);
   }
 
   parseMoney(value: string | number | null | undefined): number {

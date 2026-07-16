@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, inject, signal } from '@angular/core';
+import { Component, Input, OnChanges, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../../core/services/api.service';
@@ -14,10 +14,12 @@ import { ApiService } from '../../../../core/services/api.service';
           <h2 class="text-xl font-bold text-[var(--t-text-primary)]">Risk Register<span class="text-[var(--t-accent)]">.</span></h2>
           <p class="text-xs font-semibold uppercase tracking-wider text-[var(--t-text-secondary)]">Identify and mitigate initiative blockers</p>
         </div>
-        <button class="btn-primary flex items-center gap-2" (click)="onOpenAddModal()">
+        @if (canManage) {
+        <button class="btn-primary flex items-center gap-2" (click)="onOpenAddModal()" aria-label="Add risk">
           <span class="material-icons text-sm">add</span>
           Add Risk
         </button>
+        }
       </div>
 
       @if (loading()) {
@@ -35,7 +37,9 @@ import { ApiService } from '../../../../core/services/api.service';
           </div>
           <h3 class="text-lg font-bold">No risks registered</h3>
           <p class="text-sm text-[var(--t-text-secondary)] mt-1">Great! No active risks reported for this initiative.</p>
-          <button class="btn-secondary text-xs mt-6" (click)="onOpenAddModal()">+ Add Risk</button>
+          @if (canManage) {
+            <button class="btn-secondary text-xs mt-6" (click)="onOpenAddModal()">+ Add Risk</button>
+          }
         </div>
       }
 
@@ -84,7 +88,7 @@ import { ApiService } from '../../../../core/services/api.service';
               </div>
 
               <div class="flex md:flex-col items-center justify-center gap-2 border-l md:pl-6 border-transparent md:border-[var(--t-border)]">
-                @if (risk.status === 'open') {
+                @if (risk.status === 'open' && canManage) {
                   <button class="btn-secondary py-1.5 px-4 text-xs w-full" (click)="onOpenEditModal(risk)">Edit</button>
                   <button class="btn-primary py-1.5 px-4 text-xs w-full" (click)="onCloseRisk(risk.id)">Close</button>
                   @if (confirmDeleteId() === risk.id) {
@@ -187,10 +191,13 @@ import { ApiService } from '../../../../core/services/api.service';
     }
   `
 })
-export class RisksTabComponent implements OnInit {
+export class RisksTabComponent implements OnInit, OnChanges {
   @Input() initiativeId!: string;
+  @Input() canManage = false;
+  @Input() startCreate = false;
   
   private readonly api = inject(ApiService);
+  private openedFromRoute = false;
   
   risks = signal<any[]>([]);
   loading = signal(true);
@@ -211,6 +218,17 @@ export class RisksTabComponent implements OnInit {
 
   ngOnInit() {
     this.fetchRisks();
+    this.openCreateFromRoute();
+  }
+
+  ngOnChanges(): void {
+    this.openCreateFromRoute();
+  }
+
+  private openCreateFromRoute(): void {
+    if (!this.startCreate || !this.canManage || this.openedFromRoute) return;
+    this.openedFromRoute = true;
+    this.onOpenAddModal();
   }
 
   fetchRisks() {

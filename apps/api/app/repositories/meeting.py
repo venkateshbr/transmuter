@@ -602,6 +602,7 @@ class MeetingRepository:
             .select(
                 "*, "
                 "agenda_items(text, sort_order), "
+                "meeting_session_agenda_items(text, sort_order), "
                 "initiatives(name, initiative_code, rag_status, stage), "
                 "users!meeting_artifacts_assignee_id_fkey(display_name)"
             )

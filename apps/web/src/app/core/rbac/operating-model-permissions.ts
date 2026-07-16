@@ -15,7 +15,8 @@ export type OperatingModelPermission =
   | 'program_cadence.manage'
   | 'execution_evidence.manage'
   | 'execution_evidence.manage_assigned'
-  | 'execution_evidence.manage_workstream';
+  | 'execution_evidence.manage_workstream'
+  | 'audit_log.view';
 
 export interface OperatingModelRoleOption {
   id: string;
@@ -90,6 +91,7 @@ const ROLE_PERMISSIONS: Record<string, OperatingModelPermission[]> = {
     'execution_evidence.manage',
     'execution_evidence.manage_assigned',
     'execution_evidence.manage_workstream',
+    'audit_log.view',
   ],
   tenant_admin: [
     'portfolio.view',
@@ -97,6 +99,7 @@ const ROLE_PERMISSIONS: Record<string, OperatingModelPermission[]> = {
     'users.manage',
     'tenant_setup.manage',
     'governance.manage',
+    'audit_log.view',
   ],
   pmo_lead: [
     'portfolio.view',

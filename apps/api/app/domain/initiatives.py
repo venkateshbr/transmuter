@@ -150,6 +150,12 @@ class InitiativeKPIIndicator(BaseModel):
     all_time_actual: str | None = None
 
 
+class InitiativeCapabilities(BaseModel):
+    manage_master_data: bool = False
+    manage_execution: bool = False
+    manage_financials: bool = False
+
+
 class InitiativeDetail(BaseModel):
     """Full detail — used on the 8-tab initiative page."""
 
@@ -190,6 +196,7 @@ class InitiativeDetail(BaseModel):
     team_members: list[InitiativeTeamMember] = Field(default_factory=list)
     kpi_indicators: list[InitiativeKPIIndicator] = Field(default_factory=list)
     financial_summary: FinancialSummary | None = None
+    capabilities: InitiativeCapabilities = Field(default_factory=InitiativeCapabilities)
     archived_at: str | None
     created_at: str
     updated_at: str

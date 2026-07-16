@@ -443,6 +443,23 @@ def test_agenda_suggestions_use_actions_workstreams_and_mask_pii() -> None:
     assert response.trace_id is not None
 
 
+def test_meeting_pii_mask_preserves_iso_dates_while_masking_phone_numbers() -> None:
+    text = (
+        "ACME Saturday Value Steering - 2026-07-18; target 2028-03-31; "
+        "call +65 6123 4567 or (212) 555-0199; owner@example.com"
+    )
+
+    masked = MeetingService._mask_pii(text)
+
+    assert "2026-07-18" in masked
+    assert "2028-03-31" in masked
+    assert "+65 6123 4567" not in masked
+    assert "(212) 555-0199" not in masked
+    assert masked.count("[phone]") == 2
+    assert "owner@example.com" not in masked
+    assert "[email]" in masked
+
+
 def test_generate_minutes_requires_real_source_material() -> None:
     repo = FakeMeetingV2Repository()
     service = build_service(repo)
@@ -470,8 +487,16 @@ def test_generate_minutes_summarizes_transcript_by_agenda_without_raw_dump() -> 
         "meetings": {"name": "Weekly review"},
     }
     repo.get_session_agenda = lambda session_id: [  # type: ignore[method-assign]
-        {"id": "agenda-benefits", "text": "Benefits tracking"},
-        {"id": "agenda-risk", "text": "Migration risk"},
+        {
+            "id": "session-agenda-benefits",
+            "source_agenda_item_id": "agenda-benefits",
+            "text": "Benefits tracking",
+        },
+        {
+            "id": "session-agenda-risk",
+            "source_agenda_item_id": "agenda-risk",
+            "text": "Migration risk",
+        },
     ]
     repo.list_session_artifacts = lambda session_id: [  # type: ignore[method-assign]
         {
@@ -480,7 +505,15 @@ def test_generate_minutes_summarizes_transcript_by_agenda_without_raw_dump() -> 
             "artifact_type": "risk",
             "title": "Cutover rollback owner missing",
             "status": "open",
-        }
+        },
+        {
+            "id": "artifact-2",
+            "agenda_item_id": None,
+            "session_agenda_item_id": "session-agenda-risk",
+            "artifact_type": "decision",
+            "title": "Retain the governed baseline",
+            "status": "open",
+        },
     ]
 
     service = build_service(repo)
@@ -499,6 +532,7 @@ def test_generate_minutes_summarizes_transcript_by_agenda_without_raw_dump() -> 
     assert "Discussed the migration risk is high" in minutes
     assert "Captured items:" in minutes
     assert "Cutover rollback owner missing" in minutes
+    assert "Retain the governed baseline" in minutes
     assert "## Transcript Summary Source" not in minutes
     assert "Rupa Menon:" not in minutes
     assert "Vishwa Rao:" not in minutes

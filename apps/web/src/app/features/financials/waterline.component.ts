@@ -2,13 +2,13 @@ import { CommonModule } from '@angular/common';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/services/api.service';
+import { TenantReportingContextService } from '../../core/services/tenant-reporting-context.service';
 import {
   WorkstreamOption,
   WorkstreamTargetLockResponse,
   WorkstreamTargetLockVersion,
   WorkstreamTargetPreviewResponse,
   formatDateTime,
-  formatMoney,
 } from './financials-view.models';
 
 @Component({
@@ -202,8 +202,9 @@ import {
 })
 export class WaterlineComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly reportingContext = inject(TenantReportingContextService);
 
-  readonly formatMoney = formatMoney;
+  readonly formatMoney = (value: string | number | null | undefined) => this.reportingContext.formatMoney(value);
   readonly formatDateTime = formatDateTime;
 
   readonly workstreams = signal<WorkstreamOption[]>([]);
@@ -226,6 +227,7 @@ export class WaterlineComponent implements OnInit {
   });
 
   ngOnInit(): void {
+    this.reportingContext.ensureLoaded();
     this.loadWorkstreams();
   }
 

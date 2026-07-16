@@ -117,6 +117,7 @@ export class PortfolioFinancialTrendComponent implements AfterViewInit, OnChange
   @Input() rows: FinancialTrendRow[] = [];
   @Input() granularity: FinancialTrendGranularity = 'monthly';
   @Input() showActuals = false;
+  @Input() currency = '';
   @Input() baselineValue: string | number | null = null;
   @Input() baselineLabel = 'Gross margin baseline';
 
@@ -182,12 +183,12 @@ export class PortfolioFinancialTrendComponent implements AfterViewInit, OnChange
 
   latestPlanLabel(): string {
     const row = this.latestRow();
-    return row ? this.formatMoney(row[this.activeMetric().planKey]) : '$0';
+    return row ? this.formatMoney(row[this.activeMetric().planKey]) : this.formatMoney(0);
   }
 
   latestActualLabel(): string {
     const row = this.latestRow();
-    return row ? this.formatMoney(row[this.activeMetric().actualKey]) : '$0';
+    return row ? this.formatMoney(row[this.activeMetric().actualKey]) : this.formatMoney(0);
   }
 
   private renderChart(): void {
@@ -344,19 +345,28 @@ export class PortfolioFinancialTrendComponent implements AfterViewInit, OnChange
   }
 
   formatMoney(value: string | number | null | undefined): string {
+    const currency = this.normalizedCurrency();
+    if (!currency) return '—';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency,
       maximumFractionDigits: 0,
     }).format(this.parseMoney(value));
   }
 
   private formatCompactMoney(value: number): string {
+    const currency = this.normalizedCurrency();
+    if (!currency) return '—';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency,
       notation: 'compact',
       maximumFractionDigits: 1,
     }).format(value);
+  }
+
+  private normalizedCurrency(): string | null {
+    const currency = String(this.currency || '').trim().toUpperCase();
+    return /^[A-Z]{3}$/.test(currency) ? currency : null;
   }
 }

@@ -46,26 +46,42 @@ class StrategicParameterReferenceResetRequest(BaseModel):
 
 
 @router.get("/settings")
-async def get_settings(svc: Annotated[AdminService, Depends(_svc)]) -> dict[str, object]:
+async def get_settings(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[AdminService, Depends(_svc)],
+) -> dict[str, object]:
     """Get organization settings."""
+    assert_can_manage_tenant_setup(current_user)
     return svc.get_settings()
 
 
 @router.get("/billing")
-async def get_billing_status(svc: Annotated[AdminService, Depends(_svc)]) -> dict[str, object]:
+async def get_billing_status(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[AdminService, Depends(_svc)],
+) -> dict[str, object]:
     """Get tenant subscription and seat status."""
+    assert_can_manage_tenant_setup(current_user)
     return svc.get_billing_status()
 
 
 @router.get("/launch-readiness")
-async def get_launch_readiness(svc: Annotated[AdminService, Depends(_svc)]) -> dict[str, object]:
+async def get_launch_readiness(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[AdminService, Depends(_svc)],
+) -> dict[str, object]:
     """Get launch readiness checks for the tenant and runtime."""
+    assert_can_manage_tenant_setup(current_user)
     return svc.get_launch_readiness()
 
 
 @router.get("/setup-status")
-async def get_setup_status(svc: Annotated[AdminService, Depends(_svc)]) -> dict[str, object]:
+async def get_setup_status(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[AdminService, Depends(_svc)],
+) -> dict[str, object]:
     """Get first-run tenant setup checklist status."""
+    assert_can_manage_tenant_setup(current_user)
     return svc.get_setup_status()
 
 

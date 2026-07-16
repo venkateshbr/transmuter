@@ -2,12 +2,13 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { spawn } from 'node:child_process';
+import { loadTestCredentials } from './test-credentials.mjs';
 
 const uiBaseUrl = process.env.TRANSMUTER_UI_BASE_URL ?? 'https://transmuter-dev.ishirock.tech';
 const apiBaseUrl = process.env.TRANSMUTER_API_BASE_URL ?? `${uiBaseUrl}/api`;
 const chromeBin = process.env.CHROME_BIN ?? '/snap/bin/chromium';
 const email = process.env.TRANSMUTER_E2E_EMAIL ?? 'admin@acme4-transformation.dev';
-const password = process.env.TRANSMUTER_E2E_PASSWORD;
+const { password } = loadTestCredentials({ tenant: 'acme' });
 const debugPort = Number(process.env.CHROME_DEBUG_PORT ?? 9244);
 const ledgerCsvPath = resolve(process.env.ACME_LEDGER_CSV ?? 'docs/user-guides/acme-benefit-ledger-import.csv');
 const canonicalCodes = Array.from({ length: 10 }, (_, index) => `ENT-${String(index + 1).padStart(3, '0')}`);
@@ -770,7 +771,6 @@ async function validate(page) {
 }
 
 async function main() {
-  assert(password, 'TRANSMUTER_E2E_PASSWORD is required');
   await requestJson(`${apiBaseUrl}/health`);
   const userDataDir = await mkdtemp(`${tmpdir()}/transmuter-acme4-full-demo-`);
   const chromeArgs = [

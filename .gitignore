@@ -25,6 +25,7 @@ infra/hostinger/.env.dev
 node_modules/
 .angular/
 apps/web/dist/
+.playwright-mcp/
 
 # macOS
 .DS_Store

@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, Input, OnChanges, OnInit, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../../core/services/api.service';
@@ -14,10 +14,12 @@ import { ApiService } from '../../../../core/services/api.service';
           <h2 class="text-xl font-bold text-[var(--t-text-primary)]">Key Performance Indicators<span class="text-[var(--t-accent)]">.</span></h2>
           <p class="text-xs font-semibold uppercase tracking-wider text-[var(--t-text-secondary)]">Track strategic metrics and targets</p>
         </div>
-        <button class="btn-primary flex items-center gap-2" (click)="onOpenAddModal()">
+        @if (canManage) {
+        <button class="btn-primary flex items-center gap-2" (click)="onOpenAddModal()" aria-label="Add KPI">
           <span class="material-icons text-sm">add</span>
           Add KPI
         </button>
+        }
       </div>
 
       @if (loading()) {
@@ -35,7 +37,9 @@ import { ApiService } from '../../../../core/services/api.service';
           </div>
           <h3 class="text-lg font-bold">No KPIs defined yet</h3>
           <p class="text-sm text-[var(--t-text-secondary)] mt-1">Add key metrics to monitor the success of this initiative.</p>
-          <button class="btn-secondary text-xs mt-6" (click)="onOpenAddModal()">+ Add First KPI</button>
+          @if (canManage) {
+            <button class="btn-secondary text-xs mt-6" (click)="onOpenAddModal()">+ Add First KPI</button>
+          }
         </div>
       }
 
@@ -52,6 +56,7 @@ import { ApiService } from '../../../../core/services/api.service';
                     <span class="text-[10px] font-bold uppercase tracking-wider" style="color:var(--t-text-secondary)">{{ kpi.frequency }}</span>
                   </div>
                 </div>
+                @if (canManage) {
                 <div class="flex gap-1">
                    <button class="btn-ghost p-1.5" title="Edit KPI" aria-label="Edit KPI" (click)="onOpenEditModal(kpi)">
                      <span class="material-icons text-sm">edit</span>
@@ -69,6 +74,7 @@ import { ApiService } from '../../../../core/services/api.service';
                      </button>
                    }
                 </div>
+                }
               </div>
             </div>
             
@@ -120,6 +126,7 @@ import { ApiService } from '../../../../core/services/api.service';
                 </div>
               }
 
+              @if (canManage) {
               <div class="rounded-lg border border-[var(--t-border)] bg-[var(--t-surface)] p-3 space-y-3">
                 <p class="text-[10px] font-bold uppercase tracking-wider" style="color:var(--t-text-secondary)">Quarterly Entry</p>
                 <div class="grid grid-cols-2 md:grid-cols-5 gap-2">
@@ -142,6 +149,7 @@ import { ApiService } from '../../../../core/services/api.service';
                   <button class="btn-secondary text-xs" (click)="onSaveEntry(kpi)">Save Entry</button>
                 </div>
               </div>
+              }
             </div>
           </div>
         }
@@ -199,10 +207,13 @@ import { ApiService } from '../../../../core/services/api.service';
     }
   `
 })
-export class KpisTabComponent implements OnInit {
+export class KpisTabComponent implements OnInit, OnChanges {
   @Input() initiativeId!: string;
+  @Input() canManage = false;
+  @Input() startCreate = false;
   
   private readonly api = inject(ApiService);
+  private openedFromRoute = false;
   
   kpis = signal<any[]>([]);
   loading = signal(true);
@@ -228,6 +239,17 @@ export class KpisTabComponent implements OnInit {
   ngOnInit() {
     (globalThis as any).__transmuterKpis = this;
     this.fetchKpis();
+    this.openCreateFromRoute();
+  }
+
+  ngOnChanges(): void {
+    this.openCreateFromRoute();
+  }
+
+  private openCreateFromRoute(): void {
+    if (!this.startCreate || !this.canManage || this.openedFromRoute) return;
+    this.openedFromRoute = true;
+    this.onOpenAddModal();
   }
 
   fetchKpis() {

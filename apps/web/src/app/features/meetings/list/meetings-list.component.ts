@@ -5,6 +5,7 @@ import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { CompactFilterToolbarComponent, type CompactFilterGroup } from '../../../shared/components/compact-filter-toolbar/compact-filter-toolbar.component';
 import { TimezoneOptionsService } from '../../../core/services/timezone-options.service';
+import { AuthService } from '../../../core/services/auth.service';
 
 const MEETINGS_FILTER_STATE_KEY = 'transmuter.filters.meetings.list';
 
@@ -22,11 +23,13 @@ const MEETINGS_FILTER_STATE_KEY = 'transmuter.filters.meetings.list';
           <p class="text-[var(--t-text-secondary)] mt-1">Manage recurring workstream reviews and steering committees.</p>
         </div>
 
+        @if (canManageCadence()) {
         <div class="flex flex-wrap items-center gap-3">
           <button (click)="showCreate.set(true)" class="btn-primary text-sm flex items-center gap-2" aria-label="Create meeting series">
           <span>+</span> New Series
         </button>
         </div>
+        }
       </div>
 
       <app-compact-filter-toolbar
@@ -107,7 +110,7 @@ const MEETINGS_FILTER_STATE_KEY = 'transmuter.filters.meetings.list';
         </div>
       }
 
-      @if (showCreate()) {
+      @if (showCreate() && canManageCadence()) {
         <div class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-6">
           <form (ngSubmit)="createMeeting()" class="card w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 space-y-5 shadow-2xl" style="background:var(--t-surface)">
             <div class="flex items-start justify-between gap-4">
@@ -251,6 +254,7 @@ const MEETINGS_FILTER_STATE_KEY = 'transmuter.filters.meetings.list';
 })
 export class MeetingsListComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly timezones = inject(TimezoneOptionsService);
   meetings = signal<any[]>([]);
@@ -351,6 +355,11 @@ export class MeetingsListComponent implements OnInit {
   }
 
   createMeeting() {
+    if (!this.canManageCadence()) {
+      this.showCreate.set(false);
+      this.error.set('You do not have permission to create meeting series.');
+      return;
+    }
     if (!this.draft.owner_id && this.users().length) {
       this.draft.owner_id = this.users()[0].id;
     }
@@ -382,6 +391,10 @@ export class MeetingsListComponent implements OnInit {
         this.error.set(err.error?.detail || 'Could not create meeting.');
       },
     });
+  }
+
+  canManageCadence(): boolean {
+    return this.auth.hasPermission('program_cadence.manage');
   }
 
   private emptyDraft() {

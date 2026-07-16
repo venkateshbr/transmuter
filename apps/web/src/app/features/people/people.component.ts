@@ -67,7 +67,7 @@ const PEOPLE_FILTER_STATE_KEY = 'transmuter.filters.people.directory';
           @for (p of people(); track p.id) {
             <div (click)="openProfile(p)" class="card p-6 flex flex-col items-center text-center hover:border-[var(--t-accent)] transition-all cursor-pointer group relative overflow-hidden">
               <!-- Selection Highlight -->
-              <div class="absolute inset-0 bg-[var(--t-accent)] opacity-0 group-hover:opacity-[0.02] transition-opacity"></div>
+              <div class="pointer-events-none absolute inset-0 bg-[var(--t-accent)] opacity-0 group-hover:opacity-[0.02] transition-opacity"></div>
               
               <div class="w-20 h-20 rounded-3xl bg-gradient-to-br from-[var(--t-surface-raised)] to-[var(--t-border)] flex items-center justify-center text-2xl font-black text-[var(--t-text-secondary)] mb-4 border border-[var(--t-border)] group-hover:scale-110 group-hover:rotate-3 transition-all duration-500">
                 {{ (p.display_name || 'U').substring(0,1) }}

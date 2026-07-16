@@ -342,18 +342,68 @@ interface GridMetric {
             </span>
           }
         </div>
+        <div class="mt-4 grid gap-3 md:grid-cols-[minmax(0,14rem)_1fr]">
+          <label class="block">
+            <span class="mb-1 block text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-tertiary)">Baseline fiscal year</span>
+            <input
+              type="number"
+              min="2020"
+              max="2060"
+              step="1"
+              class="input-field py-2 text-xs font-bold"
+              aria-label="Initiative baseline fiscal year"
+              [ngModel]="baselineDraftYear()"
+              (ngModelChange)="setBaselineDraftYear($event)"
+              [disabled]="annualBaselineLocked() || saving()"
+            >
+          </label>
+          <div class="flex items-end">
+            <p class="text-xs font-semibold" style="color:var(--t-text-secondary)">
+              Capture the original annual operating position used to measure this initiative's incremental impact.
+            </p>
+          </div>
+        </div>
         <div class="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           @for (item of annualBaselineRows(); track item.metric.key) {
-            <div class="border bg-[var(--t-surface-raised)] p-3" style="border-color:var(--t-border)">
-              <p class="text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-tertiary)">{{ item.metric.label }}</p>
-              <p class="mt-2 text-xl font-black" style="color:var(--t-text-primary)">{{ formatMetricValue(item.value, item.metric.value_type) }}</p>
-            </div>
+            <label class="block border bg-[var(--t-surface-raised)] p-3" style="border-color:var(--t-border)">
+              <span class="mb-2 block text-[9px] font-black uppercase tracking-widest" style="color:var(--t-text-tertiary)">{{ item.metric.label }}</span>
+              <input
+                type="number"
+                step="0.0001"
+                class="input-field py-2 text-xs font-bold"
+                [attr.aria-label]="'Initiative baseline ' + item.metric.label"
+                [ngModel]="baselineDraftValue(item.metric.id)"
+                (ngModelChange)="setBaselineDraftValue(item.metric.id, $event)"
+                [disabled]="annualBaselineLocked() || saving()"
+              >
+              <span class="mt-2 block text-[10px] font-bold" style="color:var(--t-text-secondary)">
+                {{ formatMetricValue(baselineDraftValue(item.metric.id), item.metric.value_type) }}
+              </span>
+            </label>
           }
           @if (!annualBaselineRows().length) {
             <div class="border bg-[var(--t-surface-raised)] p-3 text-sm font-bold" style="border-color:var(--t-border);color:var(--t-text-secondary)">
               No annual baseline metrics are configured for this initiative.
             </div>
           }
+        </div>
+        <div class="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--t-border)] pt-4">
+          <p class="text-xs font-semibold" style="color:var(--t-text-secondary)">
+            @if (annualBaselineLocked()) {
+              This baseline is locked by governance and remains visible as the audit reference. It cannot be edited.
+            } @else {
+              Save the baseline before entering incremental benefits so value is not confused with business-as-usual performance.
+            }
+          </p>
+          <button
+            type="button"
+            class="btn-primary px-4 py-2 text-[10px]"
+            aria-label="Save initiative annual baseline"
+            [disabled]="!canSaveAnnualBaseline()"
+            (click)="saveAnnualBaseline()"
+          >
+            {{ saving() ? 'Saving…' : 'Save Annual Baseline' }}
+          </button>
         </div>
       </section>
 
@@ -856,6 +906,8 @@ export class FinancialsTabComponent implements OnInit {
   financialMessage = signal<string | null>(null);
   financialError = signal<string | null>(null);
   grid = signal<FinancialGrid | null>(null);
+  baselineDraftYear = signal<number | null>(null);
+  baselineDraftValues = signal<Record<string, string>>({});
   valueBridge = signal<any | null>(null);
   assumptions = signal<CellAssumption[]>([]);
   configuration = signal<FinancialConfiguration | null>(null);
@@ -944,6 +996,18 @@ export class FinancialsTabComponent implements OnInit {
   ]);
 
   isLocked = computed(() => Boolean(this.grid()?.locked));
+  annualBaselineLocked = computed(() => Boolean(this.grid()?.baseline?.locked));
+  canSaveAnnualBaseline = computed(() => {
+    const year = this.baselineDraftYear();
+    const values = this.baselineDraftValues();
+    return !this.annualBaselineLocked()
+      && !this.saving()
+      && year !== null
+      && year >= 2020
+      && year <= 2060
+      && this.baselineMetricDefinitions().length > 0
+      && this.baselineMetricDefinitions().every(metric => this.isDecimalInput(values[metric.id] ?? '0'));
+  });
   canEditFinancialGrid = computed(() => !this.isLocked() || this.hasActualScenarioDefinition());
   canSaveGrid = computed(() => this.canEditFinancialGrid());
 
@@ -1260,6 +1324,53 @@ export class FinancialsTabComponent implements OnInit {
       value: values.get(metric.id) || '0',
     }));
   });
+
+  baselineDraftValue(metricDefinitionId: string): string {
+    return this.baselineDraftValues()[metricDefinitionId] ?? '0';
+  }
+
+  setBaselineDraftYear(value: number | string | null): void {
+    if (value === null || value === '') {
+      this.baselineDraftYear.set(null);
+      return;
+    }
+    const year = Number(value);
+    this.baselineDraftYear.set(Number.isInteger(year) ? year : null);
+  }
+
+  setBaselineDraftValue(metricDefinitionId: string, value: number | string | null): void {
+    this.baselineDraftValues.update(current => ({
+      ...current,
+      [metricDefinitionId]: value === null || value === '' ? '0' : String(value),
+    }));
+  }
+
+  saveAnnualBaseline(): void {
+    const baselineYear = this.baselineDraftYear();
+    if (!this.canSaveAnnualBaseline() || baselineYear === null) return;
+
+    this.clearFinancialFeedback();
+    this.saving.set(true);
+    this.api.put<InitiativeAnnualBaseline>(`/initiatives/${this.initiativeId}/financials/baseline`, {
+      baseline_year: baselineYear,
+      values: this.baselineMetricDefinitions().map(metric => ({
+        metric_definition_id: metric.id,
+        baseline_year: baselineYear,
+        value: this.baselineDraftValue(metric.id),
+      })),
+    }).subscribe({
+      next: baseline => {
+        this.grid.update(current => current ? { ...current, baseline } : current);
+        this.syncAnnualBaselineDraft(baseline);
+        this.saving.set(false);
+        this.financialMessage.set('Initiative annual baseline saved.');
+      },
+      error: err => {
+        this.saving.set(false);
+        this.financialError.set(this.financialErrorMessage(err, 'Failed to save initiative annual baseline.'));
+      },
+    });
+  }
 
   selectedScenarioCase = computed<ValueBridgeCase | null>(() => {
     const bridge = this.valueBridge();
@@ -2002,7 +2113,13 @@ export class FinancialsTabComponent implements OnInit {
     if (val === null || val === undefined) return '—';
     const num = typeof val === 'string' ? parseFloat(val) : val;
     if (isNaN(num)) return '—';
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(num);
+    const currency = String(this.grid()?.settings?.reporting_currency || '').trim().toUpperCase();
+    if (!/^[A-Z]{3}$/.test(currency)) return '—';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: 0,
+    }).format(num);
   }
 
   formatMetricValue(val: string | number | null, valueType: FinancialMetricDefinition['value_type']): string {
@@ -2581,7 +2698,10 @@ export class FinancialsTabComponent implements OnInit {
       next: config => this.configuration.set(config),
       error: () => this.configuration.set(null),
     });
-    this.api.get<FinancialGrid>(base).subscribe(g => this.grid.set(g));
+    this.api.get<FinancialGrid>(base).subscribe(g => {
+      this.grid.set(g);
+      this.syncAnnualBaselineDraft(g.baseline || null);
+    });
     this.api.get<any>(`${base}/value-bridge`).subscribe(v => this.valueBridge.set(v));
     this._loadAssumptions();
     this.api.get<CostLineListResponse>(`${base}/cost-lines`).subscribe(r => {
@@ -2597,5 +2717,16 @@ export class FinancialsTabComponent implements OnInit {
       this.assumptions.set(response.items);
       setTimeout(() => this.hotComponent?.hotInstance?.render());
     });
+  }
+
+  private syncAnnualBaselineDraft(baseline: InitiativeAnnualBaseline | null): void {
+    this.baselineDraftYear.set(baseline?.baseline_year ?? null);
+    this.baselineDraftValues.set(Object.fromEntries(
+      (baseline?.values || []).map(value => [value.metric_definition_id, value.value]),
+    ));
+  }
+
+  private isDecimalInput(value: string): boolean {
+    return /^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value.trim());
   }
 }

@@ -15,18 +15,19 @@ from decimal import Decimal
 import httpx
 import pytest
 
+from app.testing.credentials import fixture_credentials
+
 pytestmark = pytest.mark.skipif(
     os.environ.get("RUN_REAL_ACCEPTANCE") != "1",
     reason="real API acceptance requires a running API and RUN_REAL_ACCEPTANCE=1",
 )
 
 BASE_URL = os.environ.get("TRANSMUTER_API_BASE_URL", "http://localhost:8000")
-EMAIL = os.environ.get("TRANSMUTER_E2E_EMAIL", "admin@ishirock.dev")
-PASSWORD = os.environ.get("TRANSMUTER_E2E_PASSWORD", "Transmuter2026!")
 
 
 def _auth_headers(client: httpx.Client) -> dict[str, str]:
-    response = client.post("/auth/login", json={"email": EMAIL, "password": PASSWORD})
+    email, password = fixture_credentials()
+    response = client.post("/auth/login", json={"email": email, "password": password})
     response.raise_for_status()
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 

@@ -455,6 +455,23 @@ class MeetingService:
     def create_artifact(self, session_id: str, data: MeetingArtifactCreate) -> dict:
         session = self._assert_session(session_id)
         payload = data.model_dump(exclude_none=True)
+        session_agenda = self._repo.get_session_agenda(session_id)
+        session_agenda_item_id = payload.get("session_agenda_item_id")
+        if session_agenda_item_id and not any(
+            str(item.get("id")) == str(session_agenda_item_id) for item in session_agenda
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Session agenda item not found",
+            )
+        agenda_item_id = payload.get("agenda_item_id")
+        if agenda_item_id and not any(
+            str(item.get("source_agenda_item_id")) == str(agenda_item_id) for item in session_agenda
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Agenda item not found in this session",
+            )
         payload["session_id"] = session_id
         payload["meeting_id"] = session["meeting_id"]
 
@@ -1320,13 +1337,19 @@ class MeetingService:
         def artifacts_for_type(kind: str) -> list[dict]:
             return [item for item in artifacts if item.get("artifact_type") == kind]
 
-        def artifacts_for_agenda(agenda_id: str | None, kind: str | None = None) -> list[str]:
-            if not agenda_id:
+        def artifacts_for_agenda(
+            agenda_ids: set[str],
+            kind: str | None = None,
+        ) -> list[str]:
+            if not agenda_ids:
                 return []
             rows = [
                 item
                 for item in artifacts
-                if item.get("agenda_item_id") == agenda_id
+                if (
+                    str(item.get("agenda_item_id") or "") in agenda_ids
+                    or str(item.get("session_agenda_item_id") or "") in agenda_ids
+                )
                 and (kind is None or item.get("artifact_type") == kind)
             ]
             return [
@@ -1412,7 +1435,11 @@ class MeetingService:
         used_indexes: set[int] = set()
         for item in agenda:
             title = self._mask_pii(str(item.get("text") or "Agenda item"))
-            agenda_id = item.get("id") or item.get("source_agenda_item_id")
+            agenda_ids = {
+                str(agenda_id)
+                for agenda_id in (item.get("id"), item.get("source_agenda_item_id"))
+                if agenda_id
+            }
             matched = self._sentences_for_agenda(title, sentences)
             for index, _score, _sentence in matched:
                 used_indexes.add(index)
@@ -1426,7 +1453,7 @@ class MeetingService:
                     *discussion_bullets,
                 ]
             )
-            agenda_artifacts = artifacts_for_agenda(agenda_id)
+            agenda_artifacts = artifacts_for_agenda(agenda_ids)
             if agenda_artifacts:
                 sections.extend(["", "Captured items:", *agenda_artifacts])
             sections.append("")
@@ -1519,7 +1546,11 @@ class MeetingService:
     @staticmethod
     def _mask_pii(text: str) -> str:
         text = re.sub(r"[\w.+-]+@[\w-]+\.[\w.-]+", "[email]", text)
-        text = re.sub(r"\+?\d[\d\s().-]{7,}\d", "[phone]", text)
+        text = re.sub(
+            r"(?<![\w-])(?!\d{4}-\d{2}-\d{2}(?!\d))\+?\d(?:[\s().-]{0,3}\d){7,14}(?![\w-])",
+            "[phone]",
+            text,
+        )
         return text
 
     @staticmethod

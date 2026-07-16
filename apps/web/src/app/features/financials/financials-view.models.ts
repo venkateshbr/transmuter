@@ -406,20 +406,24 @@ export function selectDefaultInitiative<T extends { id: string }>(items: T[], pr
   return items[0]?.id || '';
 }
 
-export function formatMoney(value: string | number | null | undefined, maximumFractionDigits = 0): string {
+export function formatMoney(
+  value: string | number | null | undefined,
+  currency: string,
+  maximumFractionDigits = 0,
+): string {
   const numeric = parseNumeric(value);
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: 'USD',
+    currency,
     maximumFractionDigits,
   }).format(numeric);
 }
 
-export function formatCompactMoney(value: string | number | null | undefined): string {
+export function formatCompactMoney(value: string | number | null | undefined, currency: string): string {
   const numeric = parseNumeric(value);
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
-    currency: 'USD',
+    currency,
     notation: 'compact',
     maximumFractionDigits: 1,
   }).format(numeric);

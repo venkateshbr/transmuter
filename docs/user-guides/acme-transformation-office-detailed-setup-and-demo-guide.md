@@ -15,6 +15,18 @@ It expands the shorter ACME value guide with:
 
 No credentials are included in this guide.
 
+Launch-readiness note (`2026-07-15`): the deterministic five-tenant acceptance
+and the dedicated ACME client-demo acceptance are complete in development. The
+latest ACME run used one external, headed Playwright Chromium session against
+dev commit `1c5f184` (Hostinger action `104346054`). It passed all 20 named
+browser scenarios, observed no page errors or HTTP 5xx responses, and removed
+the temporary initiative and Saturday meeting through the visible Admin UI.
+The broader five-tenant run on `1f3330b` remains the cross-tenant and RBAC
+evidence. Production was not touched. Microsoft Graph live consent, Teams
+invite/join-link refresh, and transcript acceptance remain separate external
+gates under `#220`, `#389`, and `#390`; do not demonstrate those controls until
+that external acceptance is complete.
+
 For a UI-only blank-tenant setup path that skips meetings, see
 [`acme-demo-tenant-ui-setup-guide.md`](acme-demo-tenant-ui-setup-guide.md).
 
@@ -22,36 +34,104 @@ For a UI-only blank-tenant setup path that skips meetings, see
 
 ## 1. Validated ACME Demo State
 
-Validated on `https://transmuter-dev.ishirock.tech` against the ACME4
-transformation lab tenant. ACME4 was created through the current signup flow and
-uses generated `TRN-001` through `TRN-010` initiative codes. Where this guide
-uses historical `ENT-*` scenario codes, map them by row order to the ACME4
-`TRN-*` codes.
+Validated on `https://transmuter-dev.ishirock.tech` against the deterministic
+**Acme Global Manufacturing** tenant. The current canonical fixture uses
+`ENT-001` through `ENT-010`. A newly created browser-demo initiative receives
+the next available `TRN-*` code; never assume that temporary code in advance.
 
 | Area | Status | Validation result |
 |---|---|---|
 | Tenant login | Configured | ACME transformation office user can sign in. |
-| Setup checklist | Configured | 8 of 8 checks complete. ACME has 5 active stage gates, 10 active gate criteria, and 0 gates missing criteria. |
+| Setup checklist | Configured | `7/7 complete`. ACME has 5 active stage gates and every gate requires all configured criteria. |
 | Business units | Configured | Commercial, Corporate, Operations, Shared Services, Technology. |
 | Workstreams | Configured | Automation, Commercial Growth, ERP & Data Platform, Offshoring & Operating Model, Procurement & Supply Chain. |
 | Financial engine | Configured | Baseline, Plan Base, Plan High, Actual scenarios; revenue, gross margin, savings, formula metrics, and bridge rows. |
 | Tenant FY26 baseline | Configured | Annual revenue baseline = `$20.0M`; annual gross margin baseline = `$9.0M`. |
 | Initiatives | Configured | 10 ACME initiatives. |
 | Initiative baseline allocation | Reconciles | Initiative baselines total `$20.0M` revenue and `$9.0M` gross margin. |
-| FY28 Financial Overview | Reconciles | Benefits `$9.15M`, recurring costs `$0.80M`, net run-rate value `$8.35M`. |
-| Investments & Payback | Reconciles | One-off investment `$2.50M`, FY28 net run-rate `$8.35M`, payback about `3.6` months. |
-| Benefit Tracking / Bankable Plan | Board-demo-ready | ACME4 has locked bankable plans for all 10 initiatives, non-zero locked baseline and actual benefit ledger values, and governed `TRN-005` rebaseline history. |
-| FY28 contributor drawer | Reconciles | Contributor drawer shows all 10 initiatives, benefit-line detail, validation status, and totals that reconcile to the Financial Overview summary. |
+| FY28 Financial Overview | Reconciles | Benefits `$9.182M`, recurring costs `$0.800M`, net run-rate value `$8.382M`; actual benefit `$4.080M`, recurring actual `$0.388M`, net actual `$3.692M`. |
+| Investments & Payback | Reconciles | One-off investment remains separately governed from recurring FY28 run-rate value. |
+| Benefit Tracking / Bankable Plan | Board-demo-ready | All 10 initiatives have locked plans; `ENT-005` visibly shows version 2. Locked baseline is `$13.802M` and realized value is `$7.9732M`. |
+| Contributor drawer | Reconciles | Open `2028-M01` to show initiative contributors such as `ENT-006`. The broader annual `2028` row does not expose the same initiative drawer. |
 | Benefits Register | Configured | Portfolio-wide benefit lines show gross, validated, risk-adjusted, bankable, and realized values with evidence and owner metadata. |
-| Shared Costs | Configured in dev | Current ACME4 dev data includes four FY2028 shared-cost pools covering `benefit_weighted`, `equal_split`, `fixed_percentage`, and `manual_amount` methods. Total shared-cost plan is `$1.45M`, actual is `$1.305M`, and Control Tower allocated plan is `$1.45M`. |
+| Shared Costs | Configured in dev | Current deterministic ACME dev data includes four FY2028 shared-cost pools covering `benefit_weighted`, `equal_split`, `fixed_percentage`, and `manual_amount` methods. Total shared-cost plan is `$1.45M`, actual is `$1.305M`, and Control Tower allocated plan is `$1.45M`. |
 | Board pack export | Configured | Financial Overview can export a non-empty XLSX board pack using the same selected year and value basis. |
+| Core meeting command center | Development browser pass | The headed ACME run created a weekly Saturday series, linked `ENT-005`, added and generated an initiative agenda, autosaved notes, attached a decision and risk to the active agenda, generated/edited/saved/reloaded AI minutes, completed the session, and deleted the temporary series in Admin. Passed on `1c5f184`; no temporary meeting remains. |
+| People access lifecycle | Development browser pass | A real Resend setup email opened the dev app, password setup succeeded, a temporary password forced first-login change, the fixture password was restored, and a separate invite was listed, resent, and revoked. |
+| Five-tenant reporting context | Development browser pass | ACME USD/January, Northstar SGD/July, Meridian GBP/April, Solstice EUR/January, and Horizon AUD/July loaded correctly across the route sweep. |
 
 ---
 
 Production note: the Shared Costs schema, API, and UI are live on
 `https://transmuter.ishirock.tech`, but production ACME demo data is not yet at
-dev ACME4 parity. Production ACME currently has 0 shared-cost pools and 0
+dev ACME parity. Production ACME currently has 0 shared-cost pools and 0
 initiative dependencies; that seeded-data drift is tracked in issue `#304`.
+
+### Before you start the live demo
+
+1. Use the dev URL unless production promotion and production demo data have
+   been separately approved: `https://transmuter-dev.ishirock.tech`.
+2. Confirm `/health` and `/api/health` both return a healthy response.
+3. Put approved dev-only login details in the gitignored local file
+   `scratch/test-credentials.json` and set its permissions to `0600`. Never put
+   the password in this guide, Git, a screenshot, a meeting note, or a shell
+   command that prints it.
+4. Sign in as the Acme `transformation_office` persona. Wait for the **Strategic
+   Yield Dashboard** heading before using a direct link; this confirms the role
+   profile has hydrated.
+5. Open **Profile** and confirm **Acme Transformation Admin**, the ACME fixture
+   email domain, and **Transformation Office**. The current Profile view does
+   not display the legal entity name, so verify **Acme Global Manufacturing**
+   under **Admin > General** before presenting tenant configuration.
+6. Use a 1440-pixel-wide browser window for the main presentation. Test the
+   responsive layout at about 390 pixels before the audience joins, then return
+   to desktop width.
+7. Create a fresh temporary meeting series for the meeting segment. The
+   canonical fixture intentionally contains no meetings. Use the exact cleanup
+   steps in Screen 14 before ending the rehearsal or client demo.
+8. Keep the browser network/console closed during the audience demo. For formal
+   acceptance evidence, capture errors separately and never expose tokens,
+   headers, local storage, or invite URLs.
+9. Do not select **Sync Invite** or promise a Teams transcript unless Microsoft
+   Graph consent has been completed for the environment. Native agendas, notes,
+   decisions, AI draft minutes, and completion work without Teams.
+10. Rehearse the 15-screen route in section 7 once without changing data. A
+    route that redirects, shows a retry panel, or displays the wrong currency is
+    a stop condition, not a valid empty state.
+
+### Browser-validated presenter route
+
+Use this order when the audience wants the complete platform story. For every
+step, show the visible result before explaining it; do not narrate a capability
+that has not loaded on screen.
+
+| Step | What to do in the browser | Visible proof to pause on | Transformation-office explanation |
+|---:|---|---|---|
+| 1 | Open `/health`, `/api/health`, then sign in. | Healthy responses followed by **Strategic Yield Dashboard**. | The demo is using the deployed application and real ACME identity, not static slides. |
+| 2 | Open **Profile**. | ACME admin display name, fixture email domain, and **Transformation Office** role. | Role context determines the portfolio and controls the presenter can access. |
+| 3 | Open **Admin > General**. | **Acme Global Manufacturing** and `7/7 complete`. | Master data is complete before the office asks initiative owners to report value. |
+| 4 | Open **Strategic Parameters**. | Five workstreams, five business units, Group/Regional markets, one theme, and four tags. | These dimensions are the common management language used in filters and rollups. |
+| 5 | Open **Financial Configuration**. | USD, January fiscal start, FY26 `$20M` revenue/`$9M` gross-margin baseline, four scenarios, ten metrics, and eight cost categories. | Finance has defined one comparable value model for all initiatives. |
+| 6 | Open **Governance Engine**, then **Access Control**. | Five gates with required criteria and the role catalogue. | Stage gates control commitment; RBAC separates authors, reviewers, and viewers. |
+| 7 | Open **People**. | Ten user cards, **Add User**, and **Pending Access**. | The operating model is staffed across transformation, PMO, Finance, owners, benefit owners, sponsors, and viewers. |
+| 8 | Open **Dashboard**. | Ten initiatives plus workstream targets, stage waterline, value matrix, actions, KPI pulse, and activity. | This is the executive landing view: value, delivery pressure, and attention areas in one place. |
+| 9 | Open **Initiative Pipeline**; filter Automation, clear, filter Commercial Growth, clear. | Filter counts change and the unfiltered list returns to ten initiatives. | The office can move from portfolio to accountable slice without changing the source set. |
+| 10 | Open **Financial Overview**, select FY28, Benefits and Actuals on. | `$9.182M` benefits, `$0.800M` recurring cost, `$8.382M` net; then Software/Licenses drilldown and `2028-M01` contributor drawer. | Every executive number can be traced by cost category, period, and contributing initiative. |
+| 11 | Open `ENT-006 Aftermarket Revenue Growth` > **Financials**. | Original annual baseline controls are disabled with the governance-lock explanation. | An approved operating denominator cannot be silently rewritten to improve a value case. |
+| 12 | Open **Bankable Plan**, **Benefits Register**, and **Benefit Tracking**. | `ENT-005` version 2 and locked state; Finance validation; `$13.802M` locked baseline and `$7.9732M` realized value. | Approved plans are versioned, benefit claims are validated, and realization is tracked against a stable commitment. |
+| 13 | Open **Waterline**, preview a workstream lock, then **Initiative Portfolio** with baseline 2026/value 2028. | Previewed inclusion and an initiative table beginning with `ENT-001`. | Selection and target discipline can be reviewed before any new lock is committed. |
+| 14 | Open **Shared Costs** and select each of the four pools. | Rules, targets, weights, and allocation method for platform, PMO, change/training, and advisory pools. | Central costs remain transparent and separately allocated from direct initiative economics. |
+| 15 | Visit Progress, Roadmap, Status Updates, Action Items, Governance, Risks, KPIs, and Control Tower. | Each operating view loads; Control Tower shows **Allocated Costs** and **Net After Allocation** for 2028. | Finance variance is connected to milestones, status, RAID, governance, and fully loaded value. |
+| 16 | Create the temporary margin-recovery initiative with **Create with Transmuter**. | **HITL Review** suggestions, then the new initiative with accepted KPI, milestone, and risk. | AI assists drafting, but a human explicitly reviews what will be written. |
+| 17 | Configure its financial scope and save the FY26 annual baseline. Reload and reopen Financials. | Selected metrics/category persist; `$3.0M` revenue and `$1.35M` gross-margin baseline persist. | Scope defines the auditable model and the baseline defines the original operating denominator. |
+| 18 | Add `Regional price realization uplift` and `Pricing analytics subscription`; reload. | Named benefit and twelve monthly cost rows remain visible; **Edit Details** opens the monthly grid. | Benefits and costs are named, phased, and reviewable rather than hidden in a single total. |
+| 19 | Run the Saturday meeting sequence in Screen 14. | Initiative agenda, autosaved notes, agenda-linked decision/risk, generated and edited minutes, reload persistence, and `COMPLETED`. | The portfolio becomes a management cadence with evidence and decisions attached to the topic under review. |
+| 20 | Use **Admin > Data Cleanup** to delete the temporary meeting and initiative; return to Pipeline and Meetings. | `10 initiatives`; temporary initiative and series absent. | Demo mutations are controlled and the canonical client environment is restored. |
+
+The accepted automation performs exactly this sequence in one headed browser
+session. Network response waits are used only to synchronize the UI; every
+pass/fail assertion is based on rendered browser state or browser reload
+persistence.
 
 ## 2. Executive Storyline
 
@@ -60,31 +140,24 @@ Use this storyline for management:
 > ACME starts from an FY26 baseline business of `$20.0M` annual revenue and
 > `$9.0M` annual gross margin. The transformation office has configured 10
 > initiatives across automation, offshoring, commercial growth, ERP/data, and
-> procurement. By FY28, the portfolio plan shows `$4.0M` revenue uplift,
-> `$5.4M` gross margin uplift, `$3.75M` savings, and `$0.80M` recurring run
-> cost. The resulting FY28 EBITDA-effective net run-rate value is `$8.35M`,
-> excluding `$2.5M` one-off implementation investment.
+> procurement. The current FY28 Financial Overview displays `$9.182M` of
+> benefits and `$0.800M` recurring cost, resulting in `$8.382M` net run-rate
+> value. With Actuals on, it shows `$4.080M` actual benefit, `$0.388M` recurring
+> actual cost, and `$3.692M` net actual value. One-off implementation investment
+> is governed separately from the recurring run-rate story.
 
 Board-level value message:
 
 ```text
-FY28 EBITDA-effective net run-rate value
-= Gross Margin Uplift + Cost Savings - Recurring Run Costs
-= $5.40M + $3.75M - $0.80M
-= $8.35M
+FY28 net run-rate value
+= visible benefits - recurring run costs
+= $9.182M - $0.800M
+= $8.382M
 ```
 
-Broader enterprise value view:
-
-```text
-FY28 enterprise value view
-= Revenue Uplift + Gross Margin Uplift + Cost Savings - Recurring Run Costs
-= $4.00M + $5.40M + $3.75M - $0.80M
-= $12.35M
-```
-
-Use the first formula for EBITDA. Use the second only when discussing broader
-commercial value.
+Use the exact label shown on screen when presenting the number. If a client
+asks how revenue uplift, margin uplift, or savings contribute, open the period
+contributor drawer rather than summing static guide values.
 
 Shared-cost narrative:
 
@@ -101,19 +174,24 @@ Shared-cost narrative:
 Use the following portfolio when setting up a new tenant or explaining the ACME
 demo.
 
-| Code | Initiative | BU | Workstream | Tag | FY26 revenue baseline | FY26 GM baseline | FY28 revenue uplift | FY28 GM uplift | FY28 savings | FY28 recurring cost | FY28 EBITDA net | One-off investment |
-|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| ENT-001 | Transformation PMO & Benefits Office | Corporate | Automation | other | `$0.50M` | `$0.22M` | `$0.00M` | `$0.10M` | `$0.00M` | `$0.12M` | `-$0.02M` | `$0.25M` |
-| ENT-002 | Finance Process Automation | Shared Services | Automation | automation | `$1.60M` | `$0.72M` | `$0.00M` | `$0.45M` | `$0.65M` | `$0.08M` | `$1.02M` | `$0.30M` |
-| ENT-003 | Customer Onboarding Automation | Commercial | Automation | automation | `$2.20M` | `$0.99M` | `$0.70M` | `$0.50M` | `$0.15M` | `$0.06M` | `$0.60M` | `$0.28M` |
-| ENT-004 | Back-office Finance & HR Offshoring | Shared Services | Offshoring & Operating Model | offshoring | `$2.00M` | `$0.90M` | `$0.00M` | `$0.80M` | `$1.00M` | `$0.10M` | `$1.70M` | `$0.22M` |
-| ENT-005 | Enterprise Data Platform | Technology | ERP & Data Platform | automation | `$1.20M` | `$0.54M` | `$0.45M` | `$0.40M` | `$0.20M` | `$0.15M` | `$0.45M` | `$0.50M` |
-| ENT-006 | Pricing & Discount Optimization | Commercial | Commercial Growth | commercial | `$3.00M` | `$1.35M` | `$1.10M` | `$1.05M` | `$0.00M` | `$0.05M` | `$1.00M` | `$0.25M` |
-| ENT-007 | Sales Coverage Expansion | Commercial | Commercial Growth | commercial | `$3.40M` | `$1.53M` | `$0.95M` | `$0.65M` | `$0.00M` | `$0.07M` | `$0.58M` | `$0.20M` |
-| ENT-008 | Procurement Vendor Consolidation | Operations | Procurement & Supply Chain | offshoring | `$2.30M` | `$1.04M` | `$0.00M` | `$0.55M` | `$0.80M` | `$0.04M` | `$1.31M` | `$0.20M` |
-| ENT-009 | Supply Chain Control Tower | Operations | Procurement & Supply Chain | automation | `$2.40M` | `$1.08M` | `$0.30M` | `$0.45M` | `$0.45M` | `$0.06M` | `$0.84M` | `$0.18M` |
-| ENT-010 | AI Service Desk Automation | Technology | Automation | automation | `$1.40M` | `$0.63M` | `$0.50M` | `$0.45M` | `$0.50M` | `$0.07M` | `$0.88M` | `$0.12M` |
-| **Total** |  |  |  |  | **`$20.00M`** | **`$9.00M`** | **`$4.00M`** | **`$5.40M`** | **`$3.75M`** | **`$0.80M`** | **`$8.35M`** | **`$2.50M`** |
+| Code | Initiative | BU | Workstream | Tag |
+|---|---|---|---|---|
+| ENT-001 | Transformation PMO and Value Office | Corporate | Automation | other |
+| ENT-002 | Smart Factory Automation | Operations | Automation | automation |
+| ENT-003 | Commercial Pricing Excellence | Commercial | Commercial Growth | commercial |
+| ENT-004 | Shared Services Consolidation | Shared Services | Offshoring & Operating Model | offshoring |
+| ENT-005 | Enterprise Data and ERP Modernization | Technology | ERP & Data Platform | automation |
+| ENT-006 | Aftermarket Revenue Growth | Commercial | Commercial Growth | commercial |
+| ENT-007 | Strategic Account Expansion | Commercial | Commercial Growth | commercial |
+| ENT-008 | Strategic Procurement | Operations | Procurement & Supply Chain | other |
+| ENT-009 | Supply Chain Control Tower | Operations | Procurement & Supply Chain | automation |
+| ENT-010 | AI-enabled Predictive Maintenance | Operations | Automation | automation |
+
+Do not use a static initiative spreadsheet as the financial reporting
+authority during the demo. Open Financial Overview and the contributor drawer:
+the accepted live FY28 cards are `$9.182M` benefits, `$0.800M` recurring cost,
+and `$8.382M` net run-rate value. Use `ENT-006` Financials for the individual
+value-case example and `ENT-005` Bankable Plan for version history.
 
 ---
 
@@ -305,11 +383,12 @@ Workstreams:
 
 Markets:
 
-- United States
+- Group
+- Regional
 
 Themes:
 
-- Enterprise gross margin and growth transformation
+- Manufacturing productivity and profitable growth
 
 Tags:
 
@@ -322,8 +401,8 @@ Actions:
 
 1. In **Workstream Management**, create the five ACME workstreams.
 2. In **Business Units**, create the five ACME business units.
-3. In **Markets**, create United States.
-4. In **Themes**, create the enterprise transformation theme.
+3. In **Markets**, create Group and Regional.
+4. In **Themes**, create Manufacturing productivity and profitable growth.
 5. In **Tags**, create automation, offshoring, commercial, and other.
 
 Speaker notes:
@@ -353,12 +432,19 @@ Actions:
 1. Set **Currency** to `USD`.
 2. Set **Fiscal Start** to `January`.
 3. Click **Save Settings**.
+4. Reload **Financial Overview** and confirm money uses USD. For a shifted
+   fiscal tenant, also confirm the displayed fiscal year is the year in which
+   the fiscal period ends: July 2027 through June 2028 is FY2028, and April 2027
+   through March 2028 is FY2028.
+5. Change monthly, quarterly, and yearly grains once and confirm they all retain
+   the same tenant currency and fiscal-year selection.
 
 Speaker notes:
 
 > The fiscal calendar and reporting currency make every screen consistent:
 > initiative financials, portfolio trend, value ramp, bridge rows, and exports
-> all use the same reporting basis.
+> all use the same reporting basis. The platform uses fiscal ending-year
+> semantics, which is especially important for April and July tenants.
 
 ### Step 4: Configure financial metric definitions
 
@@ -651,19 +737,40 @@ Actions:
 1. Open **People** as the initial administrator, transformation office user, or
    tenant administrator.
 2. Click **Add User** to open the **Add Platform User** modal.
-3. Select **Temp Password** / **Create User**. Do not use invite links for the
-   ACME role walkthrough; the demo needs deterministic users that can log in
-   immediately.
-4. Create each user in the matrix with a controlled temporary password for the
-   demo environment.
-5. Assign each operating-model role according to the accountability table in
+3. Choose one access mode deliberately:
+
+   - **Temp Password** creates the user immediately. Enter a unique password of
+     at least 12 characters containing upper- and lower-case letters and a
+     number. Give it to the synthetic test user through the approved test
+     channel. On first login, confirm the app redirects to **Change password**;
+     the user must enter the temporary password and a different permanent one.
+   - **Invite Link** creates a pending, app-owned invitation. Enter the email,
+     display name, title, role, and any workstream assignment, then select
+     **Send Invite** once. The email link must open
+     `/auth/accept-invite?token=...` on the current Transmuter hostname—never
+     `localhost`. The recipient enters and confirms a password, selects
+     **Activate account**, and lands on the dashboard.
+
+4. For deterministic role rehearsals, prefer **Temp Password** and store only
+   the shared fixture credential in the ignored local
+   `scratch/test-credentials.json` file. Do not put it in a committed `.env`, a
+   guide, or macOS Keychain for this test workflow.
+5. For an invite rehearsal, open **Pending Access** and locate the exact
+   synthetic address. Select **Resend** once and confirm the status remains
+   `PENDING`; the old token must no longer work. Select **Revoke** and confirm
+   `REVOKED`; the latest token must no longer activate the account.
+6. Create each required persona in the matrix and assign each operating-model
+   role according to the accountability table in
    section 4.
-6. Assign workstream scope to the Workstream Lead in the People modal.
-7. Assign initiative ownership on the relevant initiative master-data screens
+7. Assign workstream scope to the Workstream Lead in the People modal.
+8. Assign initiative ownership on the relevant initiative master-data screens
    for the Initiative Owner.
-8. Use **Admin > Access Control** to review user status and role assignment.
-9. Log in once as each persona and confirm the role-specific navigation and
+9. Use **Admin > Access Control** to review user status and role assignment.
+10. Log in once as each persona and confirm the role-specific navigation and
    permissions described in section 4.
+11. After testing, revoke disposable pending invites. Do not leave an extra Auth
+    identity or person row in the canonical demo tenant; use the approved reset
+    process rather than direct production database deletion.
 
 Speaker notes:
 
@@ -694,25 +801,40 @@ Actions:
    initiative type, impact type, priority, and tag.
 3. Step 2: enter summary, context/problem, value logic, and dependencies.
 4. Step 3: enter market owner, group owner, planned start, and planned end.
-5. Step 3 also includes financial metrics, cost categories, and annual baseline
-   values. Configure them immediately if the value case is known.
-6. Step 4: review suggestions if using AI-assisted intake.
+5. Select **Generate initiative suggestions** when using AI-assisted intake.
+   Review every proposed KPI, milestone, and risk in **HITL Review**; edit or
+   reject suggestions before they are written.
+6. Select **Create initiative** and wait for the new initiative detail page.
+   Confirm its generated `TRN-*` code and its accepted KPI, milestone, and risk.
+7. Configure financial scope and the annual baseline from the initiative after
+   creation, as described in Steps 2 and 3 below.
 
-ACME example for ENT-006:
+Browser-tested client example (create temporarily, then delete in Admin):
 
 | Field | Value |
 |---|---|
-| Initiative name | Pricing & Discount Optimization |
+| Initiative name | Client Demo Margin Recovery `<date-or-initials>` |
 | Workstream | Commercial Growth |
 | Business unit | Commercial |
-| Market | United States |
-| Theme | Enterprise gross margin and growth transformation |
+| Market | Regional |
+| Theme | Manufacturing productivity and profitable growth |
 | Type | Revenue Growth |
 | Impact type | Recurring |
 | Priority | High |
 | Tag | commercial |
-| Planned start | 2027-01-01 |
-| Planned end | 2028-12-31 |
+| Planned start | 2026-08-01 |
+| Planned end | 2028-06-30 |
+
+Use this narrative in Step 2:
+
+- **Summary:** Recover aftermarket margin by standardizing price corridors and
+  managing exceptions through a weekly commercial cadence.
+- **Problem:** Regional discount leakage obscures profitable growth and weakens
+  accountability for realized margin.
+- **Value logic:** A governed one-point margin recovery creates recurring gross
+  margin uplift after adoption and data-quality controls are in place.
+- **Dependency:** Reliable price-waterfall data and regional sales-owner
+  adoption.
 
 Speaker notes:
 
@@ -741,6 +863,17 @@ Actions:
    - recurring categories when ongoing run cost exists
 3. Click **Save Scope**.
 
+For the temporary margin-recovery example, select exactly:
+
+- Annual Revenue Baseline;
+- Annual Gross Margin Baseline;
+- Gross Margin Uplift;
+- Software / Licenses.
+
+After **Save Scope** returns to initiative detail, reopen **Configure Scope**
+and confirm all four selections remain checked. This reload-style revisit is
+the visible proof that scope was persisted.
+
 Speaker notes:
 
 > Scope controls which financial rows appear for the initiative. This keeps the
@@ -750,24 +883,27 @@ Speaker notes:
 
 ### Step 3: Configure initiative annual baseline
 
-Screens:
+Screen:
 
-- `/initiatives/new`, Step 3, **Annual Baseline**
-- or `/initiatives/:id/edit`, Step 3, **Annual Baseline**
+- `/initiatives/:id`, **Financials** tab, **Annual Baseline** panel
 
 Actions:
 
 1. Set fiscal year to `2026`.
 2. Enter initiative-specific Annual Revenue Baseline.
 3. Enter initiative-specific Annual Gross Margin Baseline.
-4. Save the initiative.
+4. Select **Save Annual Baseline**.
 
 How to validate:
 
-1. Open `/initiatives/:id`.
-2. Open the **Financials** tab.
-3. Toggle scenario to **Baseline**.
-4. Confirm baseline rows appear for the initiative.
+1. Reload `/initiatives/:id` in the browser.
+2. Open the **Financials** tab again.
+3. Confirm fiscal year `2026` and both four-decimal values persist.
+4. For the tested temporary example, use revenue `3000000` and gross margin
+   `1350000`. Explain that these are the original operating denominator for
+   this demonstration, not a benefit.
+5. For a locked seeded initiative such as `ENT-006`, confirm the same controls
+   are disabled and the page explains that governance has locked the baseline.
 
 Speaker notes:
 
@@ -798,13 +934,32 @@ Actions:
 5. Enter amount, start month, and end month.
 6. Click **Add Line**.
 
+For the temporary margin-recovery example, use:
+
+| Field | Browser-tested value |
+|---|---|
+| Benefit metric | Gross Margin Uplift |
+| Named benefit line | Regional price realization uplift |
+| Confidence | `80` |
+| Phasing | Spread |
+| Base | `120000` |
+| High | `150000` |
+| Actual | `0` |
+| Start | `2027-01` |
+| End | `2027-12` |
+
+After **Benefit line added** appears, reload initiative detail, reopen
+**Financials**, and point to the named line. Explain that `$120K` is the
+committed working case, `$150K` is controlled upside, and actual remains zero
+until Finance has realization evidence.
+
 Examples:
 
 | Initiative | Benefit metric | Benefit line | FY28 amount |
 |---|---|---|---:|
-| ENT-006 Pricing & Discount Optimization | Revenue Uplift | Price realization uplift | `$1.10M` |
-| ENT-006 Pricing & Discount Optimization | Gross Margin Uplift | Discount leakage reduction | `$1.05M` |
-| ENT-008 Procurement Vendor Consolidation | Cost Savings | Vendor-rate savings | `$0.80M` |
+| ENT-006 Aftermarket Revenue Growth | Revenue Uplift | Price realization uplift | `$1.10M` |
+| ENT-006 Aftermarket Revenue Growth | Gross Margin Uplift | Discount leakage reduction | `$1.05M` |
+| ENT-008 Strategic Procurement | Cost Savings | Vendor-rate savings | `$0.80M` |
 
 Speaker notes:
 
@@ -832,6 +987,23 @@ Actions:
    - **Spread** for monthly or annual run cost.
 5. Enter amount, start month, and end month.
 6. Click **Add Cost**.
+
+For the same temporary example, use:
+
+| Field | Browser-tested value |
+|---|---|
+| Cost category | Software / Licenses |
+| Cost line | Pricing analytics subscription |
+| Lane | Plan |
+| Mode | Spread |
+| Amount | `12000` |
+| Start | `2027-01` |
+| End | `2027-12` |
+
+Wait for **12 cost lines added**, reload, and confirm both the named benefit and
+named cost are visible. Select **Edit Details** and show the monthly grid, but
+do not alter a cell during a client demo unless you intend to demonstrate a
+controlled forecast update.
 
 ACME cost pattern:
 
@@ -916,6 +1088,25 @@ Speaker notes:
 > risks, dependencies, and status updates explain whether the value is likely to
 > materialize and what management must unblock.
 
+### Step 8: Remove the temporary initiative after the demo
+
+1. Record the generated `TRN-*` code shown on the initiative Overview; do not
+   guess it from a previous rehearsal.
+2. Open `/admin` and select **Data Cleanup**.
+3. Find the exact temporary initiative name and select its deletion control.
+4. Enter the generated code in **Initiative delete confirmation code**.
+5. Wait for any transient status overlay to close, then select **Delete selected
+   initiative** once.
+6. Confirm `Deleted <code>.` appears.
+7. Return to `/initiatives/pipeline`; confirm `10 initiatives` and verify the
+   temporary name is absent.
+
+Speaker notes:
+
+> We use the same controlled cleanup surface as an administrator. The demo
+> proves real create-and-persist behavior, then returns the shared client
+> environment to its deterministic portfolio without direct database edits.
+
 ### Shared cost scenario pack
 
 Screen:
@@ -927,7 +1118,7 @@ not direct initiative cost lines. They are central costs allocated for burdened
 executive reporting and, later, optional burdened bankable-plan reporting if
 Finance enables that policy.
 
-Current ACME4 seeded proof in dev:
+Current deterministic ACME proof in dev:
 
 | Scenario | Pool | Category | Suggested method | Candidate initiatives | Demo point |
 |---|---|---|---|---|---|
@@ -1056,10 +1247,10 @@ Expected FY28 values:
 
 | Metric | Expected plan value |
 |---|---:|
-| Benefits | `$9.15M` |
+| Benefits | `$9.182M` |
 | Recurring costs | `$0.80M` |
 | One-off costs | `$0.00M` |
-| Net run-rate value | `$8.35M` |
+| Net run-rate value | `$8.382M` |
 
 Top baseline cards:
 
@@ -1088,15 +1279,16 @@ Speaker notes:
 > This is the board proof screen. The top row answers the baseline question:
 > what business were we improving? The summary cards answer the value question:
 > what recurring EBITDA-effective run-rate value are we delivering? In FY28,
-> ACME shows `$9.15M` gross benefits, `$0.80M` recurring run cost, and `$8.35M`
+> ACME shows `$9.182M` gross benefits, `$0.800M` recurring run cost, and `$8.382M`
 > net run-rate value.
 
 Important current product note:
 
 - Use the summary cards and period table for FY28 portfolio values.
-- Use the contributor drawer to show how the FY28 summary reconciles to the 10
-  initiatives. The drawer includes benefit-line detail, recurring costs, net
-  run-rate contribution, and Finance validation metadata.
+- Select a monthly row such as `2028-M01` to open the contributor drawer. Do
+  not use the broader annual `2028` cost row for this proof: it does not expose
+  the same initiative-level list. The drawer includes benefit-line detail,
+  recurring costs, net run-rate contribution, and Finance validation metadata.
 - Use the **Value basis** control when explaining the trend or value bridge:
   select target-year run-rate for the FY28 management story, and switch basis
   only when you want to discuss in-year, cumulative, or all-years values.
@@ -1152,7 +1344,7 @@ Management use:
 Screen:
 
 - `/initiatives/pipeline`
-- Open an initiative, for example **ENT-006 Pricing & Discount Optimization**
+- Open **ENT-006 Aftermarket Revenue Growth**
 - Tab: **Financials**
 
 Accountable role:
@@ -1180,8 +1372,8 @@ Expected ENT-006 FY28:
 
 Speaker notes:
 
-> We can trace the portfolio number to a single initiative. Pricing & Discount
-> Optimization contributes `$1.10M` revenue uplift and `$1.05M` gross margin
+> We can trace the portfolio number to a single initiative. Aftermarket Revenue
+> Growth contributes `$1.10M` revenue uplift and `$1.05M` gross margin
 > uplift in FY28, with only `$0.05M` recurring run cost. That creates `$1.00M`
 > EBITDA-effective net run-rate value.
 
@@ -1283,9 +1475,9 @@ Feature behavior:
 |---|---|---|
 | Current lock status | Shows whether the selected initiative is still editable or has a locked plan. | Select any seeded ACME initiative to show a locked status. |
 | Snapshot summary | Shows locked net value, entry count, cost-line count, metric count, and selected scope count. | Use it to prove the bankable value is generated from the initiative value case. |
-| Version history | Lists approval and rebaseline versions with lock time, reason, trigger, and locked-by metadata. | Select ACME4 `TRN-005 Enterprise Data Platform` to show current version 2 created from governed rebaseline approval. |
+| Version history | Lists approval and rebaseline versions with lock time, reason, trigger, and locked-by metadata. | Select `ENT-005 Enterprise Data and ERP Modernization` to show current version 2 created from governed rebaseline approval. |
 | Editable scope link | Opens the underlying initiative financial scope without changing the locked snapshot. | Explain that scope edits require a new approval or rebaseline before they become bankable. |
-| Rebaseline governance | Preserves prior versions while creating a new current baseline. | Use ACME4 `TRN-005` to explain controlled baseline movement through Bankable Plan request and Governance approval. |
+| Rebaseline governance | Preserves prior versions while creating a new current baseline. | Use `ENT-005` to explain controlled baseline movement through Bankable Plan request and Governance approval. |
 
 Primary use cases:
 
@@ -1322,7 +1514,7 @@ Shared-cost policy:
 Current ACME demo note:
 
 - ACME has locked bankable plan snapshots seeded for the 10 initiatives.
-- ACME4 has locked current plans and `TRN-005 Enterprise Data Platform` carries
+- ACME has locked current plans and `ENT-005 Enterprise Data and ERP Modernization` carries
   version-2 governed rebaseline history.
 - Use this screen as the governance proof that approved value cases are locked
   before realization is tracked.
@@ -1331,8 +1523,8 @@ Speaker notes:
 
 > The bankable plan is the immutable version of an approved value case. Once an
 > initiative passes the configured approval gate, the plan becomes the baseline
-> for realization tracking. ACME4 now has locked bankable plans and a governed
-> TRN-005 rebaseline example, so we can show both the current approved plan and a
+> for realization tracking. ACME now has locked bankable plans and a governed
+> ENT-005 rebaseline example, so we can show both the current approved plan and a
 > controlled baseline-change approval.
 
 Management use:
@@ -1397,18 +1589,18 @@ Controls:
 | Control | Demo use |
 |---|---|
 | Scope | Portfolio, Workstream, Initiative |
-| Granularity | Monthly, Quarterly, Yearly |
+| Granularity | Weekly, Monthly, Yearly |
 | Workstream | Select a workstream when scope = Workstream |
 | Initiative | Select an initiative when scope = Initiative |
 
 Current ACME demo note:
 
 - ACME benefit tracking shows non-zero locked baseline and realized actuals.
-- Use yearly granularity first, then drill to quarterly or monthly if the
+- Use yearly granularity first, then drill to monthly or weekly if the
   management audience wants phasing detail.
-- For initiative-level proof, select `ENT-006 Pricing & Discount Optimization`,
-  `ENT-008 Procurement Vendor Consolidation`, or `ENT-010 AI Service Desk
-  Automation` to show evidence-backed benefit lines.
+- For initiative-level proof, select `ENT-006 Aftermarket Revenue Growth`,
+  `ENT-008 Strategic Procurement`, or `ENT-010 AI-enabled Predictive
+  Maintenance` to show evidence-backed benefit lines.
 
 Speaker notes:
 
@@ -1501,7 +1693,7 @@ Use it for:
 - preventing shared costs from being hidden inside a single initiative,
 - explaining fully loaded portfolio economics in Executive Control Tower.
 
-Current ACME4 demo proof:
+Current deterministic ACME demo proof:
 
 | Pool | Plan | Actual | Allocation method | Reporting impact |
 |---|---:|---:|---|---|
@@ -1568,6 +1760,156 @@ Speaker notes:
 > is rarely self-explanatory; the PMO views connect the value story to delivery
 > evidence, blockers, actions, risks, and decisions.
 
+#### Saturday meeting command-center demo
+
+Status: **Headed-browser workflow passed on development on 2026-07-15** using
+commit `1c5f184` and Hostinger action `104346054`. The uninterrupted ACME run
+used the external Playwright CLI with headed Chromium. Generated minutes
+retained the selected `ENT-005` decision and risk; **Save Draft** displayed a
+success message and the presenter edit survived reload. The session completed
+and the one temporary series was deleted through Admin. Production was not
+touched.
+
+Use a PMO Lead or Transformation Office user. Use a temporary series name with
+the date so it is easy to find and remove. For the current launch test, use the
+upcoming Saturday `2026-07-18`; for a later demo, substitute the next Saturday
+and keep the same sequence.
+
+##### A. Create the meeting series
+
+1. Open `/meetings` and wait for the **Meetings** heading and **Create meeting
+   series** button. If either is missing, stop and confirm that the signed-in
+   role can manage the program cadence.
+2. Select **Create meeting series**. Confirm the **New meeting series** dialog
+   opens.
+3. Enter the following safe demo values:
+
+   | Field | Demo value |
+   |---|---|
+   | Name | `ACME Saturday Value Steering - 2026-07-18` |
+   | Scope | `All` |
+   | Recurrence | `Weekly` |
+   | Day | `Saturday` |
+   | Series start | `2026-07-18` |
+   | Series end | `2026-08-29` |
+   | Start | `09:00` |
+   | Duration | `60` |
+   | Timezone | The browser/user timezone used for the demo; record it in the evidence. |
+   | Owner | The current PMO Lead or Transformation Office user. |
+   | Participants | Select at least one synthetic ACME demo user. |
+   | Default agenda | Leave blank; add an initiative-linked item after creation. |
+   | Description | `Launch-readiness steering review for ACME value, delivery, and risks.` |
+
+4. Select **Create series** once. Wait for navigation to `/meetings/<id>` and
+   confirm the new series detail page is visible. Do not press **Sync Invite**;
+   Microsoft Teams is a separate external integration and is not required for
+   this core workflow.
+
+##### B. Link `ENT-005` and prepare an initiative-backed agenda
+
+1. In the meeting's **Initiatives** card, select **Link initiative**.
+2. Choose `ENT-005 Enterprise Data and ERP Modernization` and confirm it appears
+   in the linked-initiative list. This series link is required before generated
+   agenda suggestions can carry initiative context.
+3. Confirm at least one synthetic participant is selected for the series. Add
+   more attendees only when needed for the demo; do not use real customer or
+   employee addresses in the deterministic fixture.
+4. Select **Add agenda item**. Enter `ENT-005 migration risk and value
+   realization for 2028-03-31`, choose `ENT-005` in **Agenda initiative**, and
+   select **Add**. Confirm the exact topic and `ENT-005` appear on the series.
+5. Start the Saturday session as described below, then select **Generate
+   Agenda** in the live session. Wait for the generated rows to appear.
+6. Confirm the agenda displays `ENT-005`. Select that row and
+   verify that its initiative context contains the initiative name, delivery
+   status, plan/actual financial context, milestones, and risks.
+7. Continue only after **All changes saved** is visible. The later minutes
+   reload is the persistence checkpoint for the completed meeting record.
+
+##### C. Open the Saturday session
+
+1. From the series, select **Start Session**. In the dialog, enter the scheduled
+   Saturday date and select **Start** once. For the validated run the date was
+   `2026-07-18`; for a fresh demo, use the next scheduled Saturday.
+2. Confirm navigation to `/meetings/sessions/<id>`.
+3. Confirm the header date is Saturday, the state is **Live** or
+   `in_progress`, and the agenda contains an `ENT-005` topic.
+4. Select the agenda topic. Confirm **Current Topic** changes and the center
+   panel loads initiative summary, financial context, milestones, and risks.
+   If it instead says to select an initiative-linked item, return to the series
+   and repair the agenda-to-initiative link before continuing.
+
+##### D. Capture notes and agenda-scoped items
+
+1. In **Notes**, enter complete sentences that repeat the agenda language so
+   the generated agenda summary can associate them reliably:
+
+   ```text
+   ENT-005 value realization remains on plan, subject to Finance confirming the benefit owner.
+   The migration risk needs a named rollback owner before the next gate review.
+   The steering committee decided to keep the weekly Saturday checkpoint until the risk is green.
+   ```
+
+2. Wait for **All changes saved** before adding artifacts. This ensures the
+   generated minutes use persisted notes rather than unsaved editor state.
+3. Keep the `ENT-005` agenda item selected. In **Action Center**, choose
+   **Decision**, priority **High**, enter `Keep the Saturday checkpoint until
+   migration risk is green`, and select **Add Decision**.
+4. Add a second item with type **Risk**, priority **High**, and text `Migration
+   rollback owner is not confirmed`. Confirm both cards appear under **Action
+   Center**. These records are attached to the active source agenda item.
+
+##### E. Generate and review AI-assisted minutes
+
+1. Select **Generate Minutes**. This UI action creates a draft with an **AI
+   Summary** and agenda-organized discussion from the saved notes/transcript and
+   captured items. It does not send email and does not require a Teams invite.
+2. Wait for `Draft minutes generated.` and the **Draft meeting minutes** editor.
+3. Confirm the draft contains all of the following:
+
+   - `## AI Summary`;
+   - `## Agenda Discussion`;
+   - a heading for the `ENT-005` agenda topic;
+   - the rollback-owner discussion;
+   - `Captured items:` followed by the decision and risk;
+   - global **Decisions** and **Risks And Issues** sections.
+
+4. Correct wording in **Draft meeting minutes** if needed and select **Save
+   Draft**. Wait for `Draft minutes saved.`, reload, and confirm the edited draft
+   persists with status `draft`.
+5. Do not select **Send Minutes** during routine demo preparation. That action
+   sends external email when Resend and attendee email addresses are configured.
+
+##### F. Complete and verify the session
+
+1. Select **Complete Session** once.
+2. Confirm navigation back to `/meetings/<meeting-id>`.
+3. In **Sessions**, confirm the selected Saturday row is `COMPLETED`.
+4. Open the completed row again and confirm notes, draft minutes, agenda,
+   attendee, decision, and risk are still visible and the session is no longer
+   presented as a new live session.
+5. Open `/progress/action-items` only if an **Action** artifact was created;
+   confirm it appears with the expected status and initiative. Decisions and
+   risks should be checked in their respective meeting/PMO views.
+
+##### G. Deterministic cleanup
+
+1. Preserve screenshots, console/network results, session ID, and meeting ID in
+   the acceptance evidence without recording tokens or participant email
+   addresses.
+2. Open `/admin`, select **Data Cleanup**, and select the checkbox whose
+   accessible name begins **Select meeting** followed by your exact temporary
+   series name.
+3. Enter the exact confirmation phrase `DELETE MEETINGS`. Confirm **Delete
+   selected meetings** remains disabled until at least one meeting is selected
+   and the phrase matches exactly, then select it once.
+4. Wait for `Deleted 1 meeting series.` and for
+   the selected rows to disappear.
+5. Return to `/meetings`; confirm the temporary series is gone and unrelated
+   meetings remain.
+6. Return to `/meetings` and confirm the exact temporary series name is absent.
+   This browser-visible cleanup is the demo acceptance checkpoint. Do not use
+   production.
+
 ### Screen 15: Control Tower
 
 Screen:
@@ -1595,7 +1937,7 @@ Shared-cost impact to call out:
 
 Demo action:
 
-1. Set target year to `2028` when demonstrating the current ACME4 shared-cost
+1. Set target year to `2028` when demonstrating the current ACME shared-cost
    pools.
 2. Point to **Allocated Costs** and **Net After Allocation**.
 3. Explain that the number should drill back to `/shared-costs` pool, rule, run,
@@ -1667,8 +2009,8 @@ Actions:
 Speaker notes:
 
 > The baseline is FY26: `$20.0M` revenue and `$9.0M` gross margin. Against that
-> baseline, the FY28 plan shows `$9.15M` benefits and `$0.80M` recurring cost,
-> which gives `$8.35M` EBITDA-effective net run-rate value.
+> baseline, the FY28 plan shows `$9.182M` benefits and `$0.800M` recurring cost,
+> which gives `$8.382M` net run-rate value.
 
 ### Segment 3: Explain FY27 ramp versus FY28 run-rate
 
@@ -1688,7 +2030,7 @@ Expected values:
 | Year | Benefits | Recurring costs | One-off costs | Net run-rate value |
 |---:|---:|---:|---:|---:|
 | 2027 | `$4.62M` | `$0.40M` | `$2.50M` | `$4.22M` |
-| 2028 | `$9.15M` | `$0.80M` | `$0.00M` | `$8.35M` |
+| 2028 | `$9.182M` | `$0.800M` | `$0.00M` | `$8.382M` |
 
 Speaker notes:
 
@@ -1701,7 +2043,7 @@ Speaker notes:
 Screen:
 
 - `/initiatives/pipeline`
-- Open **ENT-006 Pricing & Discount Optimization**
+- Open **ENT-006 Aftermarket Revenue Growth**
 - Tab: **Financials**
 
 Actions:
@@ -1752,7 +2094,7 @@ Actions:
 4. Switch through the PMO, change/training, and advisory/vendor pools to show
    equal split, manual amount, and fixed percentage allocation methods.
 5. Open **Executive Control Tower**.
-6. Set target year to `2028` for the current ACME4 shared-cost proof.
+6. Set target year to `2028` for the current ACME shared-cost proof.
 7. Point to allocated costs, burdened costs, and net after allocation.
 
 Speaker notes:
@@ -1793,6 +2135,40 @@ Speaker notes:
 > locked plan is not an actuals lock; actual scenario values and actual cost
 > amounts continue to be entered in initiative Financials.
 
+### Segment 8: Run the management cadence in Meetings
+
+Screens:
+
+- `/meetings`
+- `/meetings/sessions/:id`
+
+Actions:
+
+1. Create the temporary weekly Saturday series using Screen 14, section A.
+2. Link `ENT-005`, add the initiative-backed agenda topic, and open the Saturday
+   session.
+3. Generate the agenda, select its `ENT-005` topic, and show the initiative
+   context panel.
+4. Enter the prepared notes and wait for **All changes saved**.
+5. Add the agenda-scoped decision and risk, generate minutes, add a short
+   presenter correction, select **Save Draft**, reload, and show the correction.
+6. Complete the session and show `COMPLETED` on the series detail page.
+7. Point out the agenda-specific **Captured items** section and explain that
+   actions and risks can flow into portfolio follow-up while the meeting retains
+   the decision record.
+8. After the audience segment, delete the temporary series through **Admin >
+   Data Cleanup** and verify it is absent from Meetings.
+
+Speaker notes:
+
+> The financial and delivery views become an operating cadence here. The PMO
+> prepares an initiative-linked agenda, runs the review with live portfolio
+> context, records decisions and risks against the active topic, and generates
+> a reviewable draft rather than losing the meeting outcome in personal notes.
+> Microsoft Teams is optional: the platform meeting, agenda, notes, decisions,
+> and completion flow works independently and degrades gracefully when no
+> organizer integration is connected.
+
 ### Close
 
 Screen:
@@ -1808,7 +2184,7 @@ Speaker notes:
 
 > The ACME portfolio demonstrates the core transformation management story:
 > baseline, initiatives, planned benefit, recurring cost, actual variance, and
-> management drilldown. The headline is `$8.35M` FY28 EBITDA-effective net
+> management drilldown. The headline is `$8.382M` FY28 net
 > run-rate value on a `$20.0M` revenue and `$9.0M` gross margin baseline.
 
 ---
@@ -1818,12 +2194,12 @@ Speaker notes:
 | Board question | Where to answer | Answer pattern |
 |---|---|---|
 | What is the starting point? | `/financials` baseline cards | FY26 revenue baseline `$20.0M`, gross margin baseline `$9.0M`. |
-| What is the FY28 run-rate value? | `/financials`, Year = 2028 | `$8.35M` EBITDA-effective net run-rate value. |
+| What is the FY28 run-rate value? | `/financials`, Year = 2028 | `$8.382M` net run-rate value. |
 | How much is growth versus cost-out? | `/financials`; initiative financial tabs | Revenue uplift `$4.0M`, GM uplift `$5.4M`, savings `$3.75M`. |
 | What costs are recurring? | `/financials`, cost category filter | FY28 recurring run cost `$0.80M`. |
 | What investment is needed? | `/financials`, Year = 2027; cost breakdown | One-off investment `$2.5M`. |
 | Who owns the value? | `/initiatives/pipeline`; initiative detail | Owner, group owner, BU, and workstream per initiative. |
-| Is the plan locked? | `/financials/bankable-plan` | ACME4 has locked bankable plan snapshots for all 10 initiatives; use `TRN-005` to show version 2 and governed rebaseline history. |
+| Is the plan locked? | `/financials/bankable-plan` | ACME has locked bankable plan snapshots for all 10 initiatives; use `ENT-005` to show version 2 and governed rebaseline history. |
 | Which benefit lines are Finance validated? | `/financials/benefits-register` | Filter by Finance validated and show owner, evidence, plan, actual, validated, risk-adjusted, bankable, and realized values. |
 | Is value realized or just planned? | `/financials/benefit-tracking` | ACME has realized actuals in the benefit ledger; compare actuals to locked bankable plan by portfolio, workstream, initiative, and period. |
 | Where are risks and blockers? | Initiative **Risks**, **Status**, `/pmo/risks`, `/progress/status-updates` | Show RAG status, risk list, and overdue updates. |

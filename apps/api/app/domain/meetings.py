@@ -119,6 +119,7 @@ class MeetingArtifactCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=500)
     description: str | None = None
     agenda_item_id: str | None = None
+    session_agenda_item_id: str | None = None
     initiative_id: str | None = None
     status: MeetingArtifactStatus = "open"
     priority: ActionPriority = "medium"
@@ -131,6 +132,7 @@ class MeetingArtifactUpdate(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=500)
     description: str | None = None
     agenda_item_id: str | None = None
+    session_agenda_item_id: str | None = None
     initiative_id: str | None = None
     status: MeetingArtifactStatus | None = None
     priority: ActionPriority | None = None

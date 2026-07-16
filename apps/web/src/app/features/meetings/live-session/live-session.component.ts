@@ -6,6 +6,7 @@ import { Subject, forkJoin, interval, of } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { ApiService } from '../../../core/services/api.service';
 import { TimezoneOptionsService } from '../../../core/services/timezone-options.service';
+import { TenantReportingContextService } from '../../../core/services/tenant-reporting-context.service';
 
 type ArtifactType = 'action' | 'decision' | 'risk' | 'assumption' | 'issue';
 
@@ -17,6 +18,7 @@ interface MeetingArtifact {
   status: string;
   priority?: string | null;
   agenda_item_id?: string | null;
+  session_agenda_item_id?: string | null;
   initiative_id?: string | null;
   linked_record_type?: string | null;
   linked_record_id?: string | null;
@@ -302,7 +304,7 @@ interface MeetingArtifact {
                 <button
                   class="btn-primary w-full text-xs"
                   [disabled]="!newActionItem.trim()"
-                  aria-label="Add action item"
+                  [attr.aria-label]="'Add ' + artifactLabel(artifactDraft.artifact_type).toLowerCase()"
                   (click)="addActionItem()"
                 >
                   Add {{ artifactLabel(artifactDraft.artifact_type) }}
@@ -461,6 +463,7 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly timezones = inject(TimezoneOptionsService);
+  private readonly reportingContext = inject(TenantReportingContextService);
   private readonly destroy$ = new Subject<void>();
   private readonly notesChanged$ = new Subject<string>();
 
@@ -527,6 +530,7 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
   });
 
   ngOnInit() {
+    this.reportingContext.ensureLoaded();
     this.timezones.load();
     const id = this.route.snapshot.paramMap.get('id');
     if (id) this.loadSession(id);
@@ -694,6 +698,7 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
       priority: this.artifactDraft.priority,
       status: 'open',
       agenda_item_id: active?.source_agenda_item_id || null,
+      session_agenda_item_id: active?.id || null,
       initiative_id: active?.initiative_id || null,
     };
     this.api.post<MeetingArtifact>(`/meetings/sessions/${session.id}/artifacts`, body).subscribe(item => {
@@ -877,10 +882,17 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
   saveMinutesDraft() {
     const id = this.session()?.id;
     if (!id) return;
+    this.sessionError.set(null);
     this.api.patch<any>(`/meetings/sessions/${id}`, {
       minutes_markdown: this.minutesDraft,
       minutes_status: 'draft',
-    }).subscribe(s => this.session.set({ ...this.session(), ...s }));
+    }).subscribe({
+      next: s => {
+        this.session.set({ ...this.session(), ...s });
+        this.sessionMessage.set('Draft minutes saved.');
+      },
+      error: err => this.sessionError.set(err.error?.detail || 'Could not save draft minutes.'),
+    });
   }
 
   sendMinutes() {
@@ -961,12 +973,7 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
   }
 
   formatCurrency(value: string | number): string {
-    const amount = Number(value) || 0;
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      maximumFractionDigits: 0,
-    }).format(amount);
+    return this.reportingContext.formatMoney(value);
   }
 
   endTime(start: string, durationMinutes: number): string {

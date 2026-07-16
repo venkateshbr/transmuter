@@ -11,6 +11,7 @@ import {
   inject,
 } from '@angular/core';
 import { echarts, type EChartsCoreOption, type EChartsType } from '../../charts/echarts-runtime';
+import { TenantReportingContextService } from '../../../core/services/tenant-reporting-context.service';
 
 interface PnlBridgeStep {
   key: string;
@@ -115,9 +116,14 @@ export class ValueWaterfallComponent implements AfterViewInit, OnChanges, OnDest
 
   private readonly document = inject(DOCUMENT);
   private readonly platformId = inject(PLATFORM_ID);
+  private readonly reportingContext = inject(TenantReportingContextService);
   private chart?: EChartsType;
   private resizeObserver?: ResizeObserver;
   private themeObserver?: MutationObserver;
+
+  constructor() {
+    this.reportingContext.ensureLoaded();
+  }
 
   ngAfterViewInit(): void {
     if (!isPlatformBrowser(this.platformId)) return;
@@ -307,11 +313,7 @@ export class ValueWaterfallComponent implements AfterViewInit, OnChanges, OnDest
   }
 
   private formatMoney(value: number): string {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      maximumFractionDigits: 0,
-    }).format(value);
+    return this.reportingContext.formatMoney(value);
   }
 
   private formatCompactMoney(value: number): string {

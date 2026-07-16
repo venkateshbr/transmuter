@@ -130,6 +130,7 @@ from app.domain.financials import (
     WorkstreamTargetPreviewResponse,
     WorkstreamTargetSnapshot,
 )
+from app.domain.fiscal_calendar import FiscalCalendar, FiscalPeriod
 from app.repositories.financial import FinancialRepository
 from app.services.financial_workbook import (
     build_board_pack_workbook,
@@ -2294,22 +2295,23 @@ class FinancialService:
         )
         return benefits - recurring_costs
 
-    @staticmethod
     def _ledger_row_matches_period(
+        self,
         row: dict,  # type: ignore[type-arg]
         granularity: BenefitLedgerGranularity,
         period_start: date,
     ) -> bool:
+        calendar = self._fiscal_calendar()
         year = int(row.get("year") or 0)
-        if year != period_start.year:
+        if year != calendar.fiscal_year_for_date(period_start):
             return False
         month = row.get("month")
         if granularity == "monthly":
-            return int(month or 0) == period_start.month
+            return int(month or 0) == calendar.fiscal_month_for_date(period_start)
         if granularity == "weekly":
             if not month:
                 return False
-            return int(month) == period_start.month
+            return int(month) == calendar.fiscal_month_for_date(period_start)
         return True
 
     @staticmethod
@@ -2522,17 +2524,21 @@ class FinancialService:
             )
         return periods
 
-    @staticmethod
     def _benefit_period_key(
+        self,
         period_start: date,
         granularity: BenefitLedgerGranularity,
     ) -> tuple[int, int | None, int | None]:
+        calendar = self._fiscal_calendar()
         if granularity == "weekly":
+            # Weekly ledger labels are an established ISO-week API contract.
+            # Fiscal calendars apply to month, quarter, and year boundaries only.
             iso = period_start.isocalendar()
             return (iso.year, iso.week, None)
         if granularity == "monthly":
-            return (period_start.year, None, period_start.month)
-        return (period_start.year, None, None)
+            fiscal_period = calendar.period_for_date(period_start, "monthly")
+            return (fiscal_period.year, None, fiscal_period.month)
+        return (calendar.fiscal_year_for_date(period_start), None, None)
 
     @staticmethod
     def _benefit_period_sort(
@@ -2900,8 +2906,15 @@ class FinancialService:
             if selected_year is None or row.get("year") == selected_year
         ]
         config = self.get_configuration()
+        reporting = self._financial_reporting_settings()
         response = self._compute_portfolio_financials(
-            entries, costs, metric_values, config, granularity
+            entries,
+            costs,
+            metric_values,
+            config,
+            granularity,
+            reporting.reporting_currency,
+            reporting.fiscal_year_start_month,
         )
         response.selected_year = selected_year
         response.available_years = available_years
@@ -2989,6 +3002,11 @@ class FinancialService:
         category_key: str | None = None,
     ) -> PortfolioFinancialContributorsResponse:
         period_key = self._parse_portfolio_period(period, granularity)
+        if year is not None and year != period_key[1]:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="Year must match the fiscal year encoded in period",
+            )
         effective_year = year or period_key[1]
         business_unit_ids = self._split_filter_values(business_unit_id)
         workstream_ids = self._split_filter_values(workstream_id)
@@ -3277,6 +3295,8 @@ class FinancialService:
         in_year = self._portfolio_in_year_cards(ramp)
         return PortfolioValueRampResponse(
             granularity=granularity,
+            reporting_currency=response.reporting_currency,
+            fiscal_year_start_month=response.fiscal_year_start_month,
             run_rate_year=run_rate_year,
             as_of_date=as_of_date,
             stage=stage,
@@ -3459,13 +3479,13 @@ class FinancialService:
             for key, label, plan, actual in cards
         ]
 
-    @staticmethod
-    def _portfolio_period_start(row: PortfolioFinancialPeriod) -> date:
+    def _portfolio_period_start(self, row: PortfolioFinancialPeriod) -> date:
+        calendar = self._fiscal_calendar()
         if row.month is not None:
-            return date(row.year, row.month, 1)
+            return calendar.month_bounds(row.year, row.month)[0]
         if row.quarter is not None:
-            return date(row.year, ((row.quarter - 1) * 3) + 1, 1)
-        return date(row.year, 1, 1)
+            return calendar.quarter_bounds(row.year, row.quarter)[0]
+        return calendar.year_bounds(row.year)[0]
 
     @staticmethod
     def _filter_value_bridge_rows(
@@ -5840,8 +5860,11 @@ class FinancialService:
                 )
             )
         summary_totals = self._compute_clean_summary(values, costs)
+        reporting = self._financial_reporting_settings()
         return PortfolioFinancialsResponse(
             granularity=granularity,
+            reporting_currency=reporting.reporting_currency,
+            fiscal_year_start_month=reporting.fiscal_year_start_month,
             selected_year=selected_year,
             available_years=available_years,
             summary=[
@@ -6731,21 +6754,21 @@ class FinancialService:
         period = cls._period_key(row)
         return cls._period_label(*period)
 
-    @staticmethod
     def _parse_portfolio_period(
+        self,
         period: str,
         granularity: PortfolioGranularity,
     ) -> tuple[str, int, int | None, int | None]:
-        if "-M" in period:
-            year_part, month_part = period.split("-M", 1)
-            return (period, int(year_part), None, int(month_part))
-        if "-Q" in period:
-            year_part, quarter_part = period.split("-Q", 1)
-            return (period, int(year_part), int(quarter_part), None)
-        year = int(period)
-        if granularity == "yearly":
-            return (period, year, None, None)
-        return (period, year, None, None)
+        try:
+            parsed = FiscalPeriod.parse(period, granularity)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
+            ) from exc
+        return (parsed.label, parsed.year, parsed.quarter, parsed.month)
+
+    def _fiscal_calendar(self) -> FiscalCalendar:
+        return FiscalCalendar(self._financial_reporting_settings().fiscal_year_start_month)
 
     @staticmethod
     def _empty_portfolio_period(
@@ -6799,6 +6822,8 @@ class FinancialService:
         metric_values: list[dict],  # type: ignore[type-arg]
         config: FinancialConfigurationResponse,
         granularity: PortfolioGranularity,
+        reporting_currency: str,
+        fiscal_year_start_month: int,
     ) -> PortfolioFinancialsResponse:
         buckets: dict[tuple[str, int, int | None, int | None], dict] = {}  # type: ignore[type-arg]
         broader: dict[tuple[str, int, int | None, int | None], dict] = {}  # type: ignore[type-arg]
@@ -6966,6 +6991,8 @@ class FinancialService:
 
         return PortfolioFinancialsResponse(
             granularity=granularity,
+            reporting_currency=reporting_currency,
+            fiscal_year_start_month=fiscal_year_start_month,
             summary=[
                 PortfolioFinancialSummaryCard(
                     key=key,

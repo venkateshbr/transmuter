@@ -4,15 +4,20 @@ Populates a fresh Transmuter Supabase project with realistic dev fixtures.
 
 Usage:
     cd apps/api
-    uv run python scripts/seed_dev.py
+    TRANSMUTER_SEED_PASSWORD=... uv run python scripts/seed_dev.py
+
+If the environment variable is omitted, the script reads
+``scratch/test-credentials.json``. There is no committed password fallback.
 
 Idempotent: checks if org already exists before inserting.
 """
 
+import json
 import os
 import sys
 from datetime import date, timedelta
 from decimal import Decimal
+from pathlib import Path
 from uuid import uuid4
 
 from dotenv import load_dotenv
@@ -30,6 +35,23 @@ ORG_NAME = "Ishirock"
 ORG_SLUG = "ishirock"
 
 TODAY = date.today()
+
+
+def required_seed_password() -> str:
+    password = os.environ.get("TRANSMUTER_SEED_PASSWORD") or os.environ.get(
+        "TRANSMUTER_E2E_PASSWORD"
+    )
+    if not password:
+        path = Path(__file__).resolve().parents[3] / "scratch" / "test-credentials.json"
+        if path.is_file():
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            password = str(payload.get("shared_fixture_password") or "")
+    if not password or len(password) < 12:
+        raise RuntimeError(
+            "Dev seed password is required via TRANSMUTER_SEED_PASSWORD or "
+            "scratch/test-credentials.json"
+        )
+    return password
 
 
 def d(days_from_today: int) -> str:
@@ -164,7 +186,9 @@ def seed_workstreams(c: Client, org_id: str, bu_ids: dict[str, str]) -> dict[str
     return ids
 
 
-def seed_users(c: Client, org_id: str, ws_ids: dict[str, str]) -> dict[str, str]:
+def seed_users(
+    c: Client, org_id: str, ws_ids: dict[str, str], password: str
+) -> dict[str, str]:
     """
     Creates Supabase Auth users + platform user records.
     Returns a dict of label → user_id.
@@ -174,7 +198,7 @@ def seed_users(c: Client, org_id: str, ws_ids: dict[str, str]) -> dict[str, str]
         {
             "label": "admin1",
             "email": "admin@ishirock.dev",
-            "password": "Transmuter2026!",
+            "password": password,
             "display_name": "Alex Chen",
             "title": "Head of Transformation",
             "role": "transformation_office",
@@ -183,7 +207,7 @@ def seed_users(c: Client, org_id: str, ws_ids: dict[str, str]) -> dict[str, str]
         {
             "label": "admin2",
             "email": "toffice@ishirock.dev",
-            "password": "Transmuter2026!",
+            "password": password,
             "display_name": "Priya Sharma",
             "title": "Transformation Analyst",
             "role": "transformation_office",
@@ -193,7 +217,7 @@ def seed_users(c: Client, org_id: str, ws_ids: dict[str, str]) -> dict[str, str]
         {
             "label": "owner1",
             "email": "owner.revenue@ishirock.dev",
-            "password": "Transmuter2026!",
+            "password": password,
             "display_name": "James Wu",
             "title": "VP Commercial",
             "role": "initiative_owner",
@@ -202,7 +226,7 @@ def seed_users(c: Client, org_id: str, ws_ids: dict[str, str]) -> dict[str, str]
         {
             "label": "owner2",
             "email": "owner.ops@ishirock.dev",
-            "password": "Transmuter2026!",
+            "password": password,
             "display_name": "Fatima Al-Rashid",
             "title": "Operations Director",
             "role": "initiative_owner",
@@ -211,7 +235,7 @@ def seed_users(c: Client, org_id: str, ws_ids: dict[str, str]) -> dict[str, str]
         {
             "label": "owner3",
             "email": "owner.erp@ishirock.dev",
-            "password": "Transmuter2026!",
+            "password": password,
             "display_name": "Tom Nguyen",
             "title": "Finance Controller",
             "role": "initiative_owner",
@@ -220,7 +244,7 @@ def seed_users(c: Client, org_id: str, ws_ids: dict[str, str]) -> dict[str, str]
         {
             "label": "owner4",
             "email": "owner.hr@ishirock.dev",
-            "password": "Transmuter2026!",
+            "password": password,
             "display_name": "Mei Lin",
             "title": "CHRO",
             "role": "initiative_owner",
@@ -229,7 +253,7 @@ def seed_users(c: Client, org_id: str, ws_ids: dict[str, str]) -> dict[str, str]
         {
             "label": "owner5",
             "email": "owner.compliance@ishirock.dev",
-            "password": "Transmuter2026!",
+            "password": password,
             "display_name": "David Park",
             "title": "Head of Compliance",
             "role": "initiative_owner",
@@ -239,7 +263,7 @@ def seed_users(c: Client, org_id: str, ws_ids: dict[str, str]) -> dict[str, str]
         {
             "label": "wslead1",
             "email": "lead.na@ishirock.dev",
-            "password": "Transmuter2026!",
+            "password": password,
             "display_name": "Sofia Tanaka",
             "title": "North Asia Lead",
             "role": "initiative_owner",
@@ -248,7 +272,7 @@ def seed_users(c: Client, org_id: str, ws_ids: dict[str, str]) -> dict[str, str]
         {
             "label": "wslead2",
             "email": "lead.gp@ishirock.dev",
-            "password": "Transmuter2026!",
+            "password": password,
             "display_name": "Carlos Rivera",
             "title": "Group Productivity Lead",
             "role": "initiative_owner",
@@ -257,7 +281,7 @@ def seed_users(c: Client, org_id: str, ws_ids: dict[str, str]) -> dict[str, str]
         {
             "label": "wslead3",
             "email": "lead.erp@ishirock.dev",
-            "password": "Transmuter2026!",
+            "password": password,
             "display_name": "Nadia Kowalski",
             "title": "ERP Programme Lead",
             "role": "initiative_owner",
@@ -1328,7 +1352,7 @@ def main() -> None:
     ws_ids = seed_workstreams(c, org_id, bu_ids)
 
     print("\n4. Users...")
-    user_ids = seed_users(c, org_id, ws_ids)
+    user_ids = seed_users(c, org_id, ws_ids, required_seed_password())
 
     if not user_ids:
         print("\nERROR: No users created — cannot seed initiatives.")
@@ -1363,9 +1387,8 @@ def main() -> None:
 
     print("\n=== Seed complete ===")
     print(f"\n  Org ID   : {org_id}")
-    print("  Admin    : admin@ishirock.dev / Transmuter2026!")
-    print("  Owner    : owner.revenue@ishirock.dev / Transmuter2026!")
-    print("  WS Lead  : lead.na@ishirock.dev / Transmuter2026!")
+    print("  Seeded login identities are listed in scripts/seed_dev.py.")
+    print("  Password source: local credential file or environment (value not printed).")
     print(f"\n  Initiatives: {len(init_ids)} seeded (TRN-001 through TRN-005)")
 
 

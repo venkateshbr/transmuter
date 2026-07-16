@@ -1,8 +1,9 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
+import { TenantReportingContextService } from '../../core/services/tenant-reporting-context.service';
 import {
   BankablePlanResponse,
   BankablePlanVersion,
@@ -10,7 +11,6 @@ import {
   GovernanceSubmission,
   InitiativeOption,
   formatDateTime,
-  formatMoney,
   initiativeLabel,
   initiativeStage,
   selectDefaultInitiative,
@@ -296,10 +296,14 @@ import {
 })
 export class BankablePlanReviewComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly reportingContext = inject(TenantReportingContextService);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
+  private readonly requestedInitiativeId = this.route.snapshot.queryParamMap.get('initiative_id');
 
   readonly initiativeLabel = initiativeLabel;
   readonly initiativeStage = initiativeStage;
-  readonly formatMoney = formatMoney;
+  readonly formatMoney = (value: string | number | null | undefined) => this.reportingContext.formatMoney(value);
   readonly formatDateTime = formatDateTime;
 
   readonly initiatives = signal<InitiativeOption[]>([]);
@@ -337,12 +341,19 @@ export class BankablePlanReviewComponent implements OnInit {
   readonly nextRebaselineVersion = computed(() => (this.currentPlan()?.version || 0) + 1);
 
   ngOnInit(): void {
+    this.reportingContext.ensureLoaded();
     this.loadInitiatives();
   }
 
   setSelectedInitiative(initiativeId: string): void {
     if (!initiativeId || initiativeId === this.selectedInitiativeId()) return;
     this.selectedInitiativeId.set(initiativeId);
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { initiative_id: initiativeId },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
     this.loadPlan();
   }
 
@@ -351,7 +362,10 @@ export class BankablePlanReviewComponent implements OnInit {
       next: response => {
         const items = (response.items || []) as InitiativeOption[];
         this.initiatives.set(items);
-        const nextId = selectDefaultInitiative(items, this.selectedInitiativeId() || response?.selected_initiative_id || null);
+        const nextId = selectDefaultInitiative(
+          items,
+          this.requestedInitiativeId || this.selectedInitiativeId() || response?.selected_initiative_id || null,
+        );
         this.selectedInitiativeId.set(nextId);
         if (nextId) this.loadPlan();
       },

@@ -641,6 +641,8 @@ def test_portfolio_financials_keeps_broader_periods_separate_for_monthly_view() 
         metric_values=[],
         config=_config(),
         granularity="monthly",
+        reporting_currency="SGD",
+        fiscal_year_start_month=1,
     )
 
     assert response.periods[0].period == "2026-M01"

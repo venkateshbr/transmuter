@@ -2,13 +2,20 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawn } from 'node:child_process';
+import { loadTestCredentials } from './test-credentials.mjs';
 
 const uiBaseUrl = (process.env.TRANSMUTER_UI_BASE_URL ?? 'https://transmuter-dev.ishirock.tech').replace(/\/$/, '');
 const apiBaseUrl = (process.env.TRANSMUTER_API_BASE_URL ?? `${uiBaseUrl}/api`).replace(/\/$/, '');
 const chromeBin = process.env.CHROME_BIN ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const debugPort = Number(process.env.CHROME_DEBUG_PORT ?? 9224);
-const emailDomain = process.env.TRANSMUTER_RBAC_EMAIL_DOMAIN ?? 'acme-transformation.dev';
-const password = process.env.TRANSMUTER_RBAC_SAMPLE_PASSWORD ?? 'Transmuter2026!';
+const rbacCredentials = loadTestCredentials({
+  tenant: 'acme',
+  role: 'tenant_admin',
+  emailEnv: 'TRANSMUTER_RBAC_EMAIL',
+  passwordEnv: 'TRANSMUTER_RBAC_SAMPLE_PASSWORD',
+});
+const emailDomain = process.env.TRANSMUTER_RBAC_EMAIL_DOMAIN ?? rbacCredentials.email.split('@')[1];
+const password = rbacCredentials.password;
 
 const roles = [
   'transformation_office',

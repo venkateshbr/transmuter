@@ -3,6 +3,7 @@ import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
+import { TenantReportingContextService } from '../../core/services/tenant-reporting-context.service';
 
 interface PortfolioMetricColumn {
   metric_definition_id: string;
@@ -274,6 +275,7 @@ interface InitiativePortfolioResponse {
 })
 export class InitiativePortfolioComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly reportingContext = inject(TenantReportingContextService);
 
   readonly loading = signal(false);
   readonly response = signal<InitiativePortfolioResponse | null>(null);
@@ -315,6 +317,7 @@ export class InitiativePortfolioComponent implements OnInit {
   readonly tagOptions = computed(() => this.uniqueRowValues(row => row.tag));
 
   ngOnInit(): void {
+    this.reportingContext.ensureLoaded();
     this.load();
   }
 
@@ -409,11 +412,7 @@ export class InitiativePortfolioComponent implements OnInit {
     if (type === 'number') {
       return new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(parsed);
     }
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      maximumFractionDigits: 0,
-    }).format(parsed);
+    return this.reportingContext.formatMoney(parsed);
   }
 
   private parseNumber(value: string | number | null | undefined): number {
