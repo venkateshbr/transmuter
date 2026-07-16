@@ -18,6 +18,26 @@ Dev and production are separate projects on the same VPS:
 The older `infra/hostinger/deploy.sh` script is retained as a legacy VPS-local
 fallback only. It should not be used for routine dev or production deploys.
 
+The self-hosted Supabase Docker project source is pinned in
+`infra/hostinger/supabase-aethos-compose.yml`. It contains variable references
+only; all credentials remain in the saved Hostinger `supabase-aethos`
+environment. Keep this file aligned with the running project before using its
+GitHub URL for a Docker Manager update or credential rotation. The URL form is
+required because Hostinger's inline compose-content field is limited to 8,192
+characters and the Supabase compose is larger.
+
+When rotating `POSTGRES_PASSWORD` on an existing Supabase data volume, updating
+the saved Docker environment is not sufficient. Rotate the persisted PostgreSQL
+login roles used by the compose (`postgres`, `supabase_admin`,
+`supabase_auth_admin`, `authenticator`, and `supabase_storage_admin`) in the same
+maintenance window, then recreate Supabase and both application projects. Do
+not print or commit either credential. Before ending the window, require:
+
+- Supabase Auth `/auth/v1/health` with the saved anonymous API key;
+- an authenticated Supabase REST root request without a 5xx response;
+- `validate-dev.sh` and `validate-prod.sh`; and
+- a real headed-browser login and route acceptance pass.
+
 ## Runtime shape
 
 - Public app hostname: `transmuter.ishirock.tech`

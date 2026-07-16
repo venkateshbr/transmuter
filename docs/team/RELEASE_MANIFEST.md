@@ -38,15 +38,13 @@ Deployment note:
 
 ### 2026-07-16 - Five-Tenant Launch Readiness And Browser Acceptance
 
-Status: dev deployed and accepted; production promotion explicitly approved by
-the founder on 2026-07-16; PR merge and the schema-before-code rollout below
-must complete before production validation
+Status: promoted to production and verified on 2026-07-16
 
 GitHub tracking:
 
-- Integration PR: `#416`, full-sweep commit `1f3330b`, artifact follow-up
-  commit `5cbabe5`, initiative-baseline/ACME-guide runtime commit `1c5f184`,
-  and final dev runtime commit `e5a769d`.
+- Integration PR: `#416`, squash-merge commit `4860a8a`, full-sweep commit
+  `1f3330b`, artifact follow-up commit `5cbabe5`, initiative-baseline/ACME-guide
+  runtime commit `1c5f184`, and final dev runtime commit `e5a769d`.
 - Release findings: `#401`, `#403`-`#412`, `#414`, and `#417`-`#419`.
 - Invite/password acceptance: `#216`.
 - Admin bulk-meeting cleanup: `#224`.
@@ -54,6 +52,7 @@ GitHub tracking:
   baseline UI: `#420`; fresh-tenant setup acceptance: `#421`; sequential
   strategic-parameter persistence: `#422`.
 - External Microsoft Graph gates: `#220`, `#389`, and `#390`.
+- Post-promotion credential-rotation follow-up: `#423`.
 
 Dev deployment:
 
@@ -113,23 +112,46 @@ Acceptance evidence:
   `3ef52dd7015ee7c8953ccf7893e8d62b03a8fe9fa6588e3ab95707098cf58a50`.
 - Final read-only API run: 2,450 requests, 50 users, 55 isolation denials.
 
-Production rollout plan:
+Production promotion:
 
 - Final-head CI run `29428043985` passed backend, frontend, specs, secret scan,
   Agent eval, and policy checks on documentation head `917001f`.
-- Squash-merge PR `#416` into `main`; deploy only the resulting pushed merge
-  commit.
-- Stop and verify both production project aliases, then apply the forward-only
-  Graph migration with `--offline-schema` before new application code starts.
-- In the same stopped migration window apply the additive meeting-artifact
-  migration after the Graph migration:
+- PR `#416` was squash-merged as `4860a8a`. Post-merge `main` CI run
+  `29461257033` passed backend, frontend, specs, secret scan, Agent eval, and
+  policy gates.
+- Both production project aliases were stopped and verified offline. The first
+  schema job failed safely before any change because the configured `postgres`
+  login did not own the application tables; production remained stopped.
+  Catalog inspection identified the owner as `supabase_admin`, and the same
+  unchanged migrations were then applied successfully as owner in order:
   `supabase/migrations/20260711000002_harden_microsoft_graph_oauth.sql`, then
   `supabase/migrations/20260715000001_meeting_artifact_session_agenda.sql`.
-- Recreate production from the exact merged commit, correct the saved Graph
-  scope line to the reviewed seven-scope set, and keep Microsoft Graph
-  disconnected. Do not create or refresh organizer consent during this release.
-- Validate public web/API health and a real read-only headed-browser login and
-  route sweep. Record the action, merge commit, and result in this entry.
+- Successful schema jobs were
+  `transmuter-schema-prod-20260716083855` and
+  `transmuter-schema-prod-20260716083913`. Stop action `104397959` and deploy
+  action `104398414` completed successfully.
+- Production was recreated from exact merge `4860a8a`. Saved Graph scopes were
+  corrected to the reviewed seven-scope set by action `104398440`; Graph
+  remained disconnected and no organizer consent was created or refreshed.
+- Public `/health`, `/api/health`, Supabase Auth, and Supabase REST validation
+  passed. Non-PII catalog proof confirmed owner role `supabase_admin`, schema
+  `transmuter`, the meeting agenda-artifact column, all ten Graph context
+  columns, one historical Graph connection, and zero pending OAuth states.
+- External headed Chromium production acceptance passed in one worker in
+  20.6 seconds after the final restart. Tenant Dashboard, Pipeline,
+  Financials, Benefit Tracking, Shared Costs, Meetings, Admin, and Profile plus
+  the separate Platform login rendered read-only with zero page errors and zero
+  observed 5xx responses.
+- During owner diagnosis a database credential appeared in private command
+  output. Issue `#423` was opened immediately. Both privileged database roles
+  and the compose-managed Supabase service roles were rotated; saved Supabase,
+  dev, and production references were updated by actions `104399236`,
+  `104399485`, and `104399490`. The internal-role completion action was
+  `104399732`. No credential value is stored in this manifest or the repository.
+- The Supabase compose source is now pinned at
+  `infra/hostinger/supabase-aethos-compose.yml` with variable references only.
+  Post-rotation Supabase Auth/REST, dev, production, and repeated headed-browser
+  validation all passed.
 - Microsoft Graph callback-registration evidence, fresh organizer consent,
   live invite/join-link refresh, and transcript acceptance remain external
   follow-ups under `#220`, `#389`, and `#390`; they do not authorize weakening
