@@ -601,9 +601,7 @@ def test_minutes_source_excludes_undiscussed_agenda_context() -> None:
 
     source, _participant_names = service._professional_minutes_source(detail)
 
-    assert [item["text"] for item in source["agenda"]] == [
-        "Review Meetings V4 workflow"
-    ]
+    assert [item["text"] for item in source["agenda"]] == ["Review Meetings V4 workflow"]
 
 
 def test_captured_decision_deduplicates_an_ai_paraphrase() -> None:
@@ -796,6 +794,5 @@ async def test_generate_minutes_deduplicates_agenda_and_excludes_undiscussed_top
     assert "update the session agenda workflow" in minutes
     assert "Discussed " not in minutes
     assert (
-        "No specific transcript or note content was captured for this agenda item."
-        not in minutes
+        "No specific transcript or note content was captured for this agenda item." not in minutes
     )

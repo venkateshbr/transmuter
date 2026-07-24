@@ -186,7 +186,9 @@ def deterministic_professional_minutes(source: dict) -> MeetingMinutesContent:
             [
                 MeetingMinutesDiscussionPoint(
                     topic="Meeting discussion",
-                    summary=" ".join(_as_sentence(sentence) for sentence in discussion_sentences[:6]),
+                    summary=" ".join(
+                        _as_sentence(sentence) for sentence in discussion_sentences[:6]
+                    ),
                     evidence=discussion_sentences[:3],
                 )
             ]
@@ -249,8 +251,7 @@ def _ground_with_captured_records(
                     )
                 )
         elif artifact_type == "decision" and not any(
-            _is_semantic_duplicate(title, decision.text)
-            for decision in content.decisions
+            _is_semantic_duplicate(title, decision.text) for decision in content.decisions
         ):
             content.decisions.append(
                 MeetingMinutesDecision(
@@ -319,9 +320,7 @@ def _filter_ungrounded_model_items(
     ]
     content.decisions = [item for item in content.decisions if supported(item.evidence)]
     content.actions = [item for item in content.actions if supported(item.evidence)]
-    content.risks_and_issues = [
-        item for item in content.risks_and_issues if supported(item)
-    ]
+    content.risks_and_issues = [item for item in content.risks_and_issues if supported(item)]
     content.assumptions = [item for item in content.assumptions if supported(item)]
     content.parking_lot = [item for item in content.parking_lot if supported(item)]
     return content

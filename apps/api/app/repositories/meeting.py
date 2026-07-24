@@ -568,9 +568,7 @@ class MeetingRepository:
         existing_by_user = {
             str(item["user_id"]): item for item in existing_rows if item.get("user_id")
         }
-        source_user_ids = {
-            str(item["user_id"]) for item in attendees if item.get("user_id")
-        }
+        source_user_ids = {str(item["user_id"]) for item in attendees if item.get("user_id")}
         for user_id, existing in existing_by_user.items():
             if user_id not in source_user_ids:
                 self.delete_session_attendee(session["id"], str(existing["id"]))
@@ -583,8 +581,7 @@ class MeetingRepository:
                 "user_id": attendee.get("user_id"),
             }
             for attendee in attendees
-            if attendee.get("user_id")
-            and str(attendee["user_id"]) not in existing_by_user
+            if attendee.get("user_id") and str(attendee["user_id"]) not in existing_by_user
         ]
         if not rows:
             return

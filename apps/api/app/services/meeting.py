@@ -447,9 +447,7 @@ class MeetingService:
         )
         if "sort_order" not in payload:
             payload["sort_order"] = len(self._repo.get_session_agenda(session_id)) + 1
-        created = self._repo.create_session_agenda_item(
-            session_id, session["meeting_id"], payload
-        )
+        created = self._repo.create_session_agenda_item(session_id, session["meeting_id"], payload)
         self._repo.update_session(session_id, {"agenda_customized": True})
         return created
 
@@ -1489,9 +1487,7 @@ class MeetingService:
                 "agenda": [
                     {
                         "text": safe_text(item.get("text")),
-                        "initiative_code": (item.get("initiatives") or {}).get(
-                            "initiative_code"
-                        ),
+                        "initiative_code": (item.get("initiatives") or {}).get("initiative_code"),
                     }
                     for item in agenda
                     if self._agenda_supported_by_evidence(
