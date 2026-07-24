@@ -3,8 +3,9 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { Subject, forkJoin, interval, of } from 'rxjs';
-import { catchError, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
+import { catchError, debounceTime, distinctUntilChanged, switchMap, takeUntil } from 'rxjs/operators';
 import { ApiService } from '../../../core/services/api.service';
+import { AuthService } from '../../../core/services/auth.service';
 import { TimezoneOptionsService } from '../../../core/services/timezone-options.service';
 import { TenantReportingContextService } from '../../../core/services/tenant-reporting-context.service';
 
@@ -31,9 +32,9 @@ interface MeetingArtifact {
   standalone: true,
   imports: [CommonModule, FormsModule, RouterLink],
   template: `
-    <div class="h-screen flex flex-col overflow-hidden bg-[var(--t-bg)]">
+    <div class="min-h-screen xl:h-screen flex flex-col xl:overflow-hidden bg-[var(--t-bg)]">
       @if (session(); as s) {
-        <header class="h-16 shrink-0 border-b border-[var(--t-border)] bg-[var(--t-surface)] flex items-center justify-between px-6">
+        <header class="min-h-16 shrink-0 border-b border-[var(--t-border)] bg-[var(--t-surface)] flex flex-col gap-3 px-4 py-3 xl:flex-row xl:items-center xl:justify-between xl:px-6">
           <div class="flex items-center gap-4 min-w-0">
             <a [routerLink]="['/meetings', s.meeting_id]" class="btn-ghost h-9 w-9 p-0" aria-label="Back to meeting">
               <span class="material-icons text-sm">arrow_back</span>
@@ -51,37 +52,69 @@ interface MeetingArtifact {
             </div>
           </div>
 
-          <div class="flex items-center gap-2">
+          <div class="flex flex-wrap items-center gap-2">
             @if (teamsJoinUrl()) {
               <a [href]="teamsJoinUrl()" target="_blank" rel="noreferrer" class="btn-secondary text-xs" aria-label="Join Microsoft Teams meeting">Join Teams</a>
             }
-            <button class="btn-ghost text-xs" (click)="generateAgendaSuggestions()">Generate Agenda</button>
+            @if (canManageCadence()) {
+            <button class="btn-ghost text-xs" (click)="generateAgendaSuggestions()">Suggest Agenda</button>
             <button class="btn-secondary text-xs" (click)="openTeamsInvite()">Teams Invite</button>
             <button class="btn-ghost text-xs" (click)="openTranscriptModal()">Import Transcript</button>
-            <button class="btn-secondary text-xs" (click)="generateMinutes()">Generate Minutes</button>
+            <button class="btn-secondary text-xs" [disabled]="generatingMinutes()" (click)="generateMinutes()">
+              {{ generatingMinutes() ? 'Generating…' : 'Generate Minutes' }}
+            </button>
             <button class="btn-ghost text-xs" [disabled]="!session()?.minutes_markdown || sendingMinutes()" (click)="sendMinutes()">
               {{ sendingMinutes() ? 'Sending...' : (session()?.minutes_status === 'sent' ? 'Sent' : 'Send Minutes') }}
             </button>
             @if (s.status === 'scheduled') {
               <button class="btn-primary text-xs px-5" (click)="startScheduledSession()">Start Session</button>
-            } @else {
+            } @else if (s.status === 'in_progress') {
               <button class="btn-primary text-xs px-5" (click)="endSession()">Complete Session</button>
+            }
             }
           </div>
         </header>
 
-        <main class="flex-1 grid grid-cols-[280px_minmax(0,1fr)_380px] overflow-hidden">
-          <aside class="border-r border-[var(--t-border)] bg-[var(--t-surface-raised)]/35 overflow-y-auto">
+        <main class="flex-1 grid grid-cols-1 xl:grid-cols-[280px_minmax(0,1fr)_380px] xl:overflow-hidden">
+          <aside class="border-b xl:border-b-0 xl:border-r border-[var(--t-border)] bg-[var(--t-surface-raised)]/35 xl:overflow-y-auto">
             <div class="p-4 space-y-5">
               <section>
                 <div class="flex items-center justify-between mb-3">
                   <h2 class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Agenda</h2>
-                  <button class="text-[10px] font-bold text-[var(--t-accent)]" (click)="showAgendaForm.set(!showAgendaForm())" aria-label="Add session agenda item">+ Add</button>
+                  @if (canManageCadence()) {
+                    <button class="text-[10px] font-bold text-[var(--t-accent)]" (click)="showAgendaForm.set(!showAgendaForm())" aria-label="Add session agenda item">+ Add</button>
+                  }
                 </div>
                 @if (showAgendaForm()) {
                   <div class="mb-3 space-y-2">
                     <textarea [(ngModel)]="agendaDraft.text" rows="3" class="input-field w-full text-xs resize-none" aria-label="Session agenda item"></textarea>
+                    <select [(ngModel)]="agendaDraft.initiative_id" class="input-field w-full text-xs" aria-label="Linked initiative">
+                      <option value="">No linked initiative</option>
+                      @for (link of s.linked_initiatives || []; track link.id) {
+                        <option [value]="link.initiative_id">{{ link.initiatives?.initiative_code }} · {{ link.initiatives?.name }}</option>
+                      }
+                    </select>
                     <button class="btn-secondary w-full text-[10px]" (click)="addSessionAgendaItem()">Add Agenda Item</button>
+                  </div>
+                }
+                @if (agendaSuggestions().length) {
+                  <div class="mb-4 space-y-2 border border-[var(--t-border)] bg-[var(--t-surface)] p-3">
+                    <div class="flex items-start justify-between gap-2">
+                      <div>
+                        <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-secondary)]">Suggested agenda</p>
+                        <p class="mt-1 text-[10px] text-[var(--t-text-tertiary)]">Linked initiatives only. Review before adding.</p>
+                      </div>
+                      <button class="btn-secondary text-[10px]" [disabled]="savingSuggestions()" (click)="saveAcceptedSuggestions()">Add accepted</button>
+                    </div>
+                    @for (suggestion of agendaSuggestions(); track suggestion.client_id) {
+                      <div class="border-t border-[var(--t-border)] pt-2">
+                        <label class="flex items-start gap-2">
+                          <input type="checkbox" class="mt-1" [(ngModel)]="suggestion.accepted" [attr.aria-label]="'Accept ' + suggestion.text" />
+                          <textarea [(ngModel)]="suggestion.text" rows="2" class="input-field min-w-0 flex-1 resize-none text-xs" aria-label="Edit suggested agenda item"></textarea>
+                        </label>
+                        <button class="mt-1 text-[9px] font-bold text-red-500" (click)="rejectSuggestion(suggestion.client_id)">Reject</button>
+                      </div>
+                    }
                   </div>
                 }
                 <div class="space-y-2">
@@ -104,9 +137,11 @@ interface MeetingArtifact {
                             </p>
                           }
                         </div>
+                        @if (canManageCadence()) {
                         <button class="ml-auto text-[var(--t-text-tertiary)] hover:text-red-500" (click)="deleteSessionAgendaItem(item.id); $event.stopPropagation()" aria-label="Delete session agenda item">
                           <span class="material-icons text-sm">close</span>
                         </button>
+                        }
                       </div>
                     </div>
                   }
@@ -121,7 +156,9 @@ interface MeetingArtifact {
               <section class="pt-4 border-t border-[var(--t-border)]">
                 <div class="flex items-center justify-between mb-3">
                   <h2 class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Attendees</h2>
-                  <button class="text-[10px] font-bold text-[var(--t-accent)]" (click)="showAttendeeForm.set(!showAttendeeForm())" aria-label="Add session attendee">+ Add</button>
+                  @if (canManageCadence()) {
+                    <button class="text-[10px] font-bold text-[var(--t-accent)]" (click)="showAttendeeForm.set(!showAttendeeForm())" aria-label="Add session attendee">+ Add</button>
+                  }
                 </div>
                 @if (showAttendeeForm()) {
                   <div class="mb-3 flex gap-2">
@@ -137,9 +174,11 @@ interface MeetingArtifact {
                   @for (attendee of s.attendees || []; track attendee.id) {
                     <div class="flex items-center justify-between gap-2 p-2 bg-[var(--t-surface)] border border-[var(--t-border)]">
                       <span class="truncate text-xs font-bold text-[var(--t-text-primary)]">{{ attendee.users?.display_name || attendee.users?.email || attendee.user_id }}</span>
+                      @if (canManageCadence()) {
                       <button class="text-[var(--t-text-tertiary)] hover:text-red-500" (click)="deleteSessionAttendee(attendee.id)" aria-label="Remove session attendee">
                         <span class="material-icons text-sm">close</span>
                       </button>
+                      }
                     </div>
                   }
                 </div>
@@ -167,7 +206,7 @@ interface MeetingArtifact {
             </div>
           </aside>
 
-          <section class="overflow-y-auto bg-[var(--t-bg)]">
+          <section class="xl:overflow-y-auto bg-[var(--t-bg)]">
               <div class="p-6 space-y-5">
               @if (sessionError()) {
                 <div class="border border-red-500/30 bg-red-500/10 p-3 text-sm font-bold text-red-500">
@@ -254,14 +293,26 @@ interface MeetingArtifact {
                     <h3 class="text-sm font-black text-[var(--t-text-primary)]">Draft Minutes</h3>
                     <span class="badge-ghost text-[10px]">{{ session()?.minutes_status || 'draft' }}</span>
                   </div>
-                  <textarea [(ngModel)]="minutesDraft" rows="10" class="input-field w-full text-sm font-mono" aria-label="Draft meeting minutes"></textarea>
-                  <button class="btn-secondary text-xs mt-3" (click)="saveMinutesDraft()">Save Draft</button>
+                  <div class="mb-4 grid grid-cols-2 gap-px border border-[var(--t-border)] bg-[var(--t-border)] md:grid-cols-4" aria-label="Minutes evidence coverage">
+                    @for (source of minutesEvidence(); track source.label) {
+                      <div class="bg-[var(--t-surface-raised)] p-3">
+                        <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">{{ source.label }}</p>
+                        <p class="mt-1 text-xs font-bold" [class.text-[var(--t-green)]]="source.available" [class.text-[var(--t-text-tertiary)]]="!source.available">
+                          {{ source.available ? 'Included' : 'Not available' }}
+                        </p>
+                      </div>
+                    }
+                  </div>
+                  <textarea [(ngModel)]="minutesDraft" [readonly]="!canManageCadence()" rows="10" class="input-field w-full text-sm font-mono" aria-label="Draft meeting minutes"></textarea>
+                  @if (canManageCadence()) {
+                    <button class="btn-secondary text-xs mt-3" (click)="saveMinutesDraft()">Save Draft</button>
+                  }
                 </div>
               }
             </div>
           </section>
 
-          <aside class="border-l border-[var(--t-border)] bg-[var(--t-surface-raised)]/35 flex flex-col overflow-hidden">
+          <aside class="border-t xl:border-t-0 xl:border-l border-[var(--t-border)] bg-[var(--t-surface-raised)]/35 flex flex-col xl:overflow-hidden">
             <section class="h-[42%] border-b border-[var(--t-border)] flex flex-col">
               <div class="p-4 border-b border-[var(--t-border)]">
                 <h2 class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Notes</h2>
@@ -269,6 +320,7 @@ interface MeetingArtifact {
               <textarea
                 [(ngModel)]="notes"
                 (ngModelChange)="onNotesChange()"
+                [readonly]="!canManageCadence()"
                 placeholder="Capture meeting minutes, decisions, and key discussion points..."
                 class="flex-1 bg-transparent border-none outline-none resize-none p-4 text-sm leading-6 text-[var(--t-text-primary)] placeholder:text-[var(--t-text-tertiary)]"
               ></textarea>
@@ -280,6 +332,7 @@ interface MeetingArtifact {
                 <span class="text-[10px] font-black text-[var(--t-accent)]">{{ artifacts().length }} total</span>
               </div>
 
+              @if (canManageCadence()) {
               <div class="p-4 border-b border-[var(--t-border)] space-y-3">
                 <div class="grid grid-cols-2 gap-2">
                   <select [(ngModel)]="artifactDraft.artifact_type" class="input-field text-xs" aria-label="Artifact type">
@@ -310,6 +363,7 @@ interface MeetingArtifact {
                   Add {{ artifactLabel(artifactDraft.artifact_type) }}
                 </button>
               </div>
+              }
 
               <div class="flex-1 overflow-y-auto p-4 space-y-3">
                 @for (artifact of artifacts(); track artifact.id) {
@@ -318,14 +372,17 @@ interface MeetingArtifact {
                       <span class="text-[9px] font-black uppercase tracking-widest" [style.color]="artifactColor(artifact.artifact_type)">
                         {{ artifact.artifact_type }}
                       </span>
+                      @if (canManageCadence()) {
                       <button class="opacity-0 group-hover:opacity-100 text-red-500" (click)="deleteArtifact(artifact)" aria-label="Delete action item">
                         <span class="material-icons text-sm">delete_outline</span>
                       </button>
+                      }
                     </div>
                     <p class="mt-2 text-xs font-bold leading-5 text-[var(--t-text-primary)]">{{ artifact.title }}</p>
                     @if (artifact.description) {
                       <p class="mt-1 text-[11px] leading-4 text-[var(--t-text-secondary)]">{{ artifact.description }}</p>
                     }
+                    @if (canManageCadence()) {
                     <div class="mt-3 grid grid-cols-2 gap-2">
                       <select class="input-field text-[10px] h-8" [ngModel]="artifact.status" (ngModelChange)="updateArtifact(artifact, { status: $event })" aria-label="Artifact status">
                         <option value="open">Open</option>
@@ -336,10 +393,13 @@ interface MeetingArtifact {
                         <option value="accepted">Accepted</option>
                         <option value="rejected">Rejected</option>
                       </select>
-                      <button class="btn-ghost h-8 text-[10px]" (click)="toggleActionItem(artifact)" aria-label="Toggle action item status">
-                        Toggle
-                      </button>
+                      @if (artifact.artifact_type === 'action') {
+                        <button class="btn-ghost h-8 text-[10px]" (click)="toggleActionItem(artifact)" aria-label="Toggle action item status">
+                          {{ artifact.status === 'completed' ? 'Reopen' : 'Complete' }}
+                        </button>
+                      }
                     </div>
+                    }
                   </div>
                 }
                 @if (artifacts().length === 0) {
@@ -455,11 +515,12 @@ interface MeetingArtifact {
     </div>
   `,
   styles: [`
-    :host { display: block; height: 100vh; }
+    :host { display: block; min-height: 100vh; }
   `],
 })
 export class LiveSessionComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
+  private readonly auth = inject(AuthService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly timezones = inject(TimezoneOptionsService);
@@ -483,6 +544,9 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
   syncingMicrosoftTranscript = signal(false);
   syncingTeamsInvite = signal(false);
   sendingMinutes = signal(false);
+  generatingMinutes = signal(false);
+  savingSuggestions = signal(false);
+  agendaSuggestions = signal<any[]>([]);
   transcriptFileName = signal('');
   sessionError = signal<string | null>(null);
   sessionMessage = signal<string | null>(null);
@@ -491,7 +555,7 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
   minutesDraft = '';
   transcriptDraft = '';
   selectedUserId = '';
-  agendaDraft = { text: '' };
+  agendaDraft = { text: '', initiative_id: '' };
   teamsDraft = {
     date: '',
     start_time: '09:00',
@@ -516,6 +580,19 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
     const events = this.session()?.external_events || [];
     const event = events.find((item: any) => item.provider === 'microsoft' && item.join_url);
     return event?.join_url || '';
+  });
+
+  minutesEvidence = computed(() => {
+    const session = this.session() || {};
+    return [
+      { label: 'Transcript', available: Boolean(String(session.transcript_text || '').trim()) },
+      { label: 'Inline notes', available: Boolean(String(session.notes || this.notes || '').trim()) },
+      { label: 'Agenda', available: Boolean((session.agenda || []).length) },
+      {
+        label: 'Captured records',
+        available: Boolean((session.artifacts || []).length || (session.action_items || []).length),
+      },
+    ];
   });
 
   contextCards = computed(() => {
@@ -548,8 +625,20 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
     this.notesChanged$.pipe(
       debounceTime(1000),
       distinctUntilChanged(),
+      switchMap(content => {
+        const id = this.session()?.id;
+        if (!id) return of(null);
+        return this.api.patch(`/meetings/sessions/${id}`, { notes: content }).pipe(
+          catchError(() => {
+            this.saveStatus.set('Error saving');
+            return of(null);
+          }),
+        );
+      }),
       takeUntil(this.destroy$),
-    ).subscribe(content => this.saveNotes(content));
+    ).subscribe(result => {
+      if (result) this.saveStatus.set('All changes saved');
+    });
   }
 
   ngOnDestroy() {
@@ -608,9 +697,12 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
     const session = this.session();
     const text = this.agendaDraft.text.trim();
     if (!session?.id || !text) return;
-    this.api.post<any>(`/meetings/sessions/${session.id}/agenda`, { text }).subscribe({
+    this.api.post<any>(`/meetings/sessions/${session.id}/agenda`, {
+      text,
+      initiative_id: this.agendaDraft.initiative_id || null,
+    }).subscribe({
       next: () => {
-        this.agendaDraft = { text: '' };
+        this.agendaDraft = { text: '', initiative_id: '' };
         this.showAgendaForm.set(false);
         this.loadSession(session.id);
       },
@@ -633,26 +725,63 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
     this.sessionError.set(null);
     this.api.post<any>(`/meetings/sessions/${id}/agenda/suggestions`, {}).subscribe({
       next: res => {
-        const items = (res.items || [])
-          .map((item: any, index: number) => ({
-            text: item.text,
-            initiative_id: item.initiative_id || null,
-            sort_order: (this.session()?.agenda || []).length + index + 1,
-          }))
-          .filter((item: any) => String(item.text || '').trim());
+        const items = (res.items || []).map((item: any, index: number) => ({
+          ...item,
+          client_id: `${Date.now()}-${index}`,
+          accepted: true,
+        })).filter((item: any) => String(item.text || '').trim());
         if (!items.length) {
-          this.sessionMessage.set('No agenda suggestions were available.');
+          this.sessionMessage.set('Link at least one initiative to this meeting before generating agenda suggestions.');
           return;
         }
-        forkJoin(items.map((item: any) => this.api.post<any>(`/meetings/sessions/${id}/agenda`, item))).subscribe({
-          next: () => {
-            this.sessionMessage.set('Agenda suggestions added.');
-            this.loadSession(id);
-          },
-          error: err => this.sessionError.set(err.error?.detail || 'Could not save agenda suggestions.'),
-        });
+        this.agendaSuggestions.set(items);
       },
       error: err => this.sessionError.set(err.error?.detail || 'Could not generate agenda suggestions.'),
+    });
+  }
+
+  rejectSuggestion(clientId: string) {
+    this.agendaSuggestions.set(
+      this.agendaSuggestions().filter(item => item.client_id !== clientId),
+    );
+  }
+
+  saveAcceptedSuggestions() {
+    const id = this.session()?.id;
+    if (!id) return;
+    const existing = new Set(
+      (this.session()?.agenda || []).map((item: any) =>
+        String(item.text || '').trim().toLocaleLowerCase(),
+      ),
+    );
+    const accepted = this.agendaSuggestions()
+      .filter(item => item.accepted && String(item.text || '').trim())
+      .filter(item => !existing.has(String(item.text).trim().toLocaleLowerCase()))
+      .map((item, index) => ({
+        text: String(item.text).trim(),
+        initiative_id: item.initiative_id || null,
+        sort_order: (this.session()?.agenda || []).length + index + 1,
+      }));
+    if (!accepted.length) {
+      this.sessionMessage.set('No new accepted suggestions to add.');
+      return;
+    }
+    this.savingSuggestions.set(true);
+    forkJoin(
+      accepted.map(item =>
+        this.api.post<any>(`/meetings/sessions/${id}/agenda`, item),
+      ),
+    ).subscribe({
+      next: () => {
+        this.savingSuggestions.set(false);
+        this.agendaSuggestions.set([]);
+        this.sessionMessage.set('Accepted agenda suggestions added.');
+        this.loadSession(id);
+      },
+      error: err => {
+        this.savingSuggestions.set(false);
+        this.sessionError.set(err.error?.detail || 'Could not save agenda suggestions.');
+      },
     });
   }
 
@@ -674,15 +803,6 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
     this.api.delete(`/meetings/sessions/${id}/attendees/${attendeeId}`).subscribe({
       next: () => this.loadSession(id),
       error: err => this.sessionError.set(err.error?.detail || 'Could not remove attendee.'),
-    });
-  }
-
-  saveNotes(content: string) {
-    const id = this.session()?.id;
-    if (!id) return;
-    this.api.patch(`/meetings/sessions/${id}`, { notes: content }).subscribe({
-      next: () => this.saveStatus.set('All changes saved'),
-      error: () => this.saveStatus.set('Error saving'),
     });
   }
 
@@ -869,13 +989,24 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
     const id = this.session()?.id;
     if (!id) return;
     this.sessionError.set(null);
-    this.api.post<any>(`/meetings/sessions/${id}/minutes/generate`, { force: true }).subscribe({
+    this.generatingMinutes.set(true);
+    this.saveStatus.set('Saving notes before generation...');
+    this.api.patch(`/meetings/sessions/${id}`, { notes: this.notes }).pipe(
+      switchMap(() =>
+        this.api.post<any>(`/meetings/sessions/${id}/minutes/generate`, { force: true }),
+      ),
+    ).subscribe({
       next: s => {
-        this.session.set({ ...this.session(), ...s });
+        this.generatingMinutes.set(false);
+        this.saveStatus.set('All changes saved');
+        this.session.set({ ...this.session(), ...s, notes: this.notes });
         this.minutesDraft = s.minutes_markdown || '';
-        this.sessionMessage.set('Draft minutes generated.');
+        this.sessionMessage.set('Professional draft generated from available evidence. Review before sending.');
       },
-      error: err => this.sessionError.set(err.error?.detail || 'Could not generate minutes.'),
+      error: err => {
+        this.generatingMinutes.set(false);
+        this.sessionError.set(err.error?.detail || 'Could not generate minutes.');
+      },
     });
   }
 
@@ -959,6 +1090,10 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
 
   artifactLabel(type: ArtifactType): string {
     return type.charAt(0).toUpperCase() + type.slice(1);
+  }
+
+  canManageCadence(): boolean {
+    return this.auth.hasPermission('program_cadence.manage');
   }
 
   artifactColor(type: ArtifactType): string {

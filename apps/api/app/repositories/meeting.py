@@ -450,8 +450,24 @@ class MeetingRepository:
         )
 
     def snapshot_session_agenda(self, session: dict, agenda: list[dict]) -> None:
-        if self.get_session_agenda(session["id"]):
+        existing_rows = self.get_session_agenda(session["id"])
+        if session.get("agenda_customized") or session.get("status") in {
+            "completed",
+            "cancelled",
+        }:
             return
+        if session.get("status") == "in_progress" and existing_rows:
+            return
+        existing_by_source = {
+            str(item["source_agenda_item_id"]): item
+            for item in existing_rows
+            if item.get("source_agenda_item_id")
+        }
+        source_ids = {str(item["id"]) for item in agenda if item.get("id")}
+        for source_id, existing in existing_by_source.items():
+            if source_id not in source_ids:
+                self.delete_session_agenda_item(session["id"], str(existing["id"]))
+
         rows = [
             {
                 "tenant_id": self._tid,
@@ -463,12 +479,27 @@ class MeetingRepository:
                 "sort_order": item.get("sort_order") or index,
             }
             for index, item in enumerate(agenda, start=1)
-            if item.get("text")
+            if item.get("text") and str(item.get("id")) not in existing_by_source
         ]
-        if not rows:
-            return
         try:
-            self._c.table("meeting_session_agenda_items").insert(rows).execute()
+            for index, item in enumerate(agenda, start=1):
+                existing = existing_by_source.get(str(item.get("id")))
+                if existing and (
+                    existing.get("text") != item.get("text")
+                    or existing.get("initiative_id") != item.get("initiative_id")
+                    or existing.get("sort_order") != (item.get("sort_order") or index)
+                ):
+                    self.update_session_agenda_item(
+                        session["id"],
+                        str(existing["id"]),
+                        {
+                            "text": item.get("text"),
+                            "initiative_id": item.get("initiative_id"),
+                            "sort_order": item.get("sort_order") or index,
+                        },
+                    )
+            if rows:
+                self._c.table("meeting_session_agenda_items").insert(rows).execute()
         except Exception as exc:
             if self._is_missing_session_snapshot_tables(exc):
                 return
@@ -526,8 +557,21 @@ class MeetingRepository:
         )
 
     def snapshot_session_attendees(self, session: dict, attendees: list[dict]) -> None:
-        if self.get_session_attendees(session["id"]):
+        existing_rows = self.get_session_attendees(session["id"])
+        if session.get("attendees_customized") or session.get("status") in {
+            "completed",
+            "cancelled",
+        }:
             return
+        if session.get("status") == "in_progress" and existing_rows:
+            return
+        existing_by_user = {
+            str(item["user_id"]): item for item in existing_rows if item.get("user_id")
+        }
+        source_user_ids = {str(item["user_id"]) for item in attendees if item.get("user_id")}
+        for user_id, existing in existing_by_user.items():
+            if user_id not in source_user_ids:
+                self.delete_session_attendee(session["id"], str(existing["id"]))
         rows = [
             {
                 "tenant_id": self._tid,
@@ -537,7 +581,7 @@ class MeetingRepository:
                 "user_id": attendee.get("user_id"),
             }
             for attendee in attendees
-            if attendee.get("user_id")
+            if attendee.get("user_id") and str(attendee["user_id"]) not in existing_by_user
         ]
         if not rows:
             return

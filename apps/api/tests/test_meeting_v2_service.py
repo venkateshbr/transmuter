@@ -8,6 +8,12 @@ from uuid import UUID
 import pytest
 from fastapi import HTTPException
 
+from app.agents.meeting_minutes_agent import _ground_with_captured_records
+from app.domain.meeting_notes import (
+    MeetingMinutesAction,
+    MeetingMinutesContent,
+    MeetingMinutesDecision,
+)
 from app.domain.meetings import (
     MeetingCreate,
     MeetingMinutesGenerateRequest,
@@ -185,7 +191,7 @@ class FakeMeetingV2Repository:
         ]
 
     def list_recent_risks_for_initiatives(self, initiative_ids: list[str]) -> list[dict]:
-        assert "init-red" in initiative_ids
+        assert initiative_ids == ["init-linked"]
         return []
 
     def list_recent_milestones_for_initiatives(self, initiative_ids: list[str]) -> list[dict]:
@@ -386,6 +392,22 @@ def test_start_session_is_date_specific_and_idempotent() -> None:
     assert repo.created_sessions[0][2]["status"] == "in_progress"
 
 
+@pytest.mark.parametrize("terminal_status", ["completed", "cancelled"])
+def test_start_session_does_not_reopen_terminal_session(terminal_status: str) -> None:
+    repo = FakeMeetingV2Repository()
+    repo.sessions_by_date["2026-06-09"]["status"] = terminal_status
+    service = build_service(repo)
+
+    with pytest.raises(HTTPException) as exc:
+        service.start_session(
+            "meeting-1",
+            SessionStartRequest(session_date="2026-06-09"),
+        )
+
+    assert exc.value.status_code == 409
+    assert repo.sessions_by_date["2026-06-09"]["status"] == terminal_status
+
+
 def test_session_window_materializes_last_three_and_next_three() -> None:
     repo = FakeMeetingV2Repository()
     service = build_service(repo)
@@ -430,7 +452,7 @@ def test_session_window_respects_series_start_and_end_dates() -> None:
     ]
 
 
-def test_agenda_suggestions_use_actions_workstreams_and_mask_pii() -> None:
+def test_agenda_suggestions_use_linked_context_and_mask_pii() -> None:
     repo = FakeMeetingV2Repository()
     service = build_service(repo)
 
@@ -438,9 +460,65 @@ def test_agenda_suggestions_use_actions_workstreams_and_mask_pii() -> None:
 
     texts = [item.text for item in response.items]
     assert any("Close carry-forward action" in text for text in texts)
-    assert any("Resolve red status" in text for text in texts)
+    assert all("Margin Recovery" not in text for text in texts)
     assert all("owner@example.com" not in text for text in texts)
     assert response.trace_id is not None
+
+
+def test_agenda_suggestions_are_scoped_to_linked_initiatives_and_deduplicated() -> None:
+    repo = FakeMeetingV2Repository()
+    repo.list_recent_risks_for_initiatives = lambda initiative_ids: [  # type: ignore[method-assign]
+        {
+            "id": "risk-1",
+            "description": "Capability ramp",
+            "initiative_id": "init-linked",
+            "status": "open",
+            "initiatives": {"initiative_code": "TRN-010"},
+        },
+        {
+            "id": "risk-2",
+            "description": "Capability ramp",
+            "initiative_id": "init-linked",
+            "status": "open",
+            "initiatives": {"initiative_code": "TRN-010"},
+        },
+    ]
+    repo.list_recent_milestones_for_initiatives = lambda initiative_ids: [  # type: ignore[method-assign]
+        {
+            "id": "milestone-1",
+            "name": "Automation build",
+            "initiative_id": "init-linked",
+            "status": "in_progress",
+            "planned_end": "2026-07-31",
+            "initiatives": {"initiative_code": "TRN-010"},
+        },
+        {
+            "id": "milestone-2",
+            "name": "Automation build",
+            "initiative_id": "init-linked",
+            "status": "in_progress",
+            "planned_end": "2026-07-31",
+            "initiatives": {"initiative_code": "TRN-010"},
+        },
+    ]
+    service = build_service(repo)
+
+    response = service.suggest_agenda_items("meeting-1")
+
+    assert 1 <= len(response.items) <= 5
+    assert all(item.initiative_id != "init-red" for item in response.items)
+    normalized = [" ".join(item.text.lower().split()) for item in response.items]
+    assert len(normalized) == len(set(normalized))
+
+
+def test_agenda_suggestions_require_a_linked_initiative() -> None:
+    repo = FakeMeetingV2Repository()
+    repo.get_initiatives = lambda meeting_id: []  # type: ignore[method-assign]
+    service = build_service(repo)
+
+    response = service.suggest_agenda_items("meeting-1")
+
+    assert response.items == []
 
 
 def test_meeting_pii_mask_preserves_iso_dates_while_masking_phone_numbers() -> None:
@@ -460,12 +538,140 @@ def test_meeting_pii_mask_preserves_iso_dates_while_masking_phone_numbers() -> N
     assert "[email]" in masked
 
 
-def test_generate_minutes_requires_real_source_material() -> None:
+def test_minutes_source_masks_attendees_speakers_and_captured_owners() -> None:
+    repo = FakeMeetingV2Repository()
+    repo.get_attendees = lambda meeting_id: [  # type: ignore[method-assign]
+        {
+            "user_id": "user-rupa",
+            "users": {"display_name": "Rupa Menon"},
+        }
+    ]
+    service = build_service(repo)
+    detail = {
+        **repo.session_detail,
+        "notes": "Rupa Menon confirmed the next step.",
+        "transcript_text": "External Guest: Rupa Menon will verify the workflow.",
+        "agenda": [],
+        "attendees": repo.get_attendees("meeting-1"),
+        "artifacts": [
+            {
+                "artifact_type": "action",
+                "title": "Verify the workflow",
+                "users": {"display_name": "Vishwa Rao"},
+            }
+        ],
+        "action_items": [],
+    }
+
+    source, participant_names = service._professional_minutes_source(detail)
+
+    serialized = str(source)
+    assert "Rupa Menon" not in serialized
+    assert "Vishwa Rao" not in serialized
+    assert "External Guest" not in serialized
+    assert "Participant 1" in serialized
+    assert "Speaker:" in serialized
+    assert set(participant_names.values()) == {"Rupa Menon", "Vishwa Rao"}
+
+
+def test_minutes_source_excludes_undiscussed_agenda_context() -> None:
+    repo = FakeMeetingV2Repository()
+    service = build_service(repo)
+    repo.get_session_agenda = lambda session_id: [  # type: ignore[method-assign]
+        {
+            "id": "agenda-discussed",
+            "text": "Review Meetings V4 workflow",
+            "initiative_id": "init-linked",
+        },
+        {
+            "id": "agenda-undiscussed",
+            "text": "Undiscussed budget review",
+            "initiative_id": "init-linked",
+        },
+    ]
+    detail = {
+        **repo.session_detail,
+        "notes": "The team reviewed the Meetings V4 workflow and verified agenda propagation.",
+        "transcript_text": "The Meetings V4 workflow is ready for dev acceptance.",
+        "agenda": repo.get_session_agenda("session-empty"),
+        "attendees": [],
+        "artifacts": [],
+        "action_items": [],
+    }
+
+    source, _participant_names = service._professional_minutes_source(detail)
+
+    assert [item["text"] for item in source["agenda"]] == ["Review Meetings V4 workflow"]
+
+
+def test_captured_decision_deduplicates_an_ai_paraphrase() -> None:
+    content = MeetingMinutesContent(
+        executive_summary="The team agreed how unscheduled meetings will be handled.",
+        decisions=[
+            MeetingMinutesDecision(
+                text=(
+                    "Ad-hoc meeting series will be used for unscheduled meetings instead "
+                    "of changing recurring session dates."
+                ),
+                evidence="use ad-hoc meeting series for unscheduled meetings",
+            )
+        ],
+    )
+    source = {
+        "artifacts": [
+            {
+                "artifact_type": "decision",
+                "title": "Use ad-hoc meeting series for unscheduled meetings",
+            }
+        ],
+        "action_items": [],
+    }
+
+    grounded = _ground_with_captured_records(content, source)
+
+    assert len(grounded.decisions) == 1
+
+
+def test_captured_action_enriches_an_ai_paraphrase() -> None:
+    content = MeetingMinutesContent(
+        executive_summary="The team assigned acceptance documentation.",
+        actions=[
+            MeetingMinutesAction(
+                description="Document the acceptance evidence for issue 425.",
+                evidence="document the dev acceptance evidence on issue 425",
+            )
+        ],
+    )
+    source = {
+        "artifacts": [
+            {
+                "artifact_type": "action",
+                "title": "Document dev acceptance evidence on issue 425",
+                "owner": "Participant 1",
+                "due_date": "2026-07-24",
+                "priority": "high",
+                "status": "open",
+            }
+        ],
+        "action_items": [],
+    }
+
+    grounded = _ground_with_captured_records(content, source)
+
+    assert len(grounded.actions) == 1
+    assert grounded.actions[0].owner == "Participant 1"
+    assert grounded.actions[0].due_date == "2026-07-24"
+    assert grounded.actions[0].priority == "high"
+
+
+@pytest.mark.asyncio
+async def test_generate_minutes_requires_real_source_material(monkeypatch) -> None:
+    monkeypatch.setattr("app.agents.meeting_minutes_agent.settings.ai_enabled", False)
     repo = FakeMeetingV2Repository()
     service = build_service(repo)
 
     with pytest.raises(HTTPException) as exc:
-        service.generate_minutes(
+        await service.generate_minutes(
             "session-empty",
             MeetingMinutesGenerateRequest(force=True),
         )
@@ -473,7 +679,11 @@ def test_generate_minutes_requires_real_source_material() -> None:
     assert exc.value.status_code == 400
 
 
-def test_generate_minutes_summarizes_transcript_by_agenda_without_raw_dump() -> None:
+@pytest.mark.asyncio
+async def test_generate_minutes_summarizes_transcript_by_agenda_without_raw_dump(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.agents.meeting_minutes_agent.settings.ai_enabled", False)
     repo = FakeMeetingV2Repository()
     repo.session_detail = {
         **repo.session_detail,
@@ -518,21 +728,71 @@ def test_generate_minutes_summarizes_transcript_by_agenda_without_raw_dump() -> 
 
     service = build_service(repo)
 
-    response = service.generate_minutes(
+    response = await service.generate_minutes(
         "session-empty",
         MeetingMinutesGenerateRequest(force=True),
     )
 
     minutes = response["minutes_markdown"]
-    assert "## AI Summary" in minutes
-    assert "## Agenda Discussion" in minutes
-    assert "### Benefits tracking" in minutes
-    assert "### Migration risk" in minutes
-    assert "Discussed benefits tracking is behind" in minutes
-    assert "Discussed the migration risk is high" in minutes
-    assert "Captured items:" in minutes
+    assert "## Executive Summary" in minutes
+    assert "## Key Discussion" in minutes
+    assert "Benefits tracking is behind" in minutes
+    assert "migration risk is high" in minutes
     assert "Cutover rollback owner missing" in minutes
     assert "Retain the governed baseline" in minutes
-    assert "## Transcript Summary Source" not in minutes
-    assert "Rupa Menon:" not in minutes
-    assert "Vishwa Rao:" not in minutes
+    assert "## Source Coverage" in minutes
+    assert "Discussed " not in minutes
+    assert "No specific transcript or note content" not in minutes
+
+
+@pytest.mark.asyncio
+async def test_generate_minutes_deduplicates_agenda_and_excludes_undiscussed_topics(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("app.agents.meeting_minutes_agent.settings.ai_enabled", False)
+    repo = FakeMeetingV2Repository()
+    repo.session_detail = {
+        **repo.session_detail,
+        "id": "session-empty",
+        "notes": "The meeting configuration review found that series agenda changes were not reaching sessions.",
+        "transcript_text": (
+            "We reviewed the Transmuter meeting workflow. "
+            "The team agreed to fix agenda propagation before adding more generated topics. "
+            "Action: update the session agenda workflow and verify it in the browser."
+        ),
+        "meetings": {"name": "Transmuter Weekly"},
+    }
+    duplicated_milestone = {
+        "id": "session-agenda-milestone-1",
+        "source_agenda_item_id": "agenda-milestone",
+        "initiative_id": "init-linked",
+        "text": "Review upcoming milestone for NPK-2: Configure automation due 2026-07-31",
+    }
+    repo.get_session_agenda = lambda session_id: [  # type: ignore[method-assign]
+        {
+            "id": "session-agenda-review",
+            "source_agenda_item_id": "agenda-review",
+            "text": "Review meeting functionality",
+        },
+        duplicated_milestone,
+        {
+            **duplicated_milestone,
+            "id": "session-agenda-milestone-2",
+        },
+    ]
+
+    service = build_service(repo)
+
+    response = await service.generate_minutes(
+        "session-empty",
+        MeetingMinutesGenerateRequest(force=True),
+    )
+
+    minutes = response["minutes_markdown"]
+    assert "Review upcoming milestone for NPK-2" not in minutes
+    assert "The meeting configuration review found" in minutes
+    assert "update the session agenda workflow" in minutes
+    assert "Discussed " not in minutes
+    assert (
+        "No specific transcript or note content was captured for this agenda item." not in minutes
+    )

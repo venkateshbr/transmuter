@@ -32,6 +32,12 @@ const MEETINGS_FILTER_STATE_KEY = 'transmuter.filters.meetings.list';
         }
       </div>
 
+      @if (meetingNotice()) {
+        <div class="border border-[var(--t-border)] bg-[var(--t-surface)] p-4 text-sm font-bold text-[var(--t-accent)]" role="status">
+          {{ meetingNotice() }}
+        </div>
+      }
+
       <app-compact-filter-toolbar
         [searchValue]="search"
         searchPlaceholder="Search meetings"
@@ -255,6 +261,7 @@ const MEETINGS_FILTER_STATE_KEY = 'transmuter.filters.meetings.list';
 export class MeetingsListComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly auth = inject(AuthService);
+  meetingNotice = signal<string | null>(history.state?.meetingNotice || null);
   private readonly router = inject(Router);
   private readonly timezones = inject(TimezoneOptionsService);
   meetings = signal<any[]>([]);

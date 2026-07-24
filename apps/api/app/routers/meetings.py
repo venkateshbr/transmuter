@@ -254,7 +254,7 @@ async def generate_session_minutes(
     svc: Annotated[MeetingService, Depends(_svc)],
 ) -> dict:
     assert_can_manage_program_cadence(current_user)
-    return svc.generate_minutes(session_id, body)
+    return await svc.generate_minutes(session_id, body)
 
 
 @router.post("/sessions/{session_id}/ai/extract", response_model=MeetingNotesWorkflowReview)
