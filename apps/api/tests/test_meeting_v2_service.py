@@ -8,6 +8,12 @@ from uuid import UUID
 import pytest
 from fastapi import HTTPException
 
+from app.agents.meeting_minutes_agent import _ground_with_captured_records
+from app.domain.meeting_notes import (
+    MeetingMinutesAction,
+    MeetingMinutesContent,
+    MeetingMinutesDecision,
+)
 from app.domain.meetings import (
     MeetingCreate,
     MeetingMinutesGenerateRequest,
@@ -566,6 +572,98 @@ def test_minutes_source_masks_attendees_speakers_and_captured_owners() -> None:
     assert "Participant 1" in serialized
     assert "Speaker:" in serialized
     assert set(participant_names.values()) == {"Rupa Menon", "Vishwa Rao"}
+
+
+def test_minutes_source_excludes_undiscussed_agenda_context() -> None:
+    repo = FakeMeetingV2Repository()
+    service = build_service(repo)
+    repo.get_session_agenda = lambda session_id: [  # type: ignore[method-assign]
+        {
+            "id": "agenda-discussed",
+            "text": "Review Meetings V4 workflow",
+            "initiative_id": "init-linked",
+        },
+        {
+            "id": "agenda-undiscussed",
+            "text": "Undiscussed budget review",
+            "initiative_id": "init-linked",
+        },
+    ]
+    detail = {
+        **repo.session_detail,
+        "notes": "The team reviewed the Meetings V4 workflow and verified agenda propagation.",
+        "transcript_text": "The Meetings V4 workflow is ready for dev acceptance.",
+        "agenda": repo.get_session_agenda("session-empty"),
+        "attendees": [],
+        "artifacts": [],
+        "action_items": [],
+    }
+
+    source, _participant_names = service._professional_minutes_source(detail)
+
+    assert [item["text"] for item in source["agenda"]] == [
+        "Review Meetings V4 workflow"
+    ]
+
+
+def test_captured_decision_deduplicates_an_ai_paraphrase() -> None:
+    content = MeetingMinutesContent(
+        executive_summary="The team agreed how unscheduled meetings will be handled.",
+        decisions=[
+            MeetingMinutesDecision(
+                text=(
+                    "Ad-hoc meeting series will be used for unscheduled meetings instead "
+                    "of changing recurring session dates."
+                ),
+                evidence="use ad-hoc meeting series for unscheduled meetings",
+            )
+        ],
+    )
+    source = {
+        "artifacts": [
+            {
+                "artifact_type": "decision",
+                "title": "Use ad-hoc meeting series for unscheduled meetings",
+            }
+        ],
+        "action_items": [],
+    }
+
+    grounded = _ground_with_captured_records(content, source)
+
+    assert len(grounded.decisions) == 1
+
+
+def test_captured_action_enriches_an_ai_paraphrase() -> None:
+    content = MeetingMinutesContent(
+        executive_summary="The team assigned acceptance documentation.",
+        actions=[
+            MeetingMinutesAction(
+                description="Document the acceptance evidence for issue 425.",
+                evidence="document the dev acceptance evidence on issue 425",
+            )
+        ],
+    )
+    source = {
+        "artifacts": [
+            {
+                "artifact_type": "action",
+                "title": "Document dev acceptance evidence on issue 425",
+                "owner": "Participant 1",
+                "due_date": "2026-07-24",
+                "priority": "high",
+                "status": "open",
+            }
+        ],
+        "action_items": [],
+    }
+
+    grounded = _ground_with_captured_records(content, source)
+
+    assert len(grounded.actions) == 1
+    assert grounded.actions[0].owner == "Participant 1"
+    assert grounded.actions[0].due_date == "2026-07-24"
+    assert grounded.actions[0].priority == "high"
 
 
 @pytest.mark.asyncio

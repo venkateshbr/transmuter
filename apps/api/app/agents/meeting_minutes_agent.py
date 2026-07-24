@@ -215,8 +215,6 @@ def _ground_with_captured_records(
     content: MeetingMinutesContent,
     source: dict,
 ) -> MeetingMinutesContent:
-    action_keys = {_key(item.description) for item in content.actions}
-    decision_keys = {_key(item.text) for item in content.decisions}
     risk_keys = {_key(item) for item in content.risks_and_issues}
     assumption_keys = {_key(item) for item in content.assumptions}
 
@@ -225,26 +223,41 @@ def _ground_with_captured_records(
         title = str(item.get("title") or item.get("description") or "").strip()
         if not title:
             continue
-        if artifact_type == "action" and _key(title) not in action_keys:
-            content.actions.append(
-                MeetingMinutesAction(
-                    description=title,
-                    owner=item.get("owner"),
-                    due_date=item.get("due_date"),
-                    priority=_priority(item.get("priority")),
-                    status=item.get("status") or "open",
-                    evidence="Captured in the meeting action center.",
-                )
+        if artifact_type == "action":
+            matching_action = next(
+                (
+                    action
+                    for action in content.actions
+                    if _is_semantic_duplicate(title, action.description)
+                ),
+                None,
             )
-            action_keys.add(_key(title))
-        elif artifact_type == "decision" and _key(title) not in decision_keys:
+            if matching_action:
+                matching_action.owner = item.get("owner") or matching_action.owner
+                matching_action.due_date = item.get("due_date") or matching_action.due_date
+                matching_action.priority = _priority(item.get("priority"))
+                matching_action.status = item.get("status") or matching_action.status
+            else:
+                content.actions.append(
+                    MeetingMinutesAction(
+                        description=title,
+                        owner=item.get("owner"),
+                        due_date=item.get("due_date"),
+                        priority=_priority(item.get("priority")),
+                        status=item.get("status") or "open",
+                        evidence="Captured in the meeting action center.",
+                    )
+                )
+        elif artifact_type == "decision" and not any(
+            _is_semantic_duplicate(title, decision.text)
+            for decision in content.decisions
+        ):
             content.decisions.append(
                 MeetingMinutesDecision(
                     text=title,
                     evidence="Captured in the meeting action center.",
                 )
             )
-            decision_keys.add(_key(title))
         elif artifact_type in {"risk", "issue"} and _key(title) not in risk_keys:
             content.risks_and_issues.append(title)
             risk_keys.add(_key(title))
@@ -254,7 +267,22 @@ def _ground_with_captured_records(
 
     for item in source.get("action_items") or []:
         description = str(item.get("description") or "").strip()
-        if description and _key(description) not in action_keys:
+        if not description:
+            continue
+        matching_action = next(
+            (
+                action
+                for action in content.actions
+                if _is_semantic_duplicate(description, action.description)
+            ),
+            None,
+        )
+        if matching_action:
+            matching_action.owner = item.get("owner") or matching_action.owner
+            matching_action.due_date = item.get("due_date") or matching_action.due_date
+            matching_action.priority = _priority(item.get("priority"))
+            matching_action.status = item.get("status") or matching_action.status
+        else:
             content.actions.append(
                 MeetingMinutesAction(
                     description=description,
@@ -265,7 +293,6 @@ def _ground_with_captured_records(
                     evidence="Recorded as a platform action item.",
                 )
             )
-            action_keys.add(_key(description))
     return content
 
 
@@ -368,6 +395,33 @@ def _as_sentence(value: str) -> str:
 
 def _key(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
+
+
+def _is_semantic_duplicate(left: str, right: str) -> bool:
+    stop_words = {
+        "a",
+        "an",
+        "and",
+        "are",
+        "be",
+        "for",
+        "from",
+        "in",
+        "instead",
+        "of",
+        "on",
+        "the",
+        "to",
+        "use",
+        "used",
+        "will",
+        "with",
+    }
+    left_tokens = set(_key(left).split()) - stop_words
+    right_tokens = set(_key(right).split()) - stop_words
+    if not left_tokens or not right_tokens:
+        return _key(left) == _key(right)
+    return len(left_tokens & right_tokens) / min(len(left_tokens), len(right_tokens)) >= 0.7
 
 
 def _priority(value: object) -> str:

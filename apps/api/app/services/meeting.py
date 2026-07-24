@@ -1494,6 +1494,10 @@ class MeetingService:
                         ),
                     }
                     for item in agenda
+                    if self._agenda_supported_by_evidence(
+                        str(item.get("text") or ""),
+                        f"{safe_notes} {safe_transcript}",
+                    )
                 ],
                 "notes": self._mask_pii(safe_notes),
                 "transcript": self._mask_pii(safe_transcript),
@@ -1638,6 +1642,25 @@ class MeetingService:
                 status_code=status.HTTP_409_CONFLICT,
                 detail="This agenda item is already present.",
             )
+
+    @staticmethod
+    def _agenda_supported_by_evidence(agenda_text: str, evidence: str) -> bool:
+        stop_words = {
+            "agenda",
+            "and",
+            "confirm",
+            "discuss",
+            "for",
+            "item",
+            "meeting",
+            "review",
+            "the",
+            "this",
+            "with",
+        }
+        agenda_terms = set(re.findall(r"[a-z0-9]{3,}", agenda_text.casefold())) - stop_words
+        evidence_terms = set(re.findall(r"[a-z0-9]{3,}", evidence.casefold()))
+        return bool(agenda_terms & evidence_terms)
 
     @staticmethod
     def _mask_unknown_speaker(match: re.Match[str]) -> str:
