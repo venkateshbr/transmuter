@@ -38,7 +38,7 @@ Deployment note:
 
 ### 2026-07-25 - Meetings V4 Correctness And Professional AI Minutes
 
-Status: production promotion approved; awaiting merged-main CI and promotion
+Status: promoted to production and browser-verified
 
 GitHub tracking:
 
@@ -79,12 +79,28 @@ Acceptance evidence:
 
 Production promotion:
 
-- Required schema SQL:
+- Final release-manifest merge commit `5ef6149` passed merged-main CI run
+  `30115422887`, including backend, frontend, dependency audit, specs, secret
+  scan, Agent eval, and policy gates.
+- Applied schema SQL:
   `supabase/migrations/20260724000001_meeting_session_lifecycle.sql`.
-- Promote the exact reviewed main commit only after merged-main CI is green.
-- Post-promotion validation must include public `/health`, `/api/health`,
-  authenticated login, Meetings list/detail rendering, and a native meeting
-  workflow without creating a Teams event.
+- The first local-env attempt failed before SQL execution because its saved
+  database password was stale. The saved production application connection
+  then authenticated but failed safely before SQL execution because it was not
+  the table owner. The unchanged transactional migration was applied
+  successfully through the internal `supabase_admin` schema-owner connection
+  in schema job `transmuter-schema-prod-20260725022018`.
+- Hostinger production deploy action `105890260` reached terminal `success` and
+  recreated `transmuter-hostinger` from exact commit `5ef6149`.
+- Public `/health` and `/api/health` passed after deployment.
+- External headed Playwright Chromium production acceptance passed in one
+  worker in 22.2 seconds. Authenticated Dashboard, Pipeline, Financials,
+  Benefit Tracking, Shared Costs, Meetings, Admin, Profile, and Platform
+  Control rendered read-only with zero page errors and zero observed 5xx
+  responses.
+- No production meeting data, Teams invite, Teams event, or organizer consent
+  was created. The complete native meeting mutation workflow was performed and
+  cleaned up on dev before promotion.
 
 ### 2026-07-16 - Five-Tenant Launch Readiness And Browser Acceptance
 
