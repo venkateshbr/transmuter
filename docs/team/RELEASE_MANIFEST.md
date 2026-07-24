@@ -36,6 +36,56 @@ Deployment note:
 
 ## Current Release Entries
 
+### 2026-07-25 - Meetings V4 Correctness And Professional AI Minutes
+
+Status: production promotion approved; awaiting merged-main CI and promotion
+
+GitHub tracking:
+
+- Meetings feature: issue `#425`, PR `#426`, squash-merge commit `274c5a3`.
+- Dependency security gate: issue `#427`, PR `#428`, squash-merge commit
+  `10aa857`.
+
+Dev deployment:
+
+- Environment: `https://transmuter-dev.ishirock.tech`.
+- Schema: `transmuter_dev`.
+- Browser-tested application commit: `93c21f4`; final PR head `380e873`
+  contains formatting-only changes plus audited mainline dependencies.
+- Hostinger action: `105803657`.
+- Applied migration:
+  `supabase/migrations/20260724000001_meeting_session_lifecycle.sql`.
+- Schema job: `transmuter-schema-dev-20260724162708`.
+
+Acceptance evidence:
+
+- Real authenticated API acceptance passed for weekly series creation, default
+  agenda and attendee propagation, meeting/session initiative links,
+  linked-initiative-only agenda suggestions, lifecycle transitions, notes,
+  transcript import, captured actions and decisions, professional minutes,
+  completion protection, cancellation, and active-list removal.
+- One uninterrupted headed Playwright Chromium run against the real Angular
+  app and real dev API passed in 44.2 seconds. It repeated the complete series
+  and session workflow, generated and persisted professional AI minutes,
+  confirmed cancellation navigated to `/meetings`, and removed the temporary
+  series through Admin cleanup.
+- The browser run observed zero Teams writes, page errors, or 5xx responses.
+- Generated minutes used transcript, inline notes, agenda evidence, decisions,
+  and actions; excluded an undiscussed budget topic from the executive summary;
+  and avoided legacy placeholder prose.
+- Focused meeting tests: 28 passed. Final PR CI passed backend, frontend,
+  dependency audits, specs, secret scan, Agent eval, and policy checks.
+- Dependency PR `#428` and merged-main run `30114759910` passed all CI gates.
+
+Production promotion:
+
+- Required schema SQL:
+  `supabase/migrations/20260724000001_meeting_session_lifecycle.sql`.
+- Promote the exact reviewed main commit only after merged-main CI is green.
+- Post-promotion validation must include public `/health`, `/api/health`,
+  authenticated login, Meetings list/detail rendering, and a native meeting
+  workflow without creating a Teams event.
+
 ### 2026-07-16 - Five-Tenant Launch Readiness And Browser Acceptance
 
 Status: promoted to production and verified on 2026-07-16
