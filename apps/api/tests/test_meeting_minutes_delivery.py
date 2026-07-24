@@ -34,6 +34,10 @@ class FakeMeetingRepository:
         assert meeting_id == MEETING_ID
         return self.attendees
 
+    def get_session_attendees(self, session_id: str) -> list[dict]:
+        assert session_id == SESSION_ID
+        return []
+
     def update_session(self, session_id: str, data: dict) -> dict:
         assert session_id == SESSION_ID
         self.updated_payload = data

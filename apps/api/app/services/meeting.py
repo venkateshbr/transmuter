@@ -8,6 +8,7 @@ from langfuse.types import TraceContext
 from supabase import Client
 
 from app.agents.initiative_intake_agent import _get_langfuse
+from app.agents.meeting_minutes_agent import generate_professional_minutes
 from app.agents.meeting_notes_agent import (
     chunk_transcript,
     extract_action_items,
@@ -18,6 +19,7 @@ from app.core.database import get_supabase_admin
 from app.domain.meeting_notes import (
     LinkedInitiativeContext,
     MeetingAttendeeContext,
+    MeetingMinutesContent,
     MeetingNotesWorkflowReview,
 )
 from app.domain.meetings import (
@@ -86,12 +88,20 @@ class MeetingService:
             self._repo.set_workstreams(meeting["id"], workstream_ids)
             if participant_user_ids:
                 self._repo.set_attendees(meeting["id"], self._normalized_ids(participant_user_ids))
+            seen_agenda: set[tuple[str, str | None]] = set()
             for index, item in enumerate(default_agenda_items, start=1):
                 agenda_payload = {
                     key: value
                     for key, value in item.items()
                     if key in {"text", "initiative_id", "sort_order"} and value is not None
                 }
+                agenda_key = (
+                    " ".join(str(agenda_payload.get("text") or "").casefold().split()),
+                    agenda_payload.get("initiative_id"),
+                )
+                if not agenda_key[0] or agenda_key in seen_agenda:
+                    continue
+                seen_agenda.add(agenda_key)
                 agenda_payload.setdefault("sort_order", index)
                 self._repo.create_agenda_item(meeting["id"], agenda_payload)
             meeting = self._repo.get(meeting["id"]) or meeting
@@ -259,35 +269,45 @@ class MeetingService:
     def create_agenda_item(self, meeting_id: str, data: AgendaItemCreate) -> dict:
         self._assert_meeting(meeting_id)
         payload = data.model_dump(exclude_none=True)
+        self._reject_duplicate_agenda(
+            self._repo.get_agenda(meeting_id),
+            str(payload.get("text") or ""),
+            payload.get("initiative_id"),
+        )
         if "sort_order" not in payload:
             payload["sort_order"] = len(self._repo.get_agenda(meeting_id)) + 1
         return self._repo.create_agenda_item(meeting_id, payload)
 
     def suggest_agenda_items(self, meeting_id: str) -> AgendaSuggestionsResponse:
         meeting = self._assert_meeting(meeting_id)
-        workstream_ids = [item["id"] for item in meeting.get("workstreams") or [] if item.get("id")]
-        if not workstream_ids and meeting.get("workstream_id"):
-            workstream_ids = [meeting["workstream_id"]]
-
         linked_rows = self._repo.get_initiatives(meeting_id)
-        linked_initiatives = [
+        initiatives = [
             row.get("initiatives") or {"id": row.get("initiative_id")}
             for row in linked_rows
             if row.get("initiative_id") or row.get("initiatives")
         ]
-        workstream_initiatives = self._repo.list_initiatives_for_workstreams(workstream_ids)
-        initiatives = self._dedupe_by_id([*linked_initiatives, *workstream_initiatives])
+        initiatives = self._dedupe_by_id(initiatives)
         initiative_ids = [item["id"] for item in initiatives if item.get("id")]
+        if not initiative_ids:
+            return self._trace_agenda_suggestions(
+                meeting,
+                AgendaSuggestionsResponse(items=[], trace_id=self._agenda_trace_id()),
+            )
+        open_actions = [
+            item
+            for item in self._repo.list_open_actions_for_meeting(meeting_id)
+            if item.get("initiative_id") in initiative_ids
+        ]
 
         suggestions = self._deterministic_agenda_suggestions(
             meeting=meeting,
             initiatives=initiatives,
-            open_actions=self._repo.list_open_actions_for_meeting(meeting_id),
+            open_actions=open_actions,
             risks=self._repo.list_recent_risks_for_initiatives(initiative_ids),
             milestones=self._repo.list_recent_milestones_for_initiatives(initiative_ids),
         )
         response = AgendaSuggestionsResponse(
-            items=suggestions[:12], trace_id=self._agenda_trace_id()
+            items=suggestions[:5], trace_id=self._agenda_trace_id()
         )
         return self._trace_agenda_suggestions(meeting, response)
 
@@ -371,10 +391,21 @@ class MeetingService:
         existing = self._repo.get_session_by_date(meeting_id, session_date)
         if existing:
             self._materialize_session(existing)
+            if existing.get("status") in {"completed", "cancelled"}:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"{existing['status'].title()} sessions cannot be restarted.",
+                )
             if existing.get("status") != "in_progress":
-                existing = self._repo.update_session(existing["id"], {"status": "in_progress"})
+                existing = self._repo.update_session(
+                    existing["id"],
+                    {"status": "in_progress", "started_at": datetime.now(UTC).isoformat()},
+                )
             return existing
         session = self._create_scheduled_session(meeting, parsed, "in_progress")
+        session = self._repo.update_session(
+            session["id"], {"started_at": datetime.now(UTC).isoformat()}
+        )
         self._materialize_session(session)
         return session
 
@@ -402,15 +433,25 @@ class MeetingService:
             "artifacts": artifacts,
             "carry_forward_action_items": carry_forward,
             "external_events": external_events,
+            "linked_initiatives": self._repo.get_initiatives(meeting_id),
         }
 
     def create_session_agenda_item(self, session_id: str, data: AgendaItemCreate) -> dict:
         session = self._assert_session(session_id)
         self._materialize_session(session)
         payload = data.model_dump(exclude_none=True)
+        self._reject_duplicate_agenda(
+            self._repo.get_session_agenda(session_id),
+            str(payload.get("text") or ""),
+            payload.get("initiative_id"),
+        )
         if "sort_order" not in payload:
             payload["sort_order"] = len(self._repo.get_session_agenda(session_id)) + 1
-        return self._repo.create_session_agenda_item(session_id, session["meeting_id"], payload)
+        created = self._repo.create_session_agenda_item(
+            session_id, session["meeting_id"], payload
+        )
+        self._repo.update_session(session_id, {"agenda_customized": True})
+        return created
 
     def update_session_agenda_item(
         self,
@@ -419,30 +460,47 @@ class MeetingService:
         data: AgendaItemUpdate,
     ) -> dict:
         self._assert_session(session_id)
-        return self._repo.update_session_agenda_item(
+        updated = self._repo.update_session_agenda_item(
             session_id,
             item_id,
             data.model_dump(exclude_none=True),
         )
+        self._repo.update_session(session_id, {"agenda_customized": True})
+        return updated
 
     def delete_session_agenda_item(self, session_id: str, item_id: str) -> None:
         self._assert_session(session_id)
         self._repo.delete_session_agenda_item(session_id, item_id)
+        self._repo.update_session(session_id, {"agenda_customized": True})
 
     def add_session_attendee(self, session_id: str, data: AttendeeCreate) -> dict:
         session = self._assert_session(session_id)
         self._materialize_session(session)
-        return self._repo.add_session_attendee(session, data.user_id)
+        attendee = self._repo.add_session_attendee(session, data.user_id)
+        self._repo.update_session(session_id, {"attendees_customized": True})
+        return attendee
 
     def delete_session_attendee(self, session_id: str, attendee_id: str) -> None:
         self._assert_session(session_id)
         self._repo.delete_session_attendee(session_id, attendee_id)
+        self._repo.update_session(session_id, {"attendees_customized": True})
 
     def update_session(self, session_id: str, data: SessionUpdate) -> dict:
         return self._repo.update_session(session_id, data.model_dump(exclude_none=True))
 
     def end_session(self, session_id: str) -> dict:
-        return self._repo.update_session(session_id, {"status": "completed"})
+        session = self._assert_session(session_id)
+        if session.get("status") == "completed":
+            return session
+        if session.get("status") != "in_progress":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Only an in-progress session can be completed.",
+            )
+        return self._repo.update_session(
+            session_id,
+            {"status": "completed", "completed_at": datetime.now(UTC).isoformat()},
+        )
 
     def create_action_item(self, session_id: str, data: ActionItemCreate) -> dict:
         self.get_session_detail(session_id)
@@ -738,7 +796,7 @@ class MeetingService:
             initiative_updates=decisions.initiative_updates,
         )
 
-    def generate_minutes(
+    async def generate_minutes(
         self,
         session_id: str,
         _data: MeetingMinutesGenerateRequest,
@@ -747,16 +805,28 @@ class MeetingService:
         if not self._has_minutes_source(detail):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Add notes, import a transcript, capture agenda items, or record artifacts before generating minutes.",
+                detail="Add inline notes, import a transcript, or record actions, decisions, risks, or issues before generating minutes.",
             )
-        minutes = self._build_minutes(detail)
+        source, participant_names = self._professional_minutes_source(detail)
+        generated = await generate_professional_minutes(source)
+        minutes = self._render_professional_minutes(
+            detail,
+            generated.content,
+            generated.agent_status,
+        )
+        for placeholder, display_name in sorted(
+            participant_names.items(),
+            key=lambda item: len(item[0]),
+            reverse=True,
+        ):
+            minutes = minutes.replace(placeholder, display_name)
         return self._repo.update_session(
             session_id,
             {
                 "minutes_markdown": minutes,
                 "minutes_status": "draft",
                 "minutes_generated_at": datetime.now(UTC).isoformat(),
-                "ai_optimised": True,
+                "ai_optimised": generated.agent_status == "generated",
             },
         )
 
@@ -769,7 +839,9 @@ class MeetingService:
                 detail="Generate and review minutes before sending.",
             )
         meeting_id = session["meeting_id"]
-        attendees = self._repo.get_attendees(meeting_id)
+        attendees = self._repo.get_session_attendees(session_id) or self._repo.get_attendees(
+            meeting_id
+        )
         recipients = self._attendee_emails(attendees)
         if not recipients:
             raise HTTPException(
@@ -1185,8 +1257,8 @@ class MeetingService:
                     AgendaSuggestion(
                         text=self._mask_pii(f"Resolve {rag} status for {code} - {name}"),
                         initiative_id=initiative.get("id"),
-                        rationale="Selected workstream or linked initiative is not green.",
-                        source_type="workstream_initiative",
+                        rationale="Linked initiative is not green.",
+                        source_type="linked_initiative",
                     )
                 )
             elif stage != "complete":
@@ -1196,8 +1268,8 @@ class MeetingService:
                             f"Confirm next milestone and owner for {code} - {name}"
                         ),
                         initiative_id=initiative.get("id"),
-                        rationale="Active initiative in a selected workstream needs forward-looking review.",
-                        source_type="workstream_initiative",
+                        rationale="Active linked initiative needs forward-looking review.",
+                        source_type="linked_initiative",
                     )
                 )
 
@@ -1230,32 +1302,15 @@ class MeetingService:
                 )
             )
 
-        if not suggestions:
-            workstream_names = ", ".join(
-                [item.get("name") for item in meeting.get("workstreams") or [] if item.get("name")]
-            )
-            text = (
-                f"Confirm priorities, blockers, and owners for {workstream_names}"
-                if workstream_names
-                else "Confirm decisions, blockers, and owners for the next review period"
-            )
-            suggestions.append(
-                AgendaSuggestion(
-                    text=self._mask_pii(text),
-                    rationale="Fallback suggestion because no open actions, risks, milestones, or active initiatives were found.",
-                    source_type="fallback",
-                )
-            )
-
         deduped: list[AgendaSuggestion] = []
         seen_text: set[str] = set()
         for suggestion in suggestions:
-            key = suggestion.text.lower()
+            key = " ".join(suggestion.text.casefold().split())
             if key in seen_text:
                 continue
             seen_text.add(key)
             deduped.append(suggestion)
-        return deduped
+        return deduped[:5]
 
     @staticmethod
     def _agenda_trace_id() -> str:
@@ -1297,251 +1352,299 @@ class MeetingService:
             [
                 str(detail.get("notes") or "").strip(),
                 str(detail.get("transcript_text") or "").strip(),
-                bool(detail.get("agenda")),
                 bool(detail.get("artifacts")),
+                bool(detail.get("action_items")),
             ]
         )
 
-    def _build_minutes(self, detail: dict) -> str:
+    def _professional_minutes_source(
+        self,
+        detail: dict,
+    ) -> tuple[dict, dict[str, str]]:
         meeting = detail.get("meetings") or {}
-        agenda = detail.get("agenda") or []
-        artifacts = detail.get("artifacts") or []
-        action_items = detail.get("action_items") or []
-        notes = self._mask_pii(detail.get("notes") or "")
-        transcript = self._mask_pii(detail.get("transcript_text") or "")
+        meeting_id = detail["meeting_id"]
+        agenda = self._dedupe_agenda(detail.get("agenda") or [])
+        attendees = detail.get("attendees") or self._repo.get_attendees(meeting_id)
+        participant_names: dict[str, str] = {}
+        safe_attendees: list[dict[str, str | None]] = []
+        safe_notes = str(detail.get("notes") or "")
+        safe_transcript = str(detail.get("transcript_text") or "")
 
-        def artifact_lines(kind: str) -> list[str]:
-            rows = [a for a in artifacts if a.get("artifact_type") == kind]
-            return [
-                f"- {self._mask_pii(a.get('title') or '')}"
-                + (f" ({a.get('status')})" if a.get("status") else "")
-                for a in rows
-            ] or ["- None captured."]
-
-        def action_lines() -> list[str]:
-            rows = artifacts_for_type("action") + [
-                {
-                    "title": item.get("description"),
-                    "status": item.get("status"),
-                    "priority": item.get("priority"),
-                }
-                for item in action_items
-            ]
-            return [
-                f"- {self._mask_pii(item.get('title') or item.get('description') or '')}"
-                + (f" ({item.get('status')})" if item.get("status") else "")
-                + (f" [{item.get('priority')}]" if item.get("priority") else "")
-                for item in rows
-            ] or ["- None captured."]
-
-        def artifacts_for_type(kind: str) -> list[dict]:
-            return [item for item in artifacts if item.get("artifact_type") == kind]
-
-        def artifacts_for_agenda(
-            agenda_ids: set[str],
-            kind: str | None = None,
-        ) -> list[str]:
-            if not agenda_ids:
-                return []
-            rows = [
-                item
-                for item in artifacts
-                if (
-                    str(item.get("agenda_item_id") or "") in agenda_ids
-                    or str(item.get("session_agenda_item_id") or "") in agenda_ids
+        for index, attendee in enumerate(attendees, start=1):
+            user = attendee.get("users") or {}
+            display_name = str(user.get("display_name") or "").strip()
+            placeholder = f"Participant {index}"
+            if display_name:
+                participant_names[placeholder] = display_name
+                safe_notes = re.sub(
+                    re.escape(display_name),
+                    placeholder,
+                    safe_notes,
+                    flags=re.IGNORECASE,
                 )
-                and (kind is None or item.get("artifact_type") == kind)
-            ]
-            return [
-                f"- {self._mask_pii(item.get('title') or '')}"
-                + (f" ({item.get('status')})" if item.get("status") else "")
-                for item in rows
-            ]
-
-        agenda_lines = [
-            f"- {item.get('text')}"
-            + (
-                f" [{(item.get('initiatives') or {}).get('initiative_code')}]"
-                if item.get("initiatives")
-                else ""
+                safe_transcript = re.sub(
+                    re.escape(display_name),
+                    placeholder,
+                    safe_transcript,
+                    flags=re.IGNORECASE,
+                )
+            safe_attendees.append(
+                {
+                    "user_id": str(attendee.get("user_id") or ""),
+                    "display_name": placeholder,
+                }
             )
-            for item in agenda
-        ] or ["- No agenda items recorded."]
-
-        summary_lines = self._minutes_summary_lines(notes, transcript)
-        agenda_sections = self._agenda_minutes_sections(
-            agenda,
-            notes,
-            transcript,
-            artifacts_for_agenda,
+        safe_transcript = re.sub(
+            r"(?m)(^|(?<=[.!?])\s+)([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){0,3}):",
+            self._mask_unknown_speaker,
+            safe_transcript,
         )
 
+        def safe_text(value: object) -> str:
+            text = self._mask_pii(str(value or ""))
+            for placeholder, display_name in participant_names.items():
+                text = re.sub(
+                    re.escape(display_name),
+                    placeholder,
+                    text,
+                    flags=re.IGNORECASE,
+                )
+            return text
+
+        next_participant_index = len(attendees) + 1
+
+        def safe_owner(item: dict) -> str | None:
+            nonlocal next_participant_index
+            display_name = str((item.get("users") or {}).get("display_name") or "").strip()
+            if not display_name:
+                return None
+            for placeholder, participant_name in participant_names.items():
+                if participant_name.casefold() == display_name.casefold():
+                    return placeholder
+            placeholder = f"Participant {next_participant_index}"
+            next_participant_index += 1
+            participant_names[placeholder] = display_name
+            return placeholder
+
+        artifacts = [
+            {
+                "artifact_type": item.get("artifact_type"),
+                "title": safe_text(item.get("title")),
+                "description": safe_text(item.get("description")),
+                "status": item.get("status"),
+                "priority": item.get("priority"),
+                "due_date": item.get("due_date"),
+                "owner": safe_owner(item),
+                "initiative_id": item.get("initiative_id"),
+            }
+            for item in detail.get("artifacts") or []
+        ]
+        action_items = [
+            {
+                "description": safe_text(item.get("description")),
+                "status": item.get("status"),
+                "priority": item.get("priority"),
+                "due_date": item.get("due_date"),
+                "owner": safe_owner(item),
+                "initiative_id": item.get("initiative_id"),
+            }
+            for item in detail.get("action_items") or []
+        ]
+        for placeholder, display_name in participant_names.items():
+            safe_notes = re.sub(
+                re.escape(display_name),
+                placeholder,
+                safe_notes,
+                flags=re.IGNORECASE,
+            )
+            safe_transcript = re.sub(
+                re.escape(display_name),
+                placeholder,
+                safe_transcript,
+                flags=re.IGNORECASE,
+            )
+            for record in [*artifacts, *action_items]:
+                for field in ("title", "description"):
+                    record[field] = re.sub(
+                        re.escape(display_name),
+                        placeholder,
+                        str(record.get(field) or ""),
+                        flags=re.IGNORECASE,
+                    )
+        linked_initiatives = [
+            {
+                "id": (item.get("initiatives") or {}).get("id") or item.get("initiative_id"),
+                "name": (item.get("initiatives") or {}).get("name") or "Initiative",
+                "initiative_code": (item.get("initiatives") or {}).get("initiative_code"),
+            }
+            for item in self._repo.get_initiatives(meeting_id)
+            if item.get("initiative_id") or (item.get("initiatives") or {}).get("id")
+        ]
+        return (
+            {
+                "session_id": detail.get("id"),
+                "tenant_scope": str(self._tenant_id),
+                "meeting_name": safe_text(meeting.get("name") or "Meeting"),
+                "session_date": detail.get("session_date"),
+                "agenda": [
+                    {
+                        "text": safe_text(item.get("text")),
+                        "initiative_code": (item.get("initiatives") or {}).get(
+                            "initiative_code"
+                        ),
+                    }
+                    for item in agenda
+                ],
+                "notes": self._mask_pii(safe_notes),
+                "transcript": self._mask_pii(safe_transcript),
+                "attendees": safe_attendees,
+                "artifacts": artifacts,
+                "action_items": action_items,
+                "linked_initiatives": linked_initiatives,
+                "source_coverage": {
+                    "notes": bool(safe_notes.strip()),
+                    "transcript": bool(safe_transcript.strip()),
+                    "agenda": bool(agenda),
+                    "captured_records": bool(artifacts or action_items),
+                },
+            },
+            participant_names,
+        )
+
+    def _render_professional_minutes(
+        self,
+        detail: dict,
+        content: MeetingMinutesContent,
+        generation_method: str,
+    ) -> str:
+        meeting = detail.get("meetings") or {}
+        attendee_lines = [
+            f"- {self._mask_pii(str((item.get('users') or {}).get('display_name') or ''))}"
+            for item in detail.get("attendees") or []
+            if (item.get("users") or {}).get("display_name")
+        ] or ["- Attendance was not recorded."]
+
+        def bullets(values: list[str], empty: str) -> list[str]:
+            cleaned = [self._mask_pii(value.strip()) for value in values if value.strip()]
+            return [f"- {value}" for value in cleaned] or [f"- {empty}"]
+
+        discussion_lines: list[str] = []
+        for point in content.discussion_points:
+            discussion_lines.extend(
+                [
+                    f"### {self._mask_pii(point.topic)}",
+                    self._mask_pii(point.summary),
+                    "",
+                ]
+            )
+        if not discussion_lines:
+            discussion_lines = ["No material discussion points were evidenced in the sources.", ""]
+
+        decision_lines = [
+            f"- {self._mask_pii(item.text)}" for item in content.decisions if item.text.strip()
+        ] or ["- No explicit decisions were evidenced or captured."]
+        action_lines = []
+        for item in content.actions:
+            metadata = [
+                f"Owner: {self._mask_pii(item.owner)}" if item.owner else None,
+                f"Due: {item.due_date}" if item.due_date else None,
+                f"Priority: {item.priority}",
+                f"Status: {item.status}",
+            ]
+            suffix = "; ".join(value for value in metadata if value)
+            action_lines.append(
+                f"- {self._mask_pii(item.description)}" + (f" — {suffix}" if suffix else "")
+            )
+        if not action_lines:
+            action_lines = ["- No explicit actions were evidenced or captured."]
+
+        coverage = [
+            f"- Transcript: {'included' if detail.get('transcript_text') else 'not available'}.",
+            f"- Inline notes: {'included' if detail.get('notes') else 'not available'}.",
+            f"- Agenda context: {'included' if detail.get('agenda') else 'not available'}.",
+            (
+                "- Captured actions, decisions, risks, and issues: included."
+                if detail.get("artifacts") or detail.get("action_items")
+                else "- Captured actions, decisions, risks, and issues: none recorded."
+            ),
+            (
+                "- Generation: configured AI model with evidence grounding."
+                if generation_method == "generated"
+                else "- Generation: deterministic fallback; review carefully before sending."
+            ),
+        ]
         return "\n".join(
             [
                 f"# Minutes: {self._mask_pii(meeting.get('name') or 'Meeting')}",
                 "",
                 f"Session date: {detail.get('session_date')}",
                 "",
-                "## AI Summary",
-                *summary_lines,
+                "## Attendance",
+                *attendee_lines,
                 "",
-                "## Agenda",
-                *agenda_lines,
+                "## Executive Summary",
+                self._mask_pii(content.executive_summary),
                 "",
-                "## Agenda Discussion",
-                *agenda_sections,
-                "",
+                "## Key Discussion",
+                *discussion_lines,
                 "## Decisions",
-                *artifact_lines("decision"),
+                *decision_lines,
                 "",
                 "## Actions",
-                *action_lines(),
+                *action_lines,
                 "",
                 "## Risks And Issues",
-                *artifact_lines("risk"),
-                *artifact_lines("issue"),
+                *bullets(content.risks_and_issues, "No material risks or issues were evidenced."),
                 "",
                 "## Assumptions",
-                *artifact_lines("assumption"),
+                *bullets(content.assumptions, "No assumptions were captured."),
+                "",
+                "## Parking Lot",
+                *bullets(content.parking_lot, "No items were parked for later discussion."),
                 "",
                 "## Source Coverage",
-                f"- Captured notes: {'included' if notes else 'not captured'}.",
-                f"- Imported transcript: {'summarized' if transcript else 'not imported'}.",
+                *coverage,
             ]
         )
 
-    def _minutes_summary_lines(self, notes: str, transcript: str) -> list[str]:
-        sentences = self._source_sentences(notes, transcript)
-        if not sentences:
-            return ["- No notes or transcript content available for summary."]
-        return [f"- {self._synthesis_sentence(sentence)}" for sentence in sentences[:5]]
-
-    def _agenda_minutes_sections(
-        self,
-        agenda: list[dict],
-        notes: str,
-        transcript: str,
-        artifacts_for_agenda: object,
-    ) -> list[str]:
-        sentences = self._source_sentences(notes, transcript)
-        if not agenda:
-            bullets = [f"- {self._synthesis_sentence(sentence)}" for sentence in sentences[:6]]
-            return [
-                "### General Discussion",
-                *(bullets or ["- No discussion captured."]),
-            ]
-
-        sections: list[str] = []
-        used_indexes: set[int] = set()
+    @staticmethod
+    def _dedupe_agenda(agenda: list[dict]) -> list[dict]:
+        deduped: list[dict] = []
+        seen: set[tuple[str, str | None]] = set()
         for item in agenda:
-            title = self._mask_pii(str(item.get("text") or "Agenda item"))
-            agenda_ids = {
-                str(agenda_id)
-                for agenda_id in (item.get("id"), item.get("source_agenda_item_id"))
-                if agenda_id
-            }
-            matched = self._sentences_for_agenda(title, sentences)
-            for index, _score, _sentence in matched:
-                used_indexes.add(index)
-            discussion_bullets = [
-                f"- {self._synthesis_sentence(sentence)}"
-                for _index, _score, sentence in matched[:4]
-            ] or ["- No specific transcript or note content was captured for this agenda item."]
-            sections.extend(
-                [
-                    f"### {title}",
-                    *discussion_bullets,
-                ]
-            )
-            agenda_artifacts = artifacts_for_agenda(agenda_ids)
-            if agenda_artifacts:
-                sections.extend(["", "Captured items:", *agenda_artifacts])
-            sections.append("")
-
-        unassigned = [
-            sentence for index, sentence in enumerate(sentences) if index not in used_indexes
-        ][:4]
-        if unassigned:
-            sections.extend(
-                [
-                    "### Additional Discussion",
-                    *[f"- {self._synthesis_sentence(sentence)}" for sentence in unassigned],
-                ]
-            )
-        return sections
-
-    def _sentences_for_agenda(
-        self,
-        agenda_title: str,
-        sentences: list[str],
-    ) -> list[tuple[int, int, str]]:
-        agenda_terms = self._summary_terms(agenda_title)
-        scored: list[tuple[int, int, str]] = []
-        for index, sentence in enumerate(sentences):
-            sentence_terms = self._summary_terms(sentence)
-            score = len(agenda_terms & sentence_terms)
-            if score:
-                scored.append((index, score, sentence))
-        return sorted(scored, key=lambda item: (-item[1], item[0]))
-
-    def _source_sentences(self, notes: str, transcript: str) -> list[str]:
-        chunks = []
-        if notes.strip():
-            chunks.append(notes)
-        if transcript.strip():
-            chunks.append(transcript)
-        text = "\n".join(chunks)
-        raw_sentences = re.split(r"(?<=[.!?])\s+|\n+", text)
-        sentences: list[str] = []
-        for sentence in raw_sentences:
-            cleaned = self._clean_minutes_sentence(sentence)
-            if len(cleaned) >= 12 and cleaned not in sentences:
-                sentences.append(cleaned)
-        return sentences
-
-    def _clean_minutes_sentence(self, sentence: str) -> str:
-        cleaned = self._mask_pii(sentence)
-        cleaned = re.sub(r"^\s*[\w .'-]{1,48}:\s*", "", cleaned)
-        cleaned = re.sub(r"\s+", " ", cleaned).strip(" -\t")
-        return cleaned
-
-    def _synthesis_sentence(self, sentence: str) -> str:
-        cleaned = self._clean_minutes_sentence(sentence)
-        if len(cleaned) > 220:
-            cleaned = cleaned[:220].rsplit(" ", 1)[0] + "..."
-        if not cleaned:
-            return "No substantive discussion captured."
-        return f"Discussed {cleaned[0].lower()}{cleaned[1:]}"
+            text = " ".join(str(item.get("text") or "").split()).strip()
+            if not text:
+                continue
+            key = (text.casefold(), item.get("initiative_id"))
+            if key in seen:
+                continue
+            seen.add(key)
+            deduped.append({**item, "text": text})
+        return deduped
 
     @staticmethod
-    def _summary_terms(text: str) -> set[str]:
-        stop_words = {
-            "about",
-            "after",
-            "again",
-            "agenda",
-            "also",
-            "and",
-            "are",
-            "for",
-            "from",
-            "have",
-            "into",
-            "item",
-            "meeting",
-            "next",
-            "not",
-            "our",
-            "review",
-            "session",
-            "that",
-            "the",
-            "this",
-            "with",
-        }
-        return {
-            word for word in re.findall(r"[a-z0-9]{4,}", text.lower()) if word not in stop_words
-        }
+    def _reject_duplicate_agenda(
+        agenda: list[dict],
+        text: str,
+        initiative_id: str | None,
+    ) -> None:
+        normalized = " ".join(text.casefold().split())
+        if any(
+            " ".join(str(item.get("text") or "").casefold().split()) == normalized
+            and item.get("initiative_id") == initiative_id
+            for item in agenda
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="This agenda item is already present.",
+            )
+
+    @staticmethod
+    def _mask_unknown_speaker(match: re.Match[str]) -> str:
+        prefix, label = match.group(1), match.group(2)
+        if label.casefold() in {"action", "decision", "risk", "issue", "assumption"}:
+            return match.group(0)
+        return f"{prefix}Speaker:"
 
     @staticmethod
     def _mask_pii(text: str) -> str:

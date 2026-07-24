@@ -5,6 +5,7 @@ import { ActivatedRoute, RouterLink, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 import { TimezoneOptionsService } from '../../../core/services/timezone-options.service';
+import { AuthService } from '../../../core/services/auth.service';
 
 @Component({
   selector: 'app-meeting-detail',
@@ -35,6 +36,7 @@ import { TimezoneOptionsService } from '../../../core/services/timezone-options.
               </p>
             }
           </div>
+          @if (canManageCadence()) {
           <div class="flex gap-2">
             @if (m.status !== 'cancelled') {
               <button (click)="openMicrosoftInvite()" class="btn-secondary text-sm flex items-center gap-2" aria-label="Create Microsoft Teams invite">
@@ -44,12 +46,13 @@ import { TimezoneOptionsService } from '../../../core/services/timezone-options.
             }
             <button (click)="openEdit(m)" class="btn-ghost text-sm" aria-label="Edit meeting series">Edit Series</button>
             @if (m.status !== 'cancelled') {
-              <button (click)="openStartSession()" class="btn-primary text-sm flex items-center gap-2">
+              <button (click)="openStartSession()" class="btn-primary text-sm flex items-center gap-2" aria-label="Start next scheduled session">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                Start Session
+                Start Next Session
               </button>
             }
           </div>
+          }
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -99,8 +102,10 @@ import { TimezoneOptionsService } from '../../../core/services/timezone-options.
               <div class="flex justify-between items-center mb-6">
                 <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Default Agenda</h3>
                 <div class="flex items-center gap-3">
+                  @if (canManageCadence()) {
                   <button (click)="fetchAgendaSuggestions()" class="text-xs text-[var(--t-accent)] font-semibold" aria-label="Suggest agenda items">Suggest</button>
                   <button (click)="showAgendaForm.set(!showAgendaForm())" class="text-xs text-[var(--t-accent)] font-semibold" aria-label="Add agenda item">+ Add Item</button>
+                  }
                 </div>
               </div>
 
@@ -125,7 +130,7 @@ import { TimezoneOptionsService } from '../../../core/services/timezone-options.
                 <div class="mb-5 border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4 space-y-3">
                   <div class="flex items-center justify-between gap-3">
                     <div>
-                      <p class="text-xs font-black uppercase tracking-widest text-[var(--t-text-secondary)]">AI agenda suggestions</p>
+                      <p class="text-xs font-black uppercase tracking-widest text-[var(--t-text-secondary)]">Agenda suggestions</p>
                       <p class="text-xs text-[var(--t-text-tertiary)]">Review, edit, reject, then save accepted items.</p>
                     </div>
                     <button (click)="saveAcceptedSuggestions()" [disabled]="savingSuggestions()" class="btn-primary text-xs">
@@ -169,9 +174,11 @@ import { TimezoneOptionsService } from '../../../core/services/timezone-options.
                         </p>
                       }
                     </div>
+                    @if (canManageCadence()) {
                     <button (click)="deleteAgendaItem(item.id)" class="opacity-0 group-hover:opacity-100 transition-opacity text-[var(--t-text-tertiary)] hover:text-red-500" aria-label="Delete agenda item">
                       <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                     </button>
+                    }
                   </div>
                 }
                 @if ((m.agenda || []).length === 0) {
@@ -236,7 +243,9 @@ import { TimezoneOptionsService } from '../../../core/services/timezone-options.
             <div class="card p-6">
               <div class="flex justify-between items-center mb-6">
                 <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Attendees</h3>
-                <button (click)="showAttendeeForm.set(!showAttendeeForm())" class="text-xs text-[var(--t-accent)] font-semibold" aria-label="Add attendee">+ Add</button>
+                @if (canManageCadence()) {
+                  <button (click)="showAttendeeForm.set(!showAttendeeForm())" class="text-xs text-[var(--t-accent)] font-semibold" aria-label="Add attendee">+ Add</button>
+                }
               </div>
               @if (showAttendeeForm()) {
                 <form (ngSubmit)="addAttendee()" class="mb-5 flex gap-2">
@@ -258,9 +267,11 @@ import { TimezoneOptionsService } from '../../../core/services/timezone-options.
                       <p class="text-xs font-bold text-[var(--t-text-primary)]">{{ a.users?.display_name }}</p>
                       <p class="text-[10px] text-[var(--t-text-tertiary)]">{{ a.users?.role }}</p>
                     </div>
+                    @if (canManageCadence()) {
                     <button (click)="deleteAttendee(a.id)" class="w-8 h-8 rounded-lg bg-[var(--t-surface-raised)] flex items-center justify-center text-[var(--t-text-tertiary)] hover:text-red-500 hover:bg-red-500/10 transition-all" aria-label="Remove attendee">
                       <span class="material-icons text-sm">close</span>
                     </button>
+                    }
                   </div>
                 }
               </div>
@@ -268,8 +279,13 @@ import { TimezoneOptionsService } from '../../../core/services/timezone-options.
 
             <div class="card p-6">
               <div class="flex justify-between items-center mb-6">
-                <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Linked Initiatives</h3>
-                <button (click)="showInitiativeForm.set(!showInitiativeForm())" class="text-xs text-[var(--t-accent)] font-semibold" aria-label="Link initiative">+ Link</button>
+                <div>
+                  <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Linked Initiatives</h3>
+                  <p class="mt-1 text-xs text-[var(--t-text-secondary)]">Defines the initiative scope for agenda suggestions, session context, and minutes.</p>
+                </div>
+                @if (canManageCadence()) {
+                  <button (click)="showInitiativeForm.set(!showInitiativeForm())" class="text-xs text-[var(--t-accent)] font-semibold" aria-label="Link initiative">+ Link</button>
+                }
               </div>
               @if (showInitiativeForm()) {
                 <form (ngSubmit)="addInitiative()" class="mb-5 flex gap-2">
@@ -288,9 +304,11 @@ import { TimezoneOptionsService } from '../../../core/services/timezone-options.
                       <p class="text-xs font-bold text-[var(--t-text-primary)] truncate">{{ link.initiatives?.name }}</p>
                       <p class="text-[10px] text-[var(--t-accent)] font-bold">{{ link.initiatives?.initiative_code }}</p>
                     </div>
+                    @if (canManageCadence()) {
                     <button (click)="deleteInitiative(link.id)" class="w-8 h-8 rounded-lg bg-[var(--t-surface-raised)] flex items-center justify-center text-[var(--t-text-tertiary)] hover:text-red-500 hover:bg-red-500/10 transition-all" aria-label="Unlink initiative">
                       <span class="material-icons text-sm">link_off</span>
                     </button>
+                    }
                   </div>
                 }
                 @if ((m.initiatives || []).length === 0) {
@@ -546,16 +564,17 @@ import { TimezoneOptionsService } from '../../../core/services/timezone-options.
             <div class="flex items-start justify-between gap-4">
               <div>
                 <h2 class="text-xl font-bold text-[var(--t-text-primary)]">Start session</h2>
-                <p class="text-sm text-[var(--t-text-secondary)] mt-1">Choose the review date to start or resume.</p>
+                <p class="text-sm text-[var(--t-text-secondary)] mt-1">Start the next occurrence from this series schedule.</p>
               </div>
               <button type="button" (click)="startingSession.set(false)" class="btn-ghost h-9 w-9 p-0" aria-label="Close start session dialog">
                 <span class="material-icons text-sm">close</span>
               </button>
             </div>
-            <label>
-              <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Session Date</span>
-              <input [(ngModel)]="startSessionDate" name="session_date" type="date" required class="input-field w-full" aria-label="Session date" />
-            </label>
+            <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4">
+              <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)]">Scheduled date</span>
+              <p class="mt-1 text-lg font-black text-[var(--t-text-primary)]">{{ startSessionDate | date:'fullDate' }}</p>
+              <p class="mt-1 text-xs text-[var(--t-text-tertiary)]">Use an ad-hoc meeting series when a session does not belong to this cadence.</p>
+            </div>
             @if (startSessionError()) {
               <p class="text-sm text-red-500">{{ startSessionError() }}</p>
             }
@@ -577,6 +596,7 @@ export class MeetingDetailComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly timezones = inject(TimezoneOptionsService);
+  private readonly auth = inject(AuthService);
   
   meeting = signal<any>(null);
   users = signal<any[]>([]);
@@ -708,12 +728,10 @@ export class MeetingDetailComponent implements OnInit {
       next: res => {
         this.cancellingMeeting.set(false);
         this.editing.set(false);
-        this.meeting.set(res.meeting);
-        if (res.teams_status === 'failed' || res.teams_status === 'not_configured') {
-          this.meetingNotice.set(res.teams_detail || 'The series was cancelled, but Teams cancellation was not completed.');
-        } else {
-          this.meetingNotice.set(res.teams_detail || 'Meeting series cancelled.');
-        }
+        const notice = res.teams_status === 'failed' || res.teams_status === 'not_configured'
+          ? (res.teams_detail || 'The series was cancelled, but Teams cancellation was not completed.')
+          : (res.teams_detail || 'Meeting series cancelled.');
+        this.router.navigate(['/meetings'], { state: { meetingNotice: notice } });
       },
       error: err => {
         this.cancellingMeeting.set(false);
@@ -783,6 +801,10 @@ export class MeetingDetailComponent implements OnInit {
       },
       error: err => this.startSessionError.set(err.error?.detail || 'Could not start session.'),
     });
+  }
+
+  canManageCadence(): boolean {
+    return this.auth.hasPermission('program_cadence.manage');
   }
 
   openMicrosoftInvite(session: any | null = null) {
