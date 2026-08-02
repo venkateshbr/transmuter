@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -20,6 +21,8 @@ from app.core.microsoft_graph import (
     normalize_scope_set,
 )
 from app.repositories.meeting import MeetingRepository
+
+logger = logging.getLogger(__name__)
 
 
 class MeetingProviderError(Exception):
@@ -451,6 +454,19 @@ class MicrosoftGraphMeetingProvider:
             "context_fingerprint": context.context_fingerprint,
         }
         if any(str(self._connection.get(key) or "") != value for key, value in expected.items()):
+            mismatched = [
+                key
+                for key, value in expected.items()
+                if str(self._connection.get(key) or "") != value
+            ]
+            logger.warning(
+                "microsoft_graph_connection_invalid connection_id=%s sync_status=%s "
+                "oauth_generation=%s mismatched_fields=%s",
+                self._connection.get("id"),
+                self._connection.get("sync_status"),
+                self._connection.get("oauth_generation"),
+                mismatched,
+            )
             raise MeetingProviderConfigurationError("Microsoft Graph reconnection is required.")
         if not _canonical_uuid(self._connection.get("external_account_id")):
             raise MeetingProviderConfigurationError("Microsoft Graph reconnection is required.")
