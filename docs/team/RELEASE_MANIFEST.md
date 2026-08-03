@@ -36,6 +36,52 @@ Deployment note:
 
 ## Current Release Entries
 
+### 2026-08-03 - Centralized Tenant Microsoft 365 Organizer
+
+Status: approved for production promotion; production validation pending
+
+GitHub tracking:
+
+- Microsoft Teams parent: issue `#220`.
+- Central organizer feature: issue `#431`, PR `#432`, squash-merge commit
+  `63c9a68`.
+
+Dev deployment:
+
+- Environment: `https://transmuter-dev.ishirock.tech`.
+- Schema: `transmuter_dev`.
+- Deployed application commit: `53a47bf` (the reviewed PR head whose runtime
+  content was squash-merged as `63c9a68`).
+- Hostinger action: `107531592`, terminal success.
+- Applied migration:
+  `supabase/migrations/20260803000001_tenant_microsoft_organizer.sql`.
+- Schema job: `transmuter-schema-dev-20260803203834`.
+
+Acceptance evidence:
+
+- Focused backend suite passed 202 tests; Ruff, mypy, Angular template/type
+  compilation, and the production frontend build passed.
+- PR CI run `30813789087` passed backend, frontend, agent/workflow validation,
+  secret scan, Agent eval, and policy gates.
+- Real dev API checks confirmed the provider is configured, no token fields are
+  exposed, `tenant_admin` and `transformation_office` can start organizer OAuth,
+  and `pmo_lead` is denied.
+- One standalone Playwright worker against the deployed Angular app and real API
+  passed in 12.9 seconds. It verified tenant-admin-only Microsoft administration,
+  central organizer messaging in meeting and live-session dialogs, disabled
+  invitation writes while disconnected, zero page errors and observed 5xx
+  responses, and deterministic cleanup of the temporary meeting.
+- Microsoft consent was not completed and no Teams event was written. The tenant
+  remains fail-closed until an administrator authorizes the organizer.
+
+Production promotion:
+
+- Explicit founder approval received on 2026-08-03.
+- Apply schema SQL:
+  `supabase/migrations/20260803000001_tenant_microsoft_organizer.sql`.
+- Promotion action, deployed commit, public health checks, and browser validation
+  will be recorded after completion.
+
 ### 2026-07-25 - Meetings V4 Correctness And Professional AI Minutes
 
 Status: promoted to production and browser-verified
