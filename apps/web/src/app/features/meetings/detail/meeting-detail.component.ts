@@ -505,23 +505,17 @@ import { AuthService } from '../../../core/services/auth.service';
                   <input [(ngModel)]="microsoftInviteDraft.series_end_date" name="teams_series_end_date" type="date" required class="input-field w-full" aria-label="Teams invite series end date" />
                 </label>
               }
-              <label>
-                <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Organizer</span>
-                <select [(ngModel)]="microsoftInviteDraft.organizer_email" name="teams_organizer" class="input-field w-full" aria-label="Teams invite organizer">
-                  <option value="">Default connected organizer</option>
-                  @for (connection of microsoftConnections(); track connection.id) {
-                    <option [value]="connection.organizer_email">{{ connection.organizer_email }}</option>
-                  }
-                </select>
-              </label>
             </div>
 
-            @if (!microsoftConnections().length) {
-              <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <p class="text-sm text-[var(--t-text-secondary)]">No Microsoft organizer is connected for this tenant.</p>
-                <button type="button" (click)="connectMicrosoft()" class="btn-secondary text-xs" aria-label="Connect Microsoft 365">Connect Microsoft</button>
-              </div>
-            }
+            <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4">
+              <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Microsoft organizer</p>
+              @if (microsoftConnections().length) {
+                <p class="mt-1 text-sm font-bold text-[var(--t-text-primary)]">{{ microsoftConnections()[0].organizer_email }}</p>
+                <p class="mt-1 text-xs text-[var(--t-text-secondary)]">Managed centrally in Admin · Microsoft 365.</p>
+              } @else {
+                <p class="mt-1 text-sm text-[var(--t-text-secondary)]">A tenant administrator must connect Microsoft 365 in Admin before Teams invitations can be sent.</p>
+              }
+            </div>
 
             <fieldset class="border border-[var(--t-border)] p-4">
               <legend class="px-1 text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)]">Attendees</legend>
@@ -550,7 +544,7 @@ import { AuthService } from '../../../core/services/auth.service';
 
             <div class="flex justify-end gap-3 pt-2">
               <button type="button" (click)="showMicrosoftInvite.set(false)" class="btn-ghost text-sm">Cancel</button>
-              <button type="submit" [disabled]="syncingMicrosoftInvite()" class="btn-primary text-sm">
+              <button type="submit" [disabled]="syncingMicrosoftInvite() || !microsoftConnections().length" class="btn-primary text-sm">
                 {{ syncingMicrosoftInvite() ? 'Syncing...' : 'Create Teams Invite' }}
               </button>
             </div>
@@ -631,7 +625,6 @@ export class MeetingDetailComponent implements OnInit {
     end_time: '10:00',
     time_zone: this.timezones.browserTimezone(),
     series_end_date: '',
-    organizer_email: '',
     attendee_user_ids: [] as string[],
   };
   private meetingId = '';
@@ -824,7 +817,6 @@ export class MeetingDetailComponent implements OnInit {
       time_zone: m.timezone || this.timezones.browserTimezone(),
       series_end_date: !session && m.recurrence !== 'ad_hoc' ? m.series_end_date || this.defaultSeriesEndDate() : '',
       attendee_user_ids: attendees.map((attendee: any) => attendee.user_id).filter(Boolean),
-      organizer_email: this.microsoftConnections()[0]?.organizer_email || '',
     };
     this.microsoftInviteError.set(null);
     this.showMicrosoftInvite.set(true);
@@ -847,7 +839,6 @@ export class MeetingDetailComponent implements OnInit {
       ? `/meetings/sessions/${this.selectedTeamsSession.id}/external-events/microsoft`
       : `/meetings/${m.id}/external-events/microsoft`;
     this.api.post<any>(path, {
-      organizer_email: this.microsoftInviteDraft.organizer_email || null,
       start_date_time: `${this.microsoftInviteDraft.date}T${this.microsoftInviteDraft.start_time}:00`,
       end_date_time: `${this.microsoftInviteDraft.date}T${this.microsoftInviteDraft.end_time}:00`,
       time_zone: this.microsoftInviteDraft.time_zone || 'UTC',
@@ -869,19 +860,6 @@ export class MeetingDetailComponent implements OnInit {
         this.syncingMicrosoftInvite.set(false);
         this.microsoftInviteError.set(err.error?.detail || 'Could not create Microsoft Teams invite.');
       },
-    });
-  }
-
-  connectMicrosoft() {
-    this.api.post<any>('/meeting-integrations/microsoft/oauth/start', {}).subscribe({
-      next: res => {
-        if (res.authorization_url) {
-          window.location.href = res.authorization_url;
-          return;
-        }
-        this.microsoftInviteError.set(res.detail || 'Microsoft OAuth is not configured.');
-      },
-      error: err => this.microsoftInviteError.set(err.error?.detail || 'Could not start Microsoft OAuth.'),
     });
   }
 

@@ -29,7 +29,7 @@ from app.core.microsoft_graph import (
     normalize_scope_set,
     validate_microsoft_id_token,
 )
-from app.core.rbac import CAP_MANAGE_PROGRAM_CADENCE, has_capability
+from app.core.rbac import CAP_MANAGE_TENANT_SETUP, has_capability
 from app.repositories.meeting_integrations import MeetingIntegrationRepository
 
 MICROSOFT_GRAPH_PROVIDER = "microsoft_graph"
@@ -130,8 +130,8 @@ class MeetingIntegrationService:
 
     def start_oauth(self, actor: CurrentUser) -> OAuthStartResult:
         self._assert_actor_matches_tenant(actor)
-        if not has_capability(actor.role, CAP_MANAGE_PROGRAM_CADENCE):
-            raise PermissionError("program_cadence.manage is required")
+        if not has_capability(actor.role, CAP_MANAGE_TENANT_SETUP):
+            raise PermissionError("tenant_setup.manage is required")
         try:
             context = self._context()
         except MicrosoftGraphConfigurationError:
@@ -303,8 +303,8 @@ class MeetingIntegrationService:
 
     def disconnect(self, actor: CurrentUser, connection_id: UUID) -> bool:
         self._assert_actor_matches_tenant(actor)
-        if not has_capability(actor.role, CAP_MANAGE_PROGRAM_CADENCE):
-            raise PermissionError("program_cadence.manage is required")
+        if not has_capability(actor.role, CAP_MANAGE_TENANT_SETUP):
+            raise PermissionError("tenant_setup.manage is required")
         return self._repo.disconnect_microsoft_graph_connection(connection_id, actor.id)
 
     def _context(self) -> MicrosoftGraphContext:
@@ -441,7 +441,7 @@ class MeetingIntegrationService:
             or row.get("status") != "active"
             or bool(row.get("must_change_password"))
             or not isinstance(row.get("role"), str)
-            or not has_capability(str(row["role"]), CAP_MANAGE_PROGRAM_CADENCE)
+            or not has_capability(str(row["role"]), CAP_MANAGE_TENANT_SETUP)
         ):
             raise PermissionError("OAuth actor is no longer authorized")
         verify_scoped_authorization(

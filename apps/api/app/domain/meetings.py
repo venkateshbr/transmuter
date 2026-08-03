@@ -164,7 +164,6 @@ class AgendaSuggestionsResponse(BaseModel):
 
 
 class MeetingExternalEventCreate(BaseModel):
-    organizer_email: str | None = None
     start_date_time: str
     end_date_time: str
     time_zone: str = "UTC"

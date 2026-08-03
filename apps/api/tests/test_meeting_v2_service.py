@@ -16,6 +16,7 @@ from app.domain.meeting_notes import (
 )
 from app.domain.meetings import (
     MeetingCreate,
+    MeetingExternalEventCreate,
     MeetingMinutesGenerateRequest,
     MeetingUpdate,
     SessionStartRequest,
@@ -43,6 +44,8 @@ class FakeMeetingV2Repository:
         self.created_sessions: list[tuple[str, str, dict]] = []
         self.snapshotted_sessions: list[str] = []
         self.external_event_updates: list[dict] = []
+        self.external_event_upserts: list[dict] = []
+        self.integration_connection: dict | None = None
         self.sessions_by_date: dict[str, dict] = {
             "2026-06-09": {
                 "id": "session-existing",
@@ -161,7 +164,26 @@ class FakeMeetingV2Repository:
     def get_integration_connection(
         self, provider: str, organizer_email: str | None = None
     ) -> dict | None:
-        return None
+        assert provider == "microsoft_graph"
+        assert organizer_email is None
+        return self.integration_connection
+
+    def upsert_external_event(
+        self,
+        meeting_id: str,
+        provider: str,
+        data: dict,
+        session_id: str | None = None,
+    ) -> dict:
+        row = {
+            "id": "event-1",
+            "meeting_id": meeting_id,
+            "provider": provider,
+            "session_id": session_id,
+            **data,
+        }
+        self.external_event_upserts.append(row)
+        return row
 
     def get_integration_connection_by_id(self, connection_id: str) -> dict | None:
         return None
@@ -243,6 +265,51 @@ def test_disconnected_microsoft_event_is_not_relinked_by_organizer_email() -> No
     )
 
     assert connection is None
+
+
+def test_microsoft_invite_uses_tenant_organizer_without_request_selection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = FakeMeetingV2Repository()
+    repo.integration_connection = {
+        "id": "connection-1",
+        "organizer_email": "tenant-organizer@example.com",
+    }
+    captured: dict = {}
+
+    class FakeMicrosoftProvider:
+        def __init__(self, connection: dict, *_args: object) -> None:
+            captured["connection"] = connection
+
+        def create_invite(self, _meeting: dict, _attendees: list[dict], request: object) -> object:
+            captured["organizer_email"] = request.organizer_email  # type: ignore[attr-defined]
+            return type(
+                "InviteResult",
+                (),
+                {
+                    "external_event_id": "graph-event-1",
+                    "online_meeting_id": "online-meeting-1",
+                    "join_url": "https://teams.example/join",
+                    "organizer_email": "tenant-organizer@example.com",
+                },
+            )()
+
+    monkeypatch.setattr("app.services.meeting.MicrosoftGraphMeetingProvider", FakeMicrosoftProvider)
+    service = build_service(repo)
+
+    event = service.create_microsoft_event(
+        "meeting-1",
+        MeetingExternalEventCreate(
+            start_date_time="2026-08-04T09:00:00",
+            end_date_time="2026-08-04T10:00:00",
+            time_zone="Asia/Singapore",
+        ),
+    )
+
+    assert captured["connection"] is repo.integration_connection
+    assert captured["organizer_email"] == "tenant-organizer@example.com"
+    assert event["integration_connection_id"] == "connection-1"
+    assert event["organizer_email"] == "tenant-organizer@example.com"
 
 
 def test_create_meeting_sets_join_workstreams_and_legacy_first_id() -> None:

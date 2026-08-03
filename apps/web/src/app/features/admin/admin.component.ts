@@ -216,6 +216,86 @@ const DEFAULT_REBASELINE_ROLES = ['transformation_office', 'finance_lead', 'pmo_
             </div>
           }
 
+          @if (activeTab === 'Microsoft 365') {
+            <div class="card overflow-hidden">
+              <section class="border-b border-[var(--t-border)] bg-[var(--t-primary)] p-8 text-white">
+                <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-blue-light)]">Tenant integration</p>
+                <h3 class="mt-2 text-2xl font-black">Microsoft 365 organizer</h3>
+                <p class="mt-2 max-w-2xl text-sm leading-6 text-white/75">
+                  Authorize one Microsoft account for this tenant. Transmuter uses this organizer for Teams invitations,
+                  calendar updates, meeting lifecycle operations, and transcript synchronization.
+                </p>
+              </section>
+
+              <section class="grid gap-6 p-8 lg:grid-cols-[minmax(0,1fr)_18rem]">
+                <div class="space-y-5">
+                  @if (microsoftIntegrationMessage()) {
+                    <div class="border border-emerald-500/30 bg-emerald-500/10 p-4 text-sm font-bold text-emerald-600">
+                      {{ microsoftIntegrationMessage() }}
+                    </div>
+                  }
+                  @if (microsoftIntegrationError()) {
+                    <div class="border border-red-500/30 bg-red-500/10 p-4 text-sm font-bold text-red-500">
+                      {{ microsoftIntegrationError() }}
+                    </div>
+                  }
+
+                  @if (microsoftConnection(); as connection) {
+                    <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-6">
+                      <div class="flex flex-col justify-between gap-5 md:flex-row md:items-start">
+                        <div>
+                          <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Authorized organizer</p>
+                          <p class="mt-2 break-all text-xl font-black text-[var(--t-text-primary)]">{{ connection.organizer_email }}</p>
+                          <p class="mt-2 text-xs text-[var(--t-text-secondary)]">
+                            Connected {{ connection.updated_at | date:'medium' }} · Tokens are encrypted at rest and are never displayed.
+                          </p>
+                        </div>
+                        <span
+                          class="border px-3 py-2 text-[10px] font-black uppercase tracking-widest"
+                          [class.border-emerald-500]="connection.effective_status === 'connected'"
+                          [class.text-emerald-500]="connection.effective_status === 'connected'"
+                          [class.border-amber-500]="connection.effective_status !== 'connected'"
+                          [class.text-amber-500]="connection.effective_status !== 'connected'">
+                          {{ microsoftStatusLabel(connection.effective_status || connection.sync_status) }}
+                        </span>
+                      </div>
+
+                      <div class="mt-6 flex flex-wrap gap-3 border-t border-[var(--t-border)] pt-5">
+                        <button type="button" (click)="connectMicrosoft()" [disabled]="microsoftIntegrationMutating()" class="btn-primary text-xs" aria-label="Reconnect Microsoft 365 organizer">
+                          {{ microsoftIntegrationMutating() ? 'Opening Microsoft...' : 'Reconnect organizer' }}
+                        </button>
+                        <button type="button" (click)="disconnectMicrosoft(connection.id)" [disabled]="microsoftIntegrationMutating()" class="border border-red-500/40 px-4 py-2 text-xs font-black uppercase tracking-widest text-red-500 hover:bg-red-500/10 disabled:opacity-40" aria-label="Disconnect Microsoft 365 organizer">
+                          Disconnect
+                        </button>
+                      </div>
+                    </div>
+                  } @else if (microsoftIntegrationLoading()) {
+                    <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-6 text-sm text-[var(--t-text-secondary)]">Loading Microsoft 365 status...</div>
+                  } @else {
+                    <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-6">
+                      <p class="text-lg font-black text-[var(--t-text-primary)]">No organizer connected</p>
+                      <p class="mt-2 max-w-xl text-sm leading-6 text-[var(--t-text-secondary)]">
+                        Teams invitations and Microsoft transcript synchronization stay unavailable until an administrator authorizes the tenant organizer.
+                      </p>
+                      <button type="button" (click)="connectMicrosoft()" [disabled]="microsoftIntegrationMutating() || !microsoftProviderConfigured()" class="btn-primary mt-5 text-xs" aria-label="Connect Microsoft 365 organizer">
+                        {{ microsoftIntegrationMutating() ? 'Opening Microsoft...' : 'Connect Microsoft 365' }}
+                      </button>
+                    </div>
+                  }
+                </div>
+
+                <aside class="border-l-4 border-[var(--t-blue-light)] bg-[var(--t-surface-raised)] p-5">
+                  <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Credential policy</p>
+                  <ul class="mt-4 space-y-3 text-xs leading-5 text-[var(--t-text-secondary)]">
+                    <li>One organizer identity is shared by all Microsoft meeting workflows in this tenant.</li>
+                    <li>Access and refresh tokens are encrypted and isolated by tenant, environment, schema, and OAuth client.</li>
+                    <li>Meeting users can schedule Teams events but cannot view, replace, or disconnect credentials.</li>
+                  </ul>
+                </aside>
+              </section>
+            </div>
+          }
+
           @if (activeTab === 'Data Cleanup') {
             <div class="card overflow-hidden">
               <section class="border-b border-red-500/30 bg-red-500/10 p-8">
@@ -1314,6 +1394,7 @@ export class AdminComponent implements OnInit {
   readonly tabs: Array<{ label: string; permissions: OperatingModelPermission[] }> = [
     { label: 'General', permissions: ['tenant_setup.manage'] },
     { label: 'Billing', permissions: ['tenant_setup.manage'] },
+    { label: 'Microsoft 365', permissions: ['tenant_setup.manage'] },
     { label: 'Data Cleanup', permissions: ['tenant_setup.manage'] },
     { label: 'Strategic Parameters', permissions: ['tenant_setup.manage'] },
     { label: 'Financial Configuration', permissions: ['financials.manage', 'tenant_setup.manage'] },
@@ -1335,6 +1416,11 @@ export class AdminComponent implements OnInit {
   billing = signal<any>({});
   setupStatus = signal<any>({ checks: [], completed: 0, total: 0 });
   billingError = signal<string | null>(null);
+  meetingIntegrations = signal<any>({ items: [], providers: [] });
+  microsoftIntegrationLoading = signal(false);
+  microsoftIntegrationMutating = signal(false);
+  microsoftIntegrationMessage = signal<string | null>(null);
+  microsoftIntegrationError = signal<string | null>(null);
   cleanupPreview = signal<any>({ object_counts: {}, preserved_objects: [] });
   cleanupResult = signal<any | null>(null);
   cleanupError = signal<string | null>(null);
@@ -1430,7 +1516,13 @@ export class AdminComponent implements OnInit {
   ngOnInit() {
     const visible = this.tabs.filter(tab => tab.permissions.some(permission => this.auth.hasPermission(permission)));
     this.visibleTabs.set(visible);
-    if (visible.length) this.openTab(visible[0].label);
+    const microsoftCallback = new URLSearchParams(window.location.search).get('microsoft_graph');
+    if (microsoftCallback && visible.some(tab => tab.label === 'Microsoft 365')) {
+      this.openTab('Microsoft 365');
+      this.applyMicrosoftCallbackMessage(microsoftCallback, new URLSearchParams(window.location.search).get('reason'));
+    } else if (visible.length) {
+      this.openTab(visible[0].label);
+    }
   }
 
   loadAll() {
@@ -1447,6 +1539,8 @@ export class AdminComponent implements OnInit {
       this.loadSetupStatus();
     } else if (tab === 'Billing') {
       this.loadBilling();
+    } else if (tab === 'Microsoft 365') {
+      this.loadMeetingIntegrations();
     } else if (tab === 'Data Cleanup') {
       this.loadCleanupPreview();
       this.loadInitiativeDeleteCandidates();
@@ -1495,6 +1589,99 @@ export class AdminComponent implements OnInit {
 
   loadBilling() {
     this.api.get<any>('/admin/billing').subscribe(res => this.billing.set(res));
+  }
+
+  loadMeetingIntegrations() {
+    this.microsoftIntegrationLoading.set(true);
+    this.microsoftIntegrationError.set(null);
+    this.api.get<any>('/meeting-integrations').subscribe({
+      next: res => {
+        this.meetingIntegrations.set(res || { items: [], providers: [] });
+        this.microsoftIntegrationLoading.set(false);
+      },
+      error: err => {
+        this.meetingIntegrations.set({ items: [], providers: [] });
+        this.microsoftIntegrationLoading.set(false);
+        this.microsoftIntegrationError.set(err.error?.detail || 'Could not load Microsoft 365 status.');
+      },
+    });
+  }
+
+  microsoftConnection(): any | null {
+    const connections = (this.meetingIntegrations()?.items || [])
+      .filter((item: any) => item.provider === 'microsoft_graph');
+    return connections.find((item: any) => item.effective_status === 'connected') || connections[0] || null;
+  }
+
+  microsoftProviderConfigured(): boolean {
+    return (this.meetingIntegrations()?.providers || [])
+      .some((item: any) => item.provider === 'microsoft_graph' && item.configured === true);
+  }
+
+  microsoftStatusLabel(status: string): string {
+    return String(status || 'not configured').replace(/_/g, ' ');
+  }
+
+  connectMicrosoft() {
+    if (this.microsoftIntegrationMutating()) return;
+    this.microsoftIntegrationMutating.set(true);
+    this.microsoftIntegrationError.set(null);
+    this.microsoftIntegrationMessage.set(null);
+    this.api.post<any>('/meeting-integrations/microsoft/oauth/start', {}).subscribe({
+      next: res => {
+        if (res.authorization_url) {
+          window.location.href = res.authorization_url;
+          return;
+        }
+        this.microsoftIntegrationMutating.set(false);
+        this.microsoftIntegrationError.set(res.detail || 'Microsoft OAuth is not configured.');
+      },
+      error: err => {
+        this.microsoftIntegrationMutating.set(false);
+        this.microsoftIntegrationError.set(err.error?.detail || 'Could not start Microsoft OAuth.');
+      },
+    });
+  }
+
+  disconnectMicrosoft(connectionId: string) {
+    if (this.microsoftIntegrationMutating()) return;
+    const confirmed = window.confirm(
+      'Disconnect the tenant Microsoft organizer? New Teams invitations and transcript synchronization will stop until an administrator reconnects Microsoft 365.'
+    );
+    if (!confirmed) return;
+    this.microsoftIntegrationMutating.set(true);
+    this.microsoftIntegrationError.set(null);
+    this.microsoftIntegrationMessage.set(null);
+    this.api.delete(`/meeting-integrations/microsoft/${connectionId}`).subscribe({
+      next: () => {
+        this.microsoftIntegrationMutating.set(false);
+        this.microsoftIntegrationMessage.set('Microsoft 365 organizer disconnected.');
+        this.loadMeetingIntegrations();
+      },
+      error: err => {
+        this.microsoftIntegrationMutating.set(false);
+        this.microsoftIntegrationError.set(err.error?.detail || 'Could not disconnect Microsoft 365.');
+      },
+    });
+  }
+
+  private applyMicrosoftCallbackMessage(status: string, reason: string | null): void {
+    if (status === 'connected') {
+      this.microsoftIntegrationMessage.set('Microsoft 365 organizer connected. All tenant Teams workflows will use this account.');
+      return;
+    }
+    if (status === 'cancelled') {
+      this.microsoftIntegrationError.set('Microsoft authorization was cancelled.');
+      return;
+    }
+    const reasonLabels: Record<string, string> = {
+      configuration_error: 'Microsoft Graph is not configured for this environment.',
+      consent_invalid: 'Microsoft consent was incomplete or the organizer account could not be verified.',
+      connection_failed: 'The Microsoft organizer credentials could not be stored.',
+      provider_error: 'Microsoft returned an authorization error.',
+      invalid_callback: 'The Microsoft authorization response could not be verified.',
+    };
+    this.microsoftIntegrationError.set(reasonLabels[reason || ''] || 'Microsoft authorization failed.');
   }
 
   loadSetupStatus() {

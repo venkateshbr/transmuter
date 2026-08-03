@@ -12,7 +12,7 @@ from supabase import Client
 from app.core.auth import CurrentUser, get_current_user
 from app.core.config import settings
 from app.core.database import get_supabase_admin, get_supabase_request_client
-from app.core.rbac import assert_can_manage_program_cadence, assert_can_view_portfolio
+from app.core.rbac import assert_can_manage_tenant_setup, assert_can_view_portfolio
 from app.services.meeting_integrations import (
     OAUTH_BINDING_COOKIE_MAX_AGE_SECONDS,
     OAUTH_BINDING_COOKIE_PATH,
@@ -64,7 +64,7 @@ async def start_microsoft_oauth(
     response: Response,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> OAuthStartResponse:
-    assert_can_manage_program_cadence(current_user)
+    assert_can_manage_tenant_setup(current_user)
     result = MeetingIntegrationService(get_supabase_admin(), current_user.tenant_id).start_oauth(
         current_user
     )
@@ -104,7 +104,7 @@ async def disconnect_microsoft_graph(
     connection_id: UUID,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> None:
-    assert_can_manage_program_cadence(current_user)
+    assert_can_manage_tenant_setup(current_user)
     disconnected = MeetingIntegrationService(
         get_supabase_admin(), current_user.tenant_id
     ).disconnect(current_user, connection_id)
@@ -269,7 +269,7 @@ def _oauth_redirect(result: OAuthCallbackResult) -> RedirectResponse:
     if reason:
         params["reason"] = reason
     response = RedirectResponse(
-        f"{settings.app_public_url.rstrip('/')}/meetings?{urlencode(params)}",
+        f"{settings.app_public_url.rstrip('/')}/admin?{urlencode(params)}",
         status_code=status.HTTP_303_SEE_OTHER,
     )
     response.headers["Cache-Control"] = "no-store"

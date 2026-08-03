@@ -575,14 +575,13 @@ class MeetingService:
         self._validate_external_event_schedule(data)
         connection = self._integration_secret_repo().get_integration_connection(
             "microsoft_graph",
-            data.organizer_email,
         )
         if not connection:
             return self._repo.upsert_external_event(
                 meeting_id,
                 "microsoft",
                 {
-                    "organizer_email": data.organizer_email,
+                    "organizer_email": None,
                     "scheduled_start_at": data.start_date_time,
                     "scheduled_end_at": data.end_date_time,
                     "time_zone": data.time_zone,
@@ -604,7 +603,7 @@ class MeetingService:
                 self._meeting_invite_subject(meeting, session),
                 attendees,
                 MeetingInviteRequest(
-                    organizer_email=data.organizer_email,
+                    organizer_email=connection.get("organizer_email"),
                     start_date_time=data.start_date_time,
                     end_date_time=data.end_date_time,
                     time_zone=data.time_zone,
@@ -645,7 +644,7 @@ class MeetingService:
             "microsoft",
             {
                 "integration_connection_id": connection.get("id"),
-                "organizer_email": data.organizer_email or connection.get("organizer_email"),
+                "organizer_email": connection.get("organizer_email"),
                 "scheduled_start_at": data.start_date_time,
                 "scheduled_end_at": data.end_date_time,
                 "time_zone": data.time_zone,

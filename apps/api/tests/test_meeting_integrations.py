@@ -323,6 +323,16 @@ def test_start_uses_tenant_routable_one_time_state_pkce_nonce_and_binding(
     assert repo.purged
 
 
+def test_only_tenant_setup_roles_can_administer_microsoft_connection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, _, _, _ = _service(monkeypatch)
+
+    assert service.start_oauth(_actor(role="tenant_admin")).configured is True
+    with pytest.raises(PermissionError, match="tenant_setup.manage"):
+        service.start_oauth(_actor(role="pmo_lead"))
+
+
 @pytest.mark.parametrize(
     "state",
     ["", "a" * 63, "a" * 65, "!" * 64, "=" * 64],
@@ -715,7 +725,7 @@ def test_form_post_callback_parses_once_clears_cookie_and_sanitizes_redirect(
 
     assert response.status_code == 303
     assert response.headers["location"] == (
-        "https://app.example.com/meetings?microsoft_graph=connected"
+        "https://app.example.com/admin?microsoft_graph=connected"
     )
     assert response.headers["cache-control"] == "no-store"
     assert response.headers["pragma"] == "no-cache"
@@ -944,6 +954,22 @@ def test_migration_functions_are_definer_locked_and_tenant_exact() -> None:
         encoding="utf-8"
     )
     assert "REFERENCES integration_connections(id) ON DELETE SET NULL" in original
+
+
+def test_tenant_organizer_migration_enforces_admin_ownership_and_one_connection() -> None:
+    root = Path(__file__).resolve().parents[3]
+    migration = (
+        root / "supabase/migrations/20260803000001_tenant_microsoft_organizer.sql"
+    ).read_text(encoding="utf-8").lower()
+
+    assert "integration_connections_one_microsoft_graph_per_tenant" in migration
+    assert "where provider = ''microsoft_graph''" in migration
+    assert "having count(*) > 1" in migration
+    assert "(''transformation_office'', ''tenant_admin'')" in migration
+    assert "create_microsoft_graph_oauth_state" in migration
+    assert "complete_microsoft_graph_oauth" in migration
+    assert "disconnect_microsoft_graph_connection" in migration
+    assert "was not applied exactly three times" in migration
 
 
 def test_hostinger_proxy_preserves_only_traefik_https_for_callback_validation() -> None:
