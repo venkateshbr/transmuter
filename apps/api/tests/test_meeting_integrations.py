@@ -959,8 +959,10 @@ def test_migration_functions_are_definer_locked_and_tenant_exact() -> None:
 def test_tenant_organizer_migration_enforces_admin_ownership_and_one_connection() -> None:
     root = Path(__file__).resolve().parents[3]
     migration = (
-        root / "supabase/migrations/20260803000001_tenant_microsoft_organizer.sql"
-    ).read_text(encoding="utf-8").lower()
+        (root / "supabase/migrations/20260803000001_tenant_microsoft_organizer.sql")
+        .read_text(encoding="utf-8")
+        .lower()
+    )
 
     assert "integration_connections_one_microsoft_graph_per_tenant" in migration
     assert "where provider = ''microsoft_graph''" in migration
