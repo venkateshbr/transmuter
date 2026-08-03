@@ -38,7 +38,7 @@ Deployment note:
 
 ### 2026-08-03 - Centralized Tenant Microsoft 365 Organizer
 
-Status: approved for production promotion; production validation pending
+Status: promoted to production and browser-verified
 
 GitHub tracking:
 
@@ -77,10 +77,25 @@ Acceptance evidence:
 Production promotion:
 
 - Explicit founder approval received on 2026-08-03.
-- Apply schema SQL:
+- Applied schema SQL:
   `supabase/migrations/20260803000001_tenant_microsoft_organizer.sql`.
-- Promotion action, deployed commit, public health checks, and browser validation
-  will be recorded after completion.
+- The initial schema job `transmuter-schema-prod-20260803231337` used the saved
+  application database role and failed safely before deployment because that role
+  does not own `integration_connections`; the transaction made no schema change.
+- The unchanged migration was then applied successfully through the internal
+  `supabase_admin` schema-owner connection in schema job
+  `transmuter-schema-prod-20260803232205`.
+- Hostinger production action `107546763` reached terminal `success` and deployed
+  exact reviewed commit `c3e0452792e2bc69ee97609e6a731a174fbec433`.
+- Public `/health` and `/api/health` passed after deployment.
+- Standalone Playwright production acceptance passed in 3.1 seconds. It verified
+  authenticated Admin → Microsoft 365 organizer administration, visible
+  Connect/Reconnect control, no token input fields, the Meetings route, zero page
+  errors, and zero observed 5xx responses. It performed no consent or data writes.
+- A broader legacy read-only route sweep independently reached the deployed Admin
+  page and confirmed the Microsoft 365 tab in the accessibility tree, but timed
+  out on an unrelated empty Benefit Tracking render before completing. No 5xx was
+  observed in the successful release-specific acceptance run.
 
 ### 2026-07-25 - Meetings V4 Correctness And Professional AI Minutes
 
