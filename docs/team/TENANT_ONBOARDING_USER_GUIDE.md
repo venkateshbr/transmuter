@@ -770,10 +770,16 @@ Meeting features include:
 
 - Meeting series.
 - Workstream-scoped meetings.
-- Teams sync where Microsoft Graph is connected.
+- Teams sync through the tenant organizer configured in **Admin -> Microsoft 365**.
 - Transcript import.
 - AI-assisted action item, decision, and minutes extraction.
 - Series cancellation when supported by provider integration.
+
+Tenant administrators configure Microsoft once in **Admin -> Microsoft 365**. The
+authorized Microsoft identity is the sender/organizer for every Teams invitation
+in that tenant, and the encrypted tenant credential is reused for calendar event
+updates and Microsoft transcript synchronization. Meeting users can schedule and
+sync Teams events but cannot select, replace, or disconnect the organizer.
 
 ## 11. How to Interpret the Example Portfolio
 
@@ -913,6 +919,7 @@ Follow this sequence for the cleanest implementation:
 | Add business units, workstreams, markets, themes, tags | **Admin -> Strategic Parameters** |
 | Configure financial metrics, scenarios, cost categories, value bridge | **Admin -> Financial Configuration** |
 | Configure stage gates and gate checklist | **Admin -> Governance Engine** |
+| Connect the tenant Microsoft organizer | **Admin -> Microsoft 365** |
 | Invite users | **People** / `/people` |
 | Create initiative | **Initiatives -> Create Initiative** / `/initiatives/new` |
 | View portfolio pipeline | **Initiatives** / `/initiatives/pipeline` |

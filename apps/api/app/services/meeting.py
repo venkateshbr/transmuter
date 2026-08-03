@@ -1,3 +1,4 @@
+import logging
 import re
 from datetime import UTC, date, datetime, time, timedelta
 from uuid import UUID, uuid4
@@ -55,6 +56,8 @@ from app.services.meeting_providers import (
     MicrosoftGraphMeetingProvider,
 )
 from app.services.risk import RiskService
+
+logger = logging.getLogger(__name__)
 
 
 class MeetingService:
@@ -572,14 +575,13 @@ class MeetingService:
         self._validate_external_event_schedule(data)
         connection = self._integration_secret_repo().get_integration_connection(
             "microsoft_graph",
-            data.organizer_email,
         )
         if not connection:
             return self._repo.upsert_external_event(
                 meeting_id,
                 "microsoft",
                 {
-                    "organizer_email": data.organizer_email,
+                    "organizer_email": None,
                     "scheduled_start_at": data.start_date_time,
                     "scheduled_end_at": data.end_date_time,
                     "time_zone": data.time_zone,
@@ -601,7 +603,7 @@ class MeetingService:
                 self._meeting_invite_subject(meeting, session),
                 attendees,
                 MeetingInviteRequest(
-                    organizer_email=data.organizer_email,
+                    organizer_email=connection.get("organizer_email"),
                     start_date_time=data.start_date_time,
                     end_date_time=data.end_date_time,
                     time_zone=data.time_zone,
@@ -642,7 +644,7 @@ class MeetingService:
             "microsoft",
             {
                 "integration_connection_id": connection.get("id"),
-                "organizer_email": data.organizer_email or connection.get("organizer_email"),
+                "organizer_email": connection.get("organizer_email"),
                 "scheduled_start_at": data.start_date_time,
                 "scheduled_end_at": data.end_date_time,
                 "time_zone": data.time_zone,
@@ -689,6 +691,20 @@ class MeetingService:
                 self._tenant_id,
             ).sync_transcript(event)
         except MeetingProviderConfigurationError as exc:
+            current = self._integration_secret_repo().get_integration_connection(
+                "microsoft_graph", event.get("organizer_email")
+            )
+            logger.warning(
+                "microsoft_transcript_sync_reconnect_required session_id=%s "
+                "pinned_connection_id=%s pinned_status=%s current_connection_id=%s "
+                "current_status=%s detail=%s",
+                session_id,
+                connection.get("id"),
+                connection.get("sync_status"),
+                (current or {}).get("id"),
+                (current or {}).get("sync_status"),
+                str(exc),
+            )
             return MeetingTranscriptSyncResponse(status="unavailable", detail=str(exc))
         except MeetingProviderError as exc:
             self._repo.upsert_external_event(

@@ -480,7 +480,7 @@ interface MeetingArtifact {
                   <input [(ngModel)]="teamsDraft.end_time" name="session_teams_end" type="time" required class="input-field w-full" aria-label="Teams end time" />
                 </label>
               </div>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
                 <label>
                   <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Timezone</span>
                   <select [(ngModel)]="teamsDraft.time_zone" name="session_teams_timezone" required class="input-field w-full" aria-label="Teams timezone">
@@ -489,22 +489,22 @@ interface MeetingArtifact {
                     }
                   </select>
                 </label>
-                <label>
-                  <span class="block text-xs font-bold uppercase tracking-widest text-[var(--t-text-secondary)] mb-2">Organizer</span>
-                  <select [(ngModel)]="teamsDraft.organizer_email" name="session_teams_organizer" class="input-field w-full" aria-label="Teams organizer">
-                    <option value="">Default connected organizer</option>
-                    @for (connection of microsoftConnections(); track connection.id) {
-                      <option [value]="connection.organizer_email">{{ connection.organizer_email }}</option>
-                    }
-                  </select>
-                </label>
+              </div>
+              <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4">
+                <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Microsoft organizer</p>
+                @if (microsoftConnections().length) {
+                  <p class="mt-1 text-sm font-bold text-[var(--t-text-primary)]">{{ microsoftConnections()[0].organizer_email }}</p>
+                  <p class="mt-1 text-xs text-[var(--t-text-secondary)]">Managed centrally in Admin · Microsoft 365.</p>
+                } @else {
+                  <p class="mt-1 text-sm text-[var(--t-text-secondary)]">A tenant administrator must connect Microsoft 365 in Admin before Teams invitations can be sent.</p>
+                }
               </div>
               @if (teamsInviteError()) {
                 <p class="text-sm text-red-500">{{ teamsInviteError() }}</p>
               }
               <div class="flex justify-end gap-3 pt-2">
                 <button type="button" (click)="showTeamsInvite.set(false)" class="btn-ghost text-sm">Cancel</button>
-                <button type="submit" [disabled]="syncingTeamsInvite()" class="btn-primary text-sm">
+                <button type="submit" [disabled]="syncingTeamsInvite() || !microsoftConnections().length" class="btn-primary text-sm">
                   {{ syncingTeamsInvite() ? 'Syncing...' : 'Send / Update Invite' }}
                 </button>
               </div>
@@ -561,7 +561,6 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
     start_time: '09:00',
     end_time: '10:00',
     time_zone: this.timezones.browserTimezone(),
-    organizer_email: '',
   };
   newActionItem = '';
   artifactDraft: { artifact_type: ArtifactType; priority: string } = {
@@ -870,7 +869,6 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
       start_time: start,
       end_time: this.endTime(start, Number(meeting.duration_minutes || 60)),
       time_zone: meeting.timezone || this.timezones.browserTimezone(),
-      organizer_email: this.microsoftConnections()[0]?.organizer_email || '',
     };
     this.teamsInviteError.set(null);
     this.showTeamsInvite.set(true);
@@ -886,7 +884,6 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
     this.syncingTeamsInvite.set(true);
     this.teamsInviteError.set(null);
     this.api.post<any>(`/meetings/sessions/${id}/external-events/microsoft`, {
-      organizer_email: this.teamsDraft.organizer_email || null,
       start_date_time: `${this.teamsDraft.date}T${this.teamsDraft.start_time}:00`,
       end_date_time: `${this.teamsDraft.date}T${this.teamsDraft.end_time}:00`,
       time_zone: this.teamsDraft.time_zone || 'UTC',
