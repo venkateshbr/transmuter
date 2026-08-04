@@ -40,6 +40,12 @@ inside Transmuter.
 
 ## Residual Risks and Activation Conditions
 
+Real broker acceptance identified and resolved a non-canonical base64 edge case:
+a single trailing character after Fernet padding could be ignored by the
+decoder. Context verification now performs strict base64 validation and a
+constant-time canonical-encoding comparison before decryption; the exact case
+is retained as a regression test.
+
 1. The Hermes base image is pinned to the reviewed multi-platform OCI digest
    `sha256:fcbe95482353e41cd30d39ddfc0f57ba3720f6da6969a7a69cdfb0d84b045cb6`.
    Future upgrades require a new digest review rather than following `latest`.

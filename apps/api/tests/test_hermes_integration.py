@@ -124,6 +124,8 @@ def test_context_reference_is_encrypted_scoped_and_expires() -> None:
         verify_hermes_context_ref(context_ref, now=1_061)
     with pytest.raises(HermesContextError):
         verify_hermes_context_ref(f"{context_ref}tampered", now=1_030)
+    with pytest.raises(HermesContextError):
+        verify_hermes_context_ref(f"{context_ref}x", now=1_030)
 
 
 def test_extract_hermes_text_ignores_non_message_output() -> None:

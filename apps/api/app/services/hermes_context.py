@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import json
 import time
 from dataclasses import dataclass
@@ -64,11 +65,21 @@ def verify_hermes_context_ref(
     if not context_ref.startswith(_CONTEXT_PREFIX):
         raise HermesContextError("Invalid context reference")
     current_time = int(time.time()) if now is None else now
+    token = context_ref[len(_CONTEXT_PREFIX) :]
     try:
-        payload = json.loads(
-            _fernet().decrypt(context_ref[len(_CONTEXT_PREFIX) :].encode("ascii")).decode("utf-8")
-        )
-    except (InvalidToken, ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        token_bytes = token.encode("ascii")
+        decoded = base64.b64decode(token_bytes, altchars=b"-_", validate=True)
+        canonical_token = base64.urlsafe_b64encode(decoded).decode("ascii")
+        if not hmac.compare_digest(token, canonical_token):
+            raise ValueError("Non-canonical context token")
+        payload = json.loads(_fernet().decrypt(token_bytes).decode("utf-8"))
+    except (
+        InvalidToken,
+        ValueError,
+        UnicodeDecodeError,
+        UnicodeEncodeError,
+        json.JSONDecodeError,
+    ) as exc:
         raise HermesContextError("Invalid context reference") from exc
     if not isinstance(payload, dict):
         raise HermesContextError("Invalid context payload")
