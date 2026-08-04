@@ -79,6 +79,9 @@ class MeetingProvider(Protocol):
 
 
 class MicrosoftGraphMeetingProvider:
+    _TRANSCRIPT_ACCESS_DISABLED = "graphaccesstotranscriptsdisabled"
+    _SPEAKER_ATTRIBUTION_DISABLED = "speakerattributionnotallowed"
+
     def __init__(
         self,
         connection: dict,
@@ -174,7 +177,15 @@ class MicrosoftGraphMeetingProvider:
             f"https://graph.microsoft.com/v1.0/{user_id}/onlineMeetings/{quote(online_meeting_id, safe='')}/transcripts",
             organizer_email=organizer_email,
             timeout=10,
+            preserved_forbidden_codes={self._TRANSCRIPT_ACCESS_DISABLED},
         )
+        if self._graph_error_code(transcripts_response) == self._TRANSCRIPT_ACCESS_DISABLED:
+            return TranscriptSyncResult(
+                status="unavailable",
+                detail=(
+                    "Microsoft Teams transcript API access is disabled by the tenant administrator."
+                ),
+            )
         transcripts = self._response_json(transcripts_response).get("value") or []
         if not transcripts:
             return TranscriptSyncResult(
@@ -196,7 +207,37 @@ class MicrosoftGraphMeetingProvider:
             organizer_email=organizer_email,
             accept="text/vtt",
             timeout=15,
+            preserved_forbidden_codes={
+                self._SPEAKER_ATTRIBUTION_DISABLED,
+                self._TRANSCRIPT_ACCESS_DISABLED,
+            },
         )
+        content_error = self._graph_error_code(content_response)
+        if content_error == self._SPEAKER_ATTRIBUTION_DISABLED:
+            content_response = self._graph_request(
+                "get",
+                f"https://graph.microsoft.com/v1.0/{user_id}/onlineMeetings/{quote(online_meeting_id, safe='')}/transcripts/{quote(transcript_id, safe='')}/content",
+                organizer_email=organizer_email,
+                accept="application/vnd.microsoft.graph.transcript+text",
+                timeout=15,
+                preserved_forbidden_codes={
+                    self._SPEAKER_ATTRIBUTION_DISABLED,
+                    self._TRANSCRIPT_ACCESS_DISABLED,
+                },
+            )
+            content_error = self._graph_error_code(content_response)
+        if content_error == self._TRANSCRIPT_ACCESS_DISABLED:
+            return TranscriptSyncResult(
+                status="unavailable",
+                detail=(
+                    "Microsoft Teams transcript API access is disabled by the tenant administrator."
+                ),
+            )
+        if content_error == self._SPEAKER_ATTRIBUTION_DISABLED:
+            return TranscriptSyncResult(
+                status="unavailable",
+                detail="Microsoft Teams transcript content is disabled by the tenant administrator.",
+            )
         transcript_text = normalize_vtt_transcript(content_response.text)
         if not transcript_text:
             return TranscriptSyncResult(
@@ -356,6 +397,7 @@ class MicrosoftGraphMeetingProvider:
         *,
         organizer_email: str | None,
         accept: str | None = None,
+        preserved_forbidden_codes: set[str] | None = None,
         **kwargs: object,
     ) -> object:
         token, cached = self._access_token(organizer_email)
@@ -377,6 +419,10 @@ class MicrosoftGraphMeetingProvider:
         response_status = self._status_code(response)
         if 300 <= response_status < 400:
             raise MeetingProviderTemporaryError("Microsoft Graph redirected the request.")
+        if response_status == 403 and self._graph_error_code(response) in (
+            preserved_forbidden_codes or set()
+        ):
+            return response
         if response_status == 401 or response_status == 403:
             self._clear_credentials()
             raise MeetingProviderConfigurationError("Microsoft Graph reconnection is required.")
@@ -585,6 +631,15 @@ class MicrosoftGraphMeetingProvider:
         except (TypeError, ValueError):
             return {}
         return body if isinstance(body, dict) else {}
+
+    @classmethod
+    def _graph_error_code(cls, response: object) -> str:
+        body = cls._response_json(response)
+        error = body.get("error") if isinstance(body.get("error"), dict) else {}
+        inner = error.get("innerError") or error.get("innererror")
+        if not isinstance(inner, dict):
+            inner = {}
+        return str(inner.get("code") or error.get("code") or "").strip().casefold()
 
     @staticmethod
     def _headers(access_token: str) -> dict[str, str]:

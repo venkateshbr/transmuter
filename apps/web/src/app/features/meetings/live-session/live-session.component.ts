@@ -435,14 +435,22 @@ interface MeetingArtifact {
               @if (transcriptFileName()) {
                 <p class="text-xs font-bold text-[var(--t-text-secondary)]">{{ transcriptFileName() }}</p>
               }
-              <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p class="text-xs font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Microsoft Teams</p>
-                  <p class="mt-1 text-sm text-[var(--t-text-secondary)]">Sync the transcript from the Teams event after transcription has finished.</p>
+              <div class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] p-4">
+                <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p class="text-xs font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Microsoft Teams</p>
+                    <p class="mt-1 text-sm text-[var(--t-text-secondary)]">Sync the transcript from the Teams event after transcription has finished.</p>
+                  </div>
+                  <button type="button" (click)="syncMicrosoftTranscript()" [disabled]="syncingMicrosoftTranscript()" class="btn-secondary text-xs" aria-label="Sync Microsoft Teams transcript">
+                    {{ syncingMicrosoftTranscript() ? 'Syncing...' : 'Sync from Microsoft' }}
+                  </button>
                 </div>
-                <button type="button" (click)="syncMicrosoftTranscript()" [disabled]="syncingMicrosoftTranscript()" class="btn-secondary text-xs" aria-label="Sync Microsoft Teams transcript">
-                  {{ syncingMicrosoftTranscript() ? 'Syncing...' : 'Sync from Microsoft' }}
-                </button>
+                @if (transcriptModalError()) {
+                  <p class="mt-3 border-l-2 border-red-500 pl-3 text-sm text-red-500" role="alert" data-testid="transcript-sync-error">{{ transcriptModalError() }}</p>
+                }
+                @if (transcriptModalMessage()) {
+                  <p class="mt-3 border-l-2 border-[var(--t-accent)] pl-3 text-sm text-[var(--t-text-secondary)]" role="status" data-testid="transcript-sync-message">{{ transcriptModalMessage() }}</p>
+                }
               </div>
               <div class="flex justify-end gap-3 pt-2">
                 <button type="button" (click)="showTranscriptImport.set(false)" class="btn-ghost text-sm">Cancel</button>
@@ -548,6 +556,8 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
   savingSuggestions = signal(false);
   agendaSuggestions = signal<any[]>([]);
   transcriptFileName = signal('');
+  transcriptModalError = signal<string | null>(null);
+  transcriptModalMessage = signal<string | null>(null);
   sessionError = signal<string | null>(null);
   sessionMessage = signal<string | null>(null);
   teamsInviteError = signal<string | null>(null);
@@ -854,6 +864,8 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
   openTranscriptModal() {
     this.sessionError.set(null);
     this.sessionMessage.set(null);
+    this.transcriptModalError.set(null);
+    this.transcriptModalMessage.set(null);
     this.transcriptDraft = this.session()?.transcript_text || '';
     this.transcriptFileName.set('');
     this.showTranscriptImport.set(true);
@@ -917,7 +929,7 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
     const file = input.files?.[0];
     if (!file) return;
     if (!file.name.toLowerCase().endsWith('.txt') && file.type !== 'text/plain') {
-      this.sessionError.set('Upload a .txt transcript file.');
+      this.transcriptModalError.set('Upload a .txt transcript file.');
       input.value = '';
       return;
     }
@@ -926,7 +938,7 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
       this.transcriptDraft = String(reader.result || '');
       this.transcriptFileName.set(file.name);
     };
-    reader.onerror = () => this.sessionError.set('Could not read transcript file.');
+    reader.onerror = () => this.transcriptModalError.set('Could not read transcript file.');
     reader.readAsText(file);
   }
 
@@ -935,11 +947,12 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
     if (!id) return;
     const transcript = this.transcriptDraft.trim();
     if (!transcript) {
-      this.sessionError.set('Paste transcript text or upload a .txt file before importing.');
+      this.transcriptModalError.set('Paste transcript text or upload a .txt file before importing.');
       return;
     }
     this.importingTranscript.set(true);
-    this.sessionError.set(null);
+    this.transcriptModalError.set(null);
+    this.transcriptModalMessage.set(null);
     this.api.post<any>(`/meetings/sessions/${id}/transcript/import`, {
       transcript_text: transcript,
       transcript_source: this.transcriptFileName() ? 'txt_upload' : 'manual',
@@ -952,7 +965,7 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
       },
       error: err => {
         this.importingTranscript.set(false);
-        this.sessionError.set(err.error?.detail || 'Could not import transcript.');
+        this.transcriptModalError.set(err.error?.detail || 'Could not import transcript.');
       },
     });
   }
@@ -961,23 +974,27 @@ export class LiveSessionComponent implements OnInit, OnDestroy {
     const id = this.session()?.id;
     if (!id) return;
     this.syncingMicrosoftTranscript.set(true);
-    this.sessionError.set(null);
-    this.sessionMessage.set(null);
+    this.transcriptModalError.set(null);
+    this.transcriptModalMessage.set(null);
     this.api.post<any>(`/meetings/sessions/${id}/transcript/sync/microsoft`, {}).subscribe({
       next: res => {
         this.syncingMicrosoftTranscript.set(false);
         if (res.status === 'synced' && res.session) {
-          this.showTranscriptImport.set(false);
           this.session.set({ ...this.session(), ...res.session, has_transcript: true });
           this.transcriptDraft = res.session.transcript_text || '';
-          this.sessionMessage.set('Microsoft Teams transcript synced.');
+          this.transcriptModalMessage.set('Microsoft Teams transcript synced. Review the text below.');
           return;
         }
-        this.sessionMessage.set(res.detail || 'Microsoft Teams transcript is not available yet.');
+        const detail = res.detail || 'Microsoft Teams transcript is not available yet.';
+        if (res.status === 'pending') {
+          this.transcriptModalMessage.set(detail);
+        } else {
+          this.transcriptModalError.set(detail);
+        }
       },
       error: err => {
         this.syncingMicrosoftTranscript.set(false);
-        this.sessionError.set(err.error?.detail || 'Could not sync Microsoft Teams transcript.');
+        this.transcriptModalError.set(err.error?.detail || 'Could not sync Microsoft Teams transcript.');
       },
     });
   }
