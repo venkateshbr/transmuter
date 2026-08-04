@@ -121,7 +121,7 @@ HOSTINGER_EXCLUDES=(
 DEPLOY_DIR_PARENT="$(dirname "${DEPLOY_DIR}")"
 mkdir -p "${DEPLOY_DIR_PARENT}"
 rm -rf "${DEPLOY_DIR}"
-mkdir -p "${DEPLOY_DIR}/apps/api" "${DEPLOY_DIR}/apps/web" "${DEPLOY_DIR}/domain_packs" "${DEPLOY_DIR}/infra/hostinger"
+mkdir -p "${DEPLOY_DIR}/apps/api" "${DEPLOY_DIR}/apps/web" "${DEPLOY_DIR}/domain_packs" "${DEPLOY_DIR}/infra/hostinger" "${DEPLOY_DIR}/integrations/hermes"
 
 echo "Staging Transmuter bundle locally into ${DEPLOY_DIR}"
 echo "WARNING: infra/hostinger/deploy.sh is a legacy VPS-local fallback; routine deploys use deploy-remote.sh."
@@ -135,6 +135,9 @@ rsync -az --delete "${APP_EXCLUDES[@]}" \
 
 rsync -az --delete "${APP_EXCLUDES[@]}" \
   "${REPO_ROOT}/domain_packs/" "${DEPLOY_DIR}/domain_packs/"
+
+rsync -az --delete "${APP_EXCLUDES[@]}" \
+  "${REPO_ROOT}/integrations/hermes/" "${DEPLOY_DIR}/integrations/hermes/"
 
 rsync -az --delete "${HOSTINGER_EXCLUDES[@]}" \
   "${REPO_ROOT}/infra/hostinger/" "${DEPLOY_DIR}/infra/hostinger/"

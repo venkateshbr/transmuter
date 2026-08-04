@@ -79,6 +79,18 @@ class Settings(BaseSettings):
     ai_enabled: bool = True
     bootstrap_demo_data_on_registration: bool = False
 
+    # Hermes Agent (optional advanced Transmuter AI runtime)
+    transmuter_ai_runtime: str = "transmuter_basic"
+    hermes_base_url: str = ""
+    hermes_api_key: str = ""
+    hermes_model: str = "Transmuter AI"
+    hermes_timeout_seconds: float = 45.0
+    hermes_max_retries: int = 2
+    hermes_fallback_to_basic: bool = True
+    hermes_tool_token: str = ""
+    hermes_context_signing_secret: str = ""
+    hermes_context_ttl_seconds: int = 900
+
     # Billing / payments
     payment_provider: str = ""
     stripe_secret_key: str = ""
@@ -104,6 +116,19 @@ class Settings(BaseSettings):
             raise ValueError("JWT_ALGORITHM must be HS256, HS384, or HS512.")
         if len(self.jwt_secret) < 32:
             raise ValueError("JWT_SECRET must be at least 32 characters.")
+
+        runtime = self.transmuter_ai_runtime.strip().lower() or "transmuter_basic"
+        if runtime not in {"transmuter_basic", "hermes_agent"}:
+            raise ValueError(
+                "TRANSMUTER_AI_RUNTIME must be either 'transmuter_basic' or 'hermes_agent'."
+            )
+        if self.hermes_timeout_seconds <= 0:
+            raise ValueError("HERMES_TIMEOUT_SECONDS must be greater than zero.")
+        if self.hermes_max_retries < 0:
+            raise ValueError("HERMES_MAX_RETRIES must be zero or greater.")
+        if not 60 <= self.hermes_context_ttl_seconds <= 3600:
+            raise ValueError("HERMES_CONTEXT_TTL_SECONDS must be between 60 and 3600.")
+        self.transmuter_ai_runtime = runtime
 
         target = self.supabase_target.strip().lower() or "cloud"
         if target not in {"cloud", "local"}:

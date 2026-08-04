@@ -29,6 +29,7 @@ from app.routers import (
     financials,
     governance,
     health,
+    hermes_tools,
     initiatives,
     kpis,
     meeting_artifacts,
@@ -172,6 +173,7 @@ app.include_router(workstreams.router)
 app.include_router(business_units.router)
 app.include_router(admin.router)
 app.include_router(ai.router)
+app.include_router(hermes_tools.router)
 app.include_router(action_items.router)
 app.include_router(dependencies.router)
 app.include_router(executive_control.router)

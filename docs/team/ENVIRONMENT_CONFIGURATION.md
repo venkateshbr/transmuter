@@ -91,6 +91,18 @@ are populated.
 | `LANGFUSE_SECRET_KEY` | No | Empty | Langfuse tracing secret key. |
 | `LANGFUSE_PUBLIC_KEY` | No | Empty | Langfuse tracing public key. |
 | `LANGFUSE_HOST` | No | `https://cloud.langfuse.com` | Langfuse host URL. |
+| `TRANSMUTER_AI_RUNTIME` | No | `transmuter_basic` | Server-selected Transmuter AI runtime: `transmuter_basic` or `hermes_agent`. The browser cannot select it. |
+| `HERMES_BASE_URL` | Hermes only | Empty locally; `http://hermes:8642` in Hostinger Compose | Private Hermes Responses-compatible API base URL. |
+| `HERMES_API_SERVER_KEY` | Hermes only | Empty | Shared key configured on the Hermes API server; Compose maps it to the API client's `HERMES_API_KEY`. |
+| `HERMES_MODEL` | No | `Transmuter AI` | Model/profile name sent to the private Hermes Responses API. |
+| `HERMES_TIMEOUT_SECONDS` | No | `45` | Hermes response timeout. |
+| `HERMES_MAX_RETRIES` | No | `2` | Bounded retries for transient Hermes failures. |
+| `HERMES_FALLBACK_TO_BASIC` | No | `true` | Gracefully use built-in Transmuter AI when Hermes is unavailable or returns unsafe output. |
+| `HERMES_TOOL_TOKEN` | Hermes only | Empty | Private bearer token shared only by the API broker and Hermes MCP bridge. Use at least 32 random characters. |
+| `HERMES_CONTEXT_SIGNING_SECRET` | Hermes only | Empty | Dedicated secret used to encrypt per-turn tenant/user authority references. Use at least 32 random characters. |
+| `HERMES_CONTEXT_TTL_SECONDS` | No | `900` | Validity window for an encrypted Hermes tool context; allowed range is 60-3600 seconds. |
+| `HERMES_OPENROUTER_API_KEY` | Hermes only | Falls back to `OPENROUTER_API_KEY` in Compose | Optional distinct OpenRouter key for the Hermes container. |
+| `COMPOSE_PROFILES` | Hermes deployment only | Empty | Set to `hermes` to start the optional Hermes service in Hostinger Compose. |
 
 Security rule: never send raw PII to external LLM APIs. Mask email, phone, and
 display names before tool or model calls.

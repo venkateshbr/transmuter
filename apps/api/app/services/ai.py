@@ -123,6 +123,14 @@ class CopilotToolRegistry:
     def catalog(self) -> list[dict[str, Any]]:
         return [tool.__dict__ for tool in self._tools()]
 
+    def user_display_names(self) -> list[str]:
+        """Return tenant user names solely for redacting external-agent prompts."""
+        return [
+            str(row["display_name"])
+            for row in self._query("users", "display_name")
+            if row.get("display_name")
+        ]
+
     def build_snapshot(self) -> CopilotSnapshot:
         initiatives = self._query(
             "initiatives",
@@ -433,6 +441,21 @@ class AIService:
 
     def tools(self) -> list[dict[str, Any]]:
         return self.registry.catalog()
+
+    @staticmethod
+    def is_write_request(query: str) -> bool:
+        """Return whether a prompt must remain on the confirmed-write path."""
+        return AIService._looks_like_write(query.lower())
+
+    def mask_external_prompt(self, query: str) -> str:
+        """Remove known tenant display names before an external agent sees a prompt."""
+        masked = query
+        names = sorted(self.registry.user_display_names(), key=len, reverse=True)
+        for index, name in enumerate(names, start=1):
+            if len(name.strip()) < 2:
+                continue
+            masked = re.sub(re.escape(name), f"[User {index}]", masked, flags=re.IGNORECASE)
+        return masked
 
     async def chat(
         self,
