@@ -36,6 +36,55 @@ Deployment note:
 
 ## Current Release Entries
 
+### 2026-08-04 - Platform Administrator User Guides
+
+Status: approved for production promotion
+
+GitHub tracking:
+
+- Feature issue `#439`, PR `#440`, squash-merge commit `23f69a6`.
+
+Runtime changes:
+
+- Add a post-login **User Guides** menu and lazy-loaded guide library for platform
+  administrators.
+- Publish all 14 maintained onboarding, demo, financial, Ishirock, operations,
+  and reference guides from their canonical repository Markdown sources.
+- Render headings, tables, lists, code blocks, callouts, and cross-guide links;
+  provide collection filters and full-library search.
+- Protect both guide API endpoints and Angular routes with the `platform_admin`
+  role. Guide source files are packaged in the API image and are not public web
+  assets.
+- Refresh the canonical onboarding and ACME demo guidance for the centralized
+  tenant Microsoft 365 organizer and current transcript-sync feedback, and
+  correct stale PMO route references in the Ishirock guide.
+
+Dev deployment and acceptance:
+
+- Environment: `https://transmuter-dev.ishirock.tech`.
+- Schema: `transmuter_dev`; no schema SQL was required or applied.
+- Final deployed PR head: `5590c3c`.
+- Hostinger action: `107587516`, terminal success.
+- Frontend suite passed 37 tests; Angular production build passed. Focused Ruff,
+  formatting, mypy, four guide-service tests, and two platform guide route/RBAC
+  tests passed. PR CI, secret scan, agent/workflow validation, and Agent eval
+  passed.
+- Prahari approved the fixed source manifest, path containment, disabled raw
+  Markdown HTML, API role enforcement, Angular route guard, and absence of
+  credentials in guide content.
+- Standalone Playwright against the real dev Angular app/API passed in 4.8
+  seconds. Platform admin opened all 14 guides; onboarding and ACME content,
+  search, tables, and mobile layout passed. Tenant admin saw no User Guides menu,
+  received HTTP 403 from the API, and was redirected from the guide route to
+  Dashboard. Zero page errors and observed 5xx responses occurred.
+
+Production promotion:
+
+- Explicit founder instruction to publish the guides was received in the working
+  thread.
+- No schema SQL is required.
+- Pending promotion and production browser verification.
+
 ### 2026-08-04 - Microsoft Transcript Sync Feedback And Graph Policy Handling
 
 Status: promoted to production and browser-verified
