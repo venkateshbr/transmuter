@@ -1,0 +1,42 @@
+model:
+  provider: openrouter
+  default: anthropic/claude-haiku-4.5
+  base_url: ''
+  api_mode: chat_completions
+  max_tokens: 2048
+
+provider_routing:
+  order: []
+  require_parameters: true
+  data_collection: "deny"
+
+tool_loop_guardrails:
+  hard_stop_enabled: true
+  hard_stop_after:
+    exact_failure: 5
+    idempotent_no_progress: 5
+
+skills:
+  auto_load:
+    - transmuter-portfolio-advisor
+
+mcp_servers:
+  transmuter:
+    command: "python"
+    args: ["/opt/transmuter/transmuter_mcp_server.py"]
+    env:
+      TRANSMUTER_INTERNAL_API_URL: "${TRANSMUTER_INTERNAL_API_URL}"
+      HERMES_TOOL_TOKEN: "${HERMES_TOOL_TOKEN}"
+      TRANSMUTER_TOOL_TIMEOUT_SECONDS: "30"
+    timeout: 45
+    connect_timeout: 15
+    supports_parallel_tool_calls: true
+    tools:
+      include:
+        - transmuter_portfolio_overview
+        - transmuter_portfolio_initiatives
+        - transmuter_governance_read_pack
+        - transmuter_financials_read_pack
+        - transmuter_tools_catalog
+      resources: false
+      prompts: false

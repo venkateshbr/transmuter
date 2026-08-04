@@ -10,6 +10,7 @@ from app.core.agent_security import validate_agent_text
 from app.core.auth import CurrentUser, get_current_user
 from app.core.database import get_supabase_admin, get_supabase_request_client
 from app.services.ai import AIService
+from app.services.transmuter_ai_runtime import TransmuterAIRuntime
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -96,7 +97,7 @@ def _svc(
 @router.post("/chat", response_model=ChatResponse)
 async def chat(body: ChatRequest, svc: Annotated[AIService, Depends(_svc)]) -> ChatResponse:
     """Chat with Transmuter AI about the portfolio."""
-    data = await svc.chat(body.query, body.conversation_id, body.context)
+    data = await TransmuterAIRuntime(svc).chat(body.query, body.conversation_id, body.context)
     return ChatResponse(**data)
 
 

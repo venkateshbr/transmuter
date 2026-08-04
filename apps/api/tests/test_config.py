@@ -133,3 +133,19 @@ def test_empty_supabase_settings_are_allowed_for_deterministic_no_db_tests() -> 
 def test_partial_supabase_settings_still_fail_fast() -> None:
     with pytest.raises(ValueError, match="Missing required Supabase setting"):
         _settings(supabase_url="https://legacy.supabase.co")
+
+
+def test_hermes_runtime_configuration_is_normalized_and_bounded() -> None:
+    configured = _settings(
+        transmuter_ai_runtime=" HERMES_AGENT ",
+        hermes_context_ttl_seconds="600",
+        hermes_timeout_seconds="30",
+        hermes_max_retries="1",
+    )
+    assert configured.transmuter_ai_runtime == "hermes_agent"
+    assert configured.hermes_context_ttl_seconds == 600
+
+    with pytest.raises(ValueError, match="TRANSMUTER_AI_RUNTIME"):
+        _settings(transmuter_ai_runtime="browser_selected")
+    with pytest.raises(ValueError, match="HERMES_CONTEXT_TTL_SECONDS"):
+        _settings(hermes_context_ttl_seconds="30")
