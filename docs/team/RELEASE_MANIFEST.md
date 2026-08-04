@@ -38,7 +38,7 @@ Deployment note:
 
 ### 2026-08-04 - Platform Administrator User Guides
 
-Status: approved for production promotion
+Status: promoted to production and browser-verified
 
 GitHub tracking:
 
@@ -82,8 +82,16 @@ Production promotion:
 
 - Explicit founder instruction to publish the guides was received in the working
   thread.
-- No schema SQL is required.
-- Pending promotion and production browser verification.
+- No schema SQL was required or applied.
+- Hostinger production action `107588369` reached terminal `success` and
+  deployed exact merged release commit
+  `ca1b5c0f3b2e230d0ded7e921b0cdfd5badcb5d6`.
+- Public `/health` and `/api/health` validation passed after deployment.
+- Standalone Playwright production acceptance passed in 5.9 seconds. Platform
+  admin saw the User Guides menu, opened all 14 sources, searched and opened the
+  canonical ACME guide, and passed the 390-pixel mobile-width check. Tenant admin
+  saw no menu, received HTTP 403 from the guide API, and was redirected from the
+  guide route to Dashboard. Zero page errors and observed 5xx responses occurred.
 
 ### 2026-08-04 - Microsoft Transcript Sync Feedback And Graph Policy Handling
 
