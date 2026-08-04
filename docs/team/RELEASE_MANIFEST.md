@@ -36,6 +36,64 @@ Deployment note:
 
 ## Current Release Entries
 
+### 2026-08-04 - Microsoft Transcript Sync Feedback And Graph Policy Handling
+
+Status: promoted to production and browser-verified
+
+GitHub tracking:
+
+- Microsoft Teams parent: issue `#220`.
+- Transcript sync bug: issue `#435`, PR `#436`, squash-merge commit
+  `db024a9`.
+- Dependency security gate: issue `#437`, included in PR `#436`.
+
+Runtime changes:
+
+- Keep Microsoft transcript sync success, pending, and error feedback inside the
+  Import Transcript dialog; successful sync fills the transcript text area and
+  leaves the dialog open for review.
+- Retry Microsoft Graph `SpeakerAttributionNotAllowed` responses using the
+  unattributed transcript text media type.
+- Preserve valid OAuth credentials when Microsoft reports the tenant transcript
+  policy `GraphAccessToTranscriptsDisabled`; generic 401/403 responses remain
+  fail-closed and require reconnection.
+- Update `aiohttp` to 3.14.3 and `cryptography` to 50.0.0 for the August 2026
+  security advisories.
+
+Dev deployment and acceptance:
+
+- Environment: `https://transmuter-dev.ishirock.tech`.
+- Schema: `transmuter_dev`; no schema SQL was required or applied.
+- Deployed PR head: `26837b2`.
+- Hostinger action: `107576144`, terminal success.
+- Focused backend provider/meeting/integration suite passed 111 tests; focused
+  frontend suite passed 33 tests; Ruff, formatting, mypy, Angular production
+  build, dependency audit, GitHub CI, secret scan, and agent eval passed.
+- Standalone Playwright against the real dev Angular app and API passed. A
+  deterministic temporary meeting/session confirmed the sync detail rendered
+  inside the dialog, the dialog remained open, Cancel did not leak the detail
+  onto the meeting page, and no page errors or 5xx responses occurred. The
+  temporary meeting was deleted in cleanup.
+- Prahari review confirmed exact Graph policy-code handling, no token/transcript
+  body/PII logging, retained generic 401/403 credential invalidation, and a clean
+  dependency audit.
+
+Production promotion:
+
+- Explicit founder approval was received in the working thread.
+- No schema SQL was required or applied.
+- Hostinger production action `107576425` reached terminal `success` and deployed
+  exact squash-merge commit `db024a9152a90997c343ca4799092c166cbf7aa1`.
+- Public `/health` and `/api/health` validation passed after deployment.
+- Standalone Playwright production acceptance passed in 4.7 seconds against the
+  existing Ishirock `Transmuter Daily` session. Microsoft sync returned HTTP 200
+  with its unavailable/reconnection detail inside the Import Transcript dialog;
+  the dialog remained open, Cancel removed the detail without leaking it to the
+  meeting page, and zero page errors or observed 5xx responses occurred.
+- The Ishirock organizer connection still requires an administrator to reconnect
+  Microsoft 365 because the prior generic Graph 403 had already cleared the saved
+  refresh credential before this fix was deployed.
+
 ### 2026-08-03 - Centralized Tenant Microsoft 365 Organizer
 
 Status: promoted to production and browser-verified
