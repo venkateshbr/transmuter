@@ -83,4 +83,30 @@ describe('authGuard', () => {
     await expect(firstValueFrom(result as Observable<boolean>)).resolves.toBe(false);
     expect(router.navigate).toHaveBeenCalledWith(['/dashboard']);
   });
+
+  it('denies the platform guide library to hydrated tenant users', async () => {
+    currentUser = profile;
+    const route = {
+      data: { roles: ['platform_admin'] },
+    } as unknown as ActivatedRouteSnapshot;
+    const state = { url: '/platform/guides' } as RouterStateSnapshot;
+
+    const result = TestBed.runInInjectionContext(() => authGuard(route, state));
+
+    expect(result).toBe(false);
+    expect(router.navigate).toHaveBeenCalledWith(['/dashboard']);
+  });
+
+  it('allows the platform guide library for platform administrators', async () => {
+    currentUser = { ...profile, role: 'platform_admin' };
+    const route = {
+      data: { roles: ['platform_admin'] },
+    } as unknown as ActivatedRouteSnapshot;
+    const state = { url: '/platform/guides' } as RouterStateSnapshot;
+
+    const result = TestBed.runInInjectionContext(() => authGuard(route, state));
+
+    expect(result).toBe(true);
+    expect(router.navigate).not.toHaveBeenCalled();
+  });
 });

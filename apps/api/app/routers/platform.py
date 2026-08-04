@@ -13,6 +13,7 @@ from app.services.billing import (
     stripe_price_configuration,
     update_platform_stripe_price_configuration,
 )
+from app.services.platform_guides import get_platform_guide, list_platform_guides
 
 router = APIRouter(
     prefix="/platform",
@@ -97,6 +98,24 @@ class StripePriceConfigItem(BaseModel):
 
 class StripePriceConfigUpdate(BaseModel):
     items: list[StripePriceConfigItem] = Field(..., min_length=1, max_length=4)
+
+
+@router.get("/guides")
+async def platform_guides(
+    _current_user: Annotated[CurrentUser, Depends(require_role("platform_admin"))],
+) -> dict[str, Any]:
+    return {"items": list_platform_guides()}
+
+
+@router.get("/guides/{slug}")
+async def platform_guide(
+    slug: str,
+    _current_user: Annotated[CurrentUser, Depends(require_role("platform_admin"))],
+) -> dict[str, Any]:
+    guide = get_platform_guide(slug)
+    if guide is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Guide not found")
+    return guide
 
 
 @router.get("/overview")

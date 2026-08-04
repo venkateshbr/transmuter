@@ -1,6 +1,6 @@
 # Transmuter Tenant Onboarding and Portfolio User Guide
 
-Last updated: 2026-06-20
+Last updated: 2026-08-04
 
 This guide explains how a newly onboarded tenant should configure Transmuter, create or load initiatives, manage financials, and read the available dashboards. It uses the anonymised portfolio workbook `Initiative_Portfolio_Anonymised.xlsx` as a realistic example.
 
@@ -771,7 +771,7 @@ Meeting features include:
 - Meeting series.
 - Workstream-scoped meetings.
 - Teams sync through the tenant organizer configured in **Admin -> Microsoft 365**.
-- Transcript import.
+- Transcript import by pasted text, plain-text file, or Microsoft sync.
 - AI-assisted action item, decision, and minutes extraction.
 - Series cancellation when supported by provider integration.
 
@@ -780,6 +780,12 @@ authorized Microsoft identity is the sender/organizer for every Teams invitation
 in that tenant, and the encrypted tenant credential is reused for calendar event
 updates and Microsoft transcript synchronization. Meeting users can schedule and
 sync Teams events but cannot select, replace, or disconnect the organizer.
+When **Sync from Microsoft** succeeds, the Import Transcript dialog remains open
+and the transcript text area is filled for review before import. Pending,
+reconnection, and Microsoft tenant-policy results are shown in that same dialog.
+If Microsoft reports `GraphAccessToTranscriptsDisabled`, the tenant's Microsoft
+administrator must permit Graph transcript access. If Transmuter reports that
+reconnection is required, reconnect the organizer in **Admin -> Microsoft 365**.
 
 ## 11. How to Interpret the Example Portfolio
 

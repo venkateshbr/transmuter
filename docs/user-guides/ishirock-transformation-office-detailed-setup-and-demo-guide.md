@@ -141,7 +141,7 @@ actual realization entries, dashboards, and meeting cadence.
 | `/financials/bankable-plan` | Finance Lead / PMO Lead | Transformation Office Director | Locks approved plans and shows rebaseline history. |
 | `/financials/benefit-tracking` | Benefits Controller | Finance Lead, Business Benefit Owners | Records realized benefit ledger rows and compares actuals to locked plan. |
 | `/financials/waterline` | Transformation Office Director / Finance Lead | Workstream Leads | Freezes workstream targets and tracks delivery above or below target. |
-| `/progress`, `/pmo`, `/meetings` | PMO Lead | Initiative Owners, Workstream Leads | Runs milestones, actions, status, risks, governance, and meeting cadence. |
+| `/progress`, `/pmo/governance`, `/pmo/kpis`, `/pmo/risks`, `/meetings` | PMO Lead | Initiative Owners, Workstream Leads | Runs milestones, actions, status, risks, governance, and meeting cadence. |
 | `/reports/control-tower` | Transformation Office Director | Executive Sponsor, Finance Lead, PMO Lead | Management meeting view combining value, progress, risk, blockers, and decisions. |
 
 ### Data ownership rules
@@ -590,7 +590,9 @@ Screens:
 - Initiative **Risks**
 - Initiative **Status**
 - `/progress`
-- `/pmo`
+- `/pmo/governance`
+- `/pmo/kpis`
+- `/pmo/risks`
 
 Validation:
 

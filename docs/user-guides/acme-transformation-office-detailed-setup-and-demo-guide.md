@@ -1,5 +1,7 @@
 # ACME Transformation Office Detailed Setup and Demo Guide
 
+Last reviewed: 2026-08-04
+
 This guide is a complete end-to-end walkthrough for setting up and demonstrating
 the **Acme Global Manufacturing** transformation tenant in Transmuter.
 
@@ -25,7 +27,10 @@ The broader five-tenant run on `1f3330b` remains the cross-tenant and RBAC
 evidence. Production was not touched. Microsoft Graph live consent, Teams
 invite/join-link refresh, and transcript acceptance remain separate external
 gates under `#220`, `#389`, and `#390`; do not demonstrate those controls until
-that external acceptance is complete.
+that external acceptance is complete for the ACME tenant. The platform now uses
+one tenant-level organizer configured in **Admin -> Microsoft 365**. Microsoft
+transcript sync keeps success or error feedback inside the Import Transcript
+dialog and fills the transcript text area on success.
 
 For a UI-only blank-tenant setup path that skips meetings, see
 [`acme-demo-tenant-ui-setup-guide.md`](acme-demo-tenant-ui-setup-guide.md).
@@ -92,7 +97,8 @@ initiative dependencies; that seeded-data drift is tracked in issue `#304`.
 8. Keep the browser network/console closed during the audience demo. For formal
    acceptance evidence, capture errors separately and never expose tokens,
    headers, local storage, or invite URLs.
-9. Do not select **Sync Invite** or promise a Teams transcript unless Microsoft
+9. Do not select **Sync Invite** or promise a Teams transcript unless a tenant
+   administrator has connected the organizer in **Admin -> Microsoft 365** and
    Graph consent has been completed for the environment. Native agendas, notes,
    decisions, AI draft minutes, and completion work without Teams.
 10. Rehearse the 15-screen route in section 7 once without changing data. A

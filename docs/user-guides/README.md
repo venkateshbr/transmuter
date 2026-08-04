@@ -1,12 +1,18 @@
 # Transmuter User Guide Index
 
-Last reviewed: 2026-07-15
+Last reviewed: 2026-08-04
 
 Use this page to choose the right guide. The canonical complete Acme demo is
 [`acme-transformation-office-detailed-setup-and-demo-guide.md`](acme-transformation-office-detailed-setup-and-demo-guide.md).
 It includes preflight, tenant setup, initiatives, finance, governance, People,
 the full Saturday meeting workflow, speaker notes, expected results, and
 deterministic cleanup.
+
+## Start here
+
+| Guide | Use it for |
+|---|---|
+| [Tenant onboarding and portfolio user guide](../team/TENANT_ONBOARDING_USER_GUIDE.md) | Current end-to-end product guide for tenant setup, roles, initiatives, financials, delivery, governance, dashboards, meetings, and Microsoft 365. |
 
 ## Acme guides
 
@@ -40,8 +46,11 @@ Acme demo dataset:
 ## Validated boundary
 
 The five-tenant real API and external headed-Chrome acceptance passed on the dev
-deployment at commit `1f3330b`. Production was not touched. Native Transmuter
-meetings work without Teams; Microsoft Graph live consent, Teams event/join-link
-refresh, and transcript acceptance remain separate external gates. No guide
-contains a password. Keep dev test credentials only in the gitignored local
+deployment at commit `1f3330b`. Native Transmuter meetings work without Teams.
+The centralized tenant Microsoft 365 organizer, Teams event scheduling, and
+transcript synchronization are deployed; each tenant must complete organizer
+consent and Microsoft tenant policy must permit Graph transcript access. Sync
+results now remain inside the Import Transcript dialog, and successful sync
+fills the transcript text area for review. No guide contains a password. Keep
+dev test credentials only in the gitignored local
 `scratch/test-credentials.json` file with permission mode `0600`.

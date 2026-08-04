@@ -16,6 +16,8 @@ RUN uv sync --frozen --no-dev
 
 COPY apps/api/app/ ./app/
 COPY domain_packs/ ./domain_packs/
+COPY docs/team/TENANT_ONBOARDING_USER_GUIDE.md ./docs/team/TENANT_ONBOARDING_USER_GUIDE.md
+COPY docs/user-guides/ ./docs/user-guides/
 
 EXPOSE 8001
 

@@ -35,6 +35,44 @@ def _platform_headers() -> dict[str, str]:
     }
 
 
+def test_platform_admin_can_list_and_read_published_user_guides() -> None:
+    listing = client.get("/platform/guides", headers=_platform_headers())
+
+    assert listing.status_code == 200
+    items = listing.json()["items"]
+    assert len(items) == 14
+    assert items[0]["slug"] == "tenant-onboarding"
+    assert any(item["slug"] == "acme-detailed-demo" for item in items)
+
+    detail = client.get("/platform/guides/tenant-onboarding", headers=_platform_headers())
+
+    assert detail.status_code == 200
+    guide = detail.json()
+    assert guide["title"] == "Transmuter Tenant Onboarding and Portfolio User Guide"
+    assert "<table>" in guide["html"]
+    assert "Microsoft 365" in guide["html"]
+
+
+def test_platform_guide_routes_reject_unknown_guides_and_tenant_roles() -> None:
+    missing = client.get("/platform/guides/not-a-guide", headers=_platform_headers())
+    assert missing.status_code == 404
+
+    async def tenant_user() -> CurrentUser:
+        return CurrentUser(
+            id=UUID("11111111-1111-1111-1111-111111111111"),
+            tenant_id=UUID("22222222-2222-2222-2222-222222222222"),
+            role="transformation_office",
+        )
+
+    app.dependency_overrides[get_current_user] = tenant_user
+    try:
+        response = client.get("/platform/guides")
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+    assert response.status_code == 403
+
+
 def test_platform_overview_and_delete_preview_use_real_supabase() -> None:
     overview = client.get("/platform/overview", headers=_platform_headers())
 
