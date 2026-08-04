@@ -75,6 +75,7 @@ describe('App', () => {
           { path: 'meetings', component: EmptyRouteComponent },
           { path: 'people', component: EmptyRouteComponent },
           { path: 'platform', component: EmptyRouteComponent },
+          { path: 'platform/guides', component: EmptyRouteComponent },
           { path: 'profile', component: EmptyRouteComponent },
           { path: 'auth/login', component: EmptyRouteComponent },
         ]),
@@ -239,7 +240,12 @@ describe('App', () => {
 
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.textContent).toContain('Platform');
+    expect(compiled.textContent).toContain('User Guides');
     expect(compiled.textContent).not.toContain('Financials');
+    expect((fixture.componentInstance as any).primaryNavItems.map((item: any) => item.path)).toEqual([
+      '/platform',
+      '/platform/guides',
+    ]);
     expect((fixture.componentInstance as any).homeLink()).toBe('/platform');
     expect((fixture.componentInstance as any).isPlatformAdmin()).toBe(true);
   });

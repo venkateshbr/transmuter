@@ -44,6 +44,20 @@ export const routes: Routes = [
     canActivate: [authGuard],
     children: [
       {
+        path: 'platform/guides/:slug',
+        canActivate: [authGuard],
+        data: { roles: ['platform_admin'] },
+        loadComponent: () =>
+          import('./features/platform-guides/platform-guides.component').then(m => m.PlatformGuidesComponent),
+      },
+      {
+        path: 'platform/guides',
+        canActivate: [authGuard],
+        data: { roles: ['platform_admin'] },
+        loadComponent: () =>
+          import('./features/platform-guides/platform-guides.component').then(m => m.PlatformGuidesComponent),
+      },
+      {
         path: 'platform',
         canActivate: [authGuard],
         data: { roles: ['platform_admin'] },

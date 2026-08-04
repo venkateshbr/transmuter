@@ -450,6 +450,7 @@ export class App {
     if (this.isPlatformAdmin()) {
       return [
         { label: 'Platform', path: '/platform', icon: 'admin_panel_settings' },
+        { label: 'User Guides', path: '/platform/guides', icon: 'menu_book' },
       ];
     }
     const dashboardChildren = this.dashboardNavChildren();
