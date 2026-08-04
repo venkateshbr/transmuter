@@ -85,14 +85,14 @@ _MARKDOWN = MarkdownIt("commonmark", {"html": False, "linkify": False}).enable("
 
 def _docs_root() -> Path:
     service_path = Path(__file__).resolve()
-    candidates = (
-        service_path.parents[2] / "docs",
-        service_path.parents[4] / "docs",
-    )
-    for candidate in candidates:
+    for candidate in _docs_root_candidates(service_path):
         if candidate.joinpath("user-guides").is_dir():
             return candidate
     raise RuntimeError("Published user-guide sources are not available.")
+
+
+def _docs_root_candidates(service_path: Path) -> tuple[Path, ...]:
+    return tuple(parent / "docs" for parent in service_path.parents)
 
 
 def _read_source(source: GuideSource) -> str:

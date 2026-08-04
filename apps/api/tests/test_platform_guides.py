@@ -1,6 +1,17 @@
 from pathlib import Path
 
-from app.services.platform_guides import GUIDE_SOURCES, get_platform_guide, list_platform_guides
+from app.services.platform_guides import (
+    GUIDE_SOURCES,
+    _docs_root_candidates,
+    get_platform_guide,
+    list_platform_guides,
+)
+
+
+def test_docs_root_candidates_support_the_shallow_production_image_path() -> None:
+    candidates = _docs_root_candidates(Path("/app/app/services/platform_guides.py"))
+
+    assert Path("/app/docs") in candidates
 
 
 def test_published_guide_manifest_covers_all_canonical_user_guides() -> None:
