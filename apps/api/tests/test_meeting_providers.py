@@ -569,6 +569,66 @@ def test_graph_403_clears_credentials_without_retry() -> None:
     assert len(delete_calls) == 1
 
 
+def test_transcript_speaker_attribution_403_retries_unattributed_without_reconnect() -> None:
+    http = FakeHttp()
+    http.queue(
+        "get",
+        "/content",
+        FakeResponse(
+            {
+                "error": {
+                    "code": "Forbidden",
+                    "innerError": {"code": "SpeakerAttributionNotAllowed"},
+                }
+            },
+            status_code=403,
+        ),
+        FakeResponse(text="00:00:00.000 --> 00:00:02.000\nApproved the plan"),
+    )
+    provider, repo, _ = create_provider(valid_connection(), http=http)
+
+    result = provider.sync_transcript(
+        {"online_meeting_id": "online-1", "organizer_email": "organizer@example.com"}
+    )
+
+    assert result.status == "synced"
+    assert result.transcript_text == "Approved the plan"
+    assert repo.updates == []
+    content_calls = [call for call in http.calls if call["url"].endswith("/content")]
+    assert [call["headers"]["Accept"] for call in content_calls] == [
+        "text/vtt",
+        "application/vnd.microsoft.graph.transcript+text",
+    ]
+
+
+def test_transcript_policy_403_preserves_connection_and_reports_tenant_setting() -> None:
+    http = FakeHttp()
+    http.queue(
+        "get",
+        "/transcripts",
+        FakeResponse(
+            {
+                "error": {
+                    "code": "Forbidden",
+                    "innerError": {"code": "GraphAccessToTranscriptsDisabled"},
+                }
+            },
+            status_code=403,
+        ),
+    )
+    provider, repo, _ = create_provider(valid_connection(), http=http)
+
+    result = provider.sync_transcript(
+        {"online_meeting_id": "online-1", "organizer_email": "organizer@example.com"}
+    )
+
+    assert result.status == "unavailable"
+    assert result.detail == (
+        "Microsoft Teams transcript API access is disabled by the tenant administrator."
+    )
+    assert repo.updates == []
+
+
 def test_normalize_vtt_transcript_strips_cues_and_duplicates() -> None:
     content = """WEBVTT
 

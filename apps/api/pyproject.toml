@@ -23,7 +23,7 @@ dependencies = [
     "logfire[fastapi]>=4.32.1",
     # Auth and cryptography
     "passlib[bcrypt]>=1.7.4",
-    "cryptography>=48.0.1",
+    "cryptography>=50.0.0",
     "joserfc>=1.6.7",
     # Utilities
     "python-dotenv>=1.0.0",
