@@ -148,7 +148,7 @@ interface PublishedGuide extends GuideSummary {
   `,
   styles: [`
     :host { display: block; }
-    :host ::ng-deep .guide-content { color: var(--t-text-primary); font-size: 0.875rem; line-height: 1.75; }
+    :host ::ng-deep .guide-content { overflow-x: auto; color: var(--t-text-primary); font-size: 0.875rem; line-height: 1.75; }
     :host ::ng-deep .guide-content > h1:first-child { display: none; }
     :host ::ng-deep .guide-content h2 { margin: 2.5rem 0 1rem; border-top: 1px solid var(--t-border); padding-top: 1.5rem; font-size: 1.35rem; font-weight: 900; line-height: 1.3; }
     :host ::ng-deep .guide-content h3 { margin: 2rem 0 0.75rem; color: var(--t-accent); font-size: 1rem; font-weight: 900; line-height: 1.4; }
@@ -166,7 +166,7 @@ interface PublishedGuide extends GuideSummary {
     :host ::ng-deep .guide-content pre { margin: 1rem 0; overflow-x: auto; border: 1px solid var(--t-border); background: var(--t-primary); padding: 1rem; color: white; }
     :host ::ng-deep .guide-content pre code { border: 0; background: transparent; padding: 0; color: inherit; }
     :host ::ng-deep .guide-content table { margin: 1.25rem 0 1.75rem; width: 100%; min-width: 720px; border-collapse: collapse; font-size: 0.75rem; }
-    :host ::ng-deep .guide-content table { display: block; overflow-x: auto; }
+    :host ::ng-deep .guide-content table { display: table; }
     :host ::ng-deep .guide-content th { border: 1px solid var(--t-border); background: var(--t-primary); padding: 0.7rem; color: white; text-align: left; font-size: 0.65rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em; }
     :host ::ng-deep .guide-content td { border: 1px solid var(--t-border); padding: 0.7rem; vertical-align: top; color: var(--t-text-secondary); }
     :host ::ng-deep .guide-content hr { margin: 2rem 0; border: 0; border-top: 1px solid var(--t-border); }
