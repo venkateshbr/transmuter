@@ -1657,6 +1657,11 @@ class MeetingService:
 
     @staticmethod
     def _agenda_supported_by_evidence(agenda_text: str, evidence: str) -> bool:
+        if re.search(
+            r"\b(?:undiscussed|out\s+of\s+scope)\b|\bdo\s+not\s+discuss\b",
+            agenda_text.casefold(),
+        ):
+            return False
         stop_words = {
             "agenda",
             "and",
@@ -1665,14 +1670,27 @@ class MeetingService:
             "for",
             "item",
             "meeting",
+            "must",
+            "remain",
             "review",
+            "should",
             "the",
             "this",
+            "undiscussed",
             "with",
         }
         agenda_terms = set(re.findall(r"[a-z0-9]{3,}", agenda_text.casefold())) - stop_words
-        evidence_terms = set(re.findall(r"[a-z0-9]{3,}", evidence.casefold()))
-        return bool(agenda_terms & evidence_terms)
+        if not agenda_terms:
+            return False
+        evidence_segments = re.split(r"(?<=[.!?])\s+|[\r\n]+", evidence.casefold())
+        for segment in evidence_segments:
+            evidence_terms = set(re.findall(r"[a-z0-9]{3,}", segment))
+            overlap = agenda_terms & evidence_terms
+            if len(agenda_terms) == 1 and overlap:
+                return True
+            if len(overlap) >= 2 and len(overlap) * 2 >= len(agenda_terms):
+                return True
+        return False
 
     @staticmethod
     def _mask_unknown_speaker(match: re.Match[str]) -> str:

@@ -652,14 +652,17 @@ def test_minutes_source_excludes_undiscussed_agenda_context() -> None:
         },
         {
             "id": "agenda-undiscussed",
-            "text": "Undiscussed budget review",
+            "text": "Budget review should remain undiscussed",
             "initiative_id": "init-linked",
         },
     ]
     detail = {
         **repo.session_detail,
-        "notes": "The team reviewed the Meetings V4 workflow and verified agenda propagation.",
-        "transcript_text": "The Meetings V4 workflow is ready for dev acceptance.",
+        "notes": (
+            "The team reviewed the Meetings V4 workflow and verified agenda propagation. "
+            "Unscheduled meetings should use an ad-hoc series."
+        ),
+        "transcript_text": "The Meetings V4 workflow should be ready for dev acceptance.",
         "agenda": repo.get_session_agenda("session-empty"),
         "attendees": [],
         "artifacts": [],
@@ -669,6 +672,45 @@ def test_minutes_source_excludes_undiscussed_agenda_context() -> None:
     source, _participant_names = service._professional_minutes_source(detail)
 
     assert [item["text"] for item in source["agenda"]] == ["Review Meetings V4 workflow"]
+
+
+@pytest.mark.parametrize(
+    ("agenda_text", "evidence", "expected"),
+    [
+        (
+            "Budget review must remain out of scope",
+            "The export must use an approved template.",
+            False,
+        ),
+        (
+            "Budget timeline review",
+            "The migration timeline was approved.",
+            False,
+        ),
+        (
+            "Budget timeline review",
+            "The budget timeline was reviewed.",
+            True,
+        ),
+        ("Budget", "The budget was reviewed.", True),
+        (
+            "Budget approval",
+            "Budget assumptions were listed. The migration approval was completed.",
+            False,
+        ),
+        (
+            "Do not discuss budget",
+            "The team discussed the budget elsewhere.",
+            False,
+        ),
+    ],
+)
+def test_agenda_support_requires_same_segment_topic_evidence(
+    agenda_text: str,
+    evidence: str,
+    expected: bool,
+) -> None:
+    assert MeetingService._agenda_supported_by_evidence(agenda_text, evidence) is expected
 
 
 def test_captured_decision_deduplicates_an_ai_paraphrase() -> None:
