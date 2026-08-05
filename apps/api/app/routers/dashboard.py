@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
 from supabase import Client
 
@@ -26,6 +26,11 @@ def _svc(
 def _config_svc(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> DashboardConfigService:
+    if current_user.role == "platform_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tenant context is required",
+        )
     return DashboardConfigService(get_supabase_admin(), str(current_user.tenant_id))
 
 

@@ -1,6 +1,6 @@
 # Transmuter Tenant Onboarding and Portfolio User Guide
 
-Last updated: 2026-08-04
+Last reviewed: 2026-08-05
 
 This guide explains how a newly onboarded tenant should configure Transmuter, create or load initiatives, manage financials, and read the available dashboards. It uses the anonymised portfolio workbook `Initiative_Portfolio_Anonymised.xlsx` as a realistic example.
 
@@ -787,6 +787,20 @@ If Microsoft reports `GraphAccessToTranscriptsDisabled`, the tenant's Microsoft
 administrator must permit Graph transcript access. If Transmuter reports that
 reconnection is required, reconnect the organizer in **Admin -> Microsoft 365**.
 
+### 10.11 Global Search and Portfolio Assistant
+
+Use **Global portfolio search** in the header, or `Ctrl/Cmd+K`, to find and open
+tenant-scoped initiatives, meetings, actions, milestones, risks, and people.
+
+Use the header **Portfolio Assistant** for sourced portfolio questions. The
+assistant uses the configured Transmuter AI runtime (Hermes when enabled, with
+graceful fallback). Any proposed database write remains a draft until a user
+explicitly confirms it; core portfolio work remains available if the AI service
+is unavailable.
+
+The post-login **User Guides** library is a platform-operator resource and is
+visible only to `platform_admin`. It is intentionally not part of tenant menus.
+
 ## 11. How to Interpret the Example Portfolio
 
 Use the workbook examples to understand realistic operating behavior.
@@ -942,3 +956,6 @@ Follow this sequence for the cleanest implementation:
 | Manage risks | `/pmo/risks` |
 | Manage KPIs | `/pmo/kpis` |
 | Manage meetings | `/meetings` |
+| Search the current tenant | Header **Global portfolio search** or `Ctrl/Cmd+K` |
+| Ask a sourced portfolio question | Header **Portfolio Assistant** |
+| Read maintained platform guides | **Platform -> User Guides** (`platform_admin` only) |

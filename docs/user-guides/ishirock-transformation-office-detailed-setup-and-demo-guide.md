@@ -1,5 +1,11 @@
 # Ishirock Transformation Office Detailed Setup And Demo Guide
 
+Last reviewed: 2026-08-05
+
+Validation boundary: Ishirock is a separate worked tenant and is not part of
+the current deterministic ACME release suite. Confirm its data in the target
+environment before using record-specific values.
+
 This guide is a complete end-to-end walkthrough for setting up and demonstrating
 the `ishirock` transformation tenant in Transmuter using
 `Initiative_Portfolio_Anonymised.xlsx` as the business source of truth.

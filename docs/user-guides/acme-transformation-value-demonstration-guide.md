@@ -1,5 +1,7 @@
 # ACME Transformation Value Demonstration Guide
 
+Last reviewed: 2026-08-05
+
 This guide explains how the **Acme Global Manufacturing** transformation tenant is
 structured, how initiative financials are calculated, and how to demonstrate
 value through Transmuter dashboards and reports.
@@ -19,10 +21,9 @@ scenario sequence, map each row to the matching `TRN-*` row for ACME4.
 The five-tenant API and headed-browser release matrix passed on dev commit
 `1f3330b`, including tenant currencies, fiscal calendars, financial failure/
 retry states, and role boundaries.
-Production at
-`https://transmuter.ishirock.tech` has the Shared Costs schema, API, and UI
-promoted, but production ACME seeded data is not yet at dev ACME4 parity; that
-demo-data drift is tracked in issue `#304`.
+Production data is not assumed to match the deterministic dev fixture. Validate
+the environment and displayed cards with the platform-admin validation runbook
+before presenting exact figures.
 
 ## 1. Executive storyline
 
@@ -40,10 +41,10 @@ The portfolio story is:
    costs and one-off implementation costs are also incurred.
 4. FY28 is the run-rate target year. The portfolio is expected to deliver:
    - **$4.0M revenue uplift**
-   - **$5.4M gross margin uplift**
+   - **$5.432M gross margin uplift**
    - **$3.75M cost savings**
    - **$0.8M recurring run cost**
-   - **$8.35M EBITDA-effective net run-rate value**
+   - **$8.382M EBITDA-effective net run-rate value**
 5. One-off implementation investment totals **$2.5M**. It is visible in the
    bridge and cost reports, but it should not be confused with recurring
    EBITDA drag.
@@ -54,7 +55,7 @@ The portfolio story is:
 The clean executive message is:
 
 > ACME is moving from a $20.0M revenue / $9.0M gross margin FY26 baseline toward
-> a FY28 run-rate case with $4.0M revenue growth and $8.35M EBITDA-effective net
+> a FY28 run-rate case with $4.0M revenue growth and $8.382M EBITDA-effective net
 > run-rate value after recurring operating costs.
 
 When discussing shared costs, add:
@@ -207,18 +208,18 @@ FY28 plan-base value across all 10 initiatives:
 | Driver | Amount |
 |---|---:|
 | Revenue uplift | $4.00M |
-| Gross margin uplift | $5.40M |
+| Gross margin uplift | $5.432M |
 | Cost savings | $3.75M |
 | Recurring run cost | $0.80M |
-| EBITDA-effective net run-rate value | $8.35M |
+| EBITDA-effective net run-rate value | $8.382M |
 
 Formula:
 
 ```text
 FY28 EBITDA-effective net value
 = Gross Margin Uplift + Cost Savings - Recurring Costs
-= $5.40M + $3.75M - $0.80M
-= $8.35M
+= $5.432M + $3.75M - $0.80M
+= $8.382M
 ```
 
 ### Enterprise value including revenue uplift
@@ -229,8 +230,8 @@ a broader value view:
 ```text
 FY28 enterprise value view
 = Revenue Uplift + Gross Margin Uplift + Cost Savings - Recurring Costs
-= $4.00M + $5.40M + $3.75M - $0.80M
-= $12.35M
+= $4.00M + $5.432M + $3.75M - $0.80M
+= $12.382M
 ```
 
 Do not describe this as EBITDA. It includes revenue uplift as a value driver.
@@ -524,7 +525,7 @@ required and how quickly the FY28 run-rate value pays it back.
 For the ACME FY28 plan-base case, show:
 
 - one-off investment: `$2.50M`,
-- net run-rate value: `$8.35M`,
+- net run-rate value: `$8.382M`,
 - payback period: about `3.6` months,
 - initiative-level payback ranking.
 
@@ -675,7 +676,7 @@ Use this order for a clean demo:
    - State the FY28 EBITDA-effective formula:
 
 ```text
-$5.40M GM uplift + $3.75M cost savings - $0.80M recurring cost = $8.35M
+$5.432M GM uplift + $3.75M cost savings - $0.80M recurring cost = $8.382M
 ```
 
 3. **Drill into a sample initiative**
@@ -694,7 +695,7 @@ $5.40M GM uplift + $3.75M cost savings - $0.80M recurring cost = $8.35M
 
 6. **Close with the value statement**
    - FY26 baseline: $20.0M revenue and $9.0M gross margin.
-   - FY28 plan-base: $4.0M revenue uplift and $8.35M EBITDA-effective net
+   - FY28 plan-base: $4.0M revenue uplift and $8.382M EBITDA-effective net
      run-rate value.
    - One-off investment: $2.5M to unlock the transformation.
 

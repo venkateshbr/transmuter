@@ -1,6 +1,6 @@
 # Admin Financial Configuration User Guide
 
-Last updated: 2026-07-15
+Last reviewed: 2026-08-05
 
 Audience: tenant admins, transformation office users, finance leads, benefits
 controllers, and implementation teams configuring a new tenant.
@@ -21,8 +21,10 @@ Related guides:
 - `docs/user-guides/financial-engine-end-to-end-walkthrough.md`
 - `docs/team/CLEAN_CONFIGURABLE_FINANCIAL_ENGINE.md`
 
-Validation note: reporting currency propagation and fiscal ending-year mapping
-passed the final five-tenant API and headed-browser run on dev commit `1f3330b`.
+Historical validation note (`2026-07-15`): reporting currency propagation and
+fiscal ending-year mapping passed the July five-tenant API and headed-browser
+run on dev commit `1f3330b`. Use the current platform-admin validation runbook
+and its evidence for release decisions.
 Northstar/Horizon use July starts, Meridian uses April, and Acme/Solstice use
 January. The examples below remain ACME/USD-specific unless stated otherwise.
 
@@ -770,8 +772,8 @@ ACME deliberately separates cost treatment:
 ACME FY28 management story:
 
 ```text
-$5.40M GM uplift + $3.75M cost savings - $0.80M recurring cost
-= $8.35M EBITDA-effective net run-rate value
+$5.432M GM uplift + $3.75M cost savings - $0.80M recurring cost
+= $8.382M EBITDA-effective net run-rate value
 ```
 
 ACME also shows $2.5M one-off investment separately for payback discussion.

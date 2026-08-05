@@ -1,6 +1,6 @@
 # Transmuter User Guide Index
 
-Last reviewed: 2026-08-04
+Last reviewed: 2026-08-05
 
 Use this page to choose the right guide. The canonical complete Acme demo is
 [`acme-transformation-office-detailed-setup-and-demo-guide.md`](acme-transformation-office-detailed-setup-and-demo-guide.md).
@@ -25,6 +25,12 @@ deterministic cleanup.
 | [Benefit-ledger remediation](acme-benefit-ledger-production-remediation-guide.md) | Controlled production-data remediation only after explicit approval. |
 | [Improvement opportunities](acme-transformation-platform-improvement-opportunities.md) | Product backlog/context, not a demo script. |
 
+## Validation
+
+| Guide | Use it for |
+|---|---|
+| [Platform Admin User-Guide Validation Runbook](platform-admin-user-guide-validation-runbook.md) | Reproduce the real API and external Playwright release run with local credential aliases and deterministic dev cleanup. |
+
 ## Financial configuration guides
 
 | Guide | Use it for |
@@ -45,12 +51,14 @@ Acme demo dataset:
 
 ## Validated boundary
 
-The five-tenant real API and external headed-Chrome acceptance passed on the dev
-deployment at commit `1f3330b`. Native Transmuter meetings work without Teams.
+The five-tenant real API and external Playwright acceptance procedure is
+documented in the validation runbook; consult its current local evidence rather
+than relying on a historical commit in this reusable index. Native Transmuter
+meetings work without Teams.
 The centralized tenant Microsoft 365 organizer, Teams event scheduling, and
 transcript synchronization are deployed; each tenant must complete organizer
 consent and Microsoft tenant policy must permit Graph transcript access. Sync
 results now remain inside the Import Transcript dialog, and successful sync
 fills the transcript text area for review. No guide contains a password. Keep
-dev test credentials only in the gitignored local
-`scratch/test-credentials.json` file with permission mode `0600`.
+dev test credentials only in the gitignored repository-root `credentials.json`
+file with permission mode `0600`.

@@ -20,6 +20,8 @@ infra/hostinger/.env
 infra/hostinger/.env.dev
 .env.local
 .env.*.local
+/credentials.json
+/.credentials.json.*
 
 # Node / Angular
 node_modules/

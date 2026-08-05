@@ -1,5 +1,11 @@
 # ACME Benefit Ledger Production Remediation
 
+Last reviewed: 2026-08-05
+
+Validation boundary: this is a controlled production-remediation reference, not
+part of the routine demo run. Use it only with explicit production approval and
+a current backup/rollback plan.
+
 This guide explains how to recreate the ACME benefit realization ledger through
 the UI using the deployed Benefit Tracking ledger editor/import feature.
 

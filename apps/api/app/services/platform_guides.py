@@ -72,6 +72,11 @@ GUIDE_SOURCES = (
         "user-guides/acme-benefit-ledger-production-remediation-guide.md",
     ),
     GuideSource(
+        "platform-admin-validation-runbook",
+        "Operations",
+        "user-guides/platform-admin-user-guide-validation-runbook.md",
+    ),
+    GuideSource(
         "platform-improvement-opportunities",
         "Reference",
         "user-guides/acme-transformation-platform-improvement-opportunities.md",

@@ -1,6 +1,6 @@
 # ACME Transformation Office Detailed Setup and Demo Guide
 
-Last reviewed: 2026-08-04
+Last reviewed: 2026-08-05
 
 This guide is a complete end-to-end walkthrough for setting up and demonstrating
 the **Acme Global Manufacturing** transformation tenant in Transmuter.
@@ -17,14 +17,16 @@ It expands the shorter ACME value guide with:
 
 No credentials are included in this guide.
 
-Launch-readiness note (`2026-07-15`): the deterministic five-tenant acceptance
+Historical launch-readiness evidence (`2026-07-15`): the deterministic five-tenant acceptance
 and the dedicated ACME client-demo acceptance are complete in development. The
-latest ACME run used one external, headed Playwright Chromium session against
+July ACME run used one external, headed Playwright Chromium session against
 dev commit `1c5f184` (Hostinger action `104346054`). It passed all 20 named
 browser scenarios, observed no page errors or HTTP 5xx responses, and removed
 the temporary initiative and Saturday meeting through the visible Admin UI.
-The broader five-tenant run on `1f3330b` remains the cross-tenant and RBAC
-evidence. Production was not touched. Microsoft Graph live consent, Teams
+The broader July five-tenant run on `1f3330b` is retained as historical
+cross-tenant and RBAC evidence. Use the current platform-admin validation
+runbook and its local evidence for release decisions. Production was not
+touched. Microsoft Graph live consent, Teams
 invite/join-link refresh, and transcript acceptance remain separate external
 gates under `#220`, `#389`, and `#390`; do not demonstrate those controls until
 that external acceptance is complete for the ACME tenant. The platform now uses
@@ -70,7 +72,8 @@ the next available `TRN-*` code; never assume that temporary code in advance.
 Production note: the Shared Costs schema, API, and UI are live on
 `https://transmuter.ishirock.tech`, but production ACME demo data is not yet at
 dev ACME parity. Production ACME currently has 0 shared-cost pools and 0
-initiative dependencies; that seeded-data drift is tracked in issue `#304`.
+initiative dependencies. Treat any difference from the current cards as fixture
+or environment drift and record it in the active validation issue before a demo.
 
 ### Before you start the live demo
 
@@ -78,7 +81,7 @@ initiative dependencies; that seeded-data drift is tracked in issue `#304`.
    been separately approved: `https://transmuter-dev.ishirock.tech`.
 2. Confirm `/health` and `/api/health` both return a healthy response.
 3. Put approved dev-only login details in the gitignored local file
-   `scratch/test-credentials.json` and set its permissions to `0600`. Never put
+   repository-root `credentials.json` and set its permissions to `0600`. Never put
    the password in this guide, Git, a screenshot, a meeting note, or a shell
    command that prints it.
 4. Sign in as the Acme `transformation_office` persona. Wait for the **Strategic
@@ -759,7 +762,7 @@ Actions:
 
 4. For deterministic role rehearsals, prefer **Temp Password** and store only
    the shared fixture credential in the ignored local
-   `scratch/test-credentials.json` file. Do not put it in a committed `.env`, a
+   repository-root `credentials.json` file. Do not put it in a committed `.env`, a
    guide, or macOS Keychain for this test workflow.
 5. For an invite rehearsal, open **Pending Access** and locate the exact
    synthetic address. Select **Resend** once and confirm the status remains
@@ -1777,9 +1780,8 @@ and the one temporary series was deleted through Admin. Production was not
 touched.
 
 Use a PMO Lead or Transformation Office user. Use a temporary series name with
-the date so it is easy to find and remove. For the current launch test, use the
-upcoming Saturday `2026-07-18`; for a later demo, substitute the next Saturday
-and keep the same sequence.
+the date so it is easy to find and remove. Choose the next Saturday in the
+browser's configured timezone and keep that same date throughout the sequence.
 
 ##### A. Create the meeting series
 
@@ -1792,12 +1794,12 @@ and keep the same sequence.
 
    | Field | Demo value |
    |---|---|
-   | Name | `ACME Saturday Value Steering - 2026-07-18` |
+   | Name | `ACME Saturday Value Steering - <YYYY-MM-DD>` |
    | Scope | `All` |
    | Recurrence | `Weekly` |
    | Day | `Saturday` |
-   | Series start | `2026-07-18` |
-   | Series end | `2026-08-29` |
+   | Series start | Next Saturday, `<YYYY-MM-DD>` |
+   | Series end | A later Saturday after the required test window |
    | Start | `09:00` |
    | Duration | `60` |
    | Timezone | The browser/user timezone used for the demo; record it in the evidence. |
@@ -1834,8 +1836,7 @@ and keep the same sequence.
 ##### C. Open the Saturday session
 
 1. From the series, select **Start Session**. In the dialog, enter the scheduled
-   Saturday date and select **Start** once. For the validated run the date was
-   `2026-07-18`; for a fresh demo, use the next scheduled Saturday.
+   Saturday date selected above and select **Start** once.
 2. Confirm navigation to `/meetings/sessions/<id>`.
 3. Confirm the header date is Saturday, the state is **Live** or
    `in_progress`, and the agenda contains an `ENT-005` topic.

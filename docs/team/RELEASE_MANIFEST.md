@@ -36,6 +36,47 @@ Deployment note:
 
 ## Current Release Entries
 
+### 2026-08-05 - User-Guide Revalidation And Browser Runbook
+
+Status: implementation and dev acceptance in progress
+
+GitHub tracking:
+
+- Guide validation issue `#447`.
+- Credential-remediation issue `#448`.
+- Dashboard-configuration 500 issue `#449`.
+
+Runtime changes:
+
+- Publish a fifteenth platform-admin guide containing the reproducible real-API
+  and external Playwright validation runbook, local credential aliases, safety
+  boundaries, evidence locations, and Microsoft transcript HITL procedure.
+- Refresh every published guide review date; bring the canonical ACME guide up
+  to date for global search, centralized Microsoft credentials, transcript
+  modal behavior, Portfolio Assistant/Hermes, and platform-admin guide access.
+- Reconcile stale ACME target-year figures and mark historical Ishirock and
+  financial walkthroughs with explicit validation boundaries.
+- Prevent platform-admin startup from calling tenant dashboard configuration by
+  recognizing the signed platform role before profile load; fail closed with
+  HTTP 403 if a platform admin directly requests that tenant-only endpoint.
+- Replace committed synthetic passwords with ignored mode-`0600`
+  `credentials.json` aliases and rotate the active synthetic accounts without
+  changing their IDs or metadata.
+
+Schema:
+
+- No schema SQL is required.
+
+Acceptance evidence:
+
+- Local unit/build and deployed-dev results will be recorded here before merge.
+- Evidence paths are defined in the published validation runbook and remain
+  gitignored below `scratch/`.
+
+Production promotion:
+
+- Not requested for this validation batch.
+
 ### 2026-08-04 - Platform Administrator User Guides
 
 Status: promoted to production and browser-verified

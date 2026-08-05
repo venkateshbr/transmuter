@@ -1,6 +1,6 @@
 # Ishirock Demo Tenant UI Setup Guide
 
-Last updated: 2026-06-21
+Last reviewed: 2026-08-05
 
 This guide explains how a normal tenant user can review, correct, and
 demonstrate the `ishirock` tenant through the Transmuter UI using

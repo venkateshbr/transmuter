@@ -1,6 +1,6 @@
 # Transformation Tenant UI Setup Guide With ACME Example
 
-Last updated: 2026-07-15
+Last reviewed: 2026-08-05
 
 This guide explains how a normal tenant user can create a blank tenant and
 configure a transformation office through the Transmuter UI. ACME is used as a
@@ -21,7 +21,33 @@ generated `TRN-*` initiative codes.
 
 No credentials are included in this guide.
 
-Dev validation update (`2026-07-15`): the configured ACME outcome passed all 20
+### Current navigation and integrations
+
+- Use the header **Global portfolio search** (or `Ctrl/Cmd+K`) to find an
+  initiative, meeting, action, milestone, risk, or person in the current tenant.
+- Configure the tenant's single Microsoft organizer in **Admin -> Microsoft
+  365**. That authorized identity sends Teams invitations and supplies the
+  Graph credentials used for event updates and transcript synchronization.
+- In a live meeting, **Import Transcript** supports pasted text, a `.txt` file,
+  and **Sync from Microsoft**. Success leaves the dialog open and fills the
+  transcript text area for review. Connection, policy, and availability errors
+  must appear inside the same dialog; cancelling must not move that error onto
+  the meeting page.
+- The header **Portfolio Assistant** sends read questions through the current
+  Transmuter AI runtime. If Hermes is configured it is used with graceful
+  fallback; proposed writes remain drafts until a human confirms them.
+- **User Guides** is visible only to the platform administrator under the
+  Platform menu. Tenant users follow the exported or shared copy supplied by
+  their administrator.
+
+Current validation (`2026-08-05`) uses the tracked external Playwright and
+real-API suites in the
+[Platform Admin User-Guide Validation Runbook](platform-admin-user-guide-validation-runbook.md).
+Evidence is written below `scratch/issue-447/` and is intentionally not
+committed. Exact commit and deployment identifiers belong in that evidence,
+not in reusable operating instructions.
+
+Historical dev validation (`2026-07-15`): the configured ACME outcome passed all 20
 named scenarios in one external headed Playwright Chromium session against
 commit `1c5f184` (Hostinger action `104346054`). The run proved the rendered
 tenant configuration, ten-person operating model, dashboards, portfolio and
@@ -34,14 +60,14 @@ captured notes, attached a decision and risk, generated and reviewed AI
 minutes, completed the session, and removed the temporary series. Production
 was not changed.
 
-Fresh-tenant update (`2026-07-15`): this guide also passed a complete disposable
+Historical fresh-tenant validation (`2026-07-15`): this guide also passed a complete disposable
 tenant run on dev commit `e5a769d` (Hostinger action `104365210`). One external
 headed Chromium worker completed Stripe sandbox checkout and provisioning,
 persisted all master data, configured five gates and ten users, created ten
 initiatives through the HITL workflow, built and locked a representative value
 case, posted four reconciled Shared Costs runs, opened every current demo route,
 exported the board pack, and deleted the tenant through Platform Control. The
-final run took 4.1 minutes. Production was not deployed or modified.
+July run took 4.1 minutes. Production was not deployed or modified.
 
 ### Browser-validation boundary
 
@@ -278,7 +304,7 @@ Minimum demo users:
 | Management Viewer | `viewer` | Read-only management portfolio and dashboard review. |
 
 Use unique synthetic addresses in the environment's approved QA domain. Keep
-passwords in gitignored `scratch/test-credentials.json`; never place them in
+passwords in the gitignored repository-root `credentials.json`; never place them in
 this guide or a command that prints them.
 
 Steps:
@@ -1425,17 +1451,20 @@ Before presenting or handing the tenant to users, verify:
 
 ## 18. Browser E2E Validation
 
-The local acceptance used for this guide is intentionally gitignored and runs
-through the external Playwright CLI:
+The canonical acceptance is tracked and runs through the external Playwright
+CLI. Set the exact commit currently deployed to dev:
 
 ```bash
-scratch/node_modules/.bin/playwright test \
-  scratch/fresh-tenant-full-guide.spec.mjs \
-  --config=scratch/playwright.config.mjs --headed --workers=1
+cd apps/web
+TRANSMUTER_DEPLOYED_COMMIT=<deployed-dev-commit-sha> npx playwright test \
+  e2e/fresh-tenant-full-guide.spec.mjs \
+  --config=playwright.config.mjs --workers=1
 ```
 
-Credentials come from gitignored `scratch/test-credentials.json`; never add a
-password to this guide. Validated on deployed dev `e5a769d` on 2026-07-15:
+Credentials come from the gitignored repository-root `credentials.json`; never add a
+password to this guide. Use the current evidence and procedure in the
+[Platform Admin User-Guide Validation Runbook](platform-admin-user-guide-validation-runbook.md).
+The following July 2026 result is retained as historical evidence:
 
 | Area | Result |
 |---|---:|

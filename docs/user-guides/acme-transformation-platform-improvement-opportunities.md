@@ -1,5 +1,11 @@
 # ACME Transformation Platform Improvement Opportunities
 
+Last reviewed: 2026-08-05
+
+Status: historical product-review reference. It is not the source of truth for
+current routes, seeded totals, or release acceptance; use the detailed ACME
+guide and the platform-admin validation runbook for the current tested state.
+
 This document reviews the ACME transformation value demo against common
 transformation office and benefits-realization practices. It separates:
 
@@ -81,7 +87,7 @@ Validated state as of 2026-06-22:
 | Financial metric model | Baseline, revenue uplift, gross margin uplift, savings, target metrics, and percentage formulas are configured in the new financial engine. |
 | Scenario discipline | Baseline, Plan Base, Plan High, and Actual are configured as separate lanes. |
 | Cost classification | One-off investment and recurring costs are separated; one-off investment is used for payback, not recurring EBITDA drag. |
-| FY28 management story | Financial Overview reconciles to `$8.35M` FY28 EBITDA-effective net run-rate value. |
+| FY28 management story | Financial Overview reconciles to `$8.382M` FY28 EBITDA-effective net run-rate value. |
 | Investments and payback | `/financials/investments-payback` shows cumulative one-off investment through the selected value year and portfolio payback months. |
 | Strategic dimensions | Business units, workstreams, markets, themes, and tags are configured in demo tenants. |
 | Stage gates | Stage gate definitions and gate criteria exist for a five-gate transformation lifecycle in ACME4. |
@@ -97,7 +103,7 @@ Validated state as of 2026-06-22:
 | Earlier opportunity | Current status | Notes |
 |---|---|---|
 | Gate criteria for all gates | Done | ACME4 validation has 5 active gates and 10 active criteria. |
-| FY28 contributor drawer benefit drilldown | Done | Contributor totals reconcile to `$9.15M` benefits, `$0.80M` recurring costs, and `$8.35M` net run-rate. |
+| FY28 contributor drawer benefit drilldown | Done | Contributor totals reconcile to `$9.182M` benefits, `$0.80M` recurring costs, and `$8.382M` net run-rate. |
 | Populate Benefit Tracking for ACME | Done for ACME4 | ACME4 has 240 benefit realization ledger rows loaded through the browser guide runner. |
 | Populate Bankable Plan versions | Done for ACME4 | ACME4 has locked bankable plans for all 10 initiatives and `TRN-005` has version-2 history created through governed rebaseline request and approval. |
 | Clarify Value Bridge basis | Mostly done | APIs and UI support target-year run-rate and related basis labels. Continue to watch for copy that could imply one-off investment reduces recurring EBITDA run-rate. |

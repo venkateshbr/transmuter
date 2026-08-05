@@ -1,5 +1,10 @@
 # Ishirock UI Readiness From Workbook Guide
 
+Last reviewed: 2026-08-05
+
+Validation boundary: workbook reconciliation is tenant-specific and is not
+automatically included in the current deterministic ACME release suite.
+
 This guide describes how to use the Transmuter UI to bring the `ishirock` tenant
 to an ACME-style transformation-office demo readiness state using
 `Initiative_Portfolio_Anonymised.xlsx` as the source of truth.
