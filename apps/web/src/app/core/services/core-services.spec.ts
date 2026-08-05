@@ -199,6 +199,46 @@ describe('AuthService', () => {
     expect(service.getRole()).toBeNull();
   });
 
+  it('should derive the platform-admin role from signed-token app metadata before the profile loads', () => {
+    const service = TestBed.inject(AuthService);
+    service.user.set(null);
+    localStorage.setItem('access_token', token({
+      exp: future(),
+      role: 'authenticated',
+      app_metadata: {
+        role: 'platform_admin',
+        platform_admin: true,
+      },
+    }));
+
+    expect(service.getRole()).toBe('platform_admin');
+
+    localStorage.setItem('access_token', token({
+      exp: future(),
+      role: 'authenticated',
+      app_metadata: {
+        role: 'platform_admin',
+        platform_admin: true,
+        tenant_id: 'tenant-1',
+      },
+    }));
+    expect(service.getRole()).toBeNull();
+
+    localStorage.setItem('access_token', token({
+      exp: future(),
+      role: 'authenticated',
+      app_metadata: {
+        role: 'platform_admin',
+        platform_admin: true,
+        transmuter_authorization_transmuter_dev: {
+          tenant_id: 'tenant-1',
+          role: 'viewer',
+        },
+      },
+    }));
+    expect(service.getRole()).toBeNull();
+  });
+
   it('should evaluate operating-model permissions from the active role', () => {
     const service = TestBed.inject(AuthService);
     localStorage.setItem('access_token', token({ exp: future(), role: 'finance_lead' }));

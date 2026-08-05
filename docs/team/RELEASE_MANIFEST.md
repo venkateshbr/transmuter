@@ -36,6 +36,63 @@ Deployment note:
 
 ## Current Release Entries
 
+### 2026-08-05 - User-Guide Revalidation And Browser Runbook
+
+Status: deployed to development and acceptance complete; production not requested
+
+GitHub tracking:
+
+- Guide validation issue `#447`.
+- Credential-remediation issue `#448`.
+- Dashboard-configuration 500 issue `#449`.
+- Pull request `#450`; deployed candidate commit `7238926`; Hostinger action
+  `107819009`.
+- Claim-level meeting-minutes hardening follow-up `#451`.
+
+Runtime changes:
+
+- Publish a fifteenth platform-admin guide containing the reproducible real-API
+  and external Playwright validation runbook, local credential aliases, safety
+  boundaries, evidence locations, and Microsoft transcript HITL procedure.
+- Refresh every published guide review date; bring the canonical ACME guide up
+  to date for global search, centralized Microsoft credentials, transcript
+  modal behavior, Portfolio Assistant/Hermes, and platform-admin guide access.
+- Reconcile stale ACME target-year figures and mark historical Ishirock and
+  financial walkthroughs with explicit validation boundaries.
+- Prevent platform-admin startup from calling tenant dashboard configuration by
+  recognizing the signed platform role before profile load; fail closed with
+  HTTP 403 if a platform admin directly requests that tenant-only endpoint.
+- Replace committed synthetic passwords with ignored mode-`0600`
+  `credentials.json` aliases and rotate the active synthetic accounts without
+  changing their IDs or metadata.
+
+Schema:
+
+- No schema SQL is required.
+
+Acceptance evidence:
+
+- Local backend guide/dashboard regressions: `5 passed`.
+- Local Angular unit suite: `38 passed`; production build, TypeScript, Ruff,
+  mypy, Playwright syntax, and four-suite discovery passed.
+- Five-tenant real API matrix: 50 authenticated users, 2,635 requests, 55
+  isolation denials, and deterministic cleanup across five tenants.
+- External Playwright against deployed commit `7238926`: platform-admin guides
+  `7/7`, configured ACME `20/20`, Meetings V4 `16/16`, and disposable fresh
+  tenant `8/8`. All suites recorded zero page errors and HTTP 5xx responses;
+  Meetings recorded zero Teams writes. Temporary ACME records, meeting series,
+  and the disposable tenant were removed successfully.
+- The browser run exposed a generic-word agenda-context collision. The final
+  fix evaluates evidence per sentence, requires meaningful multi-term topic
+  coverage, and excludes explicit negative agenda directives. The meeting
+  service suite passed `32/32`; Vastu and Prahari approved the final boundary.
+- Evidence paths are defined in the published validation runbook and remain
+  gitignored below `scratch/`.
+
+Production promotion:
+
+- Not requested for this validation batch.
+
 ### 2026-08-04 - Platform Administrator User Guides
 
 Status: promoted to production and browser-verified

@@ -227,6 +227,15 @@ export class AuthService {
       const payload = this.tokenPayload(token);
       const appMetadata = payload?.['app_metadata'];
       if (appMetadata && typeof appMetadata === 'object') {
+        const metadata = appMetadata as Record<string, unknown>;
+        if ('platform_admin' in metadata || metadata['role'] === 'platform_admin') {
+          return (
+            metadata['platform_admin'] === true
+            && metadata['role'] === 'platform_admin'
+            && !('tenant_id' in metadata)
+            && !Object.keys(metadata).some(key => key.startsWith('transmuter_authorization_'))
+          ) ? 'platform_admin' : null;
+        }
         const scopedRoles = new Set(
           Object.entries(appMetadata)
             .filter(([key]) => key.startsWith('transmuter_authorization_'))

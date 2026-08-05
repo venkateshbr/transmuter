@@ -1,5 +1,11 @@
 # Ishirock Transformation Value Demonstration Guide
 
+Last reviewed: 2026-08-05
+
+Validation boundary: Ishirock is a separate worked tenant and is not part of
+the current deterministic ACME release suite. Confirm its data in the target
+environment before using record-specific values.
+
 This guide explains how the `ishirock` transformation tenant is structured, how
 the workbook value case should be read, and how to demonstrate value through
 Transmuter dashboards and reports.

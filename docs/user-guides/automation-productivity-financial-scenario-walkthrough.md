@@ -1,5 +1,11 @@
 # Automation Productivity Financial Scenario Walkthrough
 
+Last reviewed: 2026-08-05
+
+Validation boundary: this is a worked historical scenario. Verify its tenant
+and initiative still exist before following record-specific values; use the
+current ACME guide for release acceptance.
+
 This guide documents a second end-to-end financial-engine scenario in the **Vish Demo Lab** tenant.
 
 - **Initiative:** `Automation productivity uplift for delivery teams`

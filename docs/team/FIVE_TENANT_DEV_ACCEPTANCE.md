@@ -99,7 +99,7 @@ Login conventions:
 - All fixture identities use the exact controlled
   `*.qa.transmuter-dev.ishirock.tech` domain allowlist and the same
   runtime-provided fixture password. Store the dev-only password in the ignored
-  `scratch/test-credentials.json` file with mode `0600`; never commit it or put
+  repository-root `credentials.json` file with mode `0600`; never commit it or put
   it in a guide, manifest, issue, screenshot, or command output. The headed
   invite test may send only to these synthetic QA identities and must retrieve
   the link through the configured delivery provider without logging its token.

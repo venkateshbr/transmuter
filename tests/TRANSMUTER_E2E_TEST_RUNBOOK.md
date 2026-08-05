@@ -63,14 +63,15 @@ User creation sequence:
 3. Click **Add User** to open the **Add Platform User** modal.
 4. Select **Temp Password** / **Create User**. Do not use invite links in this
    runbook; every persona must be able to log in immediately during E2E.
-5. Create all nine users with the scenario's controlled temporary password.
+5. Create all nine users with distinct generated temporary passwords.
 6. Assign workstream scope to the `workstream_lead` user.
 7. Assign initiative ownership to the `initiative_owner` user after the
    initiatives are created.
 8. In **Admin > Access Control**, confirm each role and user status.
 
 For the current dev ACME operating-model users created during validation, use
-the credential matrix in `tests/runbook-e2e-credentials.md`.
+the aliases in `tests/runbook-e2e-credentials.md`; secret values exist only in
+the gitignored repository-root `credentials.json`.
 
 Role login validation:
 

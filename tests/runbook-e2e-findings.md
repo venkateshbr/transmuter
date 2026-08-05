@@ -42,7 +42,9 @@ Eight fresh tenants stood up end-to-end through the real UI (public signup → S
 
 **Bottom line:** the analytics/governance engine is solid and the prior pass's biggest gaps (F6, F11) are fixed. The headline new issue is **F14** — currency/fiscal can't be changed from USD/January via the UI, which blocks a whole dimension of the test matrix. The rest are data-entry-UX and workflow-completeness gaps, not engine-correctness problems.
 
-> Detailed per-scenario write-ups follow (most recent first). Credentials for all 8 tenants: `tests/runbook-e2e-credentials.md`.
+> Detailed per-scenario write-ups follow (most recent first). Historical identity
+> status and active credential aliases are in `tests/runbook-e2e-credentials.md`;
+> secret values exist only in the gitignored repository-root `credentials.json`.
 
 ---
 

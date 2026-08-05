@@ -1,5 +1,7 @@
 # ACME Transformation Office Management Runbook
 
+Last reviewed: 2026-08-05
+
 This runbook is the high-level operating guide for management users running the
 ACME transformation program in Transmuter. It complements the detailed setup and
 demo guide:
@@ -13,6 +15,13 @@ headed-browser cadence on commit `1f3330b`, including Saturday meeting setup,
 agenda, notes, AI draft minutes, completion, and Admin cleanup. Microsoft Teams
 consent/transcripts remain optional external integration steps; the native
 meeting cadence in this runbook does not require them.
+
+For the current release check, run the
+[Platform Admin User-Guide Validation Runbook](platform-admin-user-guide-validation-runbook.md).
+Use **Admin -> Microsoft 365** for the tenant organizer, the header global
+search for cross-portfolio navigation, and the Portfolio Assistant for
+human-reviewed AI support. The platform-admin-only **User Guides** library is
+not exposed to tenant roles.
 
 ---
 
@@ -338,8 +347,8 @@ For the ACME demo, use this management summary:
 ```text
 FY28 EBITDA-effective net run-rate value
 = Gross Margin Uplift + Cost Savings - Recurring Run Costs
-= $5.40M + $3.75M - $0.80M
-= $8.35M
+= $5.432M + $3.75M - $0.80M
+= $8.382M
 ```
 
 Do not call revenue uplift EBITDA. Revenue uplift is the commercial driver; its
@@ -353,10 +362,10 @@ Key ACME facts:
 | FY26 gross margin baseline | `$9.00M` |
 | Baseline margin rate | `45.0%` |
 | FY28 revenue uplift | `$4.00M` |
-| FY28 gross margin uplift | `$5.40M` |
+| FY28 gross margin uplift | `$5.432M` |
 | FY28 cost savings | `$3.75M` |
 | FY28 recurring run cost | `$0.80M` |
-| FY28 net run-rate value | `$8.35M` |
+| FY28 net run-rate value | `$8.382M` |
 | One-off implementation investment | `$2.50M` |
 
 ---
