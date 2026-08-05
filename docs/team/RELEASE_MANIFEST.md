@@ -38,13 +38,15 @@ Deployment note:
 
 ### 2026-08-05 - User-Guide Revalidation And Browser Runbook
 
-Status: implementation and dev acceptance in progress
+Status: local acceptance complete; deployed-dev acceptance in progress
 
 GitHub tracking:
 
 - Guide validation issue `#447`.
 - Credential-remediation issue `#448`.
 - Dashboard-configuration 500 issue `#449`.
+- Pull request `#450`; candidate commit `c92eebb` (superseded by the manifest-only
+  commit that contains this entry before deployment).
 
 Runtime changes:
 
@@ -69,7 +71,16 @@ Schema:
 
 Acceptance evidence:
 
-- Local unit/build and deployed-dev results will be recorded here before merge.
+- Local backend guide/dashboard regressions: `5 passed`.
+- Local Angular unit suite: `38 passed`; production build, TypeScript, Ruff,
+  mypy, Playwright syntax, and four-suite discovery passed.
+- Five-tenant real API matrix: 50 authenticated users, 2,635 requests, 55
+  isolation denials, and deterministic cleanup across five tenants.
+- Preliminary external Playwright runs against the prior dev release passed:
+  configured ACME `20/20`, Meetings V4 `16/16`, and disposable fresh tenant
+  `8/8`, all with zero observed page errors or HTTP 5xx responses and successful
+  cleanup. The four suites will be repeated against the exact PR SHA before
+  merge.
 - Evidence paths are defined in the published validation runbook and remain
   gitignored below `scratch/`.
 
