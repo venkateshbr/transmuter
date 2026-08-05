@@ -38,15 +38,16 @@ Deployment note:
 
 ### 2026-08-05 - User-Guide Revalidation And Browser Runbook
 
-Status: local acceptance complete; deployed-dev acceptance in progress
+Status: deployed to development and acceptance complete; production not requested
 
 GitHub tracking:
 
 - Guide validation issue `#447`.
 - Credential-remediation issue `#448`.
 - Dashboard-configuration 500 issue `#449`.
-- Pull request `#450`; candidate commit `c92eebb` (superseded by the manifest-only
-  commit that contains this entry before deployment).
+- Pull request `#450`; deployed candidate commit `7238926`; Hostinger action
+  `107819009`.
+- Claim-level meeting-minutes hardening follow-up `#451`.
 
 Runtime changes:
 
@@ -76,11 +77,15 @@ Acceptance evidence:
   mypy, Playwright syntax, and four-suite discovery passed.
 - Five-tenant real API matrix: 50 authenticated users, 2,635 requests, 55
   isolation denials, and deterministic cleanup across five tenants.
-- Preliminary external Playwright runs against the prior dev release passed:
-  configured ACME `20/20`, Meetings V4 `16/16`, and disposable fresh tenant
-  `8/8`, all with zero observed page errors or HTTP 5xx responses and successful
-  cleanup. The four suites will be repeated against the exact PR SHA before
-  merge.
+- External Playwright against deployed commit `7238926`: platform-admin guides
+  `7/7`, configured ACME `20/20`, Meetings V4 `16/16`, and disposable fresh
+  tenant `8/8`. All suites recorded zero page errors and HTTP 5xx responses;
+  Meetings recorded zero Teams writes. Temporary ACME records, meeting series,
+  and the disposable tenant were removed successfully.
+- The browser run exposed a generic-word agenda-context collision. The final
+  fix evaluates evidence per sentence, requires meaningful multi-term topic
+  coverage, and excludes explicit negative agenda directives. The meeting
+  service suite passed `32/32`; Vastu and Prahari approved the final boundary.
 - Evidence paths are defined in the published validation runbook and remain
   gitignored below `scratch/`.
 
