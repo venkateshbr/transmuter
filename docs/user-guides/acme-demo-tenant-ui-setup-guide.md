@@ -350,7 +350,17 @@ section to confirm the defaults, adjust labels or formulas if needed, and enter
 the tenant's baseline values. Do not recreate duplicate rows if the default rows
 already exist.
 
+Financial Configuration is organized into five sub-tabs: **Settings**,
+**Metrics & Formulas**, **Baselines & Scenarios**, **Value Bridge**, and
+**Taxonomy**. Metric and bridge keys are formula identifiers owned by the
+current tenant. A key must be unique within that tenant, but the same key can be
+used safely by another tenant. New keys are generated from the display label
+and can be edited before the first save; saved keys are displayed read-only so
+existing formulas cannot be broken accidentally.
+
 ### 5.1 Reporting Settings
+
+Sub-tab: **Settings**
 
 Set:
 
@@ -362,6 +372,8 @@ Set:
 Save settings.
 
 ### 5.2 Scenarios
+
+Sub-tab: **Baselines & Scenarios**
 
 Create or confirm the active scenarios the tenant needs. ACME uses:
 
@@ -375,6 +387,8 @@ Create or confirm the active scenarios the tenant needs. ACME uses:
 Use **Plan Base** as the primary board plan.
 
 ### 5.3 Metric Definitions
+
+Sub-tab: **Metrics & Formulas**
 
 Create metric definitions that match the tenant's value story. ACME uses a
 revenue, gross margin, and savings model:
@@ -395,7 +409,14 @@ revenue, gross margin, and savings model:
 Use precision `4` for money and percent metrics where the UI asks for
 precision.
 
+Select a metric in the catalog to view its key. For formula metrics, use the
+available-variable ledger to insert tenant metric keys or `baseline_` aliases
+into the expression. The dependency list below the editor should match the keys
+used in the formula.
+
 ### 5.4 Tenant Annual Baselines
+
+Sub-tab: **Baselines & Scenarios**
 
 In **Annual Baselines**, enter the tenant's approved starting baseline. ACME
 uses:
@@ -410,6 +431,8 @@ For another tenant, replace both the baseline year and values with the tenant's
 approved source baseline.
 
 ### 5.5 Cost Categories
+
+Sub-tab: **Taxonomy**
 
 Create cost categories that separate one-off investment from recurring costs.
 ACME uses:
@@ -426,6 +449,8 @@ ACME uses:
 | `other` | Other | Uncategorized | None |
 
 ### 5.6 Value Bridge Rows
+
+Sub-tab: **Value Bridge**
 
 Create value bridge rows that match how leadership wants benefits and costs to
 reconcile. ACME uses these rows in order:
