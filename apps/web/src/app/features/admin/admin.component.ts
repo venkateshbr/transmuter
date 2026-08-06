@@ -4,6 +4,7 @@ import { AuthService } from '../../core/services/auth.service';
 import { ApiService } from '../../core/services/api.service';
 import { FormsModule } from '@angular/forms';
 import { OPERATING_MODEL_ROLES, type OperatingModelPermission } from '../../core/rbac/operating-model-permissions';
+import { FinancialConfigurationComponent } from './financial-configuration/financial-configuration.component';
 
 const DEFAULT_ROLE_IDS = OPERATING_MODEL_ROLES.map(role => role.id);
 const DEFAULT_REBASELINE_ROLES = ['transformation_office', 'finance_lead', 'pmo_lead'];
@@ -11,7 +12,7 @@ const DEFAULT_REBASELINE_ROLES = ['transformation_office', 'finance_lead', 'pmo_
 @Component({
   selector: 'app-admin',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, FinancialConfigurationComponent],
   template: `
     <div class="p-8 space-y-10 animate-fade-in" style="background:var(--t-bg)">
       
@@ -32,8 +33,8 @@ const DEFAULT_REBASELINE_ROLES = ['transformation_office', 'finance_lead', 'pmo_
       </div>
 
       <!-- Admin Navigation -->
-      <div class="border-b border-[var(--t-border)]">
-        <nav class="-mb-px flex space-x-8">
+      <div class="overflow-x-auto border-b border-[var(--t-border)]">
+        <nav class="-mb-px flex min-w-max space-x-8">
           @for (tab of visibleTabs(); track tab.label) {
             <button
               type="button"
@@ -747,345 +748,7 @@ const DEFAULT_REBASELINE_ROLES = ['transformation_office', 'finance_lead', 'pmo_
           }
 
           @if (activeTab === 'Financial Configuration') {
-            <div class="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-              <div class="card p-8 xl:col-span-2">
-                <div class="mb-6 flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Financial Metric Engine</h3>
-                    <p class="mt-1 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Tenant-owned metrics, scenarios, currency, and fiscal calendar</p>
-                  </div>
-                  <div class="flex flex-wrap items-end gap-3">
-                    <label class="grid gap-1">
-                      <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Currency</span>
-                      <input class="input-field w-24 py-2 text-xs uppercase" [ngModel]="reportingSettings().reporting_currency" (ngModelChange)="updateReportingCurrency($event)" [disabled]="reportingSettingsSaving()" maxlength="3" aria-label="Reporting currency">
-                    </label>
-                    <label class="grid gap-1">
-                      <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Fiscal Start</span>
-                      <select class="input-field w-36 py-2 text-xs" [ngModel]="reportingSettings().fiscal_year_start_month" (ngModelChange)="updateFiscalStartMonth($event)" [disabled]="reportingSettingsSaving()" aria-label="Fiscal year start month">
-                        @for (month of fiscalMonths; track month.value) {
-                          <option [ngValue]="month.value">{{ month.label }}</option>
-                        }
-                      </select>
-                    </label>
-                    <label class="grid gap-1">
-                      <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Inflation Mode</span>
-                      <select class="input-field w-44 py-2 text-xs" [ngModel]="reportingSettings().recurring_cost_inflation_mode || 'manual_entry'" (ngModelChange)="updateInflationMode($event)" [disabled]="reportingSettingsSaving()" aria-label="Recurring cost inflation mode">
-                        <option value="manual_entry">Manual Entry</option>
-                        <option value="optional_per_line">Optional Per Line</option>
-                        <option value="default_on">Default On</option>
-                      </select>
-                    </label>
-                    <label class="grid gap-1">
-                      <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Default Inflation %</span>
-                      <input type="number" min="0" max="100" step="0.01" class="input-field w-32 py-2 text-xs" [ngModel]="reportingSettings().default_annual_inflation_rate_pct || 0" (ngModelChange)="updateDefaultInflationRate($event)" [disabled]="reportingSettingsSaving() || reportingSettings().recurring_cost_inflation_mode === 'manual_entry'" aria-label="Default annual recurring cost inflation percent">
-                    </label>
-                    <label class="flex items-center gap-2 pb-2 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">
-                      <input type="checkbox" [checked]="reportingSettings().allow_cost_line_inflation_override !== false" (change)="updateAllowInflationOverride($any($event.target).checked)" [disabled]="reportingSettingsSaving() || reportingSettings().recurring_cost_inflation_mode === 'manual_entry'" aria-label="Allow cost line inflation override">
-                      Line Override
-                    </label>
-                    <button type="button" class="btn-primary px-4 py-2 text-[10px]" [disabled]="reportingSettingsSaving()" (click)="saveReportingSettings()" aria-label="Save reporting settings">{{ reportingSettingsSaving() ? 'Saving...' : 'Save Settings' }}</button>
-                  </div>
-                </div>
-                @if (reportingSettingsMessage()) {
-                  <p class="mb-4 text-xs font-bold text-emerald-600">{{ reportingSettingsMessage() }}</p>
-                }
-                @if (reportingSettingsError()) {
-                  <p class="mb-4 text-xs font-bold text-red-500">{{ reportingSettingsError() }}</p>
-                }
-
-                <div class="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-                  <section class="border border-[var(--t-border)]">
-                    <div class="flex items-center justify-between gap-3 border-b border-[var(--t-border)] bg-[var(--t-surface-raised)] px-4 py-3">
-                      <div>
-                        <p class="text-xs font-black uppercase tracking-widest text-[var(--t-accent)]">Metric Definitions</p>
-                        <p class="mt-1 text-[10px] text-[var(--t-text-tertiary)]">{{ metricDefinitions().length }} configured metrics</p>
-                      </div>
-                      <button type="button" class="btn-secondary px-3 py-2 text-[10px]" (click)="addMetricDefinition()" aria-label="Add metric definition">Add Metric</button>
-                    </div>
-                    <div class="divide-y divide-[var(--t-border)]">
-                      @for (metric of metricDefinitions(); track metric.id || metric.key) {
-                        <div class="grid gap-3 p-4 lg:grid-cols-[1fr_120px_120px_120px_auto] lg:items-end">
-                          <label class="grid gap-1">
-                            <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Label</span>
-                            <input class="input-field py-2 text-xs font-bold" [ngModel]="metric.label" (ngModelChange)="metric.label = $event" aria-label="Metric definition label">
-                          </label>
-                          <label class="grid gap-1">
-                            <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Type</span>
-                            <select class="input-field py-2 text-xs" [ngModel]="metric.value_type" (ngModelChange)="metric.value_type = $event" aria-label="Metric value type">
-                              <option value="currency">Currency</option>
-                              <option value="percent">Percent</option>
-                              <option value="number">Number</option>
-                            </select>
-                          </label>
-                          <label class="grid gap-1">
-                            <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Aggregation</span>
-                            <select class="input-field py-2 text-xs" [ngModel]="metric.aggregation" (ngModelChange)="metric.aggregation = $event" aria-label="Metric aggregation">
-                              <option value="sum">Sum</option>
-                              <option value="avg">Average</option>
-                              <option value="last">Last</option>
-                              <option value="formula">Formula</option>
-                            </select>
-                          </label>
-                          <label class="grid gap-1">
-                            <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Benefit</span>
-                            <select class="input-field py-2 text-xs" [ngModel]="metric.benefit_class || ''" (ngModelChange)="updateMetricBenefitClass(metric, $event)" aria-label="Benefit class">
-                              <option value="">No</option>
-                              <option value="revenue">Revenue</option>
-                              <option value="margin">Margin</option>
-                              <option value="savings">Savings</option>
-                              <option value="avoidance">Avoidance</option>
-                              <option value="other">Other</option>
-                            </select>
-                          </label>
-                          <div class="flex items-center gap-2">
-                            <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="metric.is_active = !metric.is_active" [attr.aria-label]="'Toggle ' + metric.label">{{ metric.is_active ? 'Active' : 'Hidden' }}</button>
-                            <button type="button" class="btn-primary px-3 py-2 text-[10px]" (click)="saveMetricDefinition(metric)" aria-label="Save metric definition">Save</button>
-                          </div>
-                          @if (metric.aggregation === 'formula') {
-                            <label class="grid gap-1 lg:col-span-5">
-                              <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Formula</span>
-                              <input class="input-field py-2 text-xs font-mono" [ngModel]="metric.formula || ''" (ngModelChange)="metric.formula = $event || null" aria-label="Metric formula" placeholder="revenue_uplift / baseline_revenue * 100">
-                            </label>
-                          }
-                        </div>
-                      }
-                    </div>
-                  </section>
-
-                  <section class="border border-[var(--t-border)]">
-                    <div class="flex flex-wrap items-end justify-between gap-3 border-b border-[var(--t-border)] bg-[var(--t-surface-raised)] px-4 py-3">
-                      <div>
-                        <p class="text-xs font-black uppercase tracking-widest text-[var(--t-accent)]">Annual Baselines</p>
-                        <p class="mt-1 text-[10px] text-[var(--t-text-tertiary)]">Tenant-wide original operating metrics</p>
-                      </div>
-                      <div class="flex items-end gap-2">
-                        <label class="grid gap-1">
-                          <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Fiscal Year</span>
-                          <input type="number" min="2020" max="2060" class="input-field w-28 py-2 text-xs" [ngModel]="tenantBaselineYear()" (ngModelChange)="setTenantBaselineYear($event)" aria-label="Tenant baseline fiscal year">
-                        </label>
-                        <button type="button" class="btn-primary px-3 py-2 text-[10px]" (click)="saveTenantAnnualBaselines()" aria-label="Save tenant annual baselines">Save</button>
-                      </div>
-                    </div>
-                    <div class="grid gap-3 p-4 md:grid-cols-2">
-                      @for (metric of tenantBaselineMetrics(); track metric.id || metric.key) {
-                        <label class="grid gap-1">
-                          <span class="truncate text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">{{ metric.label }}</span>
-                          <input
-                            type="number"
-                            class="input-field py-2 text-xs"
-                            [ngModel]="tenantBaselineValue(metric.id)"
-                            (ngModelChange)="setTenantBaselineValue(metric.id, $event)"
-                            [attr.aria-label]="'Tenant annual baseline for ' + metric.label">
-                        </label>
-                      }
-                    </div>
-                  </section>
-
-                  <section class="border border-[var(--t-border)]">
-                    <div class="flex items-center justify-between gap-3 border-b border-[var(--t-border)] bg-[var(--t-surface-raised)] px-4 py-3">
-                      <div>
-                        <p class="text-xs font-black uppercase tracking-widest text-[var(--t-accent)]">Scenarios</p>
-                        <p class="mt-1 text-[10px] text-[var(--t-text-tertiary)]">Plan, actual, baseline, and tenant-specific lanes</p>
-                      </div>
-                      <button type="button" class="btn-secondary px-3 py-2 text-[10px]" (click)="addScenarioDefinition()" aria-label="Add scenario">Add Scenario</button>
-                    </div>
-                    <div class="divide-y divide-[var(--t-border)]">
-                      @for (scenario of scenarioDefinitions(); track scenario.id || scenario.key) {
-                        <div class="grid gap-3 p-4 sm:grid-cols-[1fr_120px_auto] sm:items-end">
-                          <label class="grid gap-1">
-                            <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Label</span>
-                            <input class="input-field py-2 text-xs font-bold" [ngModel]="scenario.label" (ngModelChange)="scenario.label = $event" aria-label="Scenario label">
-                          </label>
-                          <label class="grid gap-1">
-                            <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Kind</span>
-                            <select class="input-field py-2 text-xs" [ngModel]="scenario.kind" (ngModelChange)="scenario.kind = $event" aria-label="Scenario kind">
-                              <option value="baseline">Baseline</option>
-                              <option value="plan">Plan</option>
-                              <option value="forecast">Forecast</option>
-                              <option value="actual">Actual</option>
-                            </select>
-                          </label>
-                          <div class="flex items-center gap-2">
-                            <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="scenario.is_active = !scenario.is_active" [attr.aria-label]="'Toggle ' + scenario.label">{{ scenario.is_active ? 'Active' : 'Hidden' }}</button>
-                            <button type="button" class="btn-primary px-3 py-2 text-[10px]" (click)="saveScenarioDefinition(scenario)" aria-label="Save scenario">Save</button>
-                          </div>
-                        </div>
-                      }
-                    </div>
-                  </section>
-
-                  <section class="border border-[var(--t-border)]">
-                    <div class="flex items-center justify-between gap-3 border-b border-[var(--t-border)] bg-[var(--t-surface-raised)] px-4 py-3">
-                      <div>
-                        <p class="text-xs font-black uppercase tracking-widest text-[var(--t-accent)]">Value Bridge Rows</p>
-                        <p class="mt-1 text-[10px] text-[var(--t-text-tertiary)]">Tenant-defined bridge lines for portfolio and initiative value reporting</p>
-                      </div>
-                      <button type="button" class="btn-secondary px-3 py-2 text-[10px]" (click)="addBridgeRowDefinition()" aria-label="Add value bridge row">Add Row</button>
-                    </div>
-                    <div class="divide-y divide-[var(--t-border)]">
-                      @for (row of bridgeRows(); track row.id || row.key) {
-                        <div class="grid gap-4 p-4">
-                          <div class="grid gap-3 lg:grid-cols-[1fr_150px_110px_100px_auto] lg:items-end">
-                            <label class="grid gap-1">
-                              <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Label</span>
-                              <input class="input-field py-2 text-xs font-bold" [ngModel]="row.label" (ngModelChange)="row.label = $event" aria-label="Bridge row label">
-                            </label>
-                            <label class="grid gap-1">
-                              <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Kind</span>
-                              <select class="input-field py-2 text-xs" [ngModel]="row.row_kind" (ngModelChange)="row.row_kind = $event" aria-label="Bridge row kind">
-                                <option value="metric_set">Metrics</option>
-                                <option value="cost_set">Costs</option>
-                                <option value="subtotal">Subtotal</option>
-                                <option value="net">Net</option>
-                              </select>
-                            </label>
-                            <label class="grid gap-1">
-                              <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Sign</span>
-                              <select class="input-field py-2 text-xs" [ngModel]="row.sign" (ngModelChange)="row.sign = numberValue($event)" aria-label="Bridge row sign">
-                                <option [ngValue]="1">Positive</option>
-                                <option [ngValue]="-1">Negative</option>
-                              </select>
-                            </label>
-                            <label class="grid gap-1">
-                              <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Order</span>
-                              <input type="number" class="input-field py-2 text-xs" [ngModel]="row.display_order" (ngModelChange)="row.display_order = numberValue($event)" aria-label="Bridge row display order">
-                            </label>
-                            <div class="flex items-center gap-2">
-                              <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="row.is_active = !row.is_active" [attr.aria-label]="'Toggle ' + row.label">{{ row.is_active ? 'Active' : 'Hidden' }}</button>
-                              <button type="button" class="btn-primary px-3 py-2 text-[10px]" (click)="saveBridgeRowDefinition(row)" aria-label="Save value bridge row">Save</button>
-                            </div>
-                          </div>
-
-                          @if (row.row_kind !== 'net') {
-                            <div class="grid gap-4 lg:grid-cols-2">
-                              <div class="border border-[var(--t-border)] bg-[var(--t-surface)] p-3">
-                                <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Metric Inputs</p>
-                                <div class="mt-3 grid gap-2 sm:grid-cols-2">
-                                  @for (metric of metricDefinitions(); track metric.id || metric.key) {
-                                    <label class="flex items-center gap-2 text-xs font-bold text-[var(--t-text-primary)]">
-                                      <input type="checkbox" [checked]="bridgeRowMetricSelected(row, metric.id)" (change)="toggleBridgeRowMetric(row, metric.id)" [attr.aria-label]="'Use metric ' + metric.label + ' in bridge row'">
-                                      <span>{{ metric.label }}</span>
-                                    </label>
-                                  }
-                                </div>
-                              </div>
-                              <div class="border border-[var(--t-border)] bg-[var(--t-surface)] p-3">
-                                <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Cost Category Inputs</p>
-                                <div class="mt-3 grid gap-2 sm:grid-cols-2">
-                                  @for (category of activeCostCategoryItems(); track category.key) {
-                                    <label class="flex items-center gap-2 text-xs font-bold text-[var(--t-text-primary)]">
-                                      <input type="checkbox" [checked]="bridgeRowCostCategorySelected(row, category.id)" (change)="toggleBridgeRowCostCategory(row, category.id)" [attr.aria-label]="'Use cost category ' + category.label + ' in bridge row'">
-                                      <span>{{ category.label }}</span>
-                                    </label>
-                                  }
-                                </div>
-                              </div>
-                            </div>
-                          }
-                        </div>
-                      }
-                    </div>
-                  </section>
-
-                  <section class="border border-[var(--t-border)]">
-                    <div class="flex items-center justify-between gap-3 border-b border-[var(--t-border)] bg-[var(--t-surface-raised)] px-4 py-3">
-                      <div>
-                        <p class="text-xs font-black uppercase tracking-widest text-[var(--t-accent)]">Line Attribute Registry</p>
-                        <p class="mt-1 text-[10px] text-[var(--t-text-tertiary)]">Reusable fields for benefit and cost lines</p>
-                      </div>
-                      <button type="button" class="btn-secondary px-3 py-2 text-[10px]" (click)="addAttributeDefinition()" aria-label="Add financial line attribute">Add Attribute</button>
-                    </div>
-                    <div class="divide-y divide-[var(--t-border)]">
-                      @for (attribute of attributeDefinitions(); track attribute.id || attribute.key) {
-                        <div class="grid gap-3 p-4 lg:grid-cols-[1fr_130px_130px_90px_auto] lg:items-end">
-                          <label class="grid gap-1">
-                            <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Label</span>
-                            <input class="input-field py-2 text-xs font-bold" [ngModel]="attribute.label" (ngModelChange)="attribute.label = $event" aria-label="Attribute label">
-                          </label>
-                          <label class="grid gap-1">
-                            <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Applies To</span>
-                            <select class="input-field py-2 text-xs" [ngModel]="attribute.entity_type" (ngModelChange)="attribute.entity_type = $event" aria-label="Attribute entity type">
-                              <option value="benefit_line">Benefit Lines</option>
-                              <option value="cost_line">Cost Lines</option>
-                            </select>
-                          </label>
-                          <label class="grid gap-1">
-                            <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Value Type</span>
-                            <select class="input-field py-2 text-xs" [ngModel]="attribute.value_type" (ngModelChange)="attribute.value_type = $event" aria-label="Attribute value type">
-                              <option value="text">Text</option>
-                              <option value="number">Number</option>
-                              <option value="currency">Currency</option>
-                              <option value="percent">Percent</option>
-                              <option value="date">Date</option>
-                              <option value="select">Select</option>
-                              <option value="boolean">Boolean</option>
-                            </select>
-                          </label>
-                          <label class="grid gap-1">
-                            <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Order</span>
-                            <input type="number" class="input-field py-2 text-xs" [ngModel]="attribute.display_order" (ngModelChange)="attribute.display_order = numberValue($event)" aria-label="Attribute display order">
-                          </label>
-                          <div class="flex items-center gap-2">
-                            <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="attribute.is_required = !attribute.is_required" [attr.aria-label]="'Toggle required for ' + attribute.label">{{ attribute.is_required ? 'Required' : 'Optional' }}</button>
-                            <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="attribute.is_active = !attribute.is_active" [attr.aria-label]="'Toggle ' + attribute.label">{{ attribute.is_active ? 'Active' : 'Hidden' }}</button>
-                            <button type="button" class="btn-primary px-3 py-2 text-[10px]" (click)="saveAttributeDefinition(attribute)" aria-label="Save attribute definition">Save</button>
-                          </div>
-                          @if (attribute.value_type === 'select') {
-                            <label class="grid gap-1 lg:col-span-5">
-                              <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Select Options</span>
-                              <input class="input-field py-2 text-xs" [ngModel]="attributeOptionsText(attribute)" (ngModelChange)="setAttributeOptionsText(attribute, $event)" aria-label="Attribute select options" placeholder="Option A, Option B, Option C">
-                            </label>
-                          }
-                        </div>
-                      }
-                    </div>
-                  </section>
-                </div>
-              </div>
-
-              <div class="card p-8 xl:col-span-2">
-                <div class="mb-6 flex items-start justify-between gap-4">
-                  <div>
-                    <h3 class="text-lg font-bold text-[var(--t-text-primary)]">Cost Categories</h3>
-                    <p class="mt-1 text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Engine-owned taxonomy for initiative cost lines and bridge rows</p>
-                  </div>
-                  <button type="button" class="btn-secondary px-4 py-2 text-[10px]" (click)="addCostCategoryDefinition()" aria-label="Add cost category">Add Category</button>
-                </div>
-                <div class="divide-y divide-[var(--t-border)] border border-[var(--t-border)]">
-                  @for (category of costCategories(); track category.id || category.key) {
-                    <div class="grid gap-3 p-4 lg:grid-cols-[1fr_140px_140px_90px_auto] lg:items-end">
-                      <label class="grid gap-1">
-                        <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Label</span>
-                        <input class="input-field py-2 text-xs font-bold" [ngModel]="category.label" (ngModelChange)="category.label = $event" aria-label="Cost category label">
-                      </label>
-                      <label class="grid gap-1">
-                        <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Group</span>
-                        <input class="input-field py-2 text-xs" [ngModel]="category.group_key || ''" (ngModelChange)="category.group_key = $event || null" aria-label="Cost category group">
-                      </label>
-                      <label class="grid gap-1">
-                        <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Rollup</span>
-                        <select class="input-field py-2 text-xs" [ngModel]="category.rollup_type || ''" (ngModelChange)="category.rollup_type = $event || null" aria-label="Cost category rollup">
-                          <option value="">Unclassified</option>
-                          <option value="recurring_cost">Recurring</option>
-                          <option value="one_off_cost">One-time</option>
-                          <option value="total_cost">Total cost</option>
-                        </select>
-                      </label>
-                      <label class="grid gap-1">
-                        <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Order</span>
-                        <input type="number" class="input-field py-2 text-xs" [ngModel]="category.display_order" (ngModelChange)="category.display_order = numberValue($event)" aria-label="Cost category display order">
-                      </label>
-                      <div class="flex items-center gap-2">
-                        <button type="button" class="btn-ghost px-3 py-2 text-[10px]" (click)="category.is_active = !category.is_active" [attr.aria-label]="'Toggle ' + category.label">
-                          {{ category.is_active ? 'Active' : 'Hidden' }}
-                        </button>
-                        <button type="button" class="btn-primary px-3 py-2 text-[10px]" (click)="saveCostCategoryDefinition(category)" aria-label="Save cost category">Save</button>
-                      </div>
-                    </div>
-                  }
-                </div>
-              </div>
-            </div>
+            <app-financial-configuration />
           }
 
           @if (activeTab === 'Dashboard Configuration') {
@@ -1549,10 +1212,6 @@ export class AdminComponent implements OnInit {
       this.loadWorkstreams();
       this.loadBusinessUnits();
       this.loadSettings();
-    } else if (tab === 'Financial Configuration') {
-      this.loadFinancialConfiguration();
-      this.loadFinancialEngineConfiguration();
-      this.loadFinancialGovernance();
     } else if (tab === 'Dashboard Configuration') {
       this.loadDashboardConfiguration();
     } else if (tab === 'Access Control') {
