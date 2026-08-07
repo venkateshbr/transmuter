@@ -2629,6 +2629,39 @@ class _CumulativeInvestmentPaybackRepo(_InitiativePortfolioRepo):
         ]
 
 
+class _PortfolioTargetSummaryRepo(_InitiativePortfolioRepo):
+    def get_all_entries(self) -> list[dict]:
+        return []
+
+    def list_financial_bridge_rows(self) -> list[dict]:
+        return []
+
+
+def test_portfolio_target_summary_adds_only_revenue_and_margin_uplifts_to_baselines() -> None:
+    service = FinancialService.__new__(FinancialService)
+    service._repo = _PortfolioTargetSummaryRepo()
+
+    summary = service._portfolio_target_summary(2028)
+
+    assert summary is not None
+    assert summary.baseline_year == 2026
+    assert summary.target_year == 2028
+    assert summary.baseline_revenue == "1000.0000"
+    assert summary.revenue_uplift_plan == "100.0000"
+    assert summary.target_revenue_plan == "1100.0000"
+    assert summary.baseline_gross_margin == "500.0000"
+    assert summary.gross_margin_uplift_plan == "100.0000"
+    assert summary.target_gross_margin_plan == "600.0000"
+    assert summary.target_gross_margin_rate_plan == "54.5455"
+
+
+def test_portfolio_target_summary_is_unavailable_without_an_eligible_tenant_baseline() -> None:
+    service = FinancialService.__new__(FinancialService)
+    service._repo = _PortfolioTargetSummaryRepo()
+
+    assert service._portfolio_target_summary(2025) is None
+
+
 def test_initiative_portfolio_reconciles_baseline_and_value_year() -> None:
     service = cast(Any, FinancialService.__new__(FinancialService))
     service._repo = _InitiativePortfolioRepo()

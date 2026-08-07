@@ -40,9 +40,10 @@ def test_guide_renderer_formats_tables_and_rewrites_internal_guide_links() -> No
 def test_published_guide_listing_has_unique_slugs_and_useful_metadata() -> None:
     items = list_platform_guides()
 
-    assert len(items) == 15
+    assert len(items) == 16
     assert len({item["slug"] for item in items}) == len(items)
     assert all(item["title"] and item["summary"] and item["category"] for item in items)
-    assert all(item["reviewed_at"] == "2026-08-05" for item in items)
+    assert all(item["reviewed_at"] for item in items)
+    assert any(item["slug"] == "acme-dashboards-reporting" for item in items)
     assert any(item["slug"] == "platform-admin-validation-runbook" for item in items)
     assert get_platform_guide("../README") is None

@@ -53,7 +53,20 @@ interface PortfolioFinancialsResponse {
   broader_period_totals: PeriodRow[];
   cost_breakdown: BreakdownRow[];
   metric_breakdown: BreakdownRow[];
+  target_summary?: PortfolioTargetSummary | null;
   financial_mode?: unknown;
+}
+
+interface PortfolioTargetSummary {
+  baseline_year: number | null;
+  target_year: number | null;
+  baseline_revenue: string;
+  revenue_uplift_plan: string;
+  target_revenue_plan: string;
+  baseline_gross_margin: string;
+  gross_margin_uplift_plan: string;
+  target_gross_margin_plan: string;
+  target_gross_margin_rate_plan: string | null;
 }
 
 interface CostLineContribution {
@@ -286,6 +299,47 @@ interface ValueBridgeResponse {
             <p class="mt-4 text-2xl font-black text-[var(--t-text-primary)]">{{ baselineGrossMarginRateLabel() }}</p>
             <p class="mt-1 text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Gross margin / revenue</p>
           </div>
+        </section>
+      }
+
+      @if (targetSummary(); as target) {
+        <section class="border border-[var(--t-border)] bg-[var(--t-surface)] shadow-sm" data-testid="portfolio-target-summary">
+          <div class="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--t-border)] px-5 py-4">
+            <div>
+              <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">Baseline-to-target bridge</p>
+              <h2 class="mt-1 text-lg font-black text-[var(--t-text-primary)]">FY{{ target.target_year }} Portfolio Targets</h2>
+              <p class="mt-1 text-xs font-bold text-[var(--t-text-secondary)]">
+                Absolute business targets derived from the FY{{ target.baseline_year }} tenant baseline and selected-year initiative uplifts.
+              </p>
+            </div>
+            <span class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] px-3 py-2 text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">
+              Plan base · full portfolio
+            </span>
+          </div>
+          <div class="grid gap-px bg-[var(--t-border)] md:grid-cols-3">
+            <div class="bg-[var(--t-primary)] p-5 text-white" data-testid="target-revenue-card">
+              <p class="text-[9px] font-black uppercase tracking-widest text-white/70">FY{{ target.target_year }} Target Revenue</p>
+              <p class="mt-4 text-2xl font-black">{{ formatMoney(target.target_revenue_plan) }}</p>
+              <p class="mt-2 text-[10px] font-bold text-white/70">
+                {{ formatMoney(target.baseline_revenue) }} baseline + {{ formatMoney(target.revenue_uplift_plan) }} revenue uplift
+              </p>
+            </div>
+            <div class="bg-[var(--t-surface)] p-5" data-testid="target-gross-margin-card">
+              <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">FY{{ target.target_year }} Target Gross Margin</p>
+              <p class="mt-4 text-2xl font-black text-[var(--t-text-primary)]">{{ formatMoney(target.target_gross_margin_plan) }}</p>
+              <p class="mt-2 text-[10px] font-bold text-[var(--t-text-secondary)]">
+                {{ formatMoney(target.baseline_gross_margin) }} baseline + {{ formatMoney(target.gross_margin_uplift_plan) }} margin uplift
+              </p>
+            </div>
+            <div class="bg-[var(--t-surface)] p-5" data-testid="target-gross-margin-rate-card">
+              <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">FY{{ target.target_year }} Target Margin Rate</p>
+              <p class="mt-4 text-2xl font-black text-[var(--t-text-primary)]">{{ formatPercentage(target.target_gross_margin_rate_plan) }}</p>
+              <p class="mt-2 text-[10px] font-bold text-[var(--t-text-secondary)]">Target gross margin / target revenue</p>
+            </div>
+          </div>
+          <p class="border-t border-[var(--t-border)] bg-[var(--t-surface-raised)] px-5 py-3 text-[10px] font-bold leading-5 text-[var(--t-text-tertiary)]">
+            Cost savings contribute to Benefits and Net Run-rate Value below; they are not added to Target Gross Margin.
+          </p>
         </section>
       }
 
@@ -742,6 +796,7 @@ export class PortfolioFinancialsComponent implements OnInit {
     if (this.showBenefits()) return summary;
     return summary.filter(card => !['benefits', 'net_value'].includes(card.key));
   });
+  targetSummary = computed(() => this.response()?.target_summary || null);
 
   effectiveYear(): number | null {
     return this.year() ?? this.response()?.selected_year ?? null;
@@ -901,6 +956,14 @@ export class PortfolioFinancialsComponent implements OnInit {
       currency: this.reportingCurrency(),
       maximumFractionDigits: 0,
     }).format(parsed);
+  }
+
+  formatPercentage(value: string | number | null | undefined): string {
+    if (value === null || value === undefined || value === '') return 'n/a';
+    return new Intl.NumberFormat('en-US', {
+      style: 'percent',
+      maximumFractionDigits: 1,
+    }).format(this.parseMoney(value) / 100);
   }
 
   private normalizeCurrency(value: string | null | undefined): string | null {
