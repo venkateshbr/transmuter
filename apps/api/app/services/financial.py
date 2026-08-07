@@ -2942,8 +2942,7 @@ class FinancialService:
             {
                 int(row["baseline_year"])
                 for row in all_baselines
-                if row.get("baseline_year") is not None
-                and int(row["baseline_year"]) <= target_year
+                if row.get("baseline_year") is not None and int(row["baseline_year"]) <= target_year
             }
         )
         if not eligible_years:
