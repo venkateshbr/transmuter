@@ -34,6 +34,11 @@ GUIDE_SOURCES = (
         "user-guides/acme-transformation-value-demonstration-guide.md",
     ),
     GuideSource(
+        "acme-dashboards-reporting",
+        "Financial guides",
+        "user-guides/acme-dashboard-and-reporting-user-guide.md",
+    ),
+    GuideSource(
         "admin-financial-configuration",
         "Financial guides",
         "user-guides/admin-financial-configuration-user-guide.md",

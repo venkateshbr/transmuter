@@ -1,6 +1,6 @@
 # ACME Transformation Office Detailed Setup and Demo Guide
 
-Last reviewed: 2026-08-05
+Last reviewed: 2026-08-07
 
 This guide is a complete end-to-end walkthrough for setting up and demonstrating
 the **Acme Global Manufacturing** transformation tenant in Transmuter.
@@ -56,7 +56,7 @@ the next available `TRN-*` code; never assume that temporary code in advance.
 | Tenant FY26 baseline | Configured | Annual revenue baseline = `$20.0M`; annual gross margin baseline = `$9.0M`. |
 | Initiatives | Configured | 10 ACME initiatives. |
 | Initiative baseline allocation | Reconciles | Initiative baselines total `$20.0M` revenue and `$9.0M` gross margin. |
-| FY28 Financial Overview | Reconciles | Benefits `$9.182M`, recurring costs `$0.800M`, net run-rate value `$8.382M`; actual benefit `$4.080M`, recurring actual `$0.388M`, net actual `$3.692M`. |
+| FY28 Financial Overview | Reconciles | Target revenue `$24.000M`, target gross margin `$14.432M`, target margin rate `60.1%`; benefits `$9.182M`, recurring costs `$0.800M`, net run-rate value `$8.382M`; actual benefit `$4.080M`, recurring actual `$0.388M`, net actual `$3.692M`. |
 | Investments & Payback | Reconciles | One-off investment remains separately governed from recurring FY28 run-rate value. |
 | Benefit Tracking / Bankable Plan | Board-demo-ready | All 10 initiatives have locked plans; `ENT-005` visibly shows version 2. Locked baseline is `$13.802M` and realized value is `$7.9732M`. |
 | Contributor drawer | Reconciles | Open `2028-M01` to show initiative contributors such as `ENT-006`. The broader annual `2028` row does not expose the same initiative drawer. |
@@ -1269,6 +1269,17 @@ Top baseline cards:
 | FY26 Portfolio Baseline Annual Gross Margin | `$9.00M` |
 | Baseline Margin Rate | `45.0%` |
 
+Baseline-to-target cards:
+
+| Card | Expected value | Calculation |
+|---|---:|---|
+| FY28 Target Revenue | `$24.000M` | `$20.000M` baseline + `$4.000M` revenue uplift |
+| FY28 Target Gross Margin | `$14.432M` | `$9.000M` baseline + `$5.432M` gross-margin uplift |
+| FY28 Target Margin Rate | `60.1%` | `$14.432M / $24.000M` |
+
+Cost savings remain in Benefits and Net Run-rate Value. They are not added to
+Target Gross Margin.
+
 Demo sequence:
 
 1. Set **Year** to `2028`.
@@ -1276,17 +1287,20 @@ Demo sequence:
 3. Turn **Benefits On**.
 4. Turn **Actuals On**.
 5. Point to the FY26 baseline cards.
-6. Point to the trend chart baseline line.
-7. Point to Benefits, Recurring Costs, and Net Run-rate Value.
-8. Change year to `2027` to show ramp year.
-9. Change back to `2028` to show run-rate.
-10. Open `/financials/investments-payback` to show `$2.50M` one-off
+6. Point to the FY28 target revenue, target gross margin, and target margin-rate cards.
+7. Point to the trend chart baseline line.
+8. Point to Benefits, Recurring Costs, and Net Run-rate Value.
+9. Change year to `2027` to show ramp year.
+10. Change back to `2028` to show run-rate.
+11. Open `/financials/investments-payback` to show `$2.50M` one-off
     investment and the `3.6` month payback period.
 
 Speaker notes:
 
 > This is the board proof screen. The top row answers the baseline question:
-> what business were we improving? The summary cards answer the value question:
+> what business were we improving? The target cards show that `$20.000M`
+> revenue becomes `$24.000M` and `$9.000M` gross margin becomes `$14.432M`.
+> The summary cards then answer the value question:
 > what recurring EBITDA-effective run-rate value are we delivering? In FY28,
 > ACME shows `$9.182M` gross benefits, `$0.800M` recurring run cost, and `$8.382M`
 > net run-rate value.

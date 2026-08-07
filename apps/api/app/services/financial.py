@@ -114,6 +114,7 @@ from app.domain.financials import (
     PortfolioInvestmentPaybackRow,
     PortfolioInvestmentPaybackSummary,
     PortfolioInYearValueCard,
+    PortfolioTargetSummary,
     PortfolioValueBridgeBasis,
     PortfolioValueRampPeriod,
     PortfolioValueRampResponse,
@@ -2858,7 +2859,7 @@ class FinancialService:
         }
         raw_entries = self._repo.get_all_entries()
         if not raw_entries:
-            return self._get_clean_portfolio_financials(
+            response = self._get_clean_portfolio_financials(
                 granularity,
                 year=year,
                 initiative_id=initiative_id,
@@ -2868,6 +2869,8 @@ class FinancialService:
                 tag=tag,
                 category_key=category_key,
             )
+            response.target_summary = self._portfolio_target_summary(response.selected_year)
+            return response
         all_entries = [
             row
             for row in self._reporting_rows(raw_entries)
@@ -2925,7 +2928,72 @@ class FinancialService:
             metric_values,
             config=config,
         )
+        response.target_summary = self._portfolio_target_summary(selected_year)
         return response
+
+    def _portfolio_target_summary(self, target_year: int | None) -> PortfolioTargetSummary | None:
+        """Build the absolute target bridge without mixing savings or run costs into margin."""
+        if target_year is None:
+            return None
+
+        definitions_by_id = self._metric_definitions_by_id()
+        all_baselines = self._repo.list_tenant_annual_baselines()
+        eligible_years = sorted(
+            {
+                int(row["baseline_year"])
+                for row in all_baselines
+                if row.get("baseline_year") is not None and int(row["baseline_year"]) <= target_year
+            }
+        )
+        if not eligible_years:
+            return None
+
+        baseline_year = eligible_years[-1]
+        baseline_values = [
+            row for row in all_baselines if int(row.get("baseline_year") or 0) == baseline_year
+        ]
+        baseline_revenue = self._baseline_amount(
+            baseline_values,
+            definitions_by_id,
+            exact_keys={"annual_revenue_baseline", "baseline_revenue", "revenue_baseline"},
+            required_tokens={"revenue", "baseline"},
+        )
+        baseline_gross_margin = self._baseline_amount(
+            baseline_values,
+            definitions_by_id,
+            exact_keys={
+                "annual_gross_margin_baseline",
+                "baseline_gross_margin",
+                "gross_margin_baseline",
+            },
+            required_tokens={"gross", "margin", "baseline"},
+        )
+        bridge = self.get_portfolio_value_bridge(
+            basis="target_year_run_rate",
+            year=target_year,
+        )
+        revenue_uplift = _dec(bridge.base_case.revenue_uplift)
+        gross_margin_uplift = _dec(bridge.base_case.gm_uplift)
+        target_revenue = baseline_revenue + revenue_uplift
+        target_gross_margin = baseline_gross_margin + gross_margin_uplift
+        target_margin_rate = (
+            (target_gross_margin / target_revenue * Decimal("100"))
+            if target_revenue > Decimal("0")
+            else None
+        )
+        return PortfolioTargetSummary(
+            baseline_year=baseline_year,
+            target_year=target_year,
+            baseline_revenue=_money(baseline_revenue),
+            revenue_uplift_plan=_money(revenue_uplift),
+            target_revenue_plan=_money(target_revenue),
+            baseline_gross_margin=_money(baseline_gross_margin),
+            gross_margin_uplift_plan=_money(gross_margin_uplift),
+            target_gross_margin_plan=_money(target_gross_margin),
+            target_gross_margin_rate_plan=(
+                _money(target_margin_rate) if target_margin_rate is not None else None
+            ),
+        )
 
     def get_portfolio_investments_payback(
         self,

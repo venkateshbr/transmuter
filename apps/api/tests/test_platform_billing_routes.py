@@ -40,9 +40,10 @@ def test_platform_admin_can_list_and_read_published_user_guides() -> None:
 
     assert listing.status_code == 200
     items = listing.json()["items"]
-    assert len(items) == 15
+    assert len(items) == 16
     assert items[0]["slug"] == "tenant-onboarding"
     assert any(item["slug"] == "acme-detailed-demo" for item in items)
+    assert any(item["slug"] == "acme-dashboards-reporting" for item in items)
     assert any(item["slug"] == "platform-admin-validation-runbook" for item in items)
 
     detail = client.get("/platform/guides/tenant-onboarding", headers=_platform_headers())

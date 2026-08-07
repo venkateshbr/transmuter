@@ -13,6 +13,7 @@ deterministic cleanup.
 | Guide | Use it for |
 |---|---|
 | [Tenant onboarding and portfolio user guide](../team/TENANT_ONBOARDING_USER_GUIDE.md) | Current end-to-end product guide for tenant setup, roles, initiatives, financials, delivery, governance, dashboards, meetings, and Microsoft 365. |
+| [Dashboards and reporting — ACME example](acme-dashboard-and-reporting-user-guide.md) | End-user explanation of every dashboard/report card, chart, filter, drilldown, formula boundary, and ACME validation value. |
 
 ## Acme guides
 

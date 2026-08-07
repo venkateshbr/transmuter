@@ -644,6 +644,20 @@ class PortfolioFinancialSummaryCard(BaseModel):
     variance: str = "0"
 
 
+class PortfolioTargetSummary(BaseModel):
+    """Absolute target-year portfolio values derived from tenant baselines."""
+
+    baseline_year: int | None = None
+    target_year: int | None = None
+    baseline_revenue: str = "0"
+    revenue_uplift_plan: str = "0"
+    target_revenue_plan: str = "0"
+    baseline_gross_margin: str = "0"
+    gross_margin_uplift_plan: str = "0"
+    target_gross_margin_plan: str = "0"
+    target_gross_margin_rate_plan: str | None = None
+
+
 class PortfolioFinancialPeriod(BaseModel):
     period: str
     year: int
@@ -757,6 +771,7 @@ class PortfolioFinancialsResponse(BaseModel):
     broader_period_totals: list[PortfolioFinancialPeriod]
     cost_breakdown: list[PortfolioFinancialBreakdown]
     metric_breakdown: list[PortfolioFinancialBreakdown]
+    target_summary: PortfolioTargetSummary | None = None
     financial_mode: FinancialModeDescriptor | None = None
 
 
