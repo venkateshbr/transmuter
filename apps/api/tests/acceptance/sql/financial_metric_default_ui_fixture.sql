@@ -33,7 +33,7 @@ SELECT
   TRUE,
   99999
 FROM organizations organization
-WHERE organization.slug = 'acme'
+WHERE organization.slug = 'acme-transformation-lab'
 ON CONFLICT (tenant_id, key) DO NOTHING;
 
 DO $$
@@ -42,7 +42,7 @@ BEGIN
     SELECT 1
     FROM financial_metric_definitions definition
     JOIN organizations organization ON organization.id = definition.tenant_id
-    WHERE organization.slug = 'acme'
+    WHERE organization.slug = 'acme-transformation-lab'
       AND definition.key = 'default_metric_ui_acceptance'
       AND definition.origin = 'default_catalog'
       AND definition.catalog_version = 'acceptance-fixture'
