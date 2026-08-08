@@ -38,12 +38,14 @@ Deployment note:
 
 ### 2026-08-08 - Operating Navigation Split
 
-Status: deployed to development; authenticated browser acceptance pending
+Status: deployed to development; authenticated API and component acceptance complete; browser acceptance pending
 
 GitHub tracking:
 
 - Issue `#482`, draft stacked PR `#483`.
 - Deployed application commit: `be8d1d1cbab9f950248153b9c5d4b5235b1711b0`.
+- Final combined dev validation commit:
+  `ee66a1baf449eebca24a2f068fa945fdf634f153`.
 - PR base: `feat/473-roadmap-gantt`, preserving the dashboard and Roadmap
   improvements already deployed to development.
 
@@ -68,13 +70,23 @@ Dev deployment and acceptance:
 
 - Environment: `https://transmuter-dev.ishirock.tech`.
 - Hostinger deployment action `108336503` reached terminal state `success`.
+- Final combined Hostinger deployment action `108338490` reached terminal state
+  `success` and rebuilt the dev API and web images from `ee66a1b`.
 - Public `/health` and `/api/health` validation passed.
 - The public deployed main bundle contains all three new top-level menu labels.
 - Local verification: Ruff and TypeScript passed; dashboard configuration tests
   passed `3/3`; Angular passed `45/45` tests across 12 files; production build
   passed without warnings.
-- Authenticated browser acceptance remains open because the saved deterministic
-  fixture credential is stale and no reusable browser session is available.
+- Final combined verification passed Ruff, Ruff formatting, mypy, `13/13`
+  focused backend tests, `13/13` Angular component tests, TypeScript, and the
+  Angular production build.
+- Real authenticated dev API acceptance confirmed all five configurable
+  Financial Operations destinations use `financial_operations`; the temporary
+  dashboard-layout and Roadmap fixtures were reset/removed successfully.
+- Authenticated browser acceptance remains open because no in-app or Chrome
+  browser backend is attached to the current execution environment. The saved
+  deterministic transformation-office credential is valid and returned
+  `/auth/me` HTTP `200`.
 
 Production promotion:
 
@@ -82,13 +94,15 @@ Production promotion:
 
 ### 2026-08-08 - Dependency-aware Roadmap Explorer Gantt
 
-Status: deployed to development; authenticated UI/API acceptance pending
+Status: deployed to development; authenticated API acceptance complete; browser acceptance pending
 
 GitHub tracking:
 
 - Parent issue `#473`, acceptance issue `#478`, deploy-readiness issue `#479`,
   draft stacked PR `#480`.
 - Deployed application commit: `714cc73fde985a51a5718e3536973d879aea1296`.
+- Final combined dev validation commit:
+  `ee66a1baf449eebca24a2f068fa945fdf634f153`.
 - Initial Gantt application commit: `0f61ecba7b2eaac16a477b9837f44250771c5939`.
 - PR base: `feat/462-dashboard-improvements`; production promotion therefore
   also depends on completing the dashboard reorganization release.
@@ -121,16 +135,24 @@ Dev deployment and acceptance:
 - Environment: `https://transmuter-dev.ishirock.tech`.
 - Initial Hostinger deployment action `108325741` reached terminal state
   `success`; regression-fix action `108333564` also reached `success`.
+- Final combined Hostinger deployment action `108338490` reached terminal state
+  `success`.
 - Public `/health` and `/api/health` validation passed.
 - Local verification before the initial deploy: Ruff, `3/3` focused backend
   tests, `43/43` frontend tests, Angular compilation, and the production build
   passed. Regression-fix verification added the failing renderer test, then
   passed `44/44` frontend tests and an Angular production build without
   warnings. The roadmap lazy chunk reduced from about 690 kB to 38.53 kB.
-- Final real authenticated API/browser acceptance remains open. The ignored
-  saved fixture credential returns HTTP `401` for both the role and
-  tenant-admin identities, and no reusable browser backend is available in the
-  current execution environment. No credential was reset or exposed.
+- Real authenticated dev API acceptance used the deterministic ACME fixture,
+  loaded the seeded 33-milestone portfolio, created two dated temporary
+  milestone rows and one `finish_to_start` dependency with a five-day lag,
+  confirmed the Roadmap response returned the exact source, target, type, lag,
+  and full `2026-01-01` to `2028-12-31` range, then removed both temporary
+  milestones. The final portfolio returned to 33 milestones and zero
+  dependencies.
+- Browser acceptance remains open because no in-app or Chrome browser backend
+  is attached to the current execution environment. The ignored fixture
+  credential is valid; no credential was reset or exposed.
 
 Production promotion:
 
@@ -170,6 +192,9 @@ Dev deployment and acceptance:
 
 - Environment: `https://transmuter-dev.ishirock.tech`.
 - Hostinger deployment action `108319254` reached terminal state `success`.
+- Final combined dev validation commit
+  `ee66a1baf449eebca24a2f068fa945fdf634f153` was deployed by Hostinger action
+  `108338490`, which reached terminal state `success`.
 - API, web, and Hermes containers report `running`.
 - Public `/health` and `/api/health` validation passed.
 - Real authenticated API validation confirmed exactly three Dashboard entries,
@@ -181,6 +206,9 @@ Dev deployment and acceptance:
   to publish a tenant role-default layout.
 - Local verification before deploy: Angular production build, `43/43` frontend
   tests, Ruff, and `18/18` focused backend tests passed.
+- Post-deploy authenticated API acceptance confirmed the three canonical guide
+  slugs render sanitized HTML and both eight-widget layouts persist a personal
+  size change across reload before reset restores the inherited layout.
 - Browser acceptance remains pending because the execution environment exposed
   no in-app or Chrome browser backend. No production deployment was performed.
 
