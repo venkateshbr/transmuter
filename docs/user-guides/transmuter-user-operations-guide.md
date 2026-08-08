@@ -89,7 +89,7 @@ Open **Operations → Roadmap & Milestones** to use the portfolio Gantt:
 3. Filter by workstream, status, milestone, initiative, or owner.
 4. Expand a workstream and initiative to see its milestone bars. The bar is the planned delivery window; the diamond at its right edge is planned completion.
 5. Choose **Blocking and at risk** to reduce connector clutter, or **Selected chain** to trace one milestone's upstream and downstream consequences.
-6. Select a milestone bar to review dates, owner, pressure, upstream blockers, and downstream dependents. Use **Open initiative** when a record needs correction. The Gantt itself is read-only.
+6. Select either a milestone name in the left register or its bar/diamond to review dates, owner, pressure, upstream blockers, and downstream dependents. Use **Open milestone details** to open the initiative's Milestones tab with that record expanded when it needs correction. The Gantt itself is read-only.
 
 #### ACC-101 worked dependency example
 
@@ -116,7 +116,7 @@ Lag is the delay after the dependency condition. `+5` means wait five days; `-2`
 
 If the connector slips to 20 September, update its Target Completion in the initiative milestone workflow. Then reopen the Gantt and assess whether the pilot or production dates also require an approved schedule change. The Roadmap Explorer never silently reschedules dependent records.
 
-Milestones without a planned completion date appear under **Needs scheduling** below the Gantt. Assign dates in the source initiative rather than leaving operational work outside the schedule.
+Milestones with only one planned date still appear as a diamond. Milestones with neither a planned start nor planned completion appear under **Needs scheduling** below the Gantt. Assign dates in the source initiative rather than leaving operational work outside the schedule.
 
 ### 5.3 Action Items
 

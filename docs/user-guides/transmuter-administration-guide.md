@@ -84,7 +84,7 @@ Before teams create milestone dependencies, publish a consistent scheduling conv
 - Allow a completion-only milestone when it is a genuine event or decision point.
 - Use finish-to-start as the default dependency type.
 - Use lag for a real waiting period such as stabilization, notice, or approval; do not use lag to conceal an unplanned delay.
-- Require owners to correct missing dates shown in the Roadmap Explorer's **Needs scheduling** section.
+- Require owners to correct milestones with neither planned date shown in the Roadmap Explorer's **Needs scheduling** section. A record with one planned date remains visible as a diamond until its full delivery window is known.
 - Keep schedule editing in initiative milestone workflows. The portfolio Gantt is a read-only control surface.
 
 ACME policy example: system build-to-pilot dependencies use finish-to-start; deployment-to-adoption may use start-to-start with a documented 30-day lag. Cross-initiative dependencies are permitted when both milestones belong to ACME. The platform rejects self-references, cycles, and links to a milestone outside the active tenant.

@@ -198,7 +198,10 @@ import {
               </section>
               <aside class="space-y-3">
                 <button type="button" class="btn-primary w-full justify-center" (click)="traceSelected()"><span class="material-icons text-sm">account_tree</span> Trace dependency chain</button>
-                <a class="btn-secondary w-full justify-center" [routerLink]="['/initiatives', selected.initiative_id]">Open initiative</a>
+                <a
+                  class="btn-secondary w-full justify-center"
+                  [routerLink]="['/initiatives', selected.initiative_id]"
+                  [queryParams]="{ tab: 'milestones', milestone: selected.id }">Open milestone details</a>
                 <p class="border-t border-[var(--t-border)] pt-4 text-xs leading-5 text-[var(--t-text-secondary)]">Schedule changes remain controlled in the milestone workflow. This roadmap is read-only to prevent accidental portfolio rescheduling.</p>
               </aside>
             </div>
@@ -273,9 +276,9 @@ export class RoadmapComponent implements OnInit {
     return (this.roadmap()?.initiatives || []).filter(item => ids.has(item.id));
   });
   readonly scheduledMilestones = computed(() => this.filteredMilestones()
-    .filter(item => !!item.planned_end)
+    .filter(item => !!(item.planned_start || item.planned_end))
     .sort((a, b) => (a.planned_start || a.planned_end || '').localeCompare(b.planned_start || b.planned_end || '')));
-  readonly unscheduledMilestones = computed(() => this.filteredMilestones().filter(item => !item.planned_end));
+  readonly unscheduledMilestones = computed(() => this.filteredMilestones().filter(item => !item.planned_start && !item.planned_end));
   readonly selectedMilestone = computed(() => this.milestones().find(item => item.id === this.selectedMilestoneId()) || null);
   readonly upstreamDependencies = computed(() => this.dependencies().filter(item => item.target === this.selectedMilestoneId()));
   readonly downstreamDependencies = computed(() => this.dependencies().filter(item => item.source === this.selectedMilestoneId()));

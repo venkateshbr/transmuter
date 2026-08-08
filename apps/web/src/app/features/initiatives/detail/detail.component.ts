@@ -88,7 +88,7 @@ import { DependenciesTabComponent } from './dependencies/dependencies-tab.compon
         <div class="mt-6">
           <app-overview-tab *ngIf="activeTab === 'overview'" [initiativeId]="id"></app-overview-tab>
           <app-financials-tab *ngIf="activeTab === 'financials'" [initiativeId]="id"></app-financials-tab>
-          <app-milestones-tab *ngIf="activeTab === 'milestones'" [initiativeId]="id"></app-milestones-tab>
+          <app-milestones-tab *ngIf="activeTab === 'milestones'" [initiativeId]="id" [focusMilestoneId]="milestoneId"></app-milestones-tab>
           <app-kpis-tab *ngIf="activeTab === 'kpis'" [initiativeId]="id" [canManage]="!!initiative()?.capabilities?.manage_execution" [startCreate]="action === 'new'"></app-kpis-tab>
           <app-risks-tab *ngIf="activeTab === 'risks'" [initiativeId]="id" [canManage]="!!initiative()?.capabilities?.manage_execution" [startCreate]="action === 'new'"></app-risks-tab>
           <app-dependencies-tab *ngIf="activeTab === 'dependencies'" [initiativeId]="id"></app-dependencies-tab>
@@ -113,12 +113,14 @@ export class InitiativeDetailComponent implements OnInit {
 
   activeTab = 'overview';
   action = '';
+  milestoneId = '';
   
   ngOnInit(): void {
     this.route.queryParamMap.subscribe(params => {
       const requestedTab = params.get('tab') || '';
       if (this.tabs.some(tab => tab.id === requestedTab)) this.activeTab = requestedTab;
       this.action = params.get('action') || '';
+      this.milestoneId = params.get('milestone') || '';
     });
     if (this.id) {
       this.api.get(`/initiatives/${this.id}`).subscribe({

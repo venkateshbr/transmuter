@@ -1456,8 +1456,8 @@ async function main() {
               const bodyText = document.body?.innerText || '';
               return bodyText.includes('Roadmap Explorer')
                 && bodyText.includes(${JSON.stringify(crossUpstreamMilestone.name)})
-                && !!document.querySelector('.gantt_task_line[task_id="${downstreamMilestone.id}"]')
-                && document.querySelectorAll('.gantt_task_link').length > 0;
+                && !!document.querySelector('[data-milestone-id="${downstreamMilestone.id}"]')
+                && document.querySelectorAll('path.roadmap-link').length > 0;
             })()
           `),
           'roadmap dotted dependency link',
@@ -1466,8 +1466,8 @@ async function main() {
       } catch (error) {
         const roadmapState = await evalJs(page, `
           (() => ({
-            pathCount: document.querySelectorAll('.gantt_task_link').length,
-            downstreamMarker: !!document.querySelector('.gantt_task_line[task_id="${downstreamMilestone.id}"]'),
+            pathCount: document.querySelectorAll('path.roadmap-link').length,
+            downstreamMarker: !!document.querySelector('[data-milestone-id="${downstreamMilestone.id}"]'),
             upstreamNameVisible: (document.body?.innerText || '').includes(${JSON.stringify(crossUpstreamMilestone.name)}),
             bodyText: (document.body?.innerText || '').slice(0, 2000),
           }))()
@@ -1476,7 +1476,7 @@ async function main() {
       }
       await evalJs(page, `
         (() => {
-          const button = document.querySelector('.gantt_task_line[task_id="${downstreamMilestone.id}"]');
+          const button = document.querySelector('[data-milestone-id="${downstreamMilestone.id}"]');
           if (!button) throw new Error('Missing downstream roadmap milestone marker');
           button.scrollIntoView({ block: 'center', inline: 'center' });
           button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
@@ -1507,7 +1507,7 @@ async function main() {
           (() => {
             const modal = document.querySelector('[data-testid="roadmap-milestone-modal"]');
             return {
-              markerExists: !!document.querySelector('.gantt_task_line[task_id="${downstreamMilestone.id}"]'),
+              markerExists: !!document.querySelector('[data-milestone-id="${downstreamMilestone.id}"]'),
               modalExists: !!modal,
               modalText: (modal?.innerText || '').slice(0, 2000),
               upstreamPanelText: (document.querySelector('[data-testid="roadmap-upstream-dependencies"]')?.innerText || '').slice(0, 1000),
@@ -1526,7 +1526,7 @@ async function main() {
         })()
       `);
       await waitFor(
-        () => evalJs(page, "document.querySelectorAll('.roadmap-dimmed').length > 0 && document.querySelectorAll('.gantt_task_link').length > 0"),
+        () => evalJs(page, "document.querySelectorAll('.roadmap-row-dimmed').length > 0 && document.querySelectorAll('path.roadmap-link').length > 0"),
         'roadmap selected dependency chain',
       );
       await page.send('Page.navigate', { url: `${uiBaseUrl}/initiatives/${manualInitiativeId}` });

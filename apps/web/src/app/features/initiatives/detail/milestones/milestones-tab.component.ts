@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, Input, OnChanges, OnInit, SimpleChanges, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../../core/services/api.service';
@@ -134,7 +134,7 @@ interface DependencyCandidateGroup {
       @if (!loading() && milestones().length > 0) {
         <div class="space-y-2">
           @for (ms of filteredMilestones(); track ms.id) {
-            <div class="card p-0 overflow-hidden group/row transition-all duration-300">
+            <div class="card p-0 overflow-hidden group/row transition-all duration-300" [attr.data-milestone-detail-id]="ms.id">
               <!-- Row header -->
               <div class="w-full flex items-center gap-3 px-4 py-3 hover:bg-[var(--t-surface-raised)] transition-colors cursor-pointer"
                    (click)="toggleExpand(ms.id)">
@@ -465,8 +465,9 @@ interface DependencyCandidateGroup {
     }
   `,
 })
-export class MilestonesTabComponent implements OnInit {
+export class MilestonesTabComponent implements OnInit, OnChanges {
   @Input() initiativeId = '';
+  @Input() focusMilestoneId = '';
 
   private readonly api = inject(ApiService);
 
@@ -512,6 +513,13 @@ export class MilestonesTabComponent implements OnInit {
     if (!this.initiativeId) { this.loading.set(false); return; }
     this.loadPortfolioMilestones();
     this.loadMilestones();
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['focusMilestoneId'] && this.focusMilestoneId && !changes['focusMilestoneId'].firstChange) {
+      this.expandedId.set(this.focusMilestoneId);
+      this.loadDetail(this.focusMilestoneId);
+    }
   }
 
   toggleExpand(id: string): void {
@@ -749,6 +757,10 @@ export class MilestonesTabComponent implements OnInit {
           ...item,
           sort_order: item.sort_order ?? index * 10,
         })));
+        if (this.focusMilestoneId && r.items.some(item => item.id === this.focusMilestoneId)) {
+          this.expandedId.set(this.focusMilestoneId);
+          this.loadDetail(this.focusMilestoneId);
+        }
         this.loading.set(false);
       },
       error: () => this.loading.set(false),

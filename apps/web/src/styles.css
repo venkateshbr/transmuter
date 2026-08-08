@@ -301,149 +301,102 @@ h1, h2, h3, h4, h5, h6 {
   animation: spin-slow 8s linear infinite;
 }
 
-/* ── Roadmap Explorer / DHTMLX Gantt adapter theme ── */
-.roadmap-gantt-host .gantt_container,
-.roadmap-gantt-host .gantt_grid,
-.roadmap-gantt-host .gantt_task,
-.roadmap-gantt-host .gantt_grid_data,
-.roadmap-gantt-host .gantt_task_bg {
-  background: var(--t-surface);
-  color: var(--t-text-primary);
-  border-color: var(--t-border);
-  font-family: "Libre Franklin", Arial, sans-serif;
-  --dhx-gantt-font-family: "Libre Franklin", Arial, sans-serif;
-  --dhx-gantt-border-radius: 0;
-  --dhx-gantt-task-border-radius: 0;
-  --dhx-gantt-base-colors-primary: var(--t-accent);
-  --dhx-gantt-container-background: var(--t-surface);
-  --dhx-gantt-container-color: var(--t-text-primary);
-  --dhx-gantt-base-colors-border: var(--t-border);
-  --dhx-gantt-base-colors-background-alt: var(--t-surface-raised);
-}
-.roadmap-gantt-host .gantt_grid_scale,
-.roadmap-gantt-host .gantt_task_scale {
+/* ── Roadmap Explorer timeline structure ── */
+.roadmap-axis {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: 330px var(--timeline-width);
+  height: 58px;
   background: var(--t-primary);
   color: white;
-  border-color: rgba(255, 255, 255, 0.2);
+  border-bottom: 1px solid rgba(255, 255, 255, .22);
 }
-.roadmap-gantt-host .gantt_grid_head_cell,
-.roadmap-gantt-host .gantt_scale_cell {
-  border-color: rgba(255, 255, 255, 0.18);
-  color: white;
-  font-size: 9px;
+.roadmap-axis-register {
+  position: sticky;
+  left: 0;
+  z-index: 22;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 1rem;
+  background: var(--t-primary);
+  border-right: 1px solid rgba(255, 255, 255, .22);
+}
+.roadmap-axis-register span {
+  font-size: .62rem;
   font-weight: 900;
-  letter-spacing: 0.08em;
   text-transform: uppercase;
+  letter-spacing: .12em;
 }
-.roadmap-gantt-host .gantt_grid_data .gantt_row,
-.roadmap-gantt-host .gantt_task_row,
-.roadmap-gantt-host .gantt_cell,
-.roadmap-gantt-host .gantt_task_cell {
-  border-color: var(--t-border);
-  background: var(--t-surface);
-}
-.roadmap-gantt-host .gantt_row:hover,
-.roadmap-gantt-host .gantt_task_row:hover,
-.roadmap-gantt-host .gantt_row.gantt_selected,
-.roadmap-gantt-host .gantt_task_row.gantt_selected {
-  background: var(--t-surface-raised);
-}
-.roadmap-gantt-host .gantt_tree_content,
-.roadmap-gantt-host .gantt_cell {
-  color: var(--t-text-primary);
-  font-size: 11px;
-}
-.roadmap-gantt-host .gantt_tree_icon {
-  color: var(--t-accent);
-}
-.roadmap-gantt-host .gantt_task_line {
-  border: 0;
-  border-radius: 0;
-  background: var(--t-accent);
-  box-shadow: none;
-}
-.roadmap-gantt-host .gantt_project {
-  border-radius: 0;
-  background: var(--t-primary);
-}
-.roadmap-gantt-host .gantt_milestone {
-  border-color: var(--t-accent);
-  background: var(--t-accent);
-}
-.roadmap-gantt-host .gantt_milestone.roadmap-status-complete {
-  border-color: var(--t-text-tertiary);
-  background: var(--t-text-tertiary);
-}
-.roadmap-gantt-host .gantt_milestone.roadmap-status-overdue {
-  border-color: var(--t-red);
-  background: var(--t-red);
-}
-.roadmap-gantt-host .gantt_task_line.roadmap-window::after {
-  content: "";
-  position: absolute;
-  right: -5px;
-  top: 3px;
-  width: 10px;
-  height: 10px;
-  background: inherit;
-  transform: rotate(45deg);
-  border: 2px solid var(--t-surface);
-}
-.roadmap-gantt-host .gantt_task_line.roadmap-status-complete {
-  background: var(--t-text-tertiary);
-  opacity: 0.72;
-}
-.roadmap-gantt-host .gantt_task_line.roadmap-status-overdue {
-  background: var(--t-red);
-}
-.roadmap-gantt-host .gantt_task_line.roadmap-status-in_progress {
-  background: var(--t-accent);
-}
-.roadmap-gantt-host .gantt_task_line.roadmap-selected {
-  outline: 3px solid var(--t-blue-light);
-  outline-offset: 2px;
-}
-.roadmap-gantt-host .roadmap-dimmed {
-  opacity: 0.18 !important;
-}
-.roadmap-gantt-host .gantt_task_content {
-  padding: 0 7px;
-  color: white;
-  font-size: 9px;
+.roadmap-axis-register small {
+  color: var(--t-blue-light);
+  font-size: .58rem;
   font-weight: 800;
-  line-height: 16px;
 }
-.roadmap-gantt-host .gantt_task_link .gantt_line_wrapper div {
-  background: var(--t-accent);
+.roadmap-axis-timeline {
+  position: relative;
+  overflow: hidden;
 }
-.roadmap-gantt-host .gantt_task_link .gantt_link_arrow {
-  border-left-color: var(--t-accent);
+.roadmap-axis-tick {
+  position: absolute;
+  inset-block: 0;
+  width: 1px;
+  border-left: 1px solid rgba(255, 255, 255, .2);
 }
-.roadmap-gantt-host .gantt_task_link.roadmap-link-blocking .gantt_line_wrapper div {
-  background: var(--t-red);
-  height: 3px;
+.roadmap-axis-tick span {
+  position: absolute;
+  top: 20px;
+  left: 8px;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, .88);
+  font-size: .58rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .08em;
 }
-.roadmap-gantt-host .gantt_task_link.roadmap-link-blocking .gantt_link_arrow {
-  border-left-color: var(--t-red);
+.roadmap-workstream-row {
+  background: var(--t-primary-soft);
 }
-.roadmap-gantt-host .gantt_task_link.roadmap-link-at_risk .gantt_line_wrapper div {
-  background: var(--t-amber);
+.roadmap-workstream-row .roadmap-register-cell,
+.roadmap-workstream-row .roadmap-timeline-cell {
+  background-color: var(--t-primary-soft);
 }
-.roadmap-gantt-host .gantt_task_link.roadmap-link-at_risk .gantt_link_arrow {
-  border-left-color: var(--t-amber);
+.roadmap-workstream-row .roadmap-register-cell {
+  gap: .55rem;
+  color: var(--t-primary);
 }
-.roadmap-gantt-host .gantt_task_link.roadmap-link-resolved {
-  opacity: 0.35;
+.roadmap-workstream-row .material-icons {
+  color: var(--t-accent);
+  font-size: 1rem;
 }
-.roadmap-gantt-host .gantt_marker.today {
-  background: var(--t-red);
+.roadmap-workstream-row strong {
+  font-size: .63rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .1em;
 }
-.gantt_tooltip {
-  border: 1px solid var(--t-border-strong) !important;
-  border-radius: 0 !important;
-  background: var(--t-surface) !important;
-  color: var(--t-text-primary) !important;
-  font-family: "Libre Franklin", Arial, sans-serif !important;
-  font-size: 11px !important;
-  box-shadow: 0 8px 24px rgba(7, 31, 60, 0.18) !important;
+.roadmap-initiative-row .roadmap-register-cell,
+.roadmap-initiative-row .roadmap-timeline-cell {
+  background-color: var(--t-surface-raised);
+}
+.roadmap-initiative-row .roadmap-register-cell {
+  gap: .65rem;
+  padding-left: 1.5rem;
+}
+.roadmap-initiative-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: .68rem;
+  font-weight: 850;
+}
+.roadmap-initiative-code {
+  flex: none;
+  color: var(--t-accent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .55rem;
+  font-weight: 900;
 }
