@@ -27,6 +27,7 @@
     "@handsontable/angular": "^16.2.0",
     "@sentry/angular": "^10.53.1",
     "core-js": "^3.49.0",
+    "dhtmlx-gantt": "^10.0.1",
     "echarts": "^6.1.0",
     "handsontable": "^16.2.0",
     "lucide-angular": "^1.0.0",

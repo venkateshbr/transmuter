@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+MilestoneDependencyType = Literal[
+    "finish_to_start",
+    "start_to_start",
+    "finish_to_finish",
+    "start_to_finish",
+]
 
 
 class MilestoneCreate(BaseModel):
@@ -14,6 +21,12 @@ class MilestoneCreate(BaseModel):
     priority: str = "medium"
     planned_start: str | None = None
     planned_end: str | None = None
+
+    @model_validator(mode="after")
+    def validate_date_order(self) -> MilestoneCreate:
+        if self.planned_start and self.planned_end and self.planned_start > self.planned_end:
+            raise ValueError("planned_start must be on or before planned_end")
+        return self
 
 
 class MilestoneUpdate(BaseModel):
@@ -103,6 +116,8 @@ class ChecklistToggle(BaseModel):
 
 class DependencyCreate(BaseModel):
     upstream_milestone_id: str
+    dependency_type: MilestoneDependencyType = "finish_to_start"
+    lag_days: int = Field(0, ge=-3650, le=3650)
 
 
 class DependencyItem(BaseModel):
@@ -111,6 +126,8 @@ class DependencyItem(BaseModel):
     upstream_name: str | None = None
     downstream_milestone_id: str
     downstream_name: str | None = None
+    dependency_type: MilestoneDependencyType = "finish_to_start"
+    lag_days: int = 0
 
 
 class MilestoneSummary(BaseModel):
@@ -128,6 +145,8 @@ class DependencyResponse(BaseModel):
     upstream_planned_end: str | None = None
     upstream_pressure_score: str | None = None
     downstream_status: str | None = None
+    dependency_type: MilestoneDependencyType = "finish_to_start"
+    lag_days: int = 0
 
 
 class DependencyStats(BaseModel):
@@ -150,6 +169,8 @@ class DependencyGraphEdge(BaseModel):
     source: str
     target: str
     status: Literal["blocking", "at_risk", "resolved", "on_track"] = "on_track"
+    dependency_type: MilestoneDependencyType = "finish_to_start"
+    lag_days: int = 0
 
 
 class DependencyListResponse(BaseModel):
@@ -158,3 +179,38 @@ class DependencyListResponse(BaseModel):
     stats: DependencyStats = Field(default_factory=DependencyStats)
     nodes: list[DependencyGraphNode] = []
     edges: list[DependencyGraphEdge] = []
+
+
+class RoadmapRange(BaseModel):
+    earliest_start: str | None = None
+    latest_end: str | None = None
+
+
+class RoadmapInitiative(BaseModel):
+    id: str
+    name: str
+    initiative_code: str | None = None
+    workstream_id: str | None = None
+    workstream_name: str | None = None
+
+
+class RoadmapMilestone(MilestoneItem):
+    initiative_code: str | None = None
+    workstream_id: str | None = None
+    workstream_name: str | None = None
+
+
+class RoadmapStats(BaseModel):
+    milestones: int = 0
+    initiatives: int = 0
+    dependencies: int = 0
+    blocking_links: int = 0
+    missing_dates: int = 0
+
+
+class PortfolioRoadmapResponse(BaseModel):
+    range: RoadmapRange
+    initiatives: list[RoadmapInitiative]
+    milestones: list[RoadmapMilestone]
+    dependencies: list[DependencyGraphEdge]
+    stats: RoadmapStats
