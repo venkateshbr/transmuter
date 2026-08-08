@@ -344,7 +344,60 @@ Example with baseline:
 target_revenue = baseline_annual_revenue_baseline + revenue_uplift
 ```
 
-### 5.6 Impact if metrics are missing or misconfigured
+### 5.6 Hide, discard, or permanently delete a metric
+
+Use the three actions for different situations:
+
+| Action | Use it when | Result |
+|---|---|---|
+| **Discard metric** | The row has never been saved. | Removes only the local unsaved editor row. |
+| **Hide** | The metric has history, dependencies, or may be needed later. | Keeps all values and references but removes the metric from normal active entry choices. |
+| **Delete metric** | A saved custom metric is genuinely unused. | Permanently removes the definition after dependency review and exact-key confirmation. |
+
+System metrics do not show a Delete action. Hiding is the safe default for any
+metric that has been used in a live or archived initiative.
+
+To delete a custom metric:
+
+1. Open **Admin → Financial Configuration → Metrics & formulas**.
+2. Select the saved custom metric.
+3. Choose **Delete metric**.
+4. Review the dependency ledger. It checks benefit lines, monthly values,
+   initiative scope, initiative baselines, legacy selections, formulas, value
+   bridge rows, shared-cost rules, and historical allocations.
+5. If blocked, follow the named initiative or configuration reference and
+   remove the dependency. Choose **Hide instead** when history should remain.
+6. If allowed, review the disclosed tenant annual-baseline cleanup.
+7. Type the immutable formula key exactly and choose **Permanently delete**.
+8. Search the catalog again to confirm the metric remains absent after reload.
+
+Worked example:
+
+ACME creates `warehouse_hours_saved` while testing an automation case. A formula
+metric named **Warehouse Productivity Value** uses:
+
+```text
+warehouse_hours_saved * margin_per_hour
+```
+
+Attempting to delete **Warehouse Hours Saved** shows one **Formula dependency**
+and disables permanent deletion. ACME first edits or deletes **Warehouse
+Productivity Value**. The next impact check has no blockers. If FY2028 contains
+one tenant baseline for `warehouse_hours_saved`, the dialog explicitly says
+that one tenant annual-baseline row will also be deleted. The administrator
+types `warehouse_hours_saved` and confirms. Metrics with the same key in another
+tenant are unaffected.
+
+Important safeguards:
+
+- Active, inactive, and archived initiative dependencies all block deletion.
+- An inactive formula or bridge row still blocks because it can be reactivated.
+- Deleting an initiative removes its initiative-owned financial rows; only then
+  may its formerly used metric become deletable.
+- A failed or blocked delete has no partial effect.
+- Reusing a deleted key creates a new definition and does not restore old data.
+
+### 5.7 Impact if metrics are missing or misconfigured
 
 | Misconfiguration | Impact |
 |---|---|

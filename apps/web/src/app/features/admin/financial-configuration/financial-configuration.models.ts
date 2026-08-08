@@ -25,6 +25,28 @@ export interface FinancialMetricDefinition {
   keyManuallyEdited?: boolean;
 }
 
+export interface FinancialMetricDeletionReference {
+  id: string;
+  initiative_id?: string | null;
+  initiative_name?: string | null;
+  label: string;
+}
+
+export interface FinancialMetricDeletionCategory {
+  count: number;
+  references: FinancialMetricDeletionReference[];
+}
+
+export interface FinancialMetricDeletionImpact {
+  metric: Pick<FinancialMetricDefinition, 'id' | 'key' | 'label' | 'is_system' | 'is_active'>;
+  can_delete: boolean;
+  blocked_by_system: boolean;
+  blocker_total: number;
+  blockers: Record<string, FinancialMetricDeletionCategory>;
+  cleanup: { tenant_annual_baselines: FinancialMetricDeletionCategory };
+  confirmation_key: string;
+}
+
 export interface FinancialBridgeRow {
   id?: string;
   key: string;

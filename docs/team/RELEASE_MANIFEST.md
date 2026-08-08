@@ -36,6 +36,90 @@ Deployment note:
 
 ## Current Release Entries
 
+### 2026-08-08 - Dependency-Aware Financial Metric Deletion
+
+Status: deployed to development; real database, API, and browser acceptance complete; production pending explicit founder approval
+
+GitHub tracking:
+
+- Parent issue `#454`; stacked PR `#490` based on
+  `feat/482-operations-navigation`.
+- Runtime implementation commit: `da27710`.
+- Re-runnable migration correction: `fd3ed3f`.
+- Final deployed application/accessibility commit: `1991116`.
+- Rollback-only database acceptance commit: `0f1ce7a`.
+
+Runtime changes:
+
+- Added dependency-impact preview and confirmed deletion endpoints for saved
+  custom financial metric definitions.
+- Normalized formula inputs, value-bridge membership, legacy initiative
+  selections, and compatibility configuration to tenant-owned metric IDs.
+- Changed surviving initiative, formula, bridge, and shared-cost references to
+  metric-side `RESTRICT`; tenant annual baselines remain disclosed cascade
+  cleanup.
+- Removed tenant control of `is_system` and added database protection for
+  system classification and direct authenticated deletion.
+- Added the Admin dependency-ledger dialog, Hide alternative, exact-key
+  confirmation, responsive layout, focus containment, scroll locking, and
+  visible disabled state.
+- Updated the canonical financial architecture, consolidated Administration
+  Guide, and detailed financial configuration reference with worked examples.
+
+Local validation:
+
+- `66` focused financial service, formula, bridge, portfolio, and migration
+  tests passed.
+- `46` security tests passed, including tenant teardown dependency order.
+- Angular TypeScript and template compilation passed.
+- Angular production build passed.
+- The focused OpenAPI check confirmed both metric deletion routes are
+  registered.
+
+Development deployment:
+
+- Environment: `https://transmuter-dev.ishirock.tech`.
+- Schema: `transmuter_dev`.
+- Schema/application action: `108367914` from commit `fd3ed3f`.
+- Final application action: `108368538` from commit `1991116`.
+- Public `/health` and `/api/health` validation passed after the final container
+  became active.
+- Real API acceptance passed with a disposable input metric and formula metric:
+  formula dependency preview, structured blocked `409`, confirmed formula
+  deletion, refreshed safe impact, confirmed target deletion, and persistent
+  `404` after removal.
+- Rollback-only real PostgreSQL acceptance passed through the Hostinger schema
+  job. It verified direct authenticated delete rejection, system-metric
+  protection, cross-tenant non-disclosure, disclosed tenant-baseline cleanup,
+  and successful confirmed RPC deletion with no persistent test rows.
+- Both external Playwright scenarios passed against the public development
+  Angular app and real API with deterministic cleanup, desktop/mobile evidence,
+  background scroll lock, visible disabled confirmation, no page errors, and no
+  observed server `5xx` responses.
+
+Operational notes:
+
+- The first schema-job retry exposed a re-application failure on an already
+  named foreign key. The failed retry transaction rolled back; commit `fd3ed3f`
+  made every renamed metric constraint explicitly drop-and-recreate safe, and
+  the next migration run passed its PostgreSQL catalog gate.
+- The first browser attempt after action `108368538` reached the old container
+  during the control-plane handover. Public health was revalidated after the
+  action settled and the exact deployed suite then passed.
+
+Schema SQL applied to development:
+
+- `supabase/migrations/20260808000003_financial_metric_deletion.sql`
+
+Schema SQL required for production if explicitly promoted later:
+
+- `supabase/migrations/20260808000003_financial_metric_deletion.sql`
+
+Production validation:
+
+- Not run. Production remains unchanged and must not be promoted without an
+  explicit founder instruction.
+
 ### 2026-08-08 - Operating Navigation Split
 
 Status: deployed to development; authenticated API and component acceptance complete; browser acceptance pending

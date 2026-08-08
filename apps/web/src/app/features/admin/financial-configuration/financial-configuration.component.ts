@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, ElementRef, OnInit, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { finalize } from 'rxjs';
 import { FinancialConfigurationFacade } from './financial-configuration.facade';
@@ -8,6 +8,8 @@ import {
   FinancialBridgeRow,
   FinancialCostCategory,
   FinancialMetricDefinition,
+  FinancialMetricDeletionCategory,
+  FinancialMetricDeletionImpact,
   FinancialReportingSettings,
   FinancialScenario,
   FinancialSubtab,
@@ -251,6 +253,26 @@ const DEFAULT_SETTINGS: FinancialReportingSettings = {
                       <h4 class="section-title">{{ metric.label || 'New metric' }}</h4>
                     </div>
                     <div class="flex gap-2">
+                      @if (!metric.id) {
+                        <button
+                          type="button"
+                          class="btn-ghost px-3 py-2 text-[10px]"
+                          (click)="discardMetric(metric)"
+                          aria-label="Discard unsaved metric"
+                        >
+                          Discard metric
+                        </button>
+                      } @else if (!metric.is_system) {
+                        <button
+                          type="button"
+                          class="btn-ghost px-3 py-2 text-[10px] text-red-600"
+                          (click)="openMetricDeletion(metric)"
+                          [disabled]="deletionLoading() || saving()"
+                          [attr.aria-label]="'Delete metric ' + metric.label"
+                        >
+                          Delete metric
+                        </button>
+                      }
                       <button
                         type="button"
                         class="btn-ghost px-3 py-2 text-[10px]"
@@ -869,6 +891,173 @@ const DEFAULT_SETTINGS: FinancialReportingSettings = {
           </section>
         }
       }
+
+      @if (deletionMetric(); as metric) {
+        <div
+          class="fixed inset-0 z-50 grid place-items-center bg-slate-950/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="metric-deletion-title"
+          tabindex="-1"
+          (keydown.escape)="closeMetricDeletion()"
+          (keydown.tab)="trapDeletionFocus($event)"
+          data-testid="metric-deletion-dialog"
+        >
+          <section
+            class="max-h-[90vh] w-full max-w-3xl overflow-y-auto border border-[var(--t-border-strong)] bg-[var(--t-surface)] shadow-2xl"
+          >
+            <header
+              class="border-b border-[var(--t-border)] bg-[var(--t-primary)] px-5 py-4 text-white"
+            >
+              <p
+                class="text-[9px] font-black uppercase tracking-[0.18em] text-[var(--t-blue-light)]"
+              >
+                Dependency check
+              </p>
+              <h3 id="metric-deletion-title" class="mt-1 text-lg font-black">
+                Delete {{ metric.label }}
+              </h3>
+              <p class="mt-1 font-mono text-[10px] text-white/70">{{ metric.key }}</p>
+            </header>
+
+            @if (deletionLoading()) {
+              <p class="p-6 text-sm font-bold text-[var(--t-text-secondary)]" role="status">
+                Checking every financial dependency…
+              </p>
+            } @else if (deletionImpact(); as impact) {
+              <div class="grid gap-5 p-5 md:p-6">
+                @if (impact.blocker_total > 0 || impact.blocked_by_system) {
+                  <div class="border-l-4 border-red-600 bg-red-500/10 px-4 py-3" role="alert">
+                    <p class="text-xs font-black uppercase tracking-wider text-red-600">
+                      Deletion blocked
+                    </p>
+                    <p class="mt-1 text-xs leading-5 text-[var(--t-text-secondary)]">
+                      This metric still supports {{ impact.blocker_total }} saved reference{{
+                        impact.blocker_total === 1 ? '' : 's'
+                      }}. Remove those references first, or hide the metric to preserve history.
+                    </p>
+                  </div>
+
+                  <div class="divide-y divide-[var(--t-border)] border border-[var(--t-border)]">
+                    @for (blocker of deletionBlockers(); track blocker.key) {
+                      <div class="grid gap-2 px-4 py-3 sm:grid-cols-[180px_minmax(0,1fr)]">
+                        <div>
+                          <p
+                            class="text-[10px] font-black uppercase tracking-wider text-[var(--t-text-primary)]"
+                          >
+                            {{ blocker.label }}
+                          </p>
+                          <p class="mt-1 font-mono text-xs text-red-600">
+                            {{ blocker.category.count }}
+                          </p>
+                        </div>
+                        <ul class="grid gap-1 text-xs text-[var(--t-text-secondary)]">
+                          @for (reference of blocker.category.references; track reference.id) {
+                            <li>
+                              {{ reference.initiative_name ? reference.initiative_name + ' · ' : ''
+                              }}{{ reference.label }}
+                            </li>
+                          }
+                          @if (blocker.category.count > blocker.category.references.length) {
+                            <li class="font-bold">
+                              +
+                              {{ blocker.category.count - blocker.category.references.length }} more
+                            </li>
+                          }
+                        </ul>
+                      </div>
+                    }
+                  </div>
+                } @else {
+                  <div
+                    class="border-l-4 border-[var(--t-accent)] bg-[var(--t-surface-raised)] px-4 py-3"
+                  >
+                    <p
+                      class="text-xs font-black uppercase tracking-wider text-[var(--t-text-primary)]"
+                    >
+                      No surviving dependencies
+                    </p>
+                    <p class="mt-1 text-xs leading-5 text-[var(--t-text-secondary)]">
+                      Deletion is permanent. The metric key becomes available for reuse in this
+                      tenant.
+                    </p>
+                  </div>
+                }
+
+                @if (impact.cleanup.tenant_annual_baselines.count > 0) {
+                  <div class="border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+                    <p class="text-[10px] font-black uppercase tracking-wider text-amber-700">
+                      Automatic cleanup
+                    </p>
+                    <p class="mt-1 text-xs text-[var(--t-text-secondary)]">
+                      {{ impact.cleanup.tenant_annual_baselines.count }} tenant annual baseline
+                      row{{ impact.cleanup.tenant_annual_baselines.count === 1 ? '' : 's' }} will
+                      also be deleted.
+                    </p>
+                  </div>
+                }
+
+                @if (impact.can_delete) {
+                  <label class="field-label">
+                    Type
+                    <span class="font-mono text-[var(--t-accent)]">{{
+                      impact.confirmation_key
+                    }}</span>
+                    to confirm
+                    <input
+                      class="input-field mt-2 w-full font-mono"
+                      [ngModel]="deletionConfirmation()"
+                      (ngModelChange)="deletionConfirmation.set($event)"
+                      [attr.aria-label]="
+                        'Type ' + impact.confirmation_key + ' to confirm metric deletion'
+                      "
+                      autocomplete="off"
+                      autofocus
+                    />
+                  </label>
+                }
+
+                <div
+                  class="flex flex-wrap justify-end gap-2 border-t border-[var(--t-border)] pt-4"
+                >
+                  <button
+                    type="button"
+                    class="btn-secondary px-4 py-2 text-[10px]"
+                    (click)="closeMetricDeletion()"
+                    aria-label="Cancel metric deletion"
+                  >
+                    Cancel
+                  </button>
+                  @if (!impact.blocked_by_system) {
+                    <button
+                      type="button"
+                      class="btn-secondary px-4 py-2 text-[10px]"
+                      (click)="hideMetricInstead()"
+                      [disabled]="saving()"
+                      aria-label="Hide metric instead of deleting"
+                    >
+                      Hide instead
+                    </button>
+                  }
+                  @if (impact.can_delete) {
+                    <button
+                      type="button"
+                      class="btn-primary px-4 py-2 text-[10px] disabled:cursor-not-allowed disabled:opacity-40"
+                      (click)="confirmMetricDeletion()"
+                      [disabled]="
+                        deletionConfirmation() !== impact.confirmation_key || deletionLoading()
+                      "
+                      [attr.aria-label]="'Permanently delete metric ' + metric.label"
+                    >
+                      Permanently delete
+                    </button>
+                  }
+                </div>
+              </div>
+            }
+          </section>
+        </div>
+      }
     </div>
   `,
   styles: [
@@ -907,8 +1096,11 @@ const DEFAULT_SETTINGS: FinancialReportingSettings = {
     `,
   ],
 })
-export class FinancialConfigurationComponent implements OnInit {
+export class FinancialConfigurationComponent implements OnInit, OnDestroy {
   private readonly facade = inject(FinancialConfigurationFacade);
+  private readonly host: ElementRef<HTMLElement> = inject(ElementRef);
+  private deletionTrigger: HTMLElement | null = null;
+  private previousBodyOverflow = '';
   readonly tabs: Array<{ key: FinancialSubtab; label: string }> = [
     { key: 'settings', label: 'Settings' },
     { key: 'metrics', label: 'Metrics & formulas' },
@@ -936,9 +1128,16 @@ export class FinancialConfigurationComponent implements OnInit {
   readonly metricSearch = signal('');
   readonly baselineYear = signal(new Date().getFullYear());
   readonly baselineValues = signal<Record<string, string>>({});
+  readonly deletionMetric = signal<FinancialMetricDefinition | null>(null);
+  readonly deletionImpact = signal<FinancialMetricDeletionImpact | null>(null);
+  readonly deletionConfirmation = signal('');
+  readonly deletionLoading = signal(false);
 
   ngOnInit(): void {
     this.load();
+  }
+  ngOnDestroy(): void {
+    document.body.style.overflow = this.previousBodyOverflow;
   }
   load(): void {
     this.loading.set(true);
@@ -1088,6 +1287,131 @@ export class FinancialConfigurationComponent implements OnInit {
       return;
     }
     this.runSave(this.facade.saveMetric(metric), 'Metric saved.', true);
+  }
+  discardMetric(metric: FinancialMetricDefinition): void {
+    this.metrics.update((rows) => rows.filter((row) => row !== metric));
+    this.selectedMetric.set(this.metrics()[0] || null);
+    this.message.set('Unsaved metric discarded.');
+  }
+  openMetricDeletion(metric: FinancialMetricDefinition): void {
+    if (!metric.id || metric.is_system) return;
+    this.deletionTrigger = document.activeElement as HTMLElement | null;
+    this.previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    this.deletionMetric.set(metric);
+    this.deletionImpact.set(null);
+    this.deletionConfirmation.set('');
+    this.deletionLoading.set(true);
+    this.error.set(null);
+    queueMicrotask(() =>
+      this.host.nativeElement
+        .querySelector<HTMLElement>('[data-testid="metric-deletion-dialog"]')
+        ?.focus(),
+    );
+    this.facade
+      .loadMetricDeletionImpact(metric.id)
+      .pipe(finalize(() => this.deletionLoading.set(false)))
+      .subscribe({
+        next: (impact) => this.deletionImpact.set(impact),
+        error: (err) => {
+          this.closeMetricDeletion();
+          this.error.set(err.error?.detail || 'Could not check metric dependencies.');
+        },
+      });
+  }
+  closeMetricDeletion(): void {
+    document.body.style.overflow = this.previousBodyOverflow;
+    this.deletionMetric.set(null);
+    this.deletionImpact.set(null);
+    this.deletionConfirmation.set('');
+    const trigger = this.deletionTrigger;
+    this.deletionTrigger = null;
+    queueMicrotask(() => trigger?.focus());
+  }
+  trapDeletionFocus(event: Event): void {
+    const keyboardEvent = event as KeyboardEvent;
+    const dialog = this.host.nativeElement.querySelector<HTMLElement>(
+      '[data-testid="metric-deletion-dialog"]',
+    );
+    if (!dialog) return;
+    const focusable = Array.from(
+      dialog.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled])'),
+    );
+    if (!focusable.length) {
+      keyboardEvent.preventDefault();
+      dialog.focus();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (keyboardEvent.shiftKey && document.activeElement === first) {
+      keyboardEvent.preventDefault();
+      last.focus();
+    } else if (!keyboardEvent.shiftKey && document.activeElement === last) {
+      keyboardEvent.preventDefault();
+      first.focus();
+    }
+  }
+  deletionBlockers(): Array<{
+    key: string;
+    label: string;
+    category: FinancialMetricDeletionCategory;
+  }> {
+    const impact = this.deletionImpact();
+    if (!impact) return [];
+    const labels: Record<string, string> = {
+      benefit_lines: 'Benefit lines',
+      metric_values: 'Metric values',
+      initiative_scope: 'Initiative scope',
+      initiative_baselines: 'Initiative baselines',
+      legacy_selections: 'Legacy selections',
+      legacy_configuration: 'Legacy configuration',
+      formula_dependencies: 'Formula dependencies',
+      bridge_rows: 'Value bridge rows',
+      shared_cost_rules: 'Shared-cost rules',
+      shared_cost_allocations: 'Historical allocations',
+    };
+    return Object.entries(impact.blockers)
+      .filter(([, category]) => category.count > 0)
+      .map(([key, category]) => ({ key, label: labels[key] || key, category }));
+  }
+  hideMetricInstead(): void {
+    const metric = this.deletionMetric();
+    if (!metric) return;
+    metric.is_active = false;
+    this.closeMetricDeletion();
+    this.saveMetric(metric);
+  }
+  confirmMetricDeletion(): void {
+    const metric = this.deletionMetric();
+    const impact = this.deletionImpact();
+    if (
+      !metric?.id ||
+      !impact?.can_delete ||
+      this.deletionConfirmation() !== impact.confirmation_key
+    )
+      return;
+    this.deletionLoading.set(true);
+    this.error.set(null);
+    this.facade
+      .deleteMetric(metric.id, this.deletionConfirmation())
+      .pipe(finalize(() => this.deletionLoading.set(false)))
+      .subscribe({
+        next: () => {
+          this.closeMetricDeletion();
+          this.message.set(`Metric ${metric.label} deleted.`);
+          this.load();
+        },
+        error: (err) => {
+          const detail = err.error?.detail;
+          if (detail?.impact) this.deletionImpact.set(detail.impact);
+          this.error.set(
+            typeof detail === 'string'
+              ? detail
+              : detail?.message || 'Could not delete the financial metric.',
+          );
+        },
+      });
   }
   copyKey(key: string): void {
     navigator.clipboard

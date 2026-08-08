@@ -1205,6 +1205,40 @@ class FinancialRepository:
         )
         return result.data[0] if result.data else {}
 
+    def get_metric_deletion_impact(
+        self,
+        metric_definition_id: str,
+    ) -> dict | None:  # type: ignore[type-arg]
+        result = self._c.rpc(
+            "financial_metric_deletion_impact",
+            {
+                "p_tenant_id": self._tid,
+                "p_metric_definition_id": metric_definition_id,
+            },
+        ).execute()
+        return self._rpc_object(result.data)
+
+    def delete_metric_definition(
+        self,
+        metric_definition_id: str,
+        confirmation_key: str,
+    ) -> dict | None:  # type: ignore[type-arg]
+        result = self._c.rpc(
+            "delete_financial_metric_definition",
+            {
+                "p_tenant_id": self._tid,
+                "p_metric_definition_id": metric_definition_id,
+                "p_confirmation_key": confirmation_key,
+            },
+        ).execute()
+        return self._rpc_object(result.data)
+
+    @staticmethod
+    def _rpc_object(data: object) -> dict | None:  # type: ignore[type-arg]
+        if isinstance(data, list):
+            data = data[0] if data else None
+        return data if isinstance(data, dict) else None
+
     def create_financial_scenario(self, data: dict) -> dict:  # type: ignore[type-arg]
         payload = {
             **data,

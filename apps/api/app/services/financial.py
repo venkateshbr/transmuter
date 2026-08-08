@@ -76,6 +76,8 @@ from app.domain.financials import (
     FinancialMetricDefinition,
     FinancialMetricDefinitionCreate,
     FinancialMetricDefinitionUpdate,
+    FinancialMetricDeleteRequest,
+    FinancialMetricDeletionImpact,
     FinancialMetricValueRow,
     FinancialMetricValueUpdate,
     FinancialModeDescriptor,
@@ -1167,7 +1169,9 @@ class FinancialService:
         user_id: str | None = None,
     ) -> FinancialMetricDefinition:
         self._validate_metric_definition_payload(data.model_dump(mode="json"))
-        row = self._repo.create_metric_definition(data.model_dump(mode="json"), user_id=user_id)
+        payload = data.model_dump(mode="json")
+        payload["is_system"] = False
+        row = self._repo.create_metric_definition(payload, user_id=user_id)
         return self._to_metric_definition(row)
 
     def update_metric_definition(
@@ -1188,6 +1192,47 @@ class FinancialService:
                 detail="Financial metric definition not found",
             )
         return self._to_metric_definition(row)
+
+    def get_metric_deletion_impact(
+        self,
+        metric_definition_id: str,
+    ) -> FinancialMetricDeletionImpact:
+        row = self._repo.get_metric_deletion_impact(metric_definition_id)
+        if not row:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Financial metric definition not found",
+            )
+        return FinancialMetricDeletionImpact.model_validate(row)
+
+    def delete_metric_definition(
+        self,
+        metric_definition_id: str,
+        data: FinancialMetricDeleteRequest,
+    ) -> None:
+        result = self._repo.delete_metric_definition(
+            metric_definition_id,
+            data.confirmation_key,
+        )
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Financial metric definition not found",
+            )
+        if result.get("status") == "confirmation_mismatch":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Type the exact metric key to confirm deletion.",
+            )
+        if not result.get("deleted"):
+            impact = FinancialMetricDeletionImpact.model_validate(result)
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "message": "This metric is still in use. Hide it or remove every dependency first.",
+                    "impact": impact.model_dump(mode="json"),
+                },
+            )
 
     def create_scenario_definition(
         self,

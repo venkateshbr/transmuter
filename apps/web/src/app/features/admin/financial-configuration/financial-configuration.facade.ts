@@ -6,6 +6,7 @@ import {
   FinancialCostCategory,
   FinancialEngineConfiguration,
   FinancialMetricDefinition,
+  FinancialMetricDeletionImpact,
   FinancialReportingSettings,
   FinancialScenario,
   FinancialAttributeDefinition,
@@ -49,12 +50,21 @@ export class FinancialConfigurationFacade {
       display_order: Number(metric.display_order || 0),
       applies_to: metric.applies_to || 'opt_in',
       validation: metric.validation || {},
-      is_system: Boolean(metric.is_system),
       is_active: metric.is_active !== false,
     };
     return metric.id
       ? this.api.patch(`/admin/financial-engine/metrics/${metric.id}`, payload)
       : this.api.post('/admin/financial-engine/metrics', payload);
+  }
+
+  loadMetricDeletionImpact(metricId: string): Observable<FinancialMetricDeletionImpact> {
+    return this.api.get(`/admin/financial-engine/metrics/${metricId}/deletion-impact`);
+  }
+
+  deleteMetric(metricId: string, confirmationKey: string): Observable<void> {
+    return this.api.delete(`/admin/financial-engine/metrics/${metricId}`, {
+      confirmation_key: confirmationKey,
+    });
   }
 
   saveScenario(row: FinancialScenario): Observable<FinancialScenario> {

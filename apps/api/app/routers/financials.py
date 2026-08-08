@@ -64,6 +64,8 @@ from app.domain.financials import (
     FinancialMetricDefinition,
     FinancialMetricDefinitionCreate,
     FinancialMetricDefinitionUpdate,
+    FinancialMetricDeleteRequest,
+    FinancialMetricDeletionImpact,
     FinancialReportingSettings,
     FinancialReportingSettingsUpdate,
     FinancialScenario,
@@ -787,6 +789,35 @@ async def update_financial_metric_definition(
 ) -> FinancialMetricDefinition:
     assert_can_manage_financial_configuration(current_user)
     return svc.update_metric_definition(metric_definition_id, body, str(current_user.id))
+
+
+@router.get(
+    "/admin/financial-engine/metrics/{metric_definition_id}/deletion-impact",
+    response_model=FinancialMetricDeletionImpact,
+)
+async def get_financial_metric_deletion_impact(
+    metric_definition_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> FinancialMetricDeletionImpact:
+    assert_can_manage_financial_configuration(current_user)
+    return svc.get_metric_deletion_impact(metric_definition_id)
+
+
+@router.delete(
+    "/admin/financial-engine/metrics/{metric_definition_id}",
+    status_code=204,
+    response_class=Response,
+)
+async def delete_financial_metric_definition(
+    metric_definition_id: str,
+    body: FinancialMetricDeleteRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[FinancialService, Depends(_svc)],
+) -> Response:
+    assert_can_manage_financial_configuration(current_user)
+    svc.delete_metric_definition(metric_definition_id, body)
+    return Response(status_code=204)
 
 
 @router.post(
