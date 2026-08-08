@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { Component, ElementRef, OnInit, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { finalize } from 'rxjs';
 import { FinancialConfigurationFacade } from './financial-configuration.facade';
@@ -900,6 +900,7 @@ const DEFAULT_SETTINGS: FinancialReportingSettings = {
           aria-labelledby="metric-deletion-title"
           tabindex="-1"
           (keydown.escape)="closeMetricDeletion()"
+          (keydown.tab)="trapDeletionFocus($event)"
           data-testid="metric-deletion-dialog"
         >
           <section
@@ -1041,7 +1042,7 @@ const DEFAULT_SETTINGS: FinancialReportingSettings = {
                   @if (impact.can_delete) {
                     <button
                       type="button"
-                      class="btn-primary px-4 py-2 text-[10px]"
+                      class="btn-primary px-4 py-2 text-[10px] disabled:cursor-not-allowed disabled:opacity-40"
                       (click)="confirmMetricDeletion()"
                       [disabled]="
                         deletionConfirmation() !== impact.confirmation_key || deletionLoading()
@@ -1095,8 +1096,11 @@ const DEFAULT_SETTINGS: FinancialReportingSettings = {
     `,
   ],
 })
-export class FinancialConfigurationComponent implements OnInit {
+export class FinancialConfigurationComponent implements OnInit, OnDestroy {
   private readonly facade = inject(FinancialConfigurationFacade);
+  private readonly host: ElementRef<HTMLElement> = inject(ElementRef);
+  private deletionTrigger: HTMLElement | null = null;
+  private previousBodyOverflow = '';
   readonly tabs: Array<{ key: FinancialSubtab; label: string }> = [
     { key: 'settings', label: 'Settings' },
     { key: 'metrics', label: 'Metrics & formulas' },
@@ -1131,6 +1135,9 @@ export class FinancialConfigurationComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
+  }
+  ngOnDestroy(): void {
+    document.body.style.overflow = this.previousBodyOverflow;
   }
   load(): void {
     this.loading.set(true);
@@ -1288,11 +1295,19 @@ export class FinancialConfigurationComponent implements OnInit {
   }
   openMetricDeletion(metric: FinancialMetricDefinition): void {
     if (!metric.id || metric.is_system) return;
+    this.deletionTrigger = document.activeElement as HTMLElement | null;
+    this.previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     this.deletionMetric.set(metric);
     this.deletionImpact.set(null);
     this.deletionConfirmation.set('');
     this.deletionLoading.set(true);
     this.error.set(null);
+    queueMicrotask(() =>
+      this.host.nativeElement
+        .querySelector<HTMLElement>('[data-testid="metric-deletion-dialog"]')
+        ?.focus(),
+    );
     this.facade
       .loadMetricDeletionImpact(metric.id)
       .pipe(finalize(() => this.deletionLoading.set(false)))
@@ -1305,9 +1320,37 @@ export class FinancialConfigurationComponent implements OnInit {
       });
   }
   closeMetricDeletion(): void {
+    document.body.style.overflow = this.previousBodyOverflow;
     this.deletionMetric.set(null);
     this.deletionImpact.set(null);
     this.deletionConfirmation.set('');
+    const trigger = this.deletionTrigger;
+    this.deletionTrigger = null;
+    queueMicrotask(() => trigger?.focus());
+  }
+  trapDeletionFocus(event: Event): void {
+    const keyboardEvent = event as KeyboardEvent;
+    const dialog = this.host.nativeElement.querySelector<HTMLElement>(
+      '[data-testid="metric-deletion-dialog"]',
+    );
+    if (!dialog) return;
+    const focusable = Array.from(
+      dialog.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled])'),
+    );
+    if (!focusable.length) {
+      keyboardEvent.preventDefault();
+      dialog.focus();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (keyboardEvent.shiftKey && document.activeElement === first) {
+      keyboardEvent.preventDefault();
+      last.focus();
+    } else if (!keyboardEvent.shiftKey && document.activeElement === last) {
+      keyboardEvent.preventDefault();
+      first.focus();
+    }
   }
   deletionBlockers(): Array<{
     key: string;

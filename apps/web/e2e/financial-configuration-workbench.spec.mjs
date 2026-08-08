@@ -202,12 +202,19 @@ test('custom metric deletion discloses blockers and requires its immutable key',
 
     const dialog = page.getByTestId('metric-deletion-dialog');
     await expect(dialog).toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('hidden');
     await expect(dialog).toContainText('Deletion blocked');
     await expect(dialog).toContainText('Formula dependencies');
     await expect(
       dialog.getByRole('button', { name: 'Hide metric instead of deleting' }),
     ).toBeVisible();
+    mkdirSync(evidenceDir, { recursive: true });
+    await page.screenshot({
+      path: resolve(evidenceDir, 'financial-metric-deletion-blocked-desktop.png'),
+      fullPage: true,
+    });
     await dialog.getByRole('button', { name: 'Cancel metric deletion' }).click();
+    await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('');
 
     const deleteFormula = await fetch(`${api}/admin/financial-engine/metrics/${formula.id}`, {
       method: 'DELETE',
@@ -222,7 +229,19 @@ test('custom metric deletion discloses blockers and requires its immutable key',
 
     await page.getByRole('button', { name: `Delete metric ${targetLabel}` }).click();
     await expect(dialog).toContainText('No surviving dependencies');
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(dialog).toBeVisible();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+    ).toBe(true);
+    await page.screenshot({
+      path: resolve(evidenceDir, 'financial-metric-deletion-confirm-mobile.png'),
+      fullPage: true,
+    });
     const confirmation = dialog.getByLabel(`Type ${targetKey} to confirm metric deletion`);
+    await expect(
+      dialog.getByRole('button', { name: `Permanently delete metric ${targetLabel}` }),
+    ).toBeDisabled();
     await confirmation.fill(targetKey);
     await dialog.getByRole('button', { name: `Permanently delete metric ${targetLabel}` }).click();
     await expect(dialog).toBeHidden();
@@ -234,7 +253,6 @@ test('custom metric deletion discloses blockers and requires its immutable key',
       1,
     );
 
-    mkdirSync(evidenceDir, { recursive: true });
     await page.screenshot({
       path: resolve(evidenceDir, 'financial-metric-deletion.png'),
       fullPage: true,
