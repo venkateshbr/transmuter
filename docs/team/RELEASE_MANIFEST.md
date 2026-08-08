@@ -36,6 +36,51 @@ Deployment note:
 
 ## Current Release Entries
 
+### 2026-08-08 - Dependency-aware Roadmap Explorer Gantt
+
+Status: deployed to development; authenticated UI/API acceptance pending
+
+GitHub tracking:
+
+- Parent issue `#473`, acceptance issue `#478`, deploy-readiness issue `#479`,
+  draft stacked PR `#480`.
+- Deployed application commit: `0f61ecba7b2eaac16a477b9837f44250771c5939`.
+- PR base: `feat/462-dashboard-improvements`; production promotion therefore
+  also depends on completing the dashboard reorganization release.
+
+Runtime changes:
+
+- Replace the completion-dot roadmap with a read-only, full-range portfolio
+  Gantt grouped by workstream and initiative.
+- Show planned milestone spans, completion diamonds, typed FS/SS/FF/SF
+  dependencies, lead/lag, zoom controls, fit-to-range, filtering, mobile
+  chronology, and dependency-chain tracing.
+- Add a bulk tenant-scoped portfolio roadmap API and deterministic dependency
+  fixtures while retaining milestone and dependency editing in Operations.
+
+Schema:
+
+- Applied `supabase/migrations/20260808000001_roadmap_gantt.sql` to
+  `transmuter_dev` through Hostinger schema job
+  `transmuter-schema-dev-20260808154647`.
+- Production requires the same migration before application promotion.
+
+Dev deployment and acceptance:
+
+- Environment: `https://transmuter-dev.ishirock.tech`.
+- Hostinger deployment action `108325741` reached terminal state `success`.
+- Public `/health` and `/api/health` validation passed.
+- Local verification before deploy: Ruff, `3/3` focused backend tests,
+  `43/43` frontend tests, Angular compilation, and the production build passed.
+- Final real authenticated API/browser acceptance remains open. The ignored
+  saved fixture credential returns HTTP `401` for both the role and
+  tenant-admin identities, and no reusable browser backend is available in the
+  current execution environment. No credential was reset or exposed.
+
+Production promotion:
+
+- Not requested.
+
 ### 2026-08-08 - Dashboard And Operations Reorganization
 
 Status: deployed to development; authenticated API validation complete; browser acceptance pending
