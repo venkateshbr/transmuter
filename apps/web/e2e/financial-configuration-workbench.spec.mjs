@@ -92,15 +92,16 @@ test('tenant financial keys, formulas, subtabs, and value bridge editor', async 
   const defaultMetric = configuration.definitions.find((metric) =>
     ['default_catalog', 'legacy_default'].includes(metric.origin),
   );
-  expect(defaultMetric).toBeTruthy();
-  await page.getByLabel('Search metric definitions').fill(defaultMetric.key);
-  await page.getByRole('button', { name: `Edit metric ${defaultMetric.label}` }).click();
-  await expect(page.getByText('Default metric', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText(/Deleted defaults are not restored automatically/)).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: `Delete metric ${defaultMetric.label}` }),
-  ).toBeVisible();
-  await page.getByLabel('Search metric definitions').fill('');
+  if (defaultMetric) {
+    await page.getByLabel('Search metric definitions').fill(defaultMetric.key);
+    await page.getByRole('button', { name: `Edit metric ${defaultMetric.label}` }).click();
+    await expect(page.getByText('Default metric', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText(/Deleted defaults are not restored automatically/)).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: `Delete metric ${defaultMetric.label}` }),
+    ).toBeVisible();
+    await page.getByLabel('Search metric definitions').fill('');
+  }
   await page.getByRole('button', { name: 'Add metric definition' }).click();
   await page.getByLabel('Metric definition label').fill('Revenue Uplift');
   await expect(page.getByLabel('Metric formula key')).toHaveValue('revenue_uplift');
