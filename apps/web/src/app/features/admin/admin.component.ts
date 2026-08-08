@@ -775,7 +775,9 @@ const DEFAULT_REBASELINE_ROLES = ['transformation_office', 'finance_lead', 'pmo_
                       <span class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Menu Group</span>
                       <select class="input-field py-2 text-xs" [ngModel]="dashboard.menu_group" (ngModelChange)="dashboard.menu_group = $event" aria-label="Dashboard menu group">
                         <option value="dashboard">Dashboard menu</option>
-                        <option value="operations">Operations menu</option>
+                        <option value="financial_operations">Financial Operations menu</option>
+                        <option value="transformation_management">Transformation Management menu</option>
+                        <option value="governance_cadence">Governance & Cadence menu</option>
                         <option value="primary">Primary nav</option>
                         <option value="hidden">Hidden</option>
                       </select>

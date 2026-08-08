@@ -317,7 +317,7 @@ interface ValueBridgeResponse {
         <ng-template dashboardWidget="investment_payback" widgetTitle="Investment and payback" widgetDescription="Investment recovery and payback ranking" [widgetRequired]="true" widgetDefaultSize="medium">
           <section class="card h-full p-6">
             <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">Investment discipline</p><h2 class="mt-1 text-lg font-black">Payback and value</h2>
-            <p class="mt-3 text-xs leading-5 text-[var(--t-text-secondary)]">Compare investment, cumulative value and expected payback across initiatives. Entry and maintenance remain in Operations.</p>
+            <p class="mt-3 text-xs leading-5 text-[var(--t-text-secondary)]">Compare investment, cumulative value and expected payback across initiatives. Entry and maintenance remain in Financial Operations.</p>
             <a routerLink="/financials/investments-payback" class="btn-secondary mt-5 inline-flex text-xs">View payback analysis</a>
           </section>
         </ng-template>

@@ -9,32 +9,33 @@ This is the canonical day-to-day guide for Transformation Office, PMO, finance, 
 | Menu | Purpose |
 |---|---|
 | Dashboard | Read-only decision views: Operational, Financial, and Initiative Portfolio |
-| Operations | Create, maintain, validate, approve, lock, allocate, and evidence records |
-| Initiatives | Portfolio pipeline and initiative detail |
+| Transformation Management | Initiative pipeline, milestones, roadmap, actions, status, risks, and KPIs |
+| Financial Operations | Benefit evidence, registers, plans, target locks, and shared costs |
+| Governance & Cadence | Gate approvals, meetings, decisions, and follow-up |
 | People | Tenant user administration when permitted |
 | Profile | Your account and preferences |
 
-The key rule is simple: **read and decide in dashboards; enter and maintain under Operations or Initiative detail**.
+The key rule is simple: **read and decide in dashboards; enter and maintain in the relevant operating menu or Initiative detail**.
 
 ## 2. Sign in and profile
 
 Accept an invitation from your administrator, sign in, and complete any forced password change. Open **Profile** to confirm your display information and role. If a required page or control is absent, request the correct role rather than sharing another user's account.
 
-## 3. Operations hub
+## 3. Operating workbenches
 
-Open **Operations** for three workbenches:
+The former Operations menu is separated by job-to-be-done:
 
-- **Delivery operations:** Progress Monitor, Roadmap & Milestones, Action Items, Status Updates, Risk Register, KPI Management.
-- **Financial operations:** Benefit Ledger, Benefits Register, Bankable Plans, Waterline & Target Locks, Shared Costs.
-- **Governance and cadence:** Gate Approvals, Meetings, Initiative Pipeline.
+- **Transformation Management:** Initiative Pipeline, Progress Monitor, Roadmap & Milestones, Action Items, Status Updates, Risk Register, KPI Management.
+- **Financial Operations:** Benefit Ledger, Benefits Register, Bankable Plans, Waterline & Target Locks, Shared Costs.
+- **Governance & Cadence:** Gate Approvals and Meetings.
 
-The hub describes each destination. Permissions may prevent some users from opening restricted functions.
+Each top-level menu opens a focused workbench describing its destinations. Permissions may prevent some users from opening restricted functions. Dependencies are managed and traced within **Roadmap & Milestones**, so there is no duplicate Dependencies menu item. Benefit validation is performed within **Benefits Register**, so there is no separate duplicate validation destination.
 
 ## 4. Initiative lifecycle
 
 ### 4.1 Create an initiative
 
-Users with initiative-management permission open **Initiatives → New** and enter the business problem, name, owner, sponsor, business unit, workstream, stage, priority, dates, tags, and narrative.
+Users with initiative-management permission open **Transformation Management → Initiative Pipeline → New** and enter the business problem, name, owner, sponsor, business unit, workstream, stage, priority, dates, tags, and narrative.
 
 ACME example:
 
@@ -82,7 +83,7 @@ Use Progress Monitor to review initiative delivery and open the relevant record.
 
 Create milestones from the initiative's **Milestones** tab. Enter both **Planned Start** and **Target Completion** when the milestone represents a delivery window. If only the completion date is known, the Roadmap Explorer shows a diamond instead of inventing a duration.
 
-Open **Operations → Roadmap & Milestones** to use the portfolio Gantt:
+Open **Transformation Management → Roadmap & Milestones** to use the portfolio Gantt:
 
 1. Select **Fit all** to show the earliest planned start through the latest planned completion in the filtered portfolio.
 2. Change **Scale** between Year, Quarter, Month, and Week without changing saved dates.
@@ -181,7 +182,7 @@ For ACC-101:
 
 ### 7.2 Benefit Ledger
 
-Use **Operations → Benefit Ledger** to enter or import realized evidence. Supply initiative, period, metric, amount, evidence/reference, and status as required.
+Use **Financial Operations → Benefit Ledger** to enter or import realized evidence. Supply initiative, period, metric, amount, evidence/reference, and status as required.
 
 Example: record ACC-101 July actual cost saving of `$150,000.0000`, link the finance evidence reference, and submit it for validation. Do not type this value into the Financial Dashboard.
 

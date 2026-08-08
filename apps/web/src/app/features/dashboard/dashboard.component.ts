@@ -142,7 +142,7 @@ const DASHBOARD_FILTER_STATE_KEY = 'transmuter.filters.dashboard';
           <section class="card h-full p-6" data-testid="dashboard-needs-attention">
             <div class="flex items-center justify-between gap-3">
               <div><p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">Act now</p><h2 class="mt-1 text-lg font-black">Needs attention</h2></div>
-              <a routerLink="/operations" class="text-xs font-black text-[var(--t-accent)]">Open Operations →</a>
+              <a routerLink="/operations" class="text-xs font-black text-[var(--t-accent)]">Open operating workbenches →</a>
             </div>
             <div class="mt-5 grid gap-3 sm:grid-cols-3">
               <a routerLink="/initiatives/pipeline" [queryParams]="{ rag_status: 'red' }" class="border-l-4 border-red-500 bg-[var(--t-surface-raised)] p-4"><p class="text-2xl font-black text-red-500">{{ data()?.summary?.at_risk || 0 }}</p><p class="text-xs font-bold">At-risk initiatives</p></a>

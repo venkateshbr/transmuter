@@ -81,8 +81,31 @@ export const routes: Routes = [
       },
       {
         path: 'operations',
-        loadComponent: () =>
-          import('./features/operations/operations-hub.component').then(m => m.OperationsHubComponent),
+        children: [
+          {
+            path: '',
+            loadComponent: () =>
+              import('./features/operations/operations-hub.component').then(m => m.OperationsHubComponent),
+          },
+          {
+            path: 'transformation',
+            data: { section: 'transformation' },
+            loadComponent: () =>
+              import('./features/operations/operations-hub.component').then(m => m.OperationsHubComponent),
+          },
+          {
+            path: 'financial',
+            data: { section: 'financial' },
+            loadComponent: () =>
+              import('./features/operations/operations-hub.component').then(m => m.OperationsHubComponent),
+          },
+          {
+            path: 'governance',
+            data: { section: 'governance' },
+            loadComponent: () =>
+              import('./features/operations/operations-hub.component').then(m => m.OperationsHubComponent),
+          },
+        ],
       },
       {
         path: 'financials',
