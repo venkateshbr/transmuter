@@ -100,6 +100,60 @@ Do not compare these six-month actuals to a twelve-month plan without saying
 that the actual is year to date. Use Benefit Tracking for period-by-period
 realization and evidence.
 
+### 2.4 From forecast to bankable plan to waterline
+
+These terms describe different governance states. They are not interchangeable
+dashboard labels.
+
+| Term | Plain-language meaning | What changes it? |
+|---|---|---|
+| Working forecast | Finance's current editable view of expected benefits and costs. | Normal forecast and financial-data updates. |
+| Bankable plan | An initiative's approved financial case captured as an immutable version. It freezes the financial entries, costs, metric values, scope selections, and calculated summary used at approval. | A new governed approval or rebaseline creates a new version; editing the working forecast does not rewrite an existing version. |
+| Locked net run-rate waterline | An immutable workstream target created at a cutoff date. It includes initiatives approved by that date and, where available, takes each initiative's net value from its current bankable-plan version. | A new waterline lock creates another version. It does not mutate the earlier snapshot. |
+| Benefit realization | Periodic actual value recorded against the locked plan. | Accepted ledger entries and supporting evidence. |
+
+The governance flow is:
+
+1. Finance and the initiative owner develop the working forecast.
+2. The configured approval gate locks an initiative bankable-plan version.
+3. The transformation office previews a workstream cutoff and locks the
+   approved initiatives into a workstream waterline.
+4. Benefit Tracking compares realization with the locked plan; it does not
+   silently move the target when the forecast changes.
+5. If assumptions materially change, request a governed rebaseline. The new
+   version becomes current while the prior version remains in history.
+
+> **Management rule:** use Financial Overview for a selected-year portfolio
+> outlook, Bankable Plan for the approved initiative commitment, Waterline for
+> the immutable workstream commitment at a cutoff, and Benefit Tracking for
+> actual realization against the lock.
+
+### 2.5 ACME locked-waterline reconciliation
+
+ACME's current waterline was locked on `2028-06-30`. All ten initiatives had
+the required approval by the cutoff, and `ENT-005` uses governed bankable-plan
+version 2. The lock is cumulative across the approved FY2027 and FY2028 scope,
+so it must not be compared directly with a FY2028-only card.
+
+| Period in the lock | Plan benefits | Recurring plan cost | Locked net run-rate | Actual benefits | Recurring actual cost | Net actual |
+|---|---:|---:|---:|---:|---:|---:|
+| FY2027 | `$4.620M` | `$0.400M` | `$4.220M` | `$3.893M` | `$0.388M` | `$3.505M` |
+| FY2028 | `$9.182M` | `$0.800M` | `$8.382M` | `$4.080M` | `$0.388M` | `$3.692M` |
+| **Locked cumulative scope** | **`$13.802M`** | **`$1.200M`** | **`$12.602M`** | **`$7.973M`** | **`$0.776M`** | **`$7.197M`** |
+
+The executive waterline therefore reads:
+
+```text
+Locked net run-rate target  $12.602M
+Net actual                   $7.197M
+Variance                    -$5.405M
+```
+
+The `$12.602M` is not a second FY2028 forecast and must not be added to the
+FY2028 `$8.382M`. It contains that FY2028 value plus the locked FY2027 net value.
+Similarly, the `$7.197M` actual contains FY2027 actual plus FY2028 actual through
+`2028-06-30`.
+
 ---
 
 ## 3. Executive Dashboard
@@ -177,8 +231,11 @@ the selected target year and the active financial mode.
 
 ### Bankable Workstream Targets
 
-- **What it shows:** latest immutable workstream targets and actual realization.
+- **What it shows:** the latest immutable net run-rate target for each
+  workstream, its cumulative actual, and `actual − locked target` variance.
 - **Source:** Waterline target locks and actual benefit ledger values.
+- **ACME example:** five locked workstreams total `$12.602M`; cumulative net
+  actual is `$7.197M`; variance is `-$5.405M`.
 - **Management question:** are workstreams delivering against a frozen target
   rather than a moving forecast?
 
@@ -186,8 +243,20 @@ the selected target year and the active financial mode.
 
 - **What it shows:** value currently progressing through configured stages
   compared with approved locked bankable value.
-- **How to read it:** a gap can indicate unapproved pipeline value, delivery
-  movement, or a plan awaiting governance.
+- **Locked marker:** the immutable net target from the latest workstream
+  waterline locks.
+- **L5 Realized:** cumulative net actual recognized against the locked target.
+- **L4 Bankable:** the part of the locked target not yet realized, calculated as
+  `max(locked target − L5 realized, 0)`.
+- **Above waterline:** `L4 + L5`. For ACME this is `$5.405M + $7.197M =
+  $12.602M`, equal to the lock.
+- **Below waterline:** selected-year value currently shown in L1-L3 delivery
+  stages. ACME shows `$3.320M`, all at L3.
+- **How to read it:** below-waterline stage value is a pipeline/delivery context,
+  not an amount to add to or subtract from the locked target. An initiative can
+  already have an approved bankable plan while its current delivery stage is
+  still L3, so “below” does not automatically mean “excluded from the Waterline
+  lock.” Open Waterline to verify actual included/excluded status.
 - **Management question:** how much of the value story is approved and bankable?
 
 ### Workstreams × Value Tags matrix
@@ -411,19 +480,48 @@ delivery, risk, or benefit-evidence review.
 
 Route: `/financials/bankable-plan`
 
-- **Initiative selector:** changes the approved value case being reviewed.
-- **Locked/Editable badge:** whether a current immutable plan exists.
-- **Locked bankable plan:** committed net value and lock timestamp.
-- **Working forecast:** current editable view; it may differ from the lock.
-- **Snapshot contents:** financial entries, cost lines, metric values, and
-  selected financial scope captured in the version.
-- **Version history:** every approved plan/rebaseline with time, reason,
-  trigger, and actor.
-- **Request rebaseline:** starts governance; it does not overwrite history.
+### What makes a plan bankable
 
-Use `ENT-005 Enterprise Data and ERP Modernization` to demonstrate version 2
-and a controlled rebaseline. The bankable plan is the baseline for realization,
-not necessarily the latest working forecast.
+A bankable plan is the financial case management has approved and Finance is
+prepared to measure. “Bankable” means the value case has passed the configured
+governance checkpoint; it does not mean cash has already been realized or that
+the initiative is risk free.
+
+The locked version preserves:
+
+- the initiative's plan and actual financial entries or configurable metric
+  values;
+- recurring and one-off cost lines;
+- annual baseline and financial-scope selections;
+- the calculated benefit, cost, and net-value summary;
+- approval/rebaseline trigger, reason, actor, and lock time.
+
+The **Working forecast** can continue to change. Those edits do not rewrite the
+locked plan. The **Locked/Editable** badge tells you whether the initiative has
+a current immutable version, and **Version history** provides the audit trail.
+
+### ACME example: ENT-005 governed rebaseline
+
+`ENT-005 Enterprise Data and ERP Modernization` first locked version 1 after
+Gate 2 approval. When validated scope and adoption assumptions changed, the
+owner requested a rebaseline, the dashboard impact was reviewed, and approval
+created version 2. Version 2 is now the value source used by the ERP & Data
+Platform waterline; version 1 remains available as history.
+
+This is the correct sequence:
+
+```text
+working forecast changes
+        ↓
+rebaseline requested and approved
+        ↓
+bankable plan v2 created (v1 retained)
+        ↓
+next waterline lock references bankable v2
+```
+
+Use **Request rebaseline** when the commitment itself must change. Do not treat
+a working-forecast edit as an approved change to the target.
 
 ---
 
@@ -478,6 +576,19 @@ This is the primary realization comparison. A negative variance can reflect
 timing, delivery leakage, evidence not yet accepted, or an outdated plan. Open
 the initiative and its evidence before concluding that value has failed.
 
+Benefit Tracking reports benefit-ledger plan and actual amounts. At portfolio
+level, ACME's cumulative locked benefit baseline is `$13.802M` and cumulative
+actual benefit is `$7.973M`. These are gross benefit figures. To reconcile to
+the net Waterline, subtract cumulative recurring costs:
+
+```text
+$13.802M locked benefits - $1.200M recurring plan cost = $12.602M waterline
+ $7.973M actual benefits - $0.776M recurring actual cost = $7.197M net actual
+```
+
+Therefore Benefit Tracking and Waterline agree after applying the same gross
+versus net boundary; their headline figures are not expected to be identical.
+
 ### Bankable plan baseline by initiative
 
 This table shows which plan version supplies each initiative baseline. It is the
@@ -499,21 +610,55 @@ evidence-backed actuals.
 
 Route: `/financials/waterline`
 
-- **Workstream:** selects the target population.
-- **Lock date:** cutoff for approved initiatives.
-- **Preview:** calculates included and excluded initiatives without writing a
-  lock.
-- **Lock target:** creates an immutable snapshot; use only when governance has
-  approved the cutoff.
-- **Locked target / Actuals / Variance:** committed workstream value compared
-  with realization.
-- **Included initiatives:** approved above the cutoff and their value source.
-- **Below cutoff:** excluded or pending initiatives.
-- **Immutable snapshots:** versioned lock history.
+### What the waterline means
 
-Waterline is a governance target, not a substitute for FY2028 Financial
-Overview. Its value may use the configured lock basis and cutoff rather than a
-single-year dashboard total.
+The waterline answers: **which approved initiatives and how much net run-rate
+value did this workstream formally commit at the cutoff?** It freezes a target
+so future reporting compares performance with a stable commitment instead of a
+moving forecast.
+
+- **Workstream:** selects the target population.
+- **Lock date:** includes initiatives with the required approval decided on or
+  before this cutoff.
+- **Preview:** shows included/excluded initiatives and values without writing.
+- **Lock target:** creates a new immutable version. Use it only after governance
+  approves the population and cutoff.
+- **Value source:** uses the current bankable-plan version when one exists;
+  otherwise preview can show current financials. Verify the source before lock.
+- **Locked target:** sum of included initiatives' net plan values.
+- **Actuals:** sum of their net actual values for the same frozen snapshot
+  scope.
+- **Variance:** `actual − locked target`; a negative amount is unrealized value,
+  not automatically a loss.
+- **Below cutoff:** initiatives that lacked the required approval by the cutoff.
+- **Immutable snapshots:** prior versions remain available after a later lock.
+
+### ACME workstream locks
+
+All ten ACME initiatives qualified at the `2028-06-30` cutoff. The five current
+workstream locks reconcile as follows:
+
+| Workstream | Included initiatives | Locked net run-rate | Net actual | Variance |
+|---|---|---:|---:|---:|
+| Automation | ENT-001, ENT-002, ENT-010 | `$2.775M` | `$1.558M` | `-$1.217M` |
+| Commercial Growth | ENT-003, ENT-006, ENT-007 | `$3.268M` | `$1.897M` | `-$1.370M` |
+| ERP & Data Platform | ENT-005 bankable v2 | `$0.687M` | `$0.359M` | `-$0.328M` |
+| Offshoring & Operating Model | ENT-004 | `$2.600M` | `$1.498M` | `-$1.102M` |
+| Procurement & Supply Chain | ENT-008, ENT-009 | `$3.272M` | `$1.885M` | `-$1.388M` |
+| **Portfolio waterline** | **10 initiatives** | **`$12.602M`** | **`$7.197M`** | **`-$5.405M`** |
+
+Rounding in the table is to the nearest thousand; the application retains four
+decimal places.
+
+### What the waterline is not
+
+- It is not the FY2028 target revenue or target gross margin.
+- It is not automatically the same time scope as Financial Overview.
+- It is not gross benefits; the configured ACME basis is **net run-rate**.
+- It is not a forecast that moves whenever an initiative value changes.
+- “Below waterline” on the Executive stage chart is not synonymous with
+  “excluded by the Waterline cutoff”; use the Waterline included/excluded lists
+  for that governance answer.
 
 ---
 
@@ -633,8 +778,15 @@ State that seeded actuals are through `2028-06-30`.
 
 1. In Benefits Register, filter FY2028 and Finance validated.
 2. In Bankable Plan, show the current locked version and ENT-005 version 2.
-3. In Benefit Tracking, compare locked baseline to actual ledger realization.
-4. Drill into ENT-006, ENT-008, or ENT-010.
+3. In Benefit Tracking, show cumulative locked benefits `$13.802M` and actual
+   benefits `$7.973M`, then explain that these are gross benefit-ledger values.
+4. In Waterline, show locked net run-rate `$12.602M`, net actual `$7.197M`, and
+   variance `-$5.405M` after recurring costs.
+5. In the Executive stage-gate chart, show `$12.602M` above the line and
+   `$3.320M` of L3 pipeline below it. State explicitly that these figures must
+   not be added together as a committed target.
+6. Drill into ENT-005 to prove bankable version 2 and into ENT-006, ENT-008, or
+   ENT-010 to inspect realization evidence.
 
 ### Step 6 — prove investment and fully loaded economics
 
@@ -667,7 +819,10 @@ State that seeded actuals are through `2028-06-30`.
 | “The baseline plus all benefits equals target gross margin.” | Only gross-margin uplift is added to baseline gross margin. Savings stay in benefits/net value. |
 | “Net run-rate includes the `$2.500M` investment.” | Net run-rate subtracts recurring costs. One-off investment is analyzed separately in payback. |
 | “Actual `$3.692M` is the FY2028 full-year result.” | The seeded actual is through 2028-06-30. |
-| “Waterline must equal the FY2028 dashboard.” | Waterline uses its approved cutoff and locked value basis. |
+| “Waterline must equal the FY2028 dashboard.” | ACME Waterline is cumulative FY2027 + FY2028 locked net scope: `$4.220M + $8.382M = $12.602M`. Financial Overview is filtered to FY2028. |
+| “Benefit Tracking `$13.802M` should equal Waterline `$12.602M`.” | Benefit Tracking headline plan is gross benefits. Subtract `$1.200M` cumulative recurring plan cost to reconcile to the net waterline. |
+| “Below-waterline `$3.320M` should be added to the `$12.602M` lock.” | The stage chart's below-line amount is current L1-L3 pipeline context, not an incremental commitment. |
+| “Changing the forecast updates the bankable plan.” | A locked bankable version is immutable. A governed rebaseline must create the next version. |
 | “Net Before Allocation is fully loaded value.” | Net After Allocation includes shared-cost burden. |
 | “A dashboard empty state means the tenant has no data.” | It may mean filters, user ownership, role visibility, or missing enabled dashboard configuration. |
 

@@ -37,6 +37,19 @@ def test_guide_renderer_formats_tables_and_rewrites_internal_guide_links() -> No
     assert "<script" not in guide["html"].lower()
 
 
+def test_acme_dashboard_guide_explains_bankable_plan_and_locked_waterline() -> None:
+    guide = get_platform_guide("acme-dashboards-reporting")
+
+    assert guide is not None
+    assert "From forecast to bankable plan to waterline" in guide["html"]
+    assert "ENT-005 governed rebaseline" in guide["html"]
+    assert "$12.602M" in guide["html"]
+    assert "$7.197M" in guide["html"]
+    assert "$13.802M locked benefits - $1.200M recurring plan cost" in guide["html"]
+    assert "figures must" in guide["html"]
+    assert "not be added together as a committed target" in guide["html"]
+
+
 def test_published_guide_listing_has_unique_slugs_and_useful_metadata() -> None:
     items = list_platform_guides()
 
