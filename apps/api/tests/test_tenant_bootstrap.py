@@ -80,4 +80,9 @@ def test_tenant_bootstrap_creates_financial_and_dashboard_defaults_only() -> Non
         "executive_dashboard",
         "financial_overview",
         "initiative_portfolio",
+        "bankable_plan",
+        "benefits_register",
+        "benefit_tracking",
+        "waterline",
+        "shared_costs",
     }

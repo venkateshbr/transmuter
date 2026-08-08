@@ -28,6 +28,7 @@ from app.routers import (
     executive_control,
     financials,
     governance,
+    guides,
     health,
     hermes_tools,
     initiatives,
@@ -185,4 +186,5 @@ app.include_router(risks.router)
 app.include_router(search.router)
 app.include_router(status_updates.router)
 app.include_router(governance.router)
+app.include_router(guides.router)
 app.include_router(team.router)

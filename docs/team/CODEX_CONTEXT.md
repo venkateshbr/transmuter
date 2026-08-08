@@ -1,6 +1,6 @@
 # Codex Context - Transmuter
 
-Last updated: 2026-07-16
+Last updated: 2026-08-08
 
 This file captures durable working context for future Codex sessions. It supplements
 `AGENTS.md`, `docs/team/SDLC_PROTOCOL.md`, and `team/DESIGN_SYSTEM.md`; it does not
@@ -11,6 +11,9 @@ replace them.
 - First release snapshot is committed as `3ab8dcb` and tagged `v0.1.0`.
 - Dashboard value matrix work is committed after the release tag as `9015e86`.
 - Latest release tag is `v1.1.0` at commit `3627311`.
+- Pre-dashboard-reorganization baseline is tagged and published as `v1.2.0` at
+  commit `37f09dac88262478ec20217ee60a7abc052e0c38`. Dashboard improvements are
+  developed on `feat/462-dashboard-improvements` under umbrella issue `#462`.
 - The historical `v0.3.1` release includes the Alchemist workbook/dashboard
   acceptance test updates and the CI/CD pipeline gates from issue #77.
 - Shared Costs configurable allocation engine is promoted to production from
@@ -20,15 +23,17 @@ replace them.
   and web image `transmuter-web:hostinger`.
 - Hostinger dev Docker project uses API image `transmuter-api:hostinger-dev`
   and web image `transmuter-web:hostinger-dev`.
-- Current deployed application commit is `e5a769d` in dev and `4860a8a` in
-  production. Both include the five-tenant launch fixes, native meeting/browser
+- Current deployed application commit is `9ad7caf` in dev and `4860a8a` in
+  production. Dev includes the Dashboard/Operations reorganization and
+  dashboard-layout migration; production remains on the earlier launch state.
+  Both environments include the five-tenant launch fixes, native meeting/browser
   acceptance, authenticated export and template-upload browser fixes, and the
   initiative Annual Baseline editor required for the ACME end-to-end demo, the
   sequential strategic-parameter persistence fix from issue `#422`, plus the
   earlier Microsoft Graph isolation controls. Production promotion completed
   on `2026-07-16` after the two required migrations were applied offline.
-- Current application Hostinger Docker actions are `104399485` for dev and
-  `104399490` for production. Those actions preserved the deployed application
+- The latest dev dashboard deployment action is `108319254`; the recorded
+  production environment action remains `104399490`. Earlier actions preserved the deployed application
   commits while updating rotated database references. The production code
   deploy action for exact merge `4860a8a` was `104398414` and the reviewed
   Graph-scope correction action was `104398440`.
@@ -174,6 +179,19 @@ replace them.
 
 - Financial data must use PostgreSQL `NUMERIC(15,4)`, Python `Decimal`, and JSON
   string values.
+- The Dashboard menu has three decision surfaces: Operational Dashboard,
+  Financial Dashboard, and the unchanged Initiative Portfolio.
+- All entry and maintenance workflows belong under Operations, including the
+  Benefit Ledger, Benefits Register, Bankable Plans, Waterline & Target Locks,
+  Shared Costs, delivery controls, gate approvals, and meetings.
+- Operational and Financial dashboards support personal and tenant role-default
+  widget layouts. Users can drag to reorder, use accessible move controls, cycle
+  widget widths, hide optional widgets, save/reset personal layouts, and—when
+  authorized—publish a role default. Required decision widgets remain visible.
+- The canonical dashboard architecture and acceptance plan is
+  `docs/team/DASHBOARD_OPERATIONS_REORGANIZATION.md`.
+- The published in-product guide library is consolidated to Administration,
+  User Operations, and Dashboard & Reporting guides in `docs/user-guides/`.
 - Dashboard values must reconcile to initiative financial entries and value bridge
   totals.
 - Workstream x tag value matrix requirements:

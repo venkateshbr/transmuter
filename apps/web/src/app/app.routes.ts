@@ -44,6 +44,16 @@ export const routes: Routes = [
     canActivate: [authGuard],
     children: [
       {
+        path: 'guides/:slug',
+        loadComponent: () =>
+          import('./features/platform-guides/platform-guides.component').then(m => m.PlatformGuidesComponent),
+      },
+      {
+        path: 'guides',
+        loadComponent: () =>
+          import('./features/platform-guides/platform-guides.component').then(m => m.PlatformGuidesComponent),
+      },
+      {
         path: 'platform/guides/:slug',
         canActivate: [authGuard],
         data: { roles: ['platform_admin'] },
@@ -68,6 +78,11 @@ export const routes: Routes = [
         path: 'dashboard',
         loadComponent: () =>
           import('./features/dashboard/dashboard.component').then(m => m.DashboardComponent),
+      },
+      {
+        path: 'operations',
+        loadComponent: () =>
+          import('./features/operations/operations-hub.component').then(m => m.OperationsHubComponent),
       },
       {
         path: 'financials',

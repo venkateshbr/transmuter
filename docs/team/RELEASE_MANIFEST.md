@@ -36,6 +36,58 @@ Deployment note:
 
 ## Current Release Entries
 
+### 2026-08-08 - Dashboard And Operations Reorganization
+
+Status: deployed to development; authenticated API validation complete; browser acceptance pending
+
+GitHub tracking:
+
+- Parent issue `#462`, deploy-readiness issue `#470`, draft PR `#472`.
+- Deployed application commit: `9ad7caf013dbe817a90dd428d4a19bc9e17c1ac4`.
+- Baseline release before implementation: `v1.2.0` at
+  `37f09dac88262478ec20217ee60a7abc052e0c38`.
+
+Runtime changes:
+
+- Consolidate Dashboard navigation to Operational Dashboard, Financial
+  Dashboard, and the unchanged Initiative Portfolio.
+- Move delivery, financial-entry, validation, approval, lock, allocation, and
+  maintenance workflows into Operations.
+- Add constrained dashboard drag/reorder, keyboard movement, preset resizing,
+  optional-widget visibility, personal layouts, and tenant role defaults.
+- Consolidate the published guide catalogue from 16 overlapping sources to
+  Administration, User Operations, and Dashboard & Reporting guides and expose
+  them to authenticated tenant users.
+
+Schema:
+
+- Applied `supabase/migrations/20260808000001_dashboard_operations_and_layouts.sql`
+  to `transmuter_dev` through Hostinger schema job
+  `transmuter-schema-dev-20260808151256`.
+- Production requires the same migration before application promotion.
+
+Dev deployment and acceptance:
+
+- Environment: `https://transmuter-dev.ishirock.tech`.
+- Hostinger deployment action `108319254` reached terminal state `success`.
+- API, web, and Hermes containers report `running`.
+- Public `/health` and `/api/health` validation passed.
+- Real authenticated API validation confirmed exactly three Dashboard entries,
+  all five financial Operations destinations, eight Operational widgets,
+  personal-layout save and reset (`system → personal → system`), Operational
+  summary availability, Financial Dashboard response, and the three canonical
+  guide slugs.
+- A real viewer could read all three guides and received HTTP `403` when trying
+  to publish a tenant role-default layout.
+- Local verification before deploy: Angular production build, `43/43` frontend
+  tests, Ruff, and `18/18` focused backend tests passed.
+- Browser acceptance remains pending because the execution environment exposed
+  no in-app or Chrome browser backend. No production deployment was performed.
+
+Production promotion:
+
+- Not requested.
+
 ### 2026-08-08 - Portfolio Target Bridge And Bankable Waterline Guide
 
 Status: promoted to production and browser-verified

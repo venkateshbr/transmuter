@@ -30,6 +30,11 @@ STARTER_ENABLED_DASHBOARDS = {
     "executive_dashboard",
     "financial_overview",
     "initiative_portfolio",
+    "bankable_plan",
+    "benefits_register",
+    "benefit_tracking",
+    "waterline",
+    "shared_costs",
 }
 
 
@@ -45,10 +50,10 @@ class DashboardDefinition:
 
 DASHBOARD_DEFINITIONS: tuple[DashboardDefinition, ...] = (
     DashboardDefinition(
-        "executive_dashboard", "Executive Dashboard", "/dashboard", "dashboard", "grid", 10
+        "executive_dashboard", "Operational Dashboard", "/dashboard", "dashboard", "grid", 10
     ),
     DashboardDefinition(
-        "financial_overview", "Financial Overview", "/financials", "dashboard", "payments", 20
+        "financial_overview", "Financial Dashboard", "/financials", "dashboard", "payments", 20
     ),
     DashboardDefinition(
         "initiative_portfolio",
@@ -62,42 +67,47 @@ DASHBOARD_DEFINITIONS: tuple[DashboardDefinition, ...] = (
         "investments_payback",
         "Investments & Payback",
         "/financials/investments-payback",
-        "dashboard",
+        "hidden",
         "request_quote",
         40,
     ),
     DashboardDefinition(
         "bankable_plan",
-        "Bankable Plan",
+        "Bankable Plans",
         "/financials/bankable-plan",
-        "dashboard",
+        "operations",
         "account_balance",
-        50,
+        150,
     ),
     DashboardDefinition(
         "benefits_register",
         "Benefits Register",
         "/financials/benefits-register",
-        "dashboard",
+        "operations",
         "fact_check",
-        60,
+        140,
     ),
     DashboardDefinition(
         "benefit_tracking",
-        "Benefit Tracking",
+        "Benefit Ledger",
         "/financials/benefit-tracking",
-        "dashboard",
+        "operations",
         "trending_up",
-        70,
+        130,
     ),
     DashboardDefinition(
-        "waterline", "Waterline", "/financials/waterline", "dashboard", "water_drop", 80
+        "waterline",
+        "Waterline & Target Locks",
+        "/financials/waterline",
+        "operations",
+        "water_drop",
+        160,
     ),
     DashboardDefinition(
-        "control_tower", "Control Tower", "/reports/control-tower", "dashboard", "summarize", 90
+        "control_tower", "Control Tower", "/reports/control-tower", "hidden", "summarize", 90
     ),
     DashboardDefinition(
-        "shared_costs", "Shared Costs", "/shared-costs", "primary", "account_balance", 100
+        "shared_costs", "Shared Costs", "/shared-costs", "operations", "account_balance", 170
     ),
 )
 

@@ -7,6 +7,8 @@ import { DashboardEchartCardComponent } from './dashboard-echart-card.component'
 import { CompactFilterToolbarComponent, type CompactFilterGroup } from '../../shared/components/compact-filter-toolbar/compact-filter-toolbar.component';
 import { resolveFinancialMode, type FinancialModeDescriptor } from '../financials/financials-view.models';
 import { TenantReportingContextService } from '../../core/services/tenant-reporting-context.service';
+import { DashboardWidgetGridComponent } from './dashboard-widget-grid.component';
+import { DashboardWidgetDirective } from './dashboard-widget.directive';
 
 type DashboardMultiFilterKey = 'business_unit_id' | 'workstream_id' | 'priority' | 'tag';
 type ExecutiveBriefPersona = 'management' | 'investor' | 'owner';
@@ -35,7 +37,14 @@ const DASHBOARD_FILTER_STATE_KEY = 'transmuter.filters.dashboard';
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterLink, DashboardEchartCardComponent, CompactFilterToolbarComponent],
+  imports: [
+    CommonModule,
+    RouterLink,
+    DashboardEchartCardComponent,
+    CompactFilterToolbarComponent,
+    DashboardWidgetGridComponent,
+    DashboardWidgetDirective,
+  ],
   template: `
     @if (dashboardError()) {
       <section class="m-8 border border-red-500/40 bg-red-500/10 p-6" role="alert" data-testid="dashboard-load-error">
@@ -60,12 +69,9 @@ const DASHBOARD_FILTER_STATE_KEY = 'transmuter.filters.dashboard';
               <span class="h-2 w-8 bg-[var(--t-blue-light)]"></span>
               <span class="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Portfolio Live Context</span>
             </div>
-            <h1 class="text-4xl font-black tracking-tight leading-tight">
-              Operational Excellence <br/>
-              & Strategic Yield Dashboard<span class="text-[var(--t-blue-light)]">.</span>
-            </h1>
+            <h1 class="text-4xl font-black tracking-tight leading-tight">Operational Dashboard<span class="text-[var(--t-blue-light)]">.</span></h1>
             <p class="text-sm font-medium opacity-80 mt-4 max-w-xl leading-relaxed">
-              Real-time synchronization across {{ data()?.summary?.total_initiatives }} strategic initiatives.
+              Read-only decision intelligence across {{ data()?.summary?.total_initiatives }} strategic initiatives.
               The current portfolio health score is <span class="font-black text-green-300">{{ getHealthScore() }}%</span> with 
               <span class="font-black text-amber-300">{{ data()?.summary?.pending_approvals }} pending gate decisions</span>.
             </p>
@@ -111,6 +117,76 @@ const DASHBOARD_FILTER_STATE_KEY = 'transmuter.filters.dashboard';
         }
       </section>
 
+      <app-dashboard-widget-grid dashboardKey="operational">
+        <ng-template dashboardWidget="decision_strip" widgetTitle="Decision strip" widgetDescription="Portfolio decisions and exceptions" [widgetRequired]="true" widgetDefaultSize="full">
+          <section class="executive-surface grid gap-px border border-white/15 sm:grid-cols-3" data-testid="operational-decision-strip">
+            <a routerLink="/initiatives/pipeline" class="p-5 transition-colors hover:bg-white/10" aria-label="Open all initiatives">
+              <p class="text-[9px] font-black uppercase tracking-widest text-white/60">Portfolio</p>
+              <p class="mt-2 text-3xl font-black">{{ data()?.summary?.total_initiatives || 0 }}</p>
+              <p class="mt-1 text-xs text-white/70">active initiatives</p>
+            </a>
+            <a routerLink="/initiatives/pipeline" [queryParams]="{ rag_status: 'red' }" class="border-white/15 p-5 transition-colors hover:bg-white/10 sm:border-l" aria-label="Open at-risk initiatives">
+              <p class="text-[9px] font-black uppercase tracking-widest text-white/60">Needs intervention</p>
+              <p class="mt-2 text-3xl font-black text-red-300">{{ data()?.summary?.at_risk || 0 }}</p>
+              <p class="mt-1 text-xs text-white/70">red initiatives</p>
+            </a>
+            <a routerLink="/pmo/governance" [queryParams]="{ status: 'pending' }" class="border-white/15 p-5 transition-colors hover:bg-white/10 sm:border-l" aria-label="Open pending approvals">
+              <p class="text-[9px] font-black uppercase tracking-widest text-white/60">Decisions due</p>
+              <p class="mt-2 text-3xl font-black text-amber-300">{{ data()?.summary?.pending_approvals || 0 }}</p>
+              <p class="mt-1 text-xs text-white/70">gate approvals</p>
+            </a>
+          </section>
+        </ng-template>
+
+        <ng-template dashboardWidget="needs_attention" widgetTitle="Needs attention" widgetDescription="At-risk work and assigned actions" [widgetRequired]="true" widgetDefaultSize="wide">
+          <section class="card h-full p-6" data-testid="dashboard-needs-attention">
+            <div class="flex items-center justify-between gap-3">
+              <div><p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">Act now</p><h2 class="mt-1 text-lg font-black">Needs attention</h2></div>
+              <a routerLink="/operations" class="text-xs font-black text-[var(--t-accent)]">Open Operations →</a>
+            </div>
+            <div class="mt-5 grid gap-3 sm:grid-cols-3">
+              <a routerLink="/initiatives/pipeline" [queryParams]="{ rag_status: 'red' }" class="border-l-4 border-red-500 bg-[var(--t-surface-raised)] p-4"><p class="text-2xl font-black text-red-500">{{ data()?.summary?.at_risk || 0 }}</p><p class="text-xs font-bold">At-risk initiatives</p></a>
+              <a routerLink="/pmo/governance" [queryParams]="{ status: 'pending' }" class="border-l-4 border-amber-500 bg-[var(--t-surface-raised)] p-4"><p class="text-2xl font-black text-amber-600">{{ data()?.summary?.pending_approvals || 0 }}</p><p class="text-xs font-bold">Pending approvals</p></a>
+              <a routerLink="/progress/action-items" class="border-l-4 border-[var(--t-blue-light)] bg-[var(--t-surface-raised)] p-4"><p class="text-2xl font-black">{{ data()?.my_actions?.length || 0 }}</p><p class="text-xs font-bold">My open actions</p></a>
+            </div>
+          </section>
+        </ng-template>
+
+        <ng-template dashboardWidget="execution_health" widgetTitle="Execution health" widgetDescription="Portfolio pressure and RAG health" [widgetRequired]="true" widgetDefaultSize="medium">
+          <app-dashboard-echart-card kind="pressure" [data]="data()" />
+        </ng-template>
+
+        <ng-template dashboardWidget="stage_progression" widgetTitle="Stage progression" widgetDescription="Initiatives by transformation stage" [widgetRequired]="true" widgetDefaultSize="wide">
+          <app-dashboard-echart-card kind="stage" [data]="data()" [stages]="stages()" />
+        </ng-template>
+
+        <ng-template dashboardWidget="risk_heatmap" widgetTitle="Risk heatmap" widgetDescription="Risk concentration by likelihood and impact" widgetDefaultSize="medium">
+          <app-dashboard-echart-card kind="riskHeatmap" [data]="data()" [heatmapLevels]="heatmapLevels" />
+        </ng-template>
+
+        <ng-template dashboardWidget="kpi_pulse" widgetTitle="KPI pulse" widgetDescription="Latest KPI performance" widgetDefaultSize="medium">
+          <section class="card h-full p-6" data-testid="dashboard-layout-kpi-pulse">
+            <div class="flex items-end justify-between"><div><p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">KPI pulse</p><p class="mt-2 text-4xl font-black">{{ data()?.kpi_pulse?.health_score || '0.0' }}%</p></div><a routerLink="/pmo/kpis" class="text-xs font-black text-[var(--t-accent)]">Manage →</a></div>
+            <div class="mt-5 space-y-2">@for (kpi of data()?.kpi_pulse?.items || []; track kpi.id) {<a routerLink="/pmo/kpis" class="flex justify-between border-b border-[var(--t-border)] py-2 text-xs"><span class="font-bold">{{ kpi.name }}</span><span class="font-black uppercase">{{ kpi.status }}</span></a>} @empty {<p class="text-xs text-[var(--t-text-tertiary)]">No KPI actuals available.</p>}</div>
+          </section>
+        </ng-template>
+
+        <ng-template dashboardWidget="my_work" widgetTitle="My work" widgetDescription="Assigned actions and milestones" widgetDefaultSize="medium">
+          <section class="card h-full p-6" data-testid="dashboard-layout-my-work">
+            <div class="flex justify-between"><div><p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">My work</p><h2 class="mt-1 text-lg font-black">Actions and milestones</h2></div><a routerLink="/progress/action-items" class="text-xs font-black text-[var(--t-accent)]">View all →</a></div>
+            <div class="mt-5 grid grid-cols-2 gap-3"><div class="bg-[var(--t-surface-raised)] p-4"><p class="text-3xl font-black">{{ data()?.my_actions?.length || 0 }}</p><p class="text-xs font-bold">Open actions</p></div><div class="bg-[var(--t-surface-raised)] p-4"><p class="text-3xl font-black">{{ data()?.my_milestones?.length || 0 }}</p><p class="text-xs font-bold">Upcoming milestones</p></div></div>
+          </section>
+        </ng-template>
+
+        <ng-template dashboardWidget="recent_activity" widgetTitle="Recent activity" widgetDescription="Latest submitted updates" widgetDefaultSize="medium">
+          <section class="card h-full p-6" data-testid="dashboard-layout-recent-activity">
+            <div class="flex justify-between"><div><p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">Recent activity</p><h2 class="mt-1 text-lg font-black">Latest updates</h2></div><a routerLink="/progress/status-updates" class="text-xs font-black text-[var(--t-accent)]">View all →</a></div>
+            <div class="mt-4 space-y-3">@for (activity of (data()?.recent_activity || []).slice(0, 4); track activity.id) {<a [routerLink]="['/initiatives', activity.initiative_id]" class="block border-l-2 border-[var(--t-blue-light)] pl-3"><p class="truncate text-xs font-black">{{ activity.initiatives?.name || 'Initiative update' }}</p><p class="mt-1 line-clamp-1 text-xs text-[var(--t-text-secondary)]">{{ activity.summary }}</p></a>} @empty {<p class="text-xs text-[var(--t-text-tertiary)]">No recent submitted updates.</p>}</div>
+          </section>
+        </ng-template>
+      </app-dashboard-widget-grid>
+
+      @if (false) {
       <!-- Summary Cards -->
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         <a
@@ -522,6 +598,7 @@ const DASHBOARD_FILTER_STATE_KEY = 'transmuter.filters.dashboard';
           </div>
         </section>
       </div>
+      }
 
     </div>
 

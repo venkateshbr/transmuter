@@ -25,11 +25,10 @@ interface PublishedGuide extends GuideSummary {
         <div class="mx-auto max-w-[1680px] px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
           <div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_400px] lg:items-end">
             <div>
-              <p class="text-[10px] font-black uppercase tracking-[0.3em] text-[var(--t-blue-light)]">Platform operator library</p>
+              <p class="text-[10px] font-black uppercase tracking-[0.3em] text-[var(--t-blue-light)]">Transmuter knowledge library</p>
               <h1 class="mt-3 text-3xl font-black leading-tight sm:text-4xl">User guides and tutorials</h1>
               <p class="mt-4 max-w-3xl text-sm leading-6 text-white/75">
-                Published from Transmuter's maintained onboarding, financial, operating-model, and demonstration guides.
-                Access is restricted to platform administrators.
+                Three maintained guides cover administration, day-to-day operations, and dashboard interpretation with one consistent worked example.
               </p>
             </div>
             <div class="grid grid-cols-2 border border-white/20 bg-white/5">
@@ -196,11 +195,12 @@ export class PlatformGuidesComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    this.api.get<{ items: GuideSummary[] }>('/platform/guides').subscribe({
+    this.api.get<{ items: GuideSummary[] }>('/guides').subscribe({
       next: response => {
-        this.guides.set(response.items || []);
+        const items = response.items || [];
+        this.guides.set(items);
         const requestedSlug = this.route.snapshot.paramMap.get('slug');
-        const selected = response.items.find(item => item.slug === requestedSlug) || response.items[0];
+        const selected = items.find(item => item.slug === requestedSlug) || items[0];
         if (selected) this.loadGuide(selected.slug, false);
         else this.loading.set(false);
       },
@@ -232,11 +232,11 @@ export class PlatformGuidesComponent implements OnInit {
     this.loading.set(true);
     this.error.set(null);
     this.selectedSlug.set(slug);
-    this.api.get<PublishedGuide>(`/platform/guides/${slug}`).subscribe({
+    this.api.get<PublishedGuide>(`/guides/${slug}`).subscribe({
       next: response => {
         this.guide.set(response);
         this.loading.set(false);
-        if (updateUrl) void this.router.navigate(['/platform/guides', slug]);
+        if (updateUrl) void this.router.navigate(['/guides', slug]);
       },
       error: err => {
         this.loading.set(false);

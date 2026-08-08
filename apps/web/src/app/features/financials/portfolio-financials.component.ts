@@ -5,6 +5,8 @@ import { RouterLink } from '@angular/router';
 import { ApiService } from '../../core/services/api.service';
 import { financialModeUsesActuals, resolveFinancialMode, type FinancialModeDescriptor } from './financials-view.models';
 import { PortfolioFinancialTrendComponent } from './portfolio-financial-trend.component';
+import { DashboardWidgetGridComponent } from '../dashboard/dashboard-widget-grid.component';
+import { DashboardWidgetDirective } from '../dashboard/dashboard-widget.directive';
 
 type Granularity = 'monthly' | 'quarterly' | 'yearly';
 
@@ -188,7 +190,14 @@ interface ValueBridgeResponse {
 @Component({
   selector: 'app-portfolio-financials',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, PortfolioFinancialTrendComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    RouterLink,
+    PortfolioFinancialTrendComponent,
+    DashboardWidgetGridComponent,
+    DashboardWidgetDirective,
+  ],
   template: `
     <div class="min-h-screen p-8 space-y-8" style="background:var(--t-bg)">
       @if (loadError()) {
@@ -204,9 +213,9 @@ interface ValueBridgeResponse {
       <header class="flex flex-wrap items-end justify-between gap-5 border-b border-[var(--t-border)] pb-6">
         <div>
           <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">Portfolio Office</p>
-          <h1 class="mt-2 text-3xl font-black text-[var(--t-text-primary)]">Financials<span class="text-[var(--t-blue-light)]">.</span></h1>
+          <h1 class="mt-2 text-3xl font-black text-[var(--t-text-primary)]">Financial Dashboard<span class="text-[var(--t-blue-light)]">.</span></h1>
           <p class="mt-2 max-w-3xl text-sm leading-6 text-[var(--t-text-secondary)]">
-            Tenant-wide planned costs, optional benefits, and actual performance drilldowns by period.
+            Read-only portfolio value, investment, cost, target, and actual performance with governed operational drill-through.
           </p>
           <div class="mt-3 inline-flex items-center gap-2 border border-[var(--t-border)] bg-[var(--t-surface-raised)] px-3 py-2">
             <span class="text-[10px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">Data Basis</span>
@@ -281,6 +290,66 @@ interface ValueBridgeResponse {
           </button>
         </div>
       </header>
+
+      <app-dashboard-widget-grid dashboardKey="financial">
+        <ng-template dashboardWidget="financial_position" widgetTitle="Financial position" widgetDescription="Plan, actual and variance at a glance" [widgetRequired]="true" widgetDefaultSize="full">
+          <section class="grid gap-px border border-[var(--t-border)] bg-[var(--t-border)] md:grid-cols-3" data-testid="financial-position-widget">
+            @for (card of visibleSummaryCards().slice(0, 3); track card.key) {
+              <div class="bg-[var(--t-surface)] p-5">
+                <p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">{{ card.label }}</p>
+                <p class="mt-3 text-2xl font-black text-[var(--t-text-primary)]">{{ formatMoney(card.plan) }}</p>
+                <p class="mt-1 text-xs font-bold text-[var(--t-text-secondary)]">Plan</p>
+                @if (showActuals()) {<p class="mt-3 border-t border-[var(--t-border)] pt-3 text-xs font-bold">{{ formatMoney(card.actual) }} actual · {{ formatMoney(card.variance) }} variance</p>}
+              </div>
+            }
+          </section>
+        </ng-template>
+
+        <ng-template dashboardWidget="benefit_realization" widgetTitle="Benefit realization" widgetDescription="Planned and realized portfolio benefits" [widgetRequired]="true" widgetDefaultSize="wide">
+          <section class="card h-full p-6">
+            <div class="flex items-start justify-between gap-4"><div><p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">Benefit realization</p><h2 class="mt-1 text-lg font-black">Plan versus actual</h2></div><a routerLink="/financials/benefit-tracking" class="text-xs font-black text-[var(--t-accent)]">Open ledger →</a></div>
+            <div class="mt-5 grid gap-3 sm:grid-cols-2">
+              @for (card of visibleSummaryCards().slice(0, 2); track card.key) {<div class="bg-[var(--t-surface-raised)] p-4"><p class="text-[9px] font-black uppercase tracking-widest text-[var(--t-text-tertiary)]">{{ card.label }}</p><p class="mt-2 text-xl font-black">{{ formatMoney(card.plan) }}</p><p class="mt-1 text-xs text-[var(--t-text-secondary)]">{{ formatMoney(card.actual) }} actual</p></div>}
+            </div>
+          </section>
+        </ng-template>
+
+        <ng-template dashboardWidget="investment_payback" widgetTitle="Investment and payback" widgetDescription="Investment recovery and payback ranking" [widgetRequired]="true" widgetDefaultSize="medium">
+          <section class="card h-full p-6">
+            <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">Investment discipline</p><h2 class="mt-1 text-lg font-black">Payback and value</h2>
+            <p class="mt-3 text-xs leading-5 text-[var(--t-text-secondary)]">Compare investment, cumulative value and expected payback across initiatives. Entry and maintenance remain in Operations.</p>
+            <a routerLink="/financials/investments-payback" class="btn-secondary mt-5 inline-flex text-xs">View payback analysis</a>
+          </section>
+        </ng-template>
+
+        <ng-template dashboardWidget="waterline" widgetTitle="Value waterline" widgetDescription="Locked target versus current value" [widgetRequired]="true" widgetDefaultSize="wide">
+          <section class="executive-surface h-full p-6">
+            <div class="flex items-start justify-between gap-4"><div><p class="text-[10px] font-black uppercase tracking-widest text-white/60">Bankable value</p><h2 class="mt-1 text-xl font-black">Waterline and target locks</h2></div><a routerLink="/financials/waterline" class="border border-white/30 px-3 py-2 text-xs font-black hover:bg-white/10">Inspect →</a></div>
+            @if (targetSummary(); as target) {<div class="mt-6 grid grid-cols-2 gap-px bg-white/20"><div class="bg-[var(--t-primary)] p-4"><p class="text-[9px] uppercase tracking-widest text-white/60">Target revenue</p><p class="mt-2 text-xl font-black">{{ formatMoney(target.target_revenue_plan) }}</p></div><div class="bg-[var(--t-primary)] p-4"><p class="text-[9px] uppercase tracking-widest text-white/60">Target margin</p><p class="mt-2 text-xl font-black">{{ formatMoney(target.target_gross_margin_plan) }}</p></div></div>} @else {<p class="mt-5 text-xs text-white/70">No locked portfolio target is available for the selected year.</p>}
+          </section>
+        </ng-template>
+
+        <ng-template dashboardWidget="financial_trend" widgetTitle="Financial trend" widgetDescription="Benefits, costs and net value over time" widgetDefaultSize="wide">
+          <app-portfolio-financial-trend [rows]="response()?.periods || []" [granularity]="granularity()" [showActuals]="showActuals()" [currency]="reportingCurrency()" [baselineValue]="grossMarginBaselinePerPeriod()" [baselineLabel]="trendBaselineLabel()" (periodSelected)="openTrendPeriod($event)" />
+        </ng-template>
+
+        <ng-template dashboardWidget="value_bridge" widgetTitle="Value bridge" widgetDescription="Base, high and actual net value" widgetDefaultSize="medium">
+          <section class="card h-full p-6">
+            <p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">Value bridge · {{ valueBridge()?.basis_label || 'All years' }}</p>
+            <div class="mt-5 grid gap-3"><div class="bg-[var(--t-surface-raised)] p-3"><p class="text-[9px] uppercase tracking-widest">Base net</p><p class="mt-1 text-lg font-black">{{ formatMoney(valueBridge()?.base_case?.net) }}</p></div><div class="bg-[var(--t-surface-raised)] p-3"><p class="text-[9px] uppercase tracking-widest">High net</p><p class="mt-1 text-lg font-black">{{ formatMoney(valueBridge()?.high_case?.net) }}</p></div><div class="bg-[var(--t-surface-raised)] p-3"><p class="text-[9px] uppercase tracking-widest">Actual net</p><p class="mt-1 text-lg font-black">{{ formatMoney(valueBridge()?.actual?.net) }}</p></div></div>
+          </section>
+        </ng-template>
+
+        <ng-template dashboardWidget="cost_breakdown" widgetTitle="Cost breakdown" widgetDescription="Portfolio cost categories" widgetDefaultSize="medium">
+          <section class="card h-full p-6"><div class="flex justify-between"><h2 class="text-lg font-black">Cost breakdown</h2><a routerLink="/shared-costs" class="text-xs font-black text-[var(--t-accent)]">Shared costs →</a></div><div class="mt-4 space-y-3">@for (row of (response()?.cost_breakdown || []).slice(0, 5); track row.key) {<div class="border-l-2 border-[var(--t-blue-light)] pl-3"><p class="text-xs font-black">{{ row.label }}</p><p class="text-xs text-[var(--t-text-secondary)]">{{ formatMoney(row.plan) }} plan</p></div>} @empty {<p class="text-xs text-[var(--t-text-tertiary)]">No costs match the selected filters.</p>}</div></section>
+        </ng-template>
+
+        <ng-template dashboardWidget="value_matrix" widgetTitle="Initiative value matrix" widgetDescription="Portfolio value by initiative" widgetDefaultSize="full">
+          <section class="border border-[var(--t-border)] bg-[var(--t-surface)] p-6">
+            <div class="grid gap-5 md:grid-cols-[1fr_auto] md:items-center"><div><p class="text-[10px] font-black uppercase tracking-widest text-[var(--t-accent)]">Portfolio drill-through</p><h2 class="mt-1 text-xl font-black">Initiative Portfolio</h2><p class="mt-2 text-xs leading-5 text-[var(--t-text-secondary)]">Open the unchanged initiative portfolio to compare stage, value, cost, payback and ownership at initiative level.</p></div><a routerLink="/financials/initiative-portfolio" class="btn-primary text-xs">Open Initiative Portfolio</a></div>
+          </section>
+        </ng-template>
+      </app-dashboard-widget-grid>
 
       @if (hasPortfolioBaseline()) {
         <section class="grid gap-4 md:grid-cols-3">

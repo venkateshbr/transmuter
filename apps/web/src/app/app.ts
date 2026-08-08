@@ -18,7 +18,7 @@ interface DashboardConfigItem {
   dashboard_key: string;
   label: string;
   route_path: string;
-  menu_group: 'dashboard' | 'primary' | 'hidden';
+  menu_group: 'dashboard' | 'operations' | 'primary' | 'hidden';
   icon: string;
   display_order: number;
   is_enabled: boolean;
@@ -450,10 +450,11 @@ export class App {
     if (this.isPlatformAdmin()) {
       return [
         { label: 'Platform', path: '/platform', icon: 'admin_panel_settings' },
-        { label: 'User Guides', path: '/platform/guides', icon: 'menu_book' },
+        { label: 'User Guides', path: '/guides', icon: 'menu_book' },
       ];
     }
     const dashboardChildren = this.dashboardNavChildren();
+    const operationsChildren = this.operationsNavChildren();
     const primaryConfigured = this.primaryConfiguredDashboards();
     return [
       {
@@ -462,14 +463,16 @@ export class App {
         icon: 'grid',
         children: dashboardChildren,
       },
+      {
+        label: 'Operations',
+        path: '/operations',
+        icon: 'tune',
+        children: operationsChildren,
+      },
       ...primaryConfigured,
       { label: 'Initiatives',      path: '/initiatives/pipeline', icon: 'list' },
-      { label: 'Progress Monitor', path: '/progress',           icon: 'bar-chart' },
-      { label: 'Governance',       path: '/pmo/governance',     icon: 'shield' },
-      { label: 'KPIs',             path: '/pmo/kpis',           icon: 'bar-chart' },
-      { label: 'Risks',            path: '/pmo/risks',          icon: 'alert' },
-      { label: 'Meetings',         path: '/meetings',           icon: 'calendar' },
       { label: 'People',           path: '/people',             icon: 'users' },
+      { label: 'User Guides',      path: '/guides',             icon: 'menu_book' },
     ].filter(item => item.path !== '/people' || this.auth.hasPermission('users.manage'));
   }
 
@@ -561,10 +564,26 @@ export class App {
         path: item.route_path,
         icon: item.icon || 'grid',
       }));
-    if (this.dashboardConfig().length) return configured;
-    return this.dashboardConfigLoaded()
-      ? [{ label: 'Shared Costs', path: '/shared-costs', icon: 'account_balance' }]
-      : [];
+    return configured;
+  }
+
+  private operationsNavChildren(): NavItem[] {
+    const configured = this.enabledConfiguredDashboards()
+      .filter(item => item.menu_group === 'operations')
+      .map(item => ({ label: item.label, path: item.route_path, icon: item.icon || 'tune' }));
+    const delivery: NavItem[] = [
+      { label: 'Progress Monitor', path: '/progress', icon: 'bar_chart' },
+      { label: 'Roadmap & Milestones', path: '/progress/roadmap', icon: 'timeline' },
+      { label: 'Dependencies', path: '/progress/dependencies', icon: 'account_tree' },
+      { label: 'Action Items', path: '/progress/action-items', icon: 'task_alt' },
+      { label: 'Status Updates', path: '/progress/status-updates', icon: 'update' },
+      { label: 'Gate Approvals', path: '/pmo/governance', icon: 'gavel' },
+      { label: 'KPI Management', path: '/pmo/kpis', icon: 'monitoring' },
+      { label: 'Risk Register', path: '/pmo/risks', icon: 'warning' },
+      { label: 'Meetings', path: '/meetings', icon: 'calendar_month' },
+    ];
+    return [...delivery, ...configured]
+      .filter((item, index, items) => items.findIndex(candidate => candidate.path === item.path) === index);
   }
 
   private enabledConfiguredDashboards(): DashboardConfigItem[] {
@@ -580,22 +599,16 @@ export class App {
 
   private defaultDashboardChildren(): NavItem[] {
     return [
-      { label: 'Executive Dashboard', path: '/dashboard', icon: 'grid' },
-      { label: 'Financial Overview', path: '/financials', icon: 'payments' },
+      { label: 'Operational Dashboard', path: '/dashboard', icon: 'grid' },
+      { label: 'Financial Dashboard', path: '/financials', icon: 'payments' },
       { label: 'Initiative Portfolio', path: '/financials/initiative-portfolio', icon: 'table_chart' },
-      { label: 'Investments & Payback', path: '/financials/investments-payback', icon: 'request_quote' },
-      { label: 'Bankable Plan', path: '/financials/bankable-plan', icon: 'account_balance' },
-      { label: 'Benefits Register', path: '/financials/benefits-register', icon: 'fact_check' },
-      { label: 'Benefit Tracking', path: '/financials/benefit-tracking', icon: 'trending_up' },
-      { label: 'Waterline', path: '/financials/waterline', icon: 'water_drop' },
-      { label: 'Control Tower', path: '/reports/control-tower', icon: 'summarize' },
     ];
   }
 
   private starterDashboardChildren(): NavItem[] {
     return [
-      { label: 'Executive Dashboard', path: '/dashboard', icon: 'grid' },
-      { label: 'Financial Overview', path: '/financials', icon: 'payments' },
+      { label: 'Operational Dashboard', path: '/dashboard', icon: 'grid' },
+      { label: 'Financial Dashboard', path: '/financials', icon: 'payments' },
       { label: 'Initiative Portfolio', path: '/financials/initiative-portfolio', icon: 'table_chart' },
     ];
   }

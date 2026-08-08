@@ -24,16 +24,16 @@ describe('App', () => {
   let themeToggleCalled = false;
   const dashboardConfigResponse = {
     dashboards: [
-      { dashboard_key: 'executive_dashboard', label: 'Executive Dashboard', route_path: '/dashboard', menu_group: 'dashboard', icon: 'grid', display_order: 10, is_enabled: true },
-      { dashboard_key: 'financial_overview', label: 'Financial Overview', route_path: '/financials', menu_group: 'dashboard', icon: 'payments', display_order: 20, is_enabled: true },
+      { dashboard_key: 'executive_dashboard', label: 'Operational Dashboard', route_path: '/dashboard', menu_group: 'dashboard', icon: 'grid', display_order: 10, is_enabled: true },
+      { dashboard_key: 'financial_overview', label: 'Financial Dashboard', route_path: '/financials', menu_group: 'dashboard', icon: 'payments', display_order: 20, is_enabled: true },
       { dashboard_key: 'initiative_portfolio', label: 'Initiative Portfolio', route_path: '/financials/initiative-portfolio', menu_group: 'dashboard', icon: 'table_chart', display_order: 30, is_enabled: true },
-      { dashboard_key: 'investments_payback', label: 'Investments & Payback', route_path: '/financials/investments-payback', menu_group: 'dashboard', icon: 'request_quote', display_order: 40, is_enabled: true },
-      { dashboard_key: 'bankable_plan', label: 'Bankable Plan', route_path: '/financials/bankable-plan', menu_group: 'dashboard', icon: 'account_balance', display_order: 50, is_enabled: true },
-      { dashboard_key: 'benefits_register', label: 'Benefits Register', route_path: '/financials/benefits-register', menu_group: 'dashboard', icon: 'fact_check', display_order: 60, is_enabled: true },
-      { dashboard_key: 'benefit_tracking', label: 'Benefit Tracking', route_path: '/financials/benefit-tracking', menu_group: 'dashboard', icon: 'trending_up', display_order: 70, is_enabled: true },
-      { dashboard_key: 'waterline', label: 'Waterline', route_path: '/financials/waterline', menu_group: 'dashboard', icon: 'water_drop', display_order: 80, is_enabled: true },
-      { dashboard_key: 'control_tower', label: 'Control Tower', route_path: '/reports/control-tower', menu_group: 'dashboard', icon: 'summarize', display_order: 90, is_enabled: true },
-      { dashboard_key: 'shared_costs', label: 'Shared Costs', route_path: '/shared-costs', menu_group: 'primary', icon: 'account_balance', display_order: 100, is_enabled: true },
+      { dashboard_key: 'investments_payback', label: 'Investments & Payback', route_path: '/financials/investments-payback', menu_group: 'hidden', icon: 'request_quote', display_order: 40, is_enabled: true },
+      { dashboard_key: 'bankable_plan', label: 'Bankable Plans', route_path: '/financials/bankable-plan', menu_group: 'operations', icon: 'account_balance', display_order: 150, is_enabled: true },
+      { dashboard_key: 'benefits_register', label: 'Benefits Register', route_path: '/financials/benefits-register', menu_group: 'operations', icon: 'fact_check', display_order: 140, is_enabled: true },
+      { dashboard_key: 'benefit_tracking', label: 'Benefit Ledger', route_path: '/financials/benefit-tracking', menu_group: 'operations', icon: 'trending_up', display_order: 130, is_enabled: true },
+      { dashboard_key: 'waterline', label: 'Waterline & Target Locks', route_path: '/financials/waterline', menu_group: 'operations', icon: 'water_drop', display_order: 160, is_enabled: true },
+      { dashboard_key: 'control_tower', label: 'Control Tower', route_path: '/reports/control-tower', menu_group: 'hidden', icon: 'summarize', display_order: 90, is_enabled: true },
+      { dashboard_key: 'shared_costs', label: 'Shared Costs', route_path: '/shared-costs', menu_group: 'operations', icon: 'account_balance', display_order: 170, is_enabled: true },
     ],
   };
 
@@ -76,6 +76,7 @@ describe('App', () => {
           { path: 'people', component: EmptyRouteComponent },
           { path: 'platform', component: EmptyRouteComponent },
           { path: 'platform/guides', component: EmptyRouteComponent },
+          { path: 'guides', component: EmptyRouteComponent },
           { path: 'profile', component: EmptyRouteComponent },
           { path: 'auth/login', component: EmptyRouteComponent },
         ]),
@@ -156,7 +157,7 @@ describe('App', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('header')).toBeTruthy();
     expect(compiled.textContent).toContain('Dashboard');
-    expect(compiled.textContent).toContain('Meetings');
+    expect(compiled.textContent).toContain('Operations');
     expect(compiled.textContent).toContain('People');
     expect(compiled.textContent).not.toContain('More');
     expect(compiled.textContent).not.toContain('Control Tower');
@@ -168,7 +169,7 @@ describe('App', () => {
     expect((fixture.componentInstance as any).canManageTenant()).toBe(true);
   });
 
-  it('should expose financial and report paths under the dashboard menu', () => {
+  it('should expose only the two consolidated dashboards and initiative portfolio', () => {
     const fixture = TestBed.createComponent(App);
     const navItems = (fixture.componentInstance as any).navItems;
 
@@ -181,12 +182,6 @@ describe('App', () => {
       '/dashboard',
       '/financials',
       '/financials/initiative-portfolio',
-      '/financials/investments-payback',
-      '/financials/bankable-plan',
-      '/financials/benefits-register',
-      '/financials/benefit-tracking',
-      '/financials/waterline',
-      '/reports/control-tower',
     ]);
   });
 
@@ -194,18 +189,17 @@ describe('App', () => {
     const fixture = TestBed.createComponent(App);
     const component = fixture.componentInstance as any;
 
-    expect(component.primaryNavItems.map((item: any) => item.path)).toContain('/meetings');
+    const operations = component.primaryNavItems.find((item: any) => item.path === '/operations');
+    expect(operations.children.map((item: any) => item.path)).toContain('/meetings');
+    expect(operations.children.map((item: any) => item.path)).toContain('/financials/benefit-tracking');
+    expect(operations.children.map((item: any) => item.path)).toContain('/shared-costs');
     expect(component.primaryNavItems.map((item: any) => item.path)).toContain('/people');
     expect(component.primaryNavItems.map((item: any) => item.path)).toEqual([
       '/dashboard',
-      '/shared-costs',
+      '/operations',
       '/initiatives/pipeline',
-      '/progress',
-      '/pmo/governance',
-      '/pmo/kpis',
-      '/pmo/risks',
-      '/meetings',
       '/people',
+      '/guides',
     ]);
     expect(component.overflowNavItems).toEqual([]);
   });
@@ -244,7 +238,7 @@ describe('App', () => {
     expect(compiled.textContent).not.toContain('Financials');
     expect((fixture.componentInstance as any).primaryNavItems.map((item: any) => item.path)).toEqual([
       '/platform',
-      '/platform/guides',
+      '/guides',
     ]);
     expect((fixture.componentInstance as any).homeLink()).toBe('/platform');
     expect((fixture.componentInstance as any).isPlatformAdmin()).toBe(true);
