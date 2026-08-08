@@ -24,9 +24,8 @@ def test_financial_operations_menu_contract_and_defaults() -> None:
     assert {
         definition.menu_group
         for definition in DASHBOARD_DEFINITIONS
-        if definition.dashboard_key in {
-            "benefit_tracking", "benefits_register", "bankable_plan", "waterline", "shared_costs"
-        }
+        if definition.dashboard_key
+        in {"benefit_tracking", "benefits_register", "bankable_plan", "waterline", "shared_costs"}
     } == {"financial_operations"}
 
 
