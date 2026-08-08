@@ -36,6 +36,50 @@ Deployment note:
 
 ## Current Release Entries
 
+### 2026-08-08 - Operating Navigation Split
+
+Status: deployed to development; authenticated browser acceptance pending
+
+GitHub tracking:
+
+- Issue `#482`, draft stacked PR `#483`.
+- Deployed application commit: `be8d1d1cbab9f950248153b9c5d4b5235b1711b0`.
+- PR base: `feat/473-roadmap-gantt`, preserving the dashboard and Roadmap
+  improvements already deployed to development.
+
+Runtime changes:
+
+- Replace the mixed Operations dropdown with **Transformation Management**,
+  **Financial Operations**, and **Governance & Cadence**.
+- Move Initiative Pipeline into Transformation Management.
+- Remove duplicate Dependencies and Benefit Validation destinations; their
+  canonical workflows remain Roadmap & Milestones and Benefits Register.
+- Preserve tenant/role-filtered configurable financial entries and legacy
+  `operations` API compatibility.
+
+Schema:
+
+- Applied `supabase/migrations/20260808000002_operations_navigation_groups.sql`
+  to `transmuter_dev` through Hostinger schema job
+  `transmuter-schema-dev-20260808170448`.
+- Production requires the same migration before application promotion.
+
+Dev deployment and acceptance:
+
+- Environment: `https://transmuter-dev.ishirock.tech`.
+- Hostinger deployment action `108336503` reached terminal state `success`.
+- Public `/health` and `/api/health` validation passed.
+- The public deployed main bundle contains all three new top-level menu labels.
+- Local verification: Ruff and TypeScript passed; dashboard configuration tests
+  passed `3/3`; Angular passed `45/45` tests across 12 files; production build
+  passed without warnings.
+- Authenticated browser acceptance remains open because the saved deterministic
+  fixture credential is stale and no reusable browser session is available.
+
+Production promotion:
+
+- Not requested.
+
 ### 2026-08-08 - Dependency-aware Roadmap Explorer Gantt
 
 Status: deployed to development; authenticated UI/API acceptance pending
