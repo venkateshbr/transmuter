@@ -20,7 +20,7 @@ import {
     <main class="roadmap-page p-4 md:p-8 space-y-6 animate-fade-in">
       <header class="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <p class="text-[10px] font-black uppercase tracking-[0.22em] text-[var(--t-accent)]">Operations · Delivery control</p>
+          <p class="text-[10px] font-black uppercase tracking-[0.22em] text-[var(--t-accent)]">Transformation Management · Delivery control</p>
           <h1 class="mt-2 text-3xl font-black text-[var(--t-text-primary)]">Roadmap Explorer<span class="text-[var(--t-blue-light)]">.</span></h1>
           <p class="mt-1 max-w-3xl text-sm text-[var(--t-text-secondary)]">See every milestone work window from start to finish, then trace what a delay puts at risk.</p>
         </div>

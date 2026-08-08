@@ -2,7 +2,7 @@
 
 Last reviewed: 2026-08-08
 
-This guide explains every current dashboard, widget, control, drill-through, and reporting boundary. It uses **ACME Industrial Services** and initiative **ACC-101 Invoice Automation** for realistic examples. Dashboards are read-only: use **Operations** or initiative detail to change source records.
+This guide explains every current dashboard, widget, control, drill-through, and reporting boundary. It uses **ACME Industrial Services** and initiative **ACC-101 Invoice Automation** for realistic examples. Dashboards are read-only: use **Transformation Management**, **Financial Operations**, **Governance & Cadence**, or initiative detail to change source records.
 
 ## 1. Dashboard portfolio
 
@@ -11,7 +11,7 @@ The Dashboard menu contains exactly three destinations:
 | Dashboard | Question answered | Write behavior |
 |---|---|---|
 | Operational Dashboard | Where does leadership need to intervene? | None; filters, drill-through, export, layout only |
-| Financial Dashboard | Are value, cost, investment, and commitments performing? | None; drill through to Operations for entry |
+| Financial Dashboard | Are value, cost, investment, and commitments performing? | None; drill through to Financial Operations for entry |
 | Initiative Portfolio | How do initiatives compare at row level? | Unchanged; open initiative detail for maintenance |
 
 Legacy Control Tower content is represented in the Operational Dashboard. Investments & Payback remains available as a Financial Dashboard drill-through, not as a fourth dashboard menu item.
@@ -48,7 +48,7 @@ ACME example: 21 active initiatives, 3 red, and 2 pending gates means leadership
 
 ### 3.2 Needs attention — required, wide
 
-Combines the exception counts most likely to need action: at-risk initiatives, pending approvals, and the current user's open actions. **Open Operations** leads to the maintenance workbench.
+Combines the exception counts most likely to need action: at-risk initiatives, pending approvals, and the current user's open actions. Drill-throughs lead to the relevant Transformation Management or Governance & Cadence workbench.
 
 Example: if ACC-101 is amber but its gate decision is pending and Daniel has an overdue validation action, those are separate exceptions and must be resolved in their source features.
 
@@ -128,7 +128,7 @@ Formula example: `$1.8M benefits - $0.12M recurring costs = $1.68M base net run-
 
 ### 4.7 Cost breakdown — optional, medium
 
-Groups portfolio costs by configured category and links to Shared Costs. Missing or excessive `Other` values indicate data-quality work under Operations.
+Groups portfolio costs by configured category and links to Shared Costs. Missing or excessive `Other` values indicate data-quality work under Financial Operations.
 
 ### 4.8 Initiative value matrix — optional, full width
 
@@ -199,4 +199,3 @@ To reconcile, filter to ACC-101's workstream/year, open the contributing initiat
 5. Assign actions or complete approvals in Operations.
 6. Save a personal layout only for presentation preference; publish role defaults deliberately.
 7. Export only after the view is reproducible.
-

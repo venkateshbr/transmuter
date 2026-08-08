@@ -28,12 +28,12 @@ describe('App', () => {
       { dashboard_key: 'financial_overview', label: 'Financial Dashboard', route_path: '/financials', menu_group: 'dashboard', icon: 'payments', display_order: 20, is_enabled: true },
       { dashboard_key: 'initiative_portfolio', label: 'Initiative Portfolio', route_path: '/financials/initiative-portfolio', menu_group: 'dashboard', icon: 'table_chart', display_order: 30, is_enabled: true },
       { dashboard_key: 'investments_payback', label: 'Investments & Payback', route_path: '/financials/investments-payback', menu_group: 'hidden', icon: 'request_quote', display_order: 40, is_enabled: true },
-      { dashboard_key: 'bankable_plan', label: 'Bankable Plans', route_path: '/financials/bankable-plan', menu_group: 'operations', icon: 'account_balance', display_order: 150, is_enabled: true },
-      { dashboard_key: 'benefits_register', label: 'Benefits Register', route_path: '/financials/benefits-register', menu_group: 'operations', icon: 'fact_check', display_order: 140, is_enabled: true },
-      { dashboard_key: 'benefit_tracking', label: 'Benefit Ledger', route_path: '/financials/benefit-tracking', menu_group: 'operations', icon: 'trending_up', display_order: 130, is_enabled: true },
-      { dashboard_key: 'waterline', label: 'Waterline & Target Locks', route_path: '/financials/waterline', menu_group: 'operations', icon: 'water_drop', display_order: 160, is_enabled: true },
+      { dashboard_key: 'bankable_plan', label: 'Bankable Plans', route_path: '/financials/bankable-plan', menu_group: 'financial_operations', icon: 'account_balance', display_order: 150, is_enabled: true },
+      { dashboard_key: 'benefits_register', label: 'Benefits Register', route_path: '/financials/benefits-register', menu_group: 'financial_operations', icon: 'fact_check', display_order: 140, is_enabled: true },
+      { dashboard_key: 'benefit_tracking', label: 'Benefit Ledger', route_path: '/financials/benefit-tracking', menu_group: 'financial_operations', icon: 'trending_up', display_order: 130, is_enabled: true },
+      { dashboard_key: 'waterline', label: 'Waterline & Target Locks', route_path: '/financials/waterline', menu_group: 'financial_operations', icon: 'water_drop', display_order: 160, is_enabled: true },
       { dashboard_key: 'control_tower', label: 'Control Tower', route_path: '/reports/control-tower', menu_group: 'hidden', icon: 'summarize', display_order: 90, is_enabled: true },
-      { dashboard_key: 'shared_costs', label: 'Shared Costs', route_path: '/shared-costs', menu_group: 'operations', icon: 'account_balance', display_order: 170, is_enabled: true },
+      { dashboard_key: 'shared_costs', label: 'Shared Costs', route_path: '/shared-costs', menu_group: 'financial_operations', icon: 'account_balance', display_order: 170, is_enabled: true },
     ],
   };
 
@@ -157,7 +157,9 @@ describe('App', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('header')).toBeTruthy();
     expect(compiled.textContent).toContain('Dashboard');
-    expect(compiled.textContent).toContain('Operations');
+    expect(compiled.textContent).toContain('Transformation Management');
+    expect(compiled.textContent).toContain('Financial Operations');
+    expect(compiled.textContent).toContain('Governance & Cadence');
     expect(compiled.textContent).toContain('People');
     expect(compiled.textContent).not.toContain('More');
     expect(compiled.textContent).not.toContain('Control Tower');
@@ -185,19 +187,34 @@ describe('App', () => {
     ]);
   });
 
-  it('should expose all authenticated sections as primary navigation items without a More menu', () => {
+  it('should split operations into transformation, financial, and governance navigation without duplicate routes', () => {
     const fixture = TestBed.createComponent(App);
     const component = fixture.componentInstance as any;
 
-    const operations = component.primaryNavItems.find((item: any) => item.path === '/operations');
-    expect(operations.children.map((item: any) => item.path)).toContain('/meetings');
-    expect(operations.children.map((item: any) => item.path)).toContain('/financials/benefit-tracking');
-    expect(operations.children.map((item: any) => item.path)).toContain('/shared-costs');
+    const transformation = component.primaryNavItems.find((item: any) => item.path === '/operations/transformation');
+    const financial = component.primaryNavItems.find((item: any) => item.path === '/operations/financial');
+    const governance = component.primaryNavItems.find((item: any) => item.path === '/operations/governance');
+    expect(transformation.children.map((item: any) => item.path)).toEqual([
+      '/initiatives/pipeline',
+      '/progress',
+      '/progress/roadmap',
+      '/progress/action-items',
+      '/progress/status-updates',
+      '/pmo/risks',
+      '/pmo/kpis',
+    ]);
+    expect(financial.children.map((item: any) => item.path)).toContain('/financials/benefit-tracking');
+    expect(financial.children.map((item: any) => item.path)).toContain('/shared-costs');
+    expect(governance.children.map((item: any) => item.path)).toEqual(['/pmo/governance', '/meetings']);
+    const operationPaths = [transformation, financial, governance].flatMap((item: any) => item.children.map((child: any) => child.path));
+    expect(operationPaths).not.toContain('/progress/dependencies');
+    expect(new Set(operationPaths).size).toBe(operationPaths.length);
     expect(component.primaryNavItems.map((item: any) => item.path)).toContain('/people');
     expect(component.primaryNavItems.map((item: any) => item.path)).toEqual([
       '/dashboard',
-      '/operations',
-      '/initiatives/pipeline',
+      '/operations/transformation',
+      '/operations/financial',
+      '/operations/governance',
       '/people',
       '/guides',
     ]);

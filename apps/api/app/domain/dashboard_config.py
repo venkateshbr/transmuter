@@ -6,7 +6,15 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-DashboardMenuGroup = Literal["dashboard", "operations", "primary", "hidden"]
+DashboardMenuGroup = Literal[
+    "dashboard",
+    "operations",
+    "financial_operations",
+    "transformation_management",
+    "governance_cadence",
+    "primary",
+    "hidden",
+]
 
 
 class DashboardConfigItem(BaseModel):

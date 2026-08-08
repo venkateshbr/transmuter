@@ -75,7 +75,7 @@ DASHBOARD_DEFINITIONS: tuple[DashboardDefinition, ...] = (
         "bankable_plan",
         "Bankable Plans",
         "/financials/bankable-plan",
-        "operations",
+        "financial_operations",
         "account_balance",
         150,
     ),
@@ -83,7 +83,7 @@ DASHBOARD_DEFINITIONS: tuple[DashboardDefinition, ...] = (
         "benefits_register",
         "Benefits Register",
         "/financials/benefits-register",
-        "operations",
+        "financial_operations",
         "fact_check",
         140,
     ),
@@ -91,7 +91,7 @@ DASHBOARD_DEFINITIONS: tuple[DashboardDefinition, ...] = (
         "benefit_tracking",
         "Benefit Ledger",
         "/financials/benefit-tracking",
-        "operations",
+        "financial_operations",
         "trending_up",
         130,
     ),
@@ -99,7 +99,7 @@ DASHBOARD_DEFINITIONS: tuple[DashboardDefinition, ...] = (
         "waterline",
         "Waterline & Target Locks",
         "/financials/waterline",
-        "operations",
+        "financial_operations",
         "water_drop",
         160,
     ),
@@ -107,7 +107,12 @@ DASHBOARD_DEFINITIONS: tuple[DashboardDefinition, ...] = (
         "control_tower", "Control Tower", "/reports/control-tower", "hidden", "summarize", 90
     ),
     DashboardDefinition(
-        "shared_costs", "Shared Costs", "/shared-costs", "operations", "account_balance", 170
+        "shared_costs",
+        "Shared Costs",
+        "/shared-costs",
+        "financial_operations",
+        "account_balance",
+        170,
     ),
 )
 

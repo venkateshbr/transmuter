@@ -74,7 +74,7 @@ Configure the lifecycle used by your organization. A practical five-stage model 
 | L4 Implemented | Change deployed | acceptance and operational handover |
 | L5 Realized | Value evidenced | validated actual benefits and sustainment |
 
-Add gate criteria under each stage. For ACC-101, the L2-to-L3 submission might require an approved $300,000 implementation cost, named benefit owner, delivery plan, and privacy review. Gate approval is a governance action under **Operations → Gate Approvals**, not a dashboard action.
+Add gate criteria under each stage. For ACC-101, the L2-to-L3 submission might require an approved $300,000 implementation cost, named benefit owner, delivery plan, and privacy review. Gate approval is a governance action under **Governance & Cadence → Gate Approvals**, not a dashboard action.
 
 ### 3.4 Roadmap scheduling policy
 
@@ -152,14 +152,16 @@ The tenant navigation publishes only:
 - **Financial Dashboard**
 - **Initiative Portfolio** (unchanged)
 
-Entry and maintenance pages belong under **Operations**. In **Admin → Dashboard Configuration**, administrators can enable a destination, change its label or icon, restrict allowed roles, and assign it to `dashboard`, `operations`, `primary`, or `hidden`.
+Entry and maintenance pages belong under **Transformation Management**, **Financial Operations**, or **Governance & Cadence**. In **Admin → Dashboard Configuration**, administrators can enable a destination, change its label or icon, restrict allowed roles, and assign it to `dashboard`, `financial_operations`, `transformation_management`, `governance_cadence`, `primary`, or `hidden`. The legacy `operations` value remains API-readable for compatibility but is migrated to `financial_operations`.
 
 The recommended registry is:
 
 | Destination | Menu group |
 |---|---|
 | Operational Dashboard, Financial Dashboard, Initiative Portfolio | Dashboard |
-| Benefit Ledger, Benefits Register, Bankable Plans, Waterline & Target Locks, Shared Costs | Operations |
+| Initiative Pipeline, Progress Monitor, Roadmap & Milestones, Action Items, Status Updates, Risk Register, KPI Management | Transformation Management |
+| Benefit Ledger, Benefits Register, Bankable Plans, Waterline & Target Locks, Shared Costs | Financial Operations |
+| Gate Approvals, Meetings | Governance & Cadence |
 | Investments & Payback analysis, compatibility Control Tower route | Hidden; reached by dashboard drill-through |
 
 ### Publishing a role-default layout
@@ -174,7 +176,7 @@ Required decision widgets cannot be hidden. A personal layout overrides a role d
 
 ## 6. Shared-cost administration
 
-Use **Operations → Shared Costs** to create cost pools, allocation rules, and posting runs. Do not enter shared costs from a dashboard.
+Use **Financial Operations → Shared Costs** to create cost pools, allocation rules, and posting runs. Do not enter shared costs from a dashboard.
 
 Example: allocate a $240,000 PMO platform pool across Digital Operations and Growth using the approved driver. Preview the run, check recipients and rounding, post it once, and preserve the posting evidence. If the driver changes, create a governed correction/re-run according to policy rather than editing displayed dashboard totals.
 
@@ -186,7 +188,7 @@ For ACC-101:
 
 1. Confirm validated base benefits and recurring costs.
 2. Review the calculated $1.68M annual net run-rate.
-3. Preview the workstream target under **Operations → Waterline & Target Locks**.
+3. Preview the workstream target under **Financial Operations → Waterline & Target Locks**.
 4. Lock only after finance/governance approval.
 5. If assumptions materially change, use **Bankable Plans** to create a governed rebaseline; never overwrite historical commitment silently.
 
@@ -204,7 +206,7 @@ AI features are advisory and must degrade gracefully. Database writes require a 
 
 - A viewer can read dashboards but cannot publish layouts or edit financial records.
 - An initiative owner can update assigned initiatives but not unrelated ones.
-- Finance can enter and validate benefits and costs under Operations.
+- Finance can enter and validate benefits and costs under Financial Operations.
 - Required dashboard widgets remain visible.
 - Personal layout reset falls back to the role or system layout.
 - All money retains four-decimal precision in storage and string representation in APIs.

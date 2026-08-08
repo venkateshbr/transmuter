@@ -11,6 +11,7 @@ interface NavItem {
   label: string;
   path: string;
   icon: string;
+  exact?: boolean;
   children?: NavItem[];
 }
 
@@ -18,7 +19,7 @@ interface DashboardConfigItem {
   dashboard_key: string;
   label: string;
   route_path: string;
-  menu_group: 'dashboard' | 'operations' | 'primary' | 'hidden';
+  menu_group: 'dashboard' | 'operations' | 'financial_operations' | 'transformation_management' | 'governance_cadence' | 'primary' | 'hidden';
   icon: string;
   display_order: number;
   is_enabled: boolean;
@@ -454,7 +455,9 @@ export class App {
       ];
     }
     const dashboardChildren = this.dashboardNavChildren();
-    const operationsChildren = this.operationsNavChildren();
+    const transformationChildren = this.transformationNavChildren();
+    const financialOperationsChildren = this.financialOperationsNavChildren();
+    const governanceChildren = this.governanceNavChildren();
     const primaryConfigured = this.primaryConfiguredDashboards();
     return [
       {
@@ -464,13 +467,24 @@ export class App {
         children: dashboardChildren,
       },
       {
-        label: 'Operations',
-        path: '/operations',
+        label: 'Transformation Management',
+        path: '/operations/transformation',
         icon: 'tune',
-        children: operationsChildren,
+        children: transformationChildren,
+      },
+      {
+        label: 'Financial Operations',
+        path: '/operations/financial',
+        icon: 'account_balance',
+        children: financialOperationsChildren,
+      },
+      {
+        label: 'Governance & Cadence',
+        path: '/operations/governance',
+        icon: 'gavel',
+        children: governanceChildren,
       },
       ...primaryConfigured,
-      { label: 'Initiatives',      path: '/initiatives/pipeline', icon: 'list' },
       { label: 'People',           path: '/people',             icon: 'users' },
       { label: 'User Guides',      path: '/guides',             icon: 'menu_book' },
     ].filter(item => item.path !== '/people' || this.auth.hasPermission('users.manage'));
@@ -549,6 +563,7 @@ export class App {
         label: item.label,
         path: item.route_path,
         icon: item.icon || 'grid',
+        exact: item.route_path === '/financials',
       }));
     if (configured.length) return configured;
     return this.dashboardConfigLoaded()
@@ -567,23 +582,53 @@ export class App {
     return configured;
   }
 
-  private operationsNavChildren(): NavItem[] {
+  private transformationNavChildren(): NavItem[] {
     const configured = this.enabledConfiguredDashboards()
-      .filter(item => item.menu_group === 'operations')
+      .filter(item => item.menu_group === 'transformation_management')
       .map(item => ({ label: item.label, path: item.route_path, icon: item.icon || 'tune' }));
-    const delivery: NavItem[] = [
+    return this.uniqueNavItems([
+      { label: 'Initiative Pipeline', path: '/initiatives/pipeline', icon: 'view_list' },
       { label: 'Progress Monitor', path: '/progress', icon: 'bar_chart' },
       { label: 'Roadmap & Milestones', path: '/progress/roadmap', icon: 'timeline' },
-      { label: 'Dependencies', path: '/progress/dependencies', icon: 'account_tree' },
       { label: 'Action Items', path: '/progress/action-items', icon: 'task_alt' },
       { label: 'Status Updates', path: '/progress/status-updates', icon: 'update' },
-      { label: 'Gate Approvals', path: '/pmo/governance', icon: 'gavel' },
-      { label: 'KPI Management', path: '/pmo/kpis', icon: 'monitoring' },
       { label: 'Risk Register', path: '/pmo/risks', icon: 'warning' },
+      { label: 'KPI Management', path: '/pmo/kpis', icon: 'monitoring' },
+      ...configured,
+    ]);
+  }
+
+  private financialOperationsNavChildren(): NavItem[] {
+    const configured = this.enabledConfiguredDashboards()
+      .filter(item => item.menu_group === 'financial_operations' || item.menu_group === 'operations')
+      .map(item => ({ label: item.label, path: item.route_path, icon: item.icon || 'tune' }));
+    if (configured.length || this.dashboardConfigLoaded()) return this.uniqueNavItems(configured);
+    return this.starterFinancialOperationsChildren();
+  }
+
+  private governanceNavChildren(): NavItem[] {
+    const configured = this.enabledConfiguredDashboards()
+      .filter(item => item.menu_group === 'governance_cadence')
+      .map(item => ({ label: item.label, path: item.route_path, icon: item.icon || 'gavel' }));
+    return this.uniqueNavItems([
+      { label: 'Gate Approvals', path: '/pmo/governance', icon: 'gavel' },
       { label: 'Meetings', path: '/meetings', icon: 'calendar_month' },
+      ...configured,
+    ]);
+  }
+
+  private starterFinancialOperationsChildren(): NavItem[] {
+    return [
+      { label: 'Benefit Ledger', path: '/financials/benefit-tracking', icon: 'trending_up' },
+      { label: 'Benefits Register', path: '/financials/benefits-register', icon: 'fact_check' },
+      { label: 'Bankable Plans', path: '/financials/bankable-plan', icon: 'account_balance' },
+      { label: 'Waterline & Target Locks', path: '/financials/waterline', icon: 'water_drop' },
+      { label: 'Shared Costs', path: '/shared-costs', icon: 'payments' },
     ];
-    return [...delivery, ...configured]
-      .filter((item, index, items) => items.findIndex(candidate => candidate.path === item.path) === index);
+  }
+
+  private uniqueNavItems(items: NavItem[]): NavItem[] {
+    return items.filter((item, index) => items.findIndex(candidate => candidate.path === item.path) === index);
   }
 
   private enabledConfiguredDashboards(): DashboardConfigItem[] {
@@ -600,7 +645,7 @@ export class App {
   private defaultDashboardChildren(): NavItem[] {
     return [
       { label: 'Operational Dashboard', path: '/dashboard', icon: 'grid' },
-      { label: 'Financial Dashboard', path: '/financials', icon: 'payments' },
+      { label: 'Financial Dashboard', path: '/financials', icon: 'payments', exact: true },
       { label: 'Initiative Portfolio', path: '/financials/initiative-portfolio', icon: 'table_chart' },
     ];
   }
@@ -608,14 +653,16 @@ export class App {
   private starterDashboardChildren(): NavItem[] {
     return [
       { label: 'Operational Dashboard', path: '/dashboard', icon: 'grid' },
-      { label: 'Financial Dashboard', path: '/financials', icon: 'payments' },
+      { label: 'Financial Dashboard', path: '/financials', icon: 'payments', exact: true },
       { label: 'Initiative Portfolio', path: '/financials/initiative-portfolio', icon: 'table_chart' },
     ];
   }
 
   protected isNavGroupActive(item: NavItem): boolean {
     const currentPath = this.router.url.split('?')[0];
-    return currentPath === item.path || !!item.children?.some(child => currentPath === child.path || currentPath.startsWith(`${child.path}/`));
+    return currentPath === item.path || !!item.children?.some(child =>
+      currentPath === child.path || (!child.exact && currentPath.startsWith(`${child.path}/`)),
+    );
   }
 
   protected logoutFromMenu(): void {
