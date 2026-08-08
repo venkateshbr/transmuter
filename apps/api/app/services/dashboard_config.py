@@ -96,7 +96,12 @@ DASHBOARD_DEFINITIONS: tuple[DashboardDefinition, ...] = (
         130,
     ),
     DashboardDefinition(
-        "waterline", "Waterline & Target Locks", "/financials/waterline", "operations", "water_drop", 160
+        "waterline",
+        "Waterline & Target Locks",
+        "/financials/waterline",
+        "operations",
+        "water_drop",
+        160,
     ),
     DashboardDefinition(
         "control_tower", "Control Tower", "/reports/control-tower", "hidden", "summarize", 90
