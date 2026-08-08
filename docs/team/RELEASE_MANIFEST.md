@@ -36,6 +36,57 @@ Deployment note:
 
 ## Current Release Entries
 
+### 2026-08-08 - Portfolio Target Bridge And Bankable Waterline Guide
+
+Status: dev acceptance complete; approved for production promotion
+
+GitHub tracking:
+
+- Portfolio target/dashboard issue `#455`, PR `#456`.
+- Bankable plan and waterline guide issue `#457`, PRs `#458` and `#459`.
+- Final reviewed application commit: `d1451e54917a162d520883dcc1dcde88744184a9`.
+
+Runtime changes:
+
+- Add prominent FY2028 absolute Target Revenue (`$24.000M`) and Target Gross
+  Margin (`$14.432M`) cards to Financial Overview without adding cost savings
+  to gross margin.
+- Publish the platform-admin ACME dashboard/reporting guide with definitions and
+  worked examples for working forecasts, immutable bankable-plan versions,
+  governed rebaselines, locked net run-rate waterlines, and benefit realization.
+- Reconcile ACME cumulative gross locked benefits (`$13.802M`) less recurring
+  plan cost (`$1.200M`) to the locked net waterline (`$12.602M`).
+- Explain that Executive Dashboard L1-L3 below-waterline values are dynamic
+  pipeline context and must not be added to the immutable locked commitment.
+
+Schema:
+
+- No schema or data SQL is required for dev or production.
+
+Dev deployment and acceptance:
+
+- Environment: `https://transmuter-dev.ishirock.tech`.
+- Schema: `transmuter_dev`.
+- Final Hostinger deployment action: `108273603`; terminal state `success`.
+- Public `/health` and `/api/health` validation passed.
+- Real dev dashboard API reconciled the five ACME workstream locks to
+  `12601999.9992` locked net run-rate, `7197199.9990` net actual, and
+  `-5404800.0002` variance.
+- External Playwright confirmed the rendered `$12.6M` / `$7.2M` / `-$5.4M`
+  executive cards and the platform-admin published guide content, including
+  ENT-005 bankable version 2 and the gross-to-net reconciliation.
+- The browser run recorded zero page errors and observed HTTP 5xx responses.
+- PR CI passed backend, frontend, secret scan, workflow validation, and agent
+  evaluation gates.
+
+Production promotion:
+
+- Explicit founder instruction received on `2026-08-08`.
+- Promotion target: exact merged release commit containing this manifest entry.
+- Schema SQL: none.
+- Hostinger action and production browser validation will be recorded after
+  promotion.
+
 ### 2026-08-05 - User-Guide Revalidation And Browser Runbook
 
 Status: deployed to development and acceptance complete; production not requested
