@@ -251,7 +251,10 @@ the selected target year and the active financial mode.
 - **Above waterline:** `L4 + L5`. For ACME this is `$5.405M + $7.197M =
   $12.602M`, equal to the lock.
 - **Below waterline:** selected-year value currently shown in L1-L3 delivery
-  stages. ACME shows `$3.320M`, all at L3.
+  stages. This is live pipeline context and can change without changing the
+  locked waterline. For example, the ACME acceptance snapshot on `2026-08-07`
+  showed `$3.320M`, all at L3; subsequent stage or value updates can produce a
+  different current total.
 - **How to read it:** below-waterline stage value is a pipeline/delivery context,
   not an amount to add to or subtract from the locked target. An initiative can
   already have an approved bankable plan while its current delivery stage is
@@ -782,9 +785,9 @@ State that seeded actuals are through `2028-06-30`.
    benefits `$7.973M`, then explain that these are gross benefit-ledger values.
 4. In Waterline, show locked net run-rate `$12.602M`, net actual `$7.197M`, and
    variance `-$5.405M` after recurring costs.
-5. In the Executive stage-gate chart, show `$12.602M` above the line and
-   `$3.320M` of L3 pipeline below it. State explicitly that these figures must
-   not be added together as a committed target.
+5. In the Executive stage-gate chart, show `$12.602M` above the line, then read
+   the current L1-L3 total below it. State explicitly that the dynamic pipeline
+   figure must not be added to the locked commitment.
 6. Drill into ENT-005 to prove bankable version 2 and into ENT-006, ENT-008, or
    ENT-010 to inspect realization evidence.
 
@@ -821,7 +824,7 @@ State that seeded actuals are through `2028-06-30`.
 | “Actual `$3.692M` is the FY2028 full-year result.” | The seeded actual is through 2028-06-30. |
 | “Waterline must equal the FY2028 dashboard.” | ACME Waterline is cumulative FY2027 + FY2028 locked net scope: `$4.220M + $8.382M = $12.602M`. Financial Overview is filtered to FY2028. |
 | “Benefit Tracking `$13.802M` should equal Waterline `$12.602M`.” | Benefit Tracking headline plan is gross benefits. Subtract `$1.200M` cumulative recurring plan cost to reconcile to the net waterline. |
-| “Below-waterline `$3.320M` should be added to the `$12.602M` lock.” | The stage chart's below-line amount is current L1-L3 pipeline context, not an incremental commitment. |
+| “The current below-waterline pipeline should be added to the `$12.602M` lock.” | The stage chart's below-line amount is dynamic L1-L3 pipeline context, not an incremental commitment. |
 | “Changing the forecast updates the bankable plan.” | A locked bankable version is immutable. A governed rebaseline must create the next version. |
 | “Net Before Allocation is fully loaded value.” | Net After Allocation includes shared-cost burden. |
 | “A dashboard empty state means the tenant has no data.” | It may mean filters, user ownership, role visibility, or missing enabled dashboard configuration. |
