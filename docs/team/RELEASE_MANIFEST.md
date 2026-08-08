@@ -38,13 +38,16 @@ Deployment note:
 
 ### 2026-08-08 - Portfolio Target Bridge And Bankable Waterline Guide
 
-Status: dev acceptance complete; approved for production promotion
+Status: promoted to production and browser-verified
 
 GitHub tracking:
 
 - Portfolio target/dashboard issue `#455`, PR `#456`.
 - Bankable plan and waterline guide issue `#457`, PRs `#458` and `#459`.
-- Final reviewed application commit: `d1451e54917a162d520883dcc1dcde88744184a9`.
+- Release-manifest PR `#460`.
+- Final reviewed application content commit:
+  `d1451e54917a162d520883dcc1dcde88744184a9`.
+- Production promotion commit: `d4a208d07f58ba869b6fd91a8f723dbedd09aa9c`.
 
 Runtime changes:
 
@@ -82,10 +85,17 @@ Dev deployment and acceptance:
 Production promotion:
 
 - Explicit founder instruction received on `2026-08-08`.
-- Promotion target: exact merged release commit containing this manifest entry.
 - Schema SQL: none.
-- Hostinger action and production browser validation will be recorded after
-  promotion.
+- Hostinger production action `108273679` reached terminal state `success` and
+  deployed exact commit `d4a208d07f58ba869b6fd91a8f723dbedd09aa9c`.
+- Public `https://transmuter.ishirock.tech/health` and `/api/health` validation
+  passed after deployment.
+- External Playwright signed in as the real platform administrator, opened the
+  protected ACME dashboard/reporting guide, and verified the working-forecast,
+  bankable-plan, ENT-005 rebaseline, `$13.802M` gross benefit, `$12.602M` net
+  waterline, `$7.197M` net actual, and dynamic-pipeline explanations.
+- The production browser run recorded zero page errors and observed HTTP 5xx
+  responses. It was read-only and made no tenant-data changes.
 
 ### 2026-08-05 - User-Guide Revalidation And Browser Runbook
 
