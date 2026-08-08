@@ -40,17 +40,16 @@ def test_platform_admin_can_list_and_read_published_user_guides() -> None:
 
     assert listing.status_code == 200
     items = listing.json()["items"]
-    assert len(items) == 16
-    assert items[0]["slug"] == "tenant-onboarding"
-    assert any(item["slug"] == "acme-detailed-demo" for item in items)
-    assert any(item["slug"] == "acme-dashboards-reporting" for item in items)
-    assert any(item["slug"] == "platform-admin-validation-runbook" for item in items)
+    assert len(items) == 3
+    assert items[0]["slug"] == "administration"
+    assert any(item["slug"] == "user-operations" for item in items)
+    assert any(item["slug"] == "dashboards-reporting" for item in items)
 
-    detail = client.get("/platform/guides/tenant-onboarding", headers=_platform_headers())
+    detail = client.get("/platform/guides/administration", headers=_platform_headers())
 
     assert detail.status_code == 200
     guide = detail.json()
-    assert guide["title"] == "Transmuter Tenant Onboarding and Portfolio User Guide"
+    assert guide["title"] == "Transmuter Administration Guide"
     assert "<table>" in guide["html"]
     assert "Microsoft 365" in guide["html"]
 
@@ -73,6 +72,31 @@ def test_platform_guide_routes_reject_unknown_guides_and_tenant_roles() -> None:
         app.dependency_overrides.pop(get_current_user, None)
 
     assert response.status_code == 403
+
+
+def test_authenticated_tenant_users_can_read_consolidated_guides() -> None:
+    async def tenant_user() -> CurrentUser:
+        return CurrentUser(
+            id=UUID("11111111-1111-1111-1111-111111111111"),
+            tenant_id=UUID("22222222-2222-2222-2222-222222222222"),
+            role="viewer",
+        )
+
+    app.dependency_overrides[get_current_user] = tenant_user
+    try:
+        listing = client.get("/guides")
+        detail = client.get("/guides/dashboards-reporting")
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+    assert listing.status_code == 200
+    assert [item["slug"] for item in listing.json()["items"]] == [
+        "administration",
+        "user-operations",
+        "dashboards-reporting",
+    ]
+    assert detail.status_code == 200
+    assert detail.json()["title"] == "Transmuter Dashboard and Reporting Guide"
 
 
 def test_platform_overview_and_delete_preview_use_real_supabase() -> None:

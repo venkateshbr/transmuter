@@ -58,6 +58,7 @@ TENANT_DELETE_TABLES = [
     "financial_config_items",
     "financial_config_groups",
     "tenant_dashboard_config",
+    "dashboard_layouts",
     "risks",
     "kpi_entries",
     "kpis",

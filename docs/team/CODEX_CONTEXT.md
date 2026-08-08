@@ -1,6 +1,6 @@
 # Codex Context - Transmuter
 
-Last updated: 2026-07-16
+Last updated: 2026-08-08
 
 This file captures durable working context for future Codex sessions. It supplements
 `AGENTS.md`, `docs/team/SDLC_PROTOCOL.md`, and `team/DESIGN_SYSTEM.md`; it does not
@@ -11,6 +11,9 @@ replace them.
 - First release snapshot is committed as `3ab8dcb` and tagged `v0.1.0`.
 - Dashboard value matrix work is committed after the release tag as `9015e86`.
 - Latest release tag is `v1.1.0` at commit `3627311`.
+- Pre-dashboard-reorganization baseline is tagged and published as `v1.2.0` at
+  commit `37f09dac88262478ec20217ee60a7abc052e0c38`. Dashboard improvements are
+  developed on `feat/462-dashboard-improvements` under umbrella issue `#462`.
 - The historical `v0.3.1` release includes the Alchemist workbook/dashboard
   acceptance test updates and the CI/CD pipeline gates from issue #77.
 - Shared Costs configurable allocation engine is promoted to production from
@@ -174,6 +177,19 @@ replace them.
 
 - Financial data must use PostgreSQL `NUMERIC(15,4)`, Python `Decimal`, and JSON
   string values.
+- The Dashboard menu has three decision surfaces: Operational Dashboard,
+  Financial Dashboard, and the unchanged Initiative Portfolio.
+- All entry and maintenance workflows belong under Operations, including the
+  Benefit Ledger, Benefits Register, Bankable Plans, Waterline & Target Locks,
+  Shared Costs, delivery controls, gate approvals, and meetings.
+- Operational and Financial dashboards support personal and tenant role-default
+  widget layouts. Users can drag to reorder, use accessible move controls, cycle
+  widget widths, hide optional widgets, save/reset personal layouts, and—when
+  authorized—publish a role default. Required decision widgets remain visible.
+- The canonical dashboard architecture and acceptance plan is
+  `docs/team/DASHBOARD_OPERATIONS_REORGANIZATION.md`.
+- The published in-product guide library is consolidated to Administration,
+  User Operations, and Dashboard & Reporting guides in `docs/user-guides/`.
 - Dashboard values must reconcile to initiative financial entries and value bridge
   totals.
 - Workstream x tag value matrix requirements:

@@ -2,15 +2,23 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
+from fastapi.security import HTTPAuthorizationCredentials
 from supabase import Client
 
-from app.core.auth import CurrentUser, get_current_user
-from app.core.database import get_supabase_admin, get_supabase_request_client
+from app.core.auth import CurrentUser, bearer, get_current_user
+from app.core.database import get_supabase_admin, get_supabase_request_client, get_supabase_user
 from app.domain.dashboard import DashboardResponse
 from app.domain.dashboard_config import DashboardConfigResponse
+from app.domain.dashboard_layout import (
+    DashboardBreakpoint,
+    DashboardKey,
+    DashboardLayoutResponse,
+    DashboardLayoutUpdate,
+)
 from app.repositories.dashboard import DashboardRepository
 from app.services.dashboard import DashboardService
 from app.services.dashboard_config import DashboardConfigService
+from app.services.dashboard_layout import DashboardLayoutService
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -34,12 +42,56 @@ def _config_svc(
     return DashboardConfigService(get_supabase_admin(), str(current_user.tenant_id))
 
 
+def _layout_svc(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer)],
+) -> DashboardLayoutService:
+    if current_user.role == "platform_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tenant context is required",
+        )
+    return DashboardLayoutService(
+        get_supabase_user(credentials.credentials),
+        str(current_user.tenant_id),
+        str(current_user.id),
+        current_user.role,
+    )
+
+
 @router.get("/configuration", response_model=DashboardConfigResponse)
 async def get_dashboard_configuration(
     svc: Annotated[DashboardConfigService, Depends(_config_svc)],
 ) -> DashboardConfigResponse:
     """Get enabled dashboard registry for current tenant navigation."""
     return svc.get_configuration()
+
+
+@router.get("/{dashboard_key}/layout", response_model=DashboardLayoutResponse)
+async def get_dashboard_layout(
+    dashboard_key: DashboardKey,
+    svc: Annotated[DashboardLayoutService, Depends(_layout_svc)],
+    breakpoint: DashboardBreakpoint = "desktop",
+) -> DashboardLayoutResponse:
+    return svc.get_layout(dashboard_key, breakpoint)
+
+
+@router.put("/{dashboard_key}/layout", response_model=DashboardLayoutResponse)
+async def save_dashboard_layout(
+    dashboard_key: DashboardKey,
+    data: DashboardLayoutUpdate,
+    svc: Annotated[DashboardLayoutService, Depends(_layout_svc)],
+) -> DashboardLayoutResponse:
+    return svc.save_layout(dashboard_key, data)
+
+
+@router.delete("/{dashboard_key}/layout", response_model=DashboardLayoutResponse)
+async def reset_dashboard_layout(
+    dashboard_key: DashboardKey,
+    svc: Annotated[DashboardLayoutService, Depends(_layout_svc)],
+    breakpoint: DashboardBreakpoint = "desktop",
+) -> DashboardLayoutResponse:
+    return svc.reset_personal_layout(dashboard_key, breakpoint)
 
 
 @router.get("", response_model=DashboardResponse)

@@ -16,75 +16,20 @@ class GuideSource:
 
 
 GUIDE_SOURCES = (
-    GuideSource("tenant-onboarding", "Start here", "team/TENANT_ONBOARDING_USER_GUIDE.md"),
     GuideSource(
-        "acme-detailed-demo",
-        "Demo guides",
-        "user-guides/acme-transformation-office-detailed-setup-and-demo-guide.md",
-    ),
-    GuideSource("acme-ui-setup", "Demo guides", "user-guides/acme-demo-tenant-ui-setup-guide.md"),
-    GuideSource(
-        "acme-management-runbook",
-        "Demo guides",
-        "user-guides/acme-transformation-office-management-runbook.md",
+        "administration",
+        "Administration",
+        "user-guides/transmuter-administration-guide.md",
     ),
     GuideSource(
-        "acme-value-demonstration",
-        "Demo guides",
-        "user-guides/acme-transformation-value-demonstration-guide.md",
+        "user-operations",
+        "Users",
+        "user-guides/transmuter-user-operations-guide.md",
     ),
     GuideSource(
-        "acme-dashboards-reporting",
-        "Financial guides",
-        "user-guides/acme-dashboard-and-reporting-user-guide.md",
-    ),
-    GuideSource(
-        "admin-financial-configuration",
-        "Financial guides",
-        "user-guides/admin-financial-configuration-user-guide.md",
-    ),
-    GuideSource(
-        "financial-engine-walkthrough",
-        "Financial guides",
-        "user-guides/financial-engine-end-to-end-walkthrough.md",
-    ),
-    GuideSource(
-        "automation-financial-scenario",
-        "Financial guides",
-        "user-guides/automation-productivity-financial-scenario-walkthrough.md",
-    ),
-    GuideSource(
-        "ishirock-ui-setup", "Ishirock guides", "user-guides/ishirock-demo-tenant-ui-setup-guide.md"
-    ),
-    GuideSource(
-        "ishirock-detailed-demo",
-        "Ishirock guides",
-        "user-guides/ishirock-transformation-office-detailed-setup-and-demo-guide.md",
-    ),
-    GuideSource(
-        "ishirock-value-demonstration",
-        "Ishirock guides",
-        "user-guides/ishirock-transformation-value-demonstration-guide.md",
-    ),
-    GuideSource(
-        "ishirock-workbook-readiness",
-        "Ishirock guides",
-        "user-guides/ishirock-ui-readiness-from-workbook-guide.md",
-    ),
-    GuideSource(
-        "benefit-ledger-remediation",
-        "Operations",
-        "user-guides/acme-benefit-ledger-production-remediation-guide.md",
-    ),
-    GuideSource(
-        "platform-admin-validation-runbook",
-        "Operations",
-        "user-guides/platform-admin-user-guide-validation-runbook.md",
-    ),
-    GuideSource(
-        "platform-improvement-opportunities",
-        "Reference",
-        "user-guides/acme-transformation-platform-improvement-opportunities.md",
+        "dashboards-reporting",
+        "Users",
+        "user-guides/transmuter-dashboard-reporting-guide.md",
     ),
 )
 
@@ -145,7 +90,7 @@ def _rewrite_guide_links(html: str) -> str:
         filename = Path(match.group("href").split("#", 1)[0]).name
         fragment = f"#{match.group('href').split('#', 1)[1]}" if "#" in match.group("href") else ""
         slug = _SLUG_BY_FILENAME.get(filename)
-        return f'href="/platform/guides/{slug}{fragment}"' if slug else match.group(0)
+        return f'href="/guides/{slug}{fragment}"' if slug else match.group(0)
 
     return re.sub(r'href="(?P<href>[^"]+\.md(?:#[^"]*)?)"', replace, html)
 
