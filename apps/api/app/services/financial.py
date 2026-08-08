@@ -210,6 +210,10 @@ class FormulaDivideByZeroError(ZeroDivisionError):
     pass
 
 
+class FormulaMissingInputError(FormulaValidationError):
+    pass
+
+
 class FinancialService:
     def __init__(self, client: Client, tenant_id: UUID) -> None:
         self._repo = FinancialRepository(client, tenant_id)
@@ -1171,6 +1175,8 @@ class FinancialService:
         self._validate_metric_definition_payload(data.model_dump(mode="json"))
         payload = data.model_dump(mode="json")
         payload["is_system"] = False
+        payload["origin"] = "tenant"
+        payload["catalog_version"] = None
         row = self._repo.create_metric_definition(payload, user_id=user_id)
         return self._to_metric_definition(row)
 
@@ -4279,7 +4285,7 @@ class FinancialService:
         values: list[dict],  # type: ignore[type-arg]
         baseline_values: list[dict] | None = None,  # type: ignore[type-arg]
     ) -> list[dict]:  # type: ignore[type-arg]
-        if not values:
+        if not values and not baseline_values:
             return values
         definitions = self._repo.list_metric_definitions()
         definition_by_id = {row["id"]: row for row in definitions}
@@ -4301,7 +4307,7 @@ class FinancialService:
             if definition_by_id.get(row.get("metric_definition_id"), {}).get("aggregation")
             != "formula"
         ]
-        group_keys = sorted(
+        period_group_keys = sorted(
             {
                 (
                     row.get("tenant_id"),
@@ -4325,8 +4331,75 @@ class FinancialService:
             amount = _dec(row.get("value"))
             env.setdefault(key, amount)
             env[f"baseline_{key}"] = amount
+        annual_group_keys = sorted(
+            {
+                (tenant_id, initiative_id, scenario_id, year)
+                for tenant_id, initiative_id, scenario_id, year, _month in period_group_keys
+            },
+            key=lambda item: tuple(str(part) for part in item),
+        )
         computed: list[dict] = []
-        for tenant_id, initiative_id, scenario_id, year, month in group_keys:
+
+        def append_formula_rows(
+            group: tuple[object, object, object, int, int],
+            env: dict[str, Decimal],
+            candidates: list[dict],  # type: ignore[type-arg]
+        ) -> None:
+            tenant_id, initiative_id, scenario_id, year, month = group
+            for definition in candidates:
+                key = str(definition["key"])
+                formula = str(definition.get("formula") or "")
+                calculation_status = "calculated"
+                reason: str | None = None
+                try:
+                    result = self._evaluate_formula(formula, env)
+                    validation = definition.get("validation") or {}
+                    minimum = validation.get("min") if isinstance(validation, dict) else None
+                    maximum = validation.get("max") if isinstance(validation, dict) else None
+                    if minimum is not None and result < Decimal(str(minimum)):
+                        calculation_status, reason = "invalid", "below_minimum"
+                    elif maximum is not None and result > Decimal(str(maximum)):
+                        calculation_status, reason = "invalid", "above_maximum"
+                    if calculation_status == "calculated":
+                        env[key] = result
+                except FormulaMissingInputError:
+                    result = Decimal("0")
+                    calculation_status, reason = "not_available", "missing_input"
+                except FormulaDivideByZeroError:
+                    result = Decimal("0")
+                    calculation_status, reason = "not_available", "zero_denominator"
+                except FormulaValidationError:
+                    result = Decimal("0")
+                    calculation_status, reason = "invalid", "invalid_formula"
+                computed.append(
+                    {
+                        "id": (
+                            f"formula:{initiative_id or 'portfolio'}:{scenario_id}:"
+                            f"{year}:{month}:{definition['id']}"
+                        ),
+                        "tenant_id": tenant_id,
+                        "initiative_id": initiative_id,
+                        "metric_definition_id": definition["id"],
+                        "benefit_line_id": None,
+                        "scenario_id": scenario_id,
+                        "year": year,
+                        "month": month,
+                        "value": _money(result),
+                        "status": "approved",
+                        "note": "Computed formula metric",
+                        "calculation_status": calculation_status,
+                        "calculation_reason": reason,
+                        "_computed_formula": True,
+                    }
+                )
+
+        period_formulas = [
+            row for row in formula_definitions if row.get("evaluation_grain", "period") == "period"
+        ]
+        annual_formulas = [
+            row for row in formula_definitions if row.get("evaluation_grain") == "annual"
+        ]
+        for tenant_id, initiative_id, scenario_id, year, month in period_group_keys:
             env: dict[str, Decimal] = dict(baseline_env_by_initiative.get(initiative_id, {}))
             for row in stored_values:
                 if (
@@ -4343,32 +4416,42 @@ class FinancialService:
                 key = str(definition["key"])
                 env[key] = env.get(key, Decimal("0")) + _dec(row.get("value"))
 
-            for definition in formula_definitions:
+            append_formula_rows(
+                (tenant_id, initiative_id, scenario_id, year, month), env, period_formulas
+            )
+
+        for tenant_id, initiative_id, scenario_id, year in annual_group_keys:
+            env = dict(baseline_env_by_initiative.get(initiative_id, {}))
+            average_totals: dict[str, tuple[Decimal, int]] = {}
+            last_values: dict[str, tuple[int, Decimal]] = {}
+            for row in stored_values:
+                if (
+                    row.get("tenant_id"),
+                    row.get("initiative_id"),
+                    row.get("scenario_id"),
+                    int(row["year"]),
+                ) != (tenant_id, initiative_id, scenario_id, year):
+                    continue
+                definition = definition_by_id.get(row.get("metric_definition_id"))
+                if not definition:
+                    continue
                 key = str(definition["key"])
-                formula = str(definition.get("formula") or "")
-                try:
-                    env[key] = self._evaluate_formula(formula, env)
-                except (FormulaValidationError, FormulaDivideByZeroError):
-                    env[key] = Decimal("0")
-                computed.append(
-                    {
-                        "id": (
-                            f"formula:{initiative_id or 'portfolio'}:{scenario_id}:"
-                            f"{year}:{month}:{definition['id']}"
-                        ),
-                        "tenant_id": tenant_id,
-                        "initiative_id": initiative_id,
-                        "metric_definition_id": definition["id"],
-                        "benefit_line_id": None,
-                        "scenario_id": scenario_id,
-                        "year": year,
-                        "month": month,
-                        "value": _money(env[key]),
-                        "status": "approved",
-                        "note": "Computed formula metric",
-                        "_computed_formula": True,
-                    }
-                )
+                amount = _dec(row.get("value"))
+                aggregation = definition.get("aggregation", "sum")
+                if aggregation == "last":
+                    month = int(row["month"])
+                    if key not in last_values or month >= last_values[key][0]:
+                        last_values[key] = (month, amount)
+                elif aggregation == "avg":
+                    total, count = average_totals.get(key, (Decimal("0"), 0))
+                    average_totals[key] = (total + amount, count + 1)
+                else:
+                    env[key] = env.get(key, Decimal("0")) + amount
+            env.update({key: value for key, (_month, value) in last_values.items()})
+            env.update({key: total / count for key, (total, count) in average_totals.items()})
+            append_formula_rows(
+                (tenant_id, initiative_id, scenario_id, year, 12), env, annual_formulas
+            )
         return [*stored_values, *computed]
 
     @staticmethod
@@ -4442,7 +4525,9 @@ class FinancialService:
             value = cls._evaluate_formula_node(node.operand, values)
             return value if isinstance(node.op, ast.UAdd) else -value
         if isinstance(node, ast.Name):
-            return values.get(node.id, Decimal("0"))
+            if node.id not in values:
+                raise FormulaMissingInputError(f"Formula input {node.id} is unavailable")
+            return values[node.id]
         if isinstance(node, ast.Constant) and isinstance(node.value, int | float):
             return Decimal(str(node.value))
         raise FormulaValidationError("Formula uses unsupported syntax")
@@ -6701,11 +6786,15 @@ class FinancialService:
             cost_behavior=row.get("cost_behavior"),
             formula=row.get("formula"),
             formula_inputs=row.get("formula_inputs") or [],
+            semantic_role=row.get("semantic_role"),
+            evaluation_grain=row.get("evaluation_grain") or "period",
             precision=row.get("precision") or 4,
             display_order=row.get("display_order") or 0,
             applies_to=row.get("applies_to") or "opt_in",
             validation=row.get("validation") or {},
             is_system=row.get("is_system", False),
+            origin=row.get("origin") or "tenant",
+            catalog_version=row.get("catalog_version"),
             is_active=row.get("is_active", True),
             created_by=row.get("created_by"),
             updated_by=row.get("updated_by"),
@@ -6832,6 +6921,8 @@ class FinancialService:
             value=_money(row.get("value")),
             status=row.get("status") or "draft",
             note=row.get("note"),
+            calculation_status=row.get("calculation_status"),
+            calculation_reason=row.get("calculation_reason"),
         )
 
     @staticmethod

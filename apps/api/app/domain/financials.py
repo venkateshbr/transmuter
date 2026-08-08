@@ -37,6 +37,9 @@ FinancialMetricValueType = Literal["currency", "percent", "number"]
 FinancialMetricDirection = Literal["increase_good", "decrease_good", "neutral"]
 FinancialMetricAggregation = Literal["sum", "avg", "last", "formula"]
 FinancialMetricAppliesTo = Literal["all", "opt_in"]
+FinancialMetricOrigin = Literal["default_catalog", "tenant", "legacy_default"]
+FinancialMetricEvaluationGrain = Literal["period", "annual"]
+FinancialMetricCalculationStatus = Literal["calculated", "not_available", "invalid"]
 FinancialBenefitClass = Literal["savings", "avoidance", "revenue", "margin", "other"]
 FinancialCostBehavior = Literal["recurring", "one_time"]
 FinancialScenarioKind = Literal["baseline", "plan", "forecast", "actual"]
@@ -167,6 +170,8 @@ class FinancialMetricDefinitionBase(BaseModel):
     cost_behavior: FinancialCostBehavior | None = None
     formula: str | None = None
     formula_inputs: list[str] = Field(default_factory=list)
+    semantic_role: str | None = Field(None, min_length=1, max_length=120)
+    evaluation_grain: FinancialMetricEvaluationGrain = "period"
     precision: int = Field(4, ge=0, le=8)
     display_order: int = 0
     applies_to: FinancialMetricAppliesTo = "opt_in"
@@ -192,6 +197,8 @@ class FinancialMetricDefinitionUpdate(BaseModel):
     cost_behavior: FinancialCostBehavior | None = None
     formula: str | None = None
     formula_inputs: list[str] | None = None
+    semantic_role: str | None = Field(None, min_length=1, max_length=120)
+    evaluation_grain: FinancialMetricEvaluationGrain | None = None
     precision: int | None = Field(None, ge=0, le=8)
     display_order: int | None = None
     applies_to: FinancialMetricAppliesTo | None = None
@@ -202,6 +209,8 @@ class FinancialMetricDefinitionUpdate(BaseModel):
 class FinancialMetricDefinition(FinancialMetricDefinitionBase):
     id: str
     is_system: bool = False
+    origin: FinancialMetricOrigin = "tenant"
+    catalog_version: str | None = None
     created_by: str | None = None
     updated_by: str | None = None
 
@@ -241,6 +250,8 @@ class FinancialMetricDeletionMetric(BaseModel):
     label: str
     is_system: bool
     is_active: bool
+    origin: FinancialMetricOrigin = "tenant"
+    catalog_version: str | None = None
 
 
 class FinancialMetricDeletionImpact(BaseModel):
@@ -428,6 +439,8 @@ class FinancialMetricValue(BaseModel):
 class ConfigurableFinancialMetricValueRow(FinancialMetricValue):
     id: str
     value: str = "0"
+    calculation_status: FinancialMetricCalculationStatus | None = None
+    calculation_reason: str | None = None
 
 
 class ConfigurableFinancialGridUpdate(BaseModel):

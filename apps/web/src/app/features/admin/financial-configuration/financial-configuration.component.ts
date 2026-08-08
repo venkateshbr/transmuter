@@ -226,9 +226,17 @@ const DEFAULT_SETTINGS: FinancialReportingSettings = {
                     (click)="selectedMetric.set(metric)"
                     [attr.aria-label]="'Edit metric ' + metric.label"
                   >
-                    <span class="block truncate text-xs font-black text-[var(--t-text-primary)]">{{
-                      metric.label
-                    }}</span>
+                    <span class="flex min-w-0 items-center gap-2">
+                      <span
+                        class="min-w-0 flex-1 truncate text-xs font-black text-[var(--t-text-primary)]"
+                        >{{ metric.label }}</span
+                      >
+                      @if (isDefaultMetric(metric)) {
+                        <span class="badge-gray shrink-0 rounded-none text-[8px]"
+                          >Default metric</span
+                        >
+                      }
+                    </span>
                     <span
                       class="mt-1 block truncate font-mono text-[10px] text-[var(--t-accent)]"
                       >{{ metric.key }}</span
@@ -248,9 +256,21 @@ const DEFAULT_SETTINGS: FinancialReportingSettings = {
                   <div
                     class="flex flex-wrap items-start justify-between gap-4 border-b border-[var(--t-border)] pb-5"
                   >
-                    <div>
+                    <div class="min-w-0">
                       <p class="section-label">Metric editor</p>
-                      <h4 class="section-title">{{ metric.label || 'New metric' }}</h4>
+                      <div class="mt-1 flex flex-wrap items-center gap-2">
+                        <h4 class="section-title mt-0">{{ metric.label || 'New metric' }}</h4>
+                        @if (isDefaultMetric(metric)) {
+                          <span class="badge-gray rounded-none text-[8px]">Default metric</span>
+                        }
+                      </div>
+                      @if (isDefaultMetric(metric)) {
+                        <p class="mt-2 max-w-2xl text-xs leading-5 text-[var(--t-text-secondary)]">
+                          {{ defaultMetricExplanation(metric) }} You can delete this metric when it
+                          has no saved dependencies. Deleted defaults are not restored
+                          automatically.
+                        </p>
+                      }
                     </div>
                     <div class="flex gap-2">
                       @if (!metric.id) {
@@ -262,7 +282,7 @@ const DEFAULT_SETTINGS: FinancialReportingSettings = {
                         >
                           Discard metric
                         </button>
-                      } @else if (!metric.is_system) {
+                      } @else {
                         <button
                           type="button"
                           class="btn-ghost px-3 py-2 text-[10px] text-red-600"
@@ -926,7 +946,7 @@ const DEFAULT_SETTINGS: FinancialReportingSettings = {
               </p>
             } @else if (deletionImpact(); as impact) {
               <div class="grid gap-5 p-5 md:p-6">
-                @if (impact.blocker_total > 0 || impact.blocked_by_system) {
+                @if (impact.blocker_total > 0) {
                   <div class="border-l-4 border-red-600 bg-red-500/10 px-4 py-3" role="alert">
                     <p class="text-xs font-black uppercase tracking-wider text-red-600">
                       Deletion blocked
@@ -984,6 +1004,22 @@ const DEFAULT_SETTINGS: FinancialReportingSettings = {
                   </div>
                 }
 
+                @if (isDefaultMetric(metric)) {
+                  <div
+                    class="border border-[var(--t-border)] bg-[var(--t-surface-raised)] px-4 py-3"
+                  >
+                    <p
+                      class="text-[10px] font-black uppercase tracking-wider text-[var(--t-text-primary)]"
+                    >
+                      Default catalogue metric
+                    </p>
+                    <p class="mt-1 text-xs leading-5 text-[var(--t-text-secondary)]">
+                      This metric was supplied as a starting point for your tenant. Deleting it does
+                      not restore it automatically, and the same formula key can be recreated later.
+                    </p>
+                  </div>
+                }
+
                 @if (impact.cleanup.tenant_annual_baselines.count > 0) {
                   <div class="border border-amber-500/40 bg-amber-500/10 px-4 py-3">
                     <p class="text-[10px] font-black uppercase tracking-wider text-amber-700">
@@ -1028,17 +1064,15 @@ const DEFAULT_SETTINGS: FinancialReportingSettings = {
                   >
                     Cancel
                   </button>
-                  @if (!impact.blocked_by_system) {
-                    <button
-                      type="button"
-                      class="btn-secondary px-4 py-2 text-[10px]"
-                      (click)="hideMetricInstead()"
-                      [disabled]="saving()"
-                      aria-label="Hide metric instead of deleting"
-                    >
-                      Hide instead
-                    </button>
-                  }
+                  <button
+                    type="button"
+                    class="btn-secondary px-4 py-2 text-[10px]"
+                    (click)="hideMetricInstead()"
+                    [disabled]="saving()"
+                    aria-label="Hide metric instead of deleting"
+                  >
+                    Hide instead
+                  </button>
                   @if (impact.can_delete) {
                     <button
                       type="button"
@@ -1294,7 +1328,7 @@ export class FinancialConfigurationComponent implements OnInit, OnDestroy {
     this.message.set('Unsaved metric discarded.');
   }
   openMetricDeletion(metric: FinancialMetricDefinition): void {
-    if (!metric.id || metric.is_system) return;
+    if (!metric.id) return;
     this.deletionTrigger = document.activeElement as HTMLElement | null;
     this.previousBodyOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -1318,6 +1352,21 @@ export class FinancialConfigurationComponent implements OnInit, OnDestroy {
           this.error.set(err.error?.detail || 'Could not check metric dependencies.');
         },
       });
+  }
+  isDefaultMetric(metric: FinancialMetricDefinition): boolean {
+    return (
+      metric.origin === 'default_catalog' ||
+      metric.origin === 'legacy_default' ||
+      (!metric.origin && metric.is_system === true)
+    );
+  }
+  defaultMetricExplanation(metric: FinancialMetricDefinition): string {
+    if (metric.origin === 'legacy_default') {
+      return 'This metric came from your tenant’s original starter catalogue.';
+    }
+    return metric.catalog_version
+      ? `This metric came from recommended catalogue ${metric.catalog_version}.`
+      : 'This metric came from the recommended starter catalogue.';
   }
   closeMetricDeletion(): void {
     document.body.style.overflow = this.previousBodyOverflow;

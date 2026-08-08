@@ -117,7 +117,15 @@ Example: ACC-101 has base annual benefits of $1.8M and high-case benefits of $2.
 
 ### 4.2 Metrics and formulas
 
-Define metrics such as revenue uplift, gross-margin uplift, cost saving, cost avoidance, working-capital release, or cycle-time reduction. Configure each metric's unit, aggregation, and formula behavior.
+New tenants receive a versioned starter catalogue of tenant-owned metrics,
+including revenue and gross-profit baselines, uplifts, cost savings, target COGS,
+growth, and gross-margin formulas. A **Default metric** badge identifies these
+templates. Administrators may keep, hide, edit, delete, or recreate them just
+like other tenant metrics.
+
+Define additional metrics such as cost avoidance, working-capital release, or
+cycle-time reduction. Configure each metric's unit, aggregation, and formula
+behavior.
 
 Example: `net_run_rate_value = recurring_benefits - recurring_costs`. For ACC-101, `$1,800,000.0000 - $120,000.0000 = $1,680,000.0000`. One-time implementation cost is used in investment/payback analysis; it is not silently deducted from every annual run-rate period.
 
@@ -136,7 +144,7 @@ Review fallback `other` rows regularly; an uncategorized cost weakens the cost-b
 
 ### 4.4 Value bridge and baselines
 
-Configure bridge rows to explain movement from baseline to target, including which metrics contribute positively or negatively. Set annual revenue and gross-margin baselines for years used in target reporting.
+Configure bridge rows to explain movement from baseline to target, including which metrics contribute positively or negatively. Set annual revenue and gross-profit baselines for years used in target reporting.
 
 ACME example: FY2027 baseline revenue of $100M plus $4M revenue uplift produces $104M target revenue. A $1.8M cost saving belongs in benefits/net value and must not also be added to target gross margin unless the configured formula explicitly does so.
 
@@ -146,9 +154,9 @@ Financial scope controls which configured metrics and categories an initiative m
 
 ### 4.6 Metric lifecycle: hide before delete
 
-Unsaved metric rows can be discarded locally. Saved system metrics cannot be
-deleted. For a saved custom metric, choose **Delete metric** to run the full
-dependency check. Benefit lines, values, initiative scope and baselines,
+Unsaved metric rows can be discarded locally. For any saved metric, including
+an installed default, choose **Delete metric** to run the full dependency
+check. Benefit lines, values, initiative scope and baselines,
 formulas, value-bridge membership, shared-cost rules, and historical allocations
 all block deletion. The dialog identifies the records that must be changed and
 offers **Hide instead**.
@@ -159,6 +167,10 @@ metric if it is being retired. If the metric was a disposable unused pilot,
 type its exact immutable key in the confirmation field and permanently delete
 it. The dialog discloses any tenant annual-baseline rows that will be removed;
 no surviving initiative data is cascaded.
+
+Deleting an unused installed default is permanent for that tenant: bootstrap
+does not install it again. If Finance later recreates the same key, it is a new
+tenant-created definition and historical data is not restored.
 
 For the field-by-field workflow and dependency examples, see the historical
 deep reference [Admin Financial Configuration User Guide](admin-financial-configuration-user-guide.md#56-hide-discard-or-permanently-delete-a-metric).

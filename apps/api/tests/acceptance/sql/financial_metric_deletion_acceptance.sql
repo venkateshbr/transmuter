@@ -7,9 +7,9 @@ DECLARE
   actor users%ROWTYPE;
   other_tenant_id UUID;
   custom_metric_id UUID := gen_random_uuid();
-  system_metric_id UUID := gen_random_uuid();
+  default_metric_id UUID := gen_random_uuid();
   custom_key TEXT := 'db_delete_acceptance_' || SUBSTRING(custom_metric_id::TEXT, 1, 8);
-  system_key TEXT := 'db_system_acceptance_' || SUBSTRING(system_metric_id::TEXT, 1, 8);
+  default_key TEXT := 'db_default_acceptance_' || SUBSTRING(default_metric_id::TEXT, 1, 8);
   claims JSONB;
   impact JSONB;
   deletion_result JSONB;
@@ -32,10 +32,10 @@ BEGIN
   LIMIT 1;
 
   INSERT INTO financial_metric_definitions (
-    id, tenant_id, key, label, value_type, aggregation, is_system, is_active
+    id, tenant_id, key, label, value_type, aggregation, origin, catalog_version, is_system, is_active
   ) VALUES
-    (custom_metric_id, actor.tenant_id, custom_key, 'DB deletion acceptance custom', 'currency', 'sum', FALSE, TRUE),
-    (system_metric_id, actor.tenant_id, system_key, 'DB deletion acceptance system', 'currency', 'sum', TRUE, TRUE);
+    (custom_metric_id, actor.tenant_id, custom_key, 'DB deletion acceptance custom', 'currency', 'sum', 'tenant', NULL, FALSE, TRUE),
+    (default_metric_id, actor.tenant_id, default_key, 'DB deletion acceptance default', 'currency', 'sum', 'default_catalog', 'acceptance', FALSE, TRUE);
 
   INSERT INTO financial_tenant_annual_baselines (
     tenant_id, metric_definition_id, baseline_year, value
@@ -65,24 +65,25 @@ BEGIN
     RAISE EXCEPTION 'Custom metric impact did not disclose safe baseline cleanup: %', impact;
   END IF;
 
-  impact := financial_metric_deletion_impact(actor.tenant_id, system_metric_id);
+  impact := financial_metric_deletion_impact(actor.tenant_id, default_metric_id);
   IF impact IS NULL
-     OR (impact ->> 'can_delete')::BOOLEAN
-     OR NOT (impact ->> 'blocked_by_system')::BOOLEAN THEN
-    RAISE EXCEPTION 'System metric impact did not block deletion: %', impact;
+     OR NOT (impact ->> 'can_delete')::BOOLEAN
+     OR (impact ->> 'blocked_by_system')::BOOLEAN
+     OR impact #>> '{metric,origin}' <> 'default_catalog' THEN
+    RAISE EXCEPTION 'Unused default metric was not deletable: %', impact;
   END IF;
 
   deletion_result := delete_financial_metric_definition(
     actor.tenant_id,
-    system_metric_id,
-    system_key
+    default_metric_id,
+    default_key
   );
-  IF deletion_result ->> 'status' <> 'blocked' THEN
-    RAISE EXCEPTION 'System metric confirmed deletion was not blocked: %', deletion_result;
+  IF deletion_result ->> 'status' <> 'deleted' THEN
+    RAISE EXCEPTION 'Default metric confirmed deletion failed: %', deletion_result;
   END IF;
 
   IF other_tenant_id IS NOT NULL
-     AND financial_metric_deletion_impact(other_tenant_id, system_metric_id) IS NOT NULL THEN
+     AND financial_metric_deletion_impact(other_tenant_id, custom_metric_id) IS NOT NULL THEN
     RAISE EXCEPTION 'Cross-tenant deletion impact disclosed a metric';
   END IF;
 
@@ -100,8 +101,6 @@ BEGIN
   END IF;
 
   PERFORM set_config('request.jwt.claims', '{}'::TEXT, TRUE);
-  DELETE FROM financial_metric_definitions
-  WHERE tenant_id = actor.tenant_id AND id = system_metric_id;
 END;
 $$;
 
