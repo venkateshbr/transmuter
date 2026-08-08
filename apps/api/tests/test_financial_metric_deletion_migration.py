@@ -43,3 +43,19 @@ def test_metric_references_restrict_except_disclosed_tenant_baseline_cleanup() -
         maxsplit=1,
     )[1].split(";", maxsplit=1)[0]
     assert "ON DELETE CASCADE" in tenant_cleanup
+
+
+def test_named_metric_constraints_are_safe_to_reapply() -> None:
+    sql = MIGRATION.read_text(encoding="utf-8")
+
+    recreated_constraints = (
+        "financial_benefit_lines_metric_tenant_fk",
+        "financial_metric_values_metric_tenant_fk",
+        "initiative_financial_scope_metric_tenant_fk",
+        "financial_initiative_annual_baselines_metric_tenant_fk",
+        "financial_tenant_annual_baselines_metric_tenant_fk",
+        "shared_cost_rules_metric_tenant_fk",
+        "shared_cost_allocations_metric_tenant_fk",
+    )
+    for constraint in recreated_constraints:
+        assert f"DROP CONSTRAINT IF EXISTS {constraint}" in sql

@@ -284,14 +284,16 @@ ALTER TABLE financial_config_items
   REFERENCES financial_metric_definitions(tenant_id, id) ON DELETE RESTRICT;
 
 ALTER TABLE financial_benefit_lines
-  DROP CONSTRAINT IF EXISTS financial_benefit_lines_metric_definition_id_fkey;
+  DROP CONSTRAINT IF EXISTS financial_benefit_lines_metric_definition_id_fkey,
+  DROP CONSTRAINT IF EXISTS financial_benefit_lines_metric_tenant_fk;
 ALTER TABLE financial_benefit_lines
   ADD CONSTRAINT financial_benefit_lines_metric_tenant_fk
   FOREIGN KEY (tenant_id, metric_definition_id)
   REFERENCES financial_metric_definitions(tenant_id, id) ON DELETE RESTRICT;
 
 ALTER TABLE financial_metric_values
-  DROP CONSTRAINT IF EXISTS financial_metric_values_metric_definition_id_fkey;
+  DROP CONSTRAINT IF EXISTS financial_metric_values_metric_definition_id_fkey,
+  DROP CONSTRAINT IF EXISTS financial_metric_values_metric_tenant_fk;
 ALTER TABLE financial_metric_values
   ADD CONSTRAINT financial_metric_values_metric_tenant_fk
   FOREIGN KEY (tenant_id, metric_definition_id)
@@ -305,14 +307,16 @@ ALTER TABLE initiative_financial_scope
   REFERENCES financial_metric_definitions(tenant_id, id) ON DELETE RESTRICT;
 
 ALTER TABLE financial_initiative_annual_baselines
-  DROP CONSTRAINT IF EXISTS financial_initiative_annual_baselines_metric_definition_id_fkey;
+  DROP CONSTRAINT IF EXISTS financial_initiative_annual_baselines_metric_definition_id_fkey,
+  DROP CONSTRAINT IF EXISTS financial_initiative_annual_baselines_metric_tenant_fk;
 ALTER TABLE financial_initiative_annual_baselines
   ADD CONSTRAINT financial_initiative_annual_baselines_metric_tenant_fk
   FOREIGN KEY (tenant_id, metric_definition_id)
   REFERENCES financial_metric_definitions(tenant_id, id) ON DELETE RESTRICT;
 
 ALTER TABLE financial_tenant_annual_baselines
-  DROP CONSTRAINT IF EXISTS financial_tenant_annual_baselines_metric_definition_id_fkey;
+  DROP CONSTRAINT IF EXISTS financial_tenant_annual_baselines_metric_definition_id_fkey,
+  DROP CONSTRAINT IF EXISTS financial_tenant_annual_baselines_metric_tenant_fk;
 ALTER TABLE financial_tenant_annual_baselines
   ADD CONSTRAINT financial_tenant_annual_baselines_metric_tenant_fk
   FOREIGN KEY (tenant_id, metric_definition_id)
