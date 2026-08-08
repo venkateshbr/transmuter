@@ -80,14 +80,43 @@ Use Progress Monitor to review initiative delivery and open the relevant record.
 
 ### 5.2 Roadmap, milestones, and dependencies
 
-Create milestones with owner, planned dates, and status. Represent dependencies between delivery events or initiatives in the roadmap context.
+Create milestones from the initiative's **Milestones** tab. Enter both **Planned Start** and **Target Completion** when the milestone represents a delivery window. If only the completion date is known, the Roadmap Explorer shows a diamond instead of inventing a duration.
 
-Example:
+Open **Operations → Roadmap & Milestones** to use the portfolio Gantt:
 
-1. Add **ERP connector ready**, due 15 September, owner Maya Chen.
-2. Add **Pilot invoices processed**, due 30 September.
-3. Record that the pilot depends on the connector.
-4. If the connector slips, update the milestone and assess the dependent milestone.
+1. Select **Fit all** to show the earliest planned start through the latest planned completion in the filtered portfolio.
+2. Change **Scale** between Year, Quarter, Month, and Week without changing saved dates.
+3. Filter by workstream, status, milestone, initiative, or owner.
+4. Expand a workstream and initiative to see its milestone bars. The bar is the planned delivery window; the diamond at its right edge is planned completion.
+5. Choose **Blocking and at risk** to reduce connector clutter, or **Selected chain** to trace one milestone's upstream and downstream consequences.
+6. Select either a milestone name in the left register or its bar/diamond to review dates, owner, pressure, upstream blockers, and downstream dependents. Use **Open milestone details** to open the initiative's Milestones tab with that record expanded when it needs correction. The Gantt itself is read-only.
+
+#### ACC-101 worked dependency example
+
+Create these three milestones:
+
+| Milestone | Planned start | Planned completion | Owner |
+|---|---|---|---|
+| ERP connector build | 1 August 2026 | 15 September 2026 | Maya Chen |
+| Pilot invoice processing | 16 September 2026 | 30 September 2026 | Maya Chen |
+| Production release | 1 October 2026 | 15 October 2026 | Operations Lead |
+
+On **Pilot invoice processing**, add **ERP connector build** as the upstream milestone. Select dependency type **Finish to start** and lag `1` day. On **Production release**, add **Pilot invoice processing** as **Finish to start** with lag `0`.
+
+Dependency types mean:
+
+| Type | Use when |
+|---|---|
+| Finish to start | The downstream milestone cannot start until the upstream milestone finishes |
+| Start to start | The two work windows may overlap, but the downstream start depends on the upstream start |
+| Finish to finish | Completion of the downstream milestone depends on upstream completion |
+| Start to finish | The downstream milestone cannot finish until the upstream milestone starts; use only for a genuine handover pattern |
+
+Lag is the delay after the dependency condition. `+5` means wait five days; `-2` represents a two-day lead or overlap. After saving, open the Roadmap Explorer, select **Production release**, and choose **Trace dependency chain**. The connector build, pilot, and production release remain emphasized while unrelated work is dimmed.
+
+If the connector slips to 20 September, update its Target Completion in the initiative milestone workflow. Then reopen the Gantt and assess whether the pilot or production dates also require an approved schedule change. The Roadmap Explorer never silently reschedules dependent records.
+
+Milestones with only one planned date still appear as a diamond. Milestones with neither a planned start nor planned completion appear under **Needs scheduling** below the Gantt. Assign dates in the source initiative rather than leaving operational work outside the schedule.
 
 ### 5.3 Action Items
 
@@ -209,4 +238,3 @@ The Operational Dashboard can prepare an executive brief. The Financial Dashboar
 - Actual benefit evidence is entered once and validated.
 - Dashboard filters are cleared or intentionally recorded before sharing results.
 - Decisions become approvals or actions, not untracked narrative.
-

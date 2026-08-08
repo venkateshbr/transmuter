@@ -44,6 +44,24 @@ class MilestoneRepository:
         )
         return result.data or []
 
+    def list_roadmap(self) -> list[dict]:  # type: ignore[type-arg]
+        """Load the portfolio roadmap in one tenant-scoped query."""
+        result = (
+            self._c.table("milestones")
+            .select(
+                "id, initiative_id, name, description, owner_id, priority, status, "
+                "sort_order, planned_start, actual_start, planned_end, actual_end, "
+                "pressure_score, "
+                "initiatives(id, name, initiative_code, workstream_id, workstreams(id, name)), "
+                "users!milestones_owner_id_fkey(display_name)"
+            )
+            .eq("tenant_id", self._tid)
+            .order("planned_start")
+            .order("planned_end")
+            .execute()
+        )
+        return result.data or []
+
     def get(self, milestone_id: str) -> dict | None:  # type: ignore[type-arg]
         result = (
             self._c.table("milestones")
@@ -244,12 +262,16 @@ class MilestoneRepository:
         self,
         downstream_id: str,
         upstream_id: str,
+        dependency_type: str,
+        lag_days: int,
     ) -> dict:  # type: ignore[type-arg]
         data = {
             "id": str(uuid4()),
             "tenant_id": self._tid,
             "upstream_milestone_id": upstream_id,
             "downstream_milestone_id": downstream_id,
+            "dependency_type": dependency_type,
+            "lag_days": lag_days,
         }
         result = self._c.table("milestone_dependencies").insert(data).execute()
         return result.data[0]
@@ -297,7 +319,7 @@ class MilestoneRepository:
         result = (
             self._c.table("milestone_dependencies")
             .select(
-                "id, "
+                "id, dependency_type, lag_days, "
                 "upstream:milestones!upstream_milestone_id("
                 "id, name, status, planned_end, pressure_score, initiatives(initiative_code)"
                 "), "

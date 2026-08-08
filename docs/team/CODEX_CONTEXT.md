@@ -23,16 +23,19 @@ replace them.
   and web image `transmuter-web:hostinger`.
 - Hostinger dev Docker project uses API image `transmuter-api:hostinger-dev`
   and web image `transmuter-web:hostinger-dev`.
-- Current deployed application commit is `9ad7caf` in dev and `4860a8a` in
-  production. Dev includes the Dashboard/Operations reorganization and
-  dashboard-layout migration; production remains on the earlier launch state.
+- Current deployed application commit is `714cc73` in dev and `4860a8a` in
+  production. Dev includes the Dashboard/Operations reorganization and the
+  dependency-aware Roadmap Explorer Gantt; production remains on the earlier
+  launch state.
   Both environments include the five-tenant launch fixes, native meeting/browser
   acceptance, authenticated export and template-upload browser fixes, and the
   initiative Annual Baseline editor required for the ACME end-to-end demo, the
   sequential strategic-parameter persistence fix from issue `#422`, plus the
   earlier Microsoft Graph isolation controls. Production promotion completed
   on `2026-07-16` after the two required migrations were applied offline.
-- The latest dev dashboard deployment action is `108319254`; the recorded
+- The latest dev Roadmap Explorer correction action is `108333564`; the initial
+  Roadmap Explorer action was `108325741`; the prior
+  dashboard deployment action is `108319254`; the recorded
   production environment action remains `104399490`. Earlier actions preserved the deployed application
   commits while updating rotated database references. The production code
   deploy action for exact merge `4860a8a` was `104398414` and the reviewed

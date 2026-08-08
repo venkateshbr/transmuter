@@ -27,6 +27,11 @@ from app.domain.milestones import (
     MilestoneUpdate,
     PortfolioMilestoneResponse,
     PortfolioMilestoneStats,
+    PortfolioRoadmapResponse,
+    RoadmapInitiative,
+    RoadmapMilestone,
+    RoadmapRange,
+    RoadmapStats,
 )
 from app.domain.pressure import (
     MilestonePressureEngine,
@@ -79,6 +84,94 @@ class MilestoneService:
         )
         return PortfolioMilestoneResponse(stats=stats, items=items, total=len(items))
 
+    def get_portfolio_roadmap(self) -> PortfolioRoadmapResponse:
+        """Return a bulk-loaded, date-complete portfolio roadmap."""
+        rows = self._repo.list_roadmap()
+        dependency_response = self.list_all_dependencies()
+        dependency_counts: dict[str, int] = {}
+        for edge in dependency_response.edges:
+            dependency_counts[edge.source] = dependency_counts.get(edge.source, 0) + 1
+            dependency_counts[edge.target] = dependency_counts.get(edge.target, 0) + 1
+
+        initiatives_by_id: dict[str, RoadmapInitiative] = {}
+        milestones: list[RoadmapMilestone] = []
+        starts: list[str] = []
+        ends: list[str] = []
+        for row in rows:
+            initiative = row.get("initiatives") or {}
+            workstream = initiative.get("workstreams") or {}
+            owner = row.get("users") or {}
+            initiative_id = row["initiative_id"]
+            initiatives_by_id.setdefault(
+                initiative_id,
+                RoadmapInitiative(
+                    id=initiative_id,
+                    name=initiative.get("name") or "Unassigned initiative",
+                    initiative_code=initiative.get("initiative_code"),
+                    workstream_id=initiative.get("workstream_id"),
+                    workstream_name=(
+                        workstream.get("name") if isinstance(workstream, dict) else None
+                    ),
+                ),
+            )
+            planned_start = row.get("planned_start")
+            planned_end = row.get("planned_end")
+            if planned_start or planned_end:
+                starts.append(str(planned_start or planned_end))
+            if planned_end:
+                ends.append(str(planned_end))
+            pressure = row.get("pressure_score")
+            milestones.append(
+                RoadmapMilestone(
+                    id=row["id"],
+                    initiative_id=initiative_id,
+                    initiative_name=initiative.get("name"),
+                    initiative_code=initiative.get("initiative_code"),
+                    workstream_id=initiative.get("workstream_id"),
+                    workstream_name=(
+                        workstream.get("name") if isinstance(workstream, dict) else None
+                    ),
+                    name=row["name"],
+                    description=row.get("description"),
+                    owner_id=row.get("owner_id"),
+                    owner_name=(owner.get("display_name") if isinstance(owner, dict) else None),
+                    priority=row.get("priority") or "medium",
+                    status=row.get("status") or "not_started",
+                    sort_order=row.get("sort_order") or 0,
+                    planned_start=planned_start,
+                    actual_start=row.get("actual_start"),
+                    planned_end=planned_end,
+                    actual_end=row.get("actual_end"),
+                    pressure_score=str(pressure) if pressure is not None else None,
+                    pressure_level=(
+                        pressure_level(self._score(pressure)) if pressure is not None else None
+                    ),
+                    dependency_count=dependency_counts.get(row["id"], 0),
+                )
+            )
+
+        return PortfolioRoadmapResponse(
+            range=RoadmapRange(
+                earliest_start=min(starts) if starts else None,
+                latest_end=max(ends) if ends else None,
+            ),
+            initiatives=sorted(
+                initiatives_by_id.values(),
+                key=lambda item: ((item.workstream_name or ""), item.name),
+            ),
+            milestones=milestones,
+            dependencies=dependency_response.edges,
+            stats=RoadmapStats(
+                milestones=len(milestones),
+                initiatives=len(initiatives_by_id),
+                dependencies=dependency_response.total,
+                blocking_links=dependency_response.stats.blocking,
+                missing_dates=sum(
+                    1 for item in milestones if not item.planned_start or not item.planned_end
+                ),
+            ),
+        )
+
     def get_milestone(self, milestone_id: str) -> MilestoneDetail:
         row = self._repo.get(milestone_id)
         if not row:
@@ -118,6 +211,13 @@ class MilestoneService:
     def update_milestone(self, milestone_id: str, data: MilestoneUpdate) -> MilestoneDetail:
         existing = self._assert_exists(milestone_id)
         patch = {k: v for k, v in data.model_dump(exclude_none=True).items()}
+        planned_start = patch.get("planned_start", existing.get("planned_start"))
+        planned_end = patch.get("planned_end", existing.get("planned_end"))
+        if planned_start and planned_end and str(planned_start) > str(planned_end):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="planned_start must be on or before planned_end",
+            )
         self._repo.update(milestone_id, patch)
         self._recalc_pressure(
             milestone_id,
@@ -196,6 +296,12 @@ class MilestoneService:
         data: DependencyCreate,
     ) -> DependencyItem:
         ms = self._assert_exists(milestone_id)
+        upstream = self._assert_exists(data.upstream_milestone_id)
+        if milestone_id == data.upstream_milestone_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A milestone cannot depend on itself",
+            )
         if self._repo.would_create_cycle(
             milestone_id,
             data.upstream_milestone_id,
@@ -207,14 +313,25 @@ class MilestoneService:
         row = self._repo.create_dependency(
             milestone_id,
             data.upstream_milestone_id,
+            data.dependency_type,
+            data.lag_days,
         )
         self._recalc_pressure(milestone_id, ms["initiative_id"])
-        self._recalc_pressure(data.upstream_milestone_id, ms["initiative_id"])
-        return DependencyItem(
+        self._recalc_pressure(data.upstream_milestone_id, upstream["initiative_id"])
+        dependency = DependencyItem(
             id=row["id"],
             upstream_milestone_id=row["upstream_milestone_id"],
             downstream_milestone_id=row["downstream_milestone_id"],
+            dependency_type=row.get("dependency_type", "finish_to_start"),
+            lag_days=row.get("lag_days", 0),
         )
+        self._audit_change(
+            "create",
+            "milestone_dependency",
+            row["id"],
+            after_data=row,
+        )
+        return dependency
 
     def delete_dependency(
         self,
@@ -225,10 +342,21 @@ class MilestoneService:
         deps = self._repo.get_dependencies(milestone_id)
         target_dep = next((d for d in deps if d["id"] == dependency_id), None)
 
+        if not target_dep:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Milestone dependency not found",
+            )
+
         self._repo.delete_dependency(dependency_id)
+        self._audit_change(
+            "delete",
+            "milestone_dependency",
+            dependency_id,
+            before_data=target_dep,
+        )
         self._recalc_pressure(milestone_id, ms["initiative_id"])
-        if target_dep:
-            self._recalc_pressure(target_dep["upstream_milestone_id"], ms["initiative_id"])
+        self._recalc_pressure(target_dep["upstream_milestone_id"], ms["initiative_id"])
 
     def list_all_dependencies(self) -> DependencyListResponse:
         """List all dependencies across the portfolio."""
@@ -266,6 +394,8 @@ class MilestoneService:
                     str(u["pressure_score"]) if u.get("pressure_score") is not None else None
                 ),
                 downstream_status=d.get("status"),
+                dependency_type=r.get("dependency_type", "finish_to_start"),
+                lag_days=r.get("lag_days", 0),
             )
             items.append(item)
             stats.total += 1
@@ -297,6 +427,8 @@ class MilestoneService:
                     source=item.upstream.id,
                     target=item.downstream.id,
                     status=status_value,
+                    dependency_type=item.dependency_type,
+                    lag_days=item.lag_days,
                 )
             )
         return DependencyListResponse(
@@ -487,6 +619,8 @@ class MilestoneService:
                     if isinstance(d.get("downstream"), dict)
                     else None
                 ),
+                dependency_type=d.get("dependency_type", "finish_to_start"),
+                lag_days=d.get("lag_days", 0),
             )
             for d in dep_rows
         ]

@@ -27,6 +27,7 @@ from app.domain.milestones import (
     MilestoneListResponse,
     MilestoneUpdate,
     PortfolioMilestoneResponse,
+    PortfolioRoadmapResponse,
 )
 from app.domain.pressure import MilestonePressureResult
 from app.services.milestone import MilestoneService
@@ -71,6 +72,19 @@ async def list_portfolio_milestones(
 ) -> PortfolioMilestoneResponse:
     assert_can_view_portfolio(current_user)
     return svc.list_portfolio_milestones()
+
+
+@router.get(
+    "/portfolio/roadmap",
+    response_model=PortfolioRoadmapResponse,
+)
+async def get_portfolio_roadmap(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    svc: Annotated[MilestoneService, Depends(_svc)],
+) -> PortfolioRoadmapResponse:
+    """Return the tenant's milestone schedule and dependency graph."""
+    assert_can_view_portfolio(current_user)
+    return svc.get_portfolio_roadmap()
 
 
 @router.get(

@@ -1449,7 +1449,11 @@ def test_real_api_milestone_crud_pressure_dependencies_and_checklist() -> None:
             dependency = client.post(
                 f"/milestones/{milestone_b_id}/dependencies",
                 headers=headers,
-                json={"upstream_milestone_id": milestone_a_id},
+                json={
+                    "upstream_milestone_id": milestone_a_id,
+                    "dependency_type": "finish_to_start",
+                    "lag_days": 3,
+                },
             )
             dependency.raise_for_status()
             dependency_id = dependency.json()["id"]
@@ -1470,11 +1474,30 @@ def test_real_api_milestone_crud_pressure_dependencies_and_checklist() -> None:
             assert portfolio_dep_data["stats"]["total"] >= 1
             assert any(node["id"] == milestone_a_id for node in portfolio_dep_data["nodes"])
             assert any(edge["id"] == dependency_id for edge in portfolio_dep_data["edges"])
+            assert dependency_row["dependency_type"] == "finish_to_start"
+            assert dependency_row["lag_days"] == 3
+
+            roadmap = client.get("/portfolio/roadmap", headers=headers)
+            roadmap.raise_for_status()
+            roadmap_data = roadmap.json()
+            assert roadmap_data["range"]["earliest_start"]
+            assert roadmap_data["range"]["latest_end"]
+            assert any(item["id"] == milestone_a_id for item in roadmap_data["milestones"])
+            roadmap_edge = next(
+                edge for edge in roadmap_data["dependencies"] if edge["id"] == dependency_id
+            )
+            assert roadmap_edge["source"] == milestone_a_id
+            assert roadmap_edge["target"] == milestone_b_id
+            assert roadmap_edge["lag_days"] == 3
 
             overdue = client.put(
                 f"/milestones/{milestone_a_id}",
                 headers=headers,
-                json={"status": "overdue", "planned_end": "2026-01-01"},
+                json={
+                    "status": "overdue",
+                    "planned_start": "2025-12-01",
+                    "planned_end": "2026-01-01",
+                },
             )
             overdue.raise_for_status()
 

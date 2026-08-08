@@ -300,3 +300,103 @@ h1, h2, h3, h4, h5, h6 {
 .animate-spin-slow {
   animation: spin-slow 8s linear infinite;
 }
+
+/* ── Roadmap Explorer timeline structure ── */
+.roadmap-axis {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: 330px var(--timeline-width);
+  height: 58px;
+  background: var(--t-primary);
+  color: white;
+  border-bottom: 1px solid rgba(255, 255, 255, .22);
+}
+.roadmap-axis-register {
+  position: sticky;
+  left: 0;
+  z-index: 22;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0 1rem;
+  background: var(--t-primary);
+  border-right: 1px solid rgba(255, 255, 255, .22);
+}
+.roadmap-axis-register span {
+  font-size: .62rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+}
+.roadmap-axis-register small {
+  color: var(--t-blue-light);
+  font-size: .58rem;
+  font-weight: 800;
+}
+.roadmap-axis-timeline {
+  position: relative;
+  overflow: hidden;
+}
+.roadmap-axis-tick {
+  position: absolute;
+  inset-block: 0;
+  width: 1px;
+  border-left: 1px solid rgba(255, 255, 255, .2);
+}
+.roadmap-axis-tick span {
+  position: absolute;
+  top: 20px;
+  left: 8px;
+  white-space: nowrap;
+  color: rgba(255, 255, 255, .88);
+  font-size: .58rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.roadmap-workstream-row {
+  background: var(--t-primary-soft);
+}
+.roadmap-workstream-row .roadmap-register-cell,
+.roadmap-workstream-row .roadmap-timeline-cell {
+  background-color: var(--t-primary-soft);
+}
+.roadmap-workstream-row .roadmap-register-cell {
+  gap: .55rem;
+  color: var(--t-primary);
+}
+.roadmap-workstream-row .material-icons {
+  color: var(--t-accent);
+  font-size: 1rem;
+}
+.roadmap-workstream-row strong {
+  font-size: .63rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+}
+.roadmap-initiative-row .roadmap-register-cell,
+.roadmap-initiative-row .roadmap-timeline-cell {
+  background-color: var(--t-surface-raised);
+}
+.roadmap-initiative-row .roadmap-register-cell {
+  gap: .65rem;
+  padding-left: 1.5rem;
+}
+.roadmap-initiative-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: .68rem;
+  font-weight: 850;
+}
+.roadmap-initiative-code {
+  flex: none;
+  color: var(--t-accent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .55rem;
+  font-weight: 900;
+}

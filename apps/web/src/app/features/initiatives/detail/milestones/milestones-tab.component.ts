@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, Input, OnChanges, OnInit, SimpleChanges, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../../../core/services/api.service';
@@ -48,6 +48,8 @@ interface DependencyItem {
   upstream_milestone_id: string;
   upstream_name: string | null;
   downstream_milestone_id: string;
+  dependency_type: 'finish_to_start' | 'start_to_start' | 'finish_to_finish' | 'start_to_finish';
+  lag_days: number;
 }
 
 interface DependencyCandidateGroup {
@@ -132,7 +134,7 @@ interface DependencyCandidateGroup {
       @if (!loading() && milestones().length > 0) {
         <div class="space-y-2">
           @for (ms of filteredMilestones(); track ms.id) {
-            <div class="card p-0 overflow-hidden group/row transition-all duration-300">
+            <div class="card p-0 overflow-hidden group/row transition-all duration-300" [attr.data-milestone-detail-id]="ms.id">
               <!-- Row header -->
               <div class="w-full flex items-center gap-3 px-4 py-3 hover:bg-[var(--t-surface-raised)] transition-colors cursor-pointer"
                    (click)="toggleExpand(ms.id)">
@@ -222,7 +224,7 @@ interface DependencyCandidateGroup {
                         <p class="text-[10px] font-bold uppercase tracking-wider mb-3" style="color:var(--t-text-secondary)">
                           Checklist ({{ expandedDetail()!.checklist_done }}/{{ expandedDetail()!.checklist_total }})
                         </p>
-                        <div class="flex gap-2 mb-3">
+                        <div class="grid gap-2 mb-3 md:grid-cols-[minmax(180px,1fr)_155px_90px_auto]">
                           <input class="input-field text-xs"
                                  placeholder="Add checklist item..."
                                  [(ngModel)]="checklistDraft"
@@ -278,6 +280,21 @@ interface DependencyCandidateGroup {
                               </optgroup>
                             }
                           </select>
+                          <select class="input-field text-xs"
+                                  [(ngModel)]="dependencyTypeDraft"
+                                  aria-label="Dependency scheduling type">
+                            <option value="finish_to_start">Finish to start</option>
+                            <option value="start_to_start">Start to start</option>
+                            <option value="finish_to_finish">Finish to finish</option>
+                            <option value="start_to_finish">Start to finish</option>
+                          </select>
+                          <input type="number"
+                                 class="input-field text-xs"
+                                 [(ngModel)]="dependencyLagDraft"
+                                 min="-3650"
+                                 max="3650"
+                                 aria-label="Dependency lag in days"
+                                 title="Lag days; use a negative number for lead time">
                           <button class="btn-secondary px-3"
                                   title="Add dependency"
                                   aria-label="Add dependency"
@@ -293,6 +310,9 @@ interface DependencyCandidateGroup {
                                 <span class="material-icons text-sm" style="color:var(--t-red)">link_off</span>
                                 <span class="text-xs font-medium flex-1" style="color:var(--t-text-primary)">
                                   {{ dep.upstream_name || 'Upstream Milestone' }}
+                                  <small class="mt-0.5 block text-[9px] font-black uppercase tracking-wider text-[var(--t-text-tertiary)]">
+                                    {{ dependencyTypeLabel(dep.dependency_type) }} · {{ dependencyLagLabel(dep.lag_days) }}
+                                  </small>
                                 </span>
                                 <button class="btn-ghost p-1 opacity-0 group-hover/dep:opacity-100"
                                         title="Remove dependency"
@@ -416,7 +436,7 @@ interface DependencyCandidateGroup {
               <textarea [(ngModel)]="addForm.description" rows="2" class="input-field" placeholder="Key outcomes or requirements..."></textarea>
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
               <div>
                 <label class="text-[10px] font-bold uppercase tracking-wider block mb-1.5" style="color:var(--t-text-secondary)">Priority</label>
                 <select [(ngModel)]="addForm.priority" class="input-field">
@@ -424,6 +444,10 @@ interface DependencyCandidateGroup {
                   <option value="medium">Medium</option>
                   <option value="low">Low</option>
                 </select>
+              </div>
+              <div>
+                <label class="text-[10px] font-bold uppercase tracking-wider block mb-1.5" style="color:var(--t-text-secondary)">Planned Start</label>
+                <input type="date" [(ngModel)]="addForm.planned_start" class="input-field"/>
               </div>
               <div>
                 <label class="text-[10px] font-bold uppercase tracking-wider block mb-1.5" style="color:var(--t-text-secondary)">Target Completion</label>
@@ -441,8 +465,9 @@ interface DependencyCandidateGroup {
     }
   `,
 })
-export class MilestonesTabComponent implements OnInit {
+export class MilestonesTabComponent implements OnInit, OnChanges {
   @Input() initiativeId = '';
+  @Input() focusMilestoneId = '';
 
   private readonly api = inject(ApiService);
 
@@ -456,6 +481,8 @@ export class MilestonesTabComponent implements OnInit {
   sortKey: 'manual' | 'due' | 'pressure' | 'priority' | 'name' = 'manual';
   checklistDraft = '';
   dependencyDraft = '';
+  dependencyTypeDraft: DependencyItem['dependency_type'] = 'finish_to_start';
+  dependencyLagDraft = 0;
   confirmDeleteId = signal<string | null>(null);
 
   // Add Modal State
@@ -464,6 +491,7 @@ export class MilestonesTabComponent implements OnInit {
     name: '',
     description: '',
     priority: 'medium',
+    planned_start: '',
     planned_end: ''
   };
 
@@ -485,6 +513,13 @@ export class MilestonesTabComponent implements OnInit {
     if (!this.initiativeId) { this.loading.set(false); return; }
     this.loadPortfolioMilestones();
     this.loadMilestones();
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['focusMilestoneId'] && this.focusMilestoneId && !changes['focusMilestoneId'].firstChange) {
+      this.expandedId.set(this.focusMilestoneId);
+      this.loadDetail(this.focusMilestoneId);
+    }
   }
 
   toggleExpand(id: string): void {
@@ -573,6 +608,7 @@ export class MilestonesTabComponent implements OnInit {
       name: '',
       description: '',
       priority: 'medium',
+      planned_start: new Date().toISOString().slice(0, 10),
       planned_end: new Date().toISOString().slice(0, 10)
     };
     this.showAddModal.set(true);
@@ -636,13 +672,26 @@ export class MilestonesTabComponent implements OnInit {
     if (!this.dependencyDraft) return;
     this.api.post<DependencyItem>(`/milestones/${milestoneId}/dependencies`, {
       upstream_milestone_id: this.dependencyDraft,
+      dependency_type: this.dependencyTypeDraft,
+      lag_days: Number(this.dependencyLagDraft) || 0,
     }).subscribe({
       next: () => {
         this.dependencyDraft = '';
+        this.dependencyTypeDraft = 'finish_to_start';
+        this.dependencyLagDraft = 0;
         this.refreshExpanded(milestoneId);
       },
       error: () => alert('Failed to add dependency. Check for circular dependencies.'),
     });
+  }
+
+  dependencyTypeLabel(value: DependencyItem['dependency_type']): string {
+    return value.replaceAll('_', ' ');
+  }
+
+  dependencyLagLabel(days: number): string {
+    if (!days) return 'No lag';
+    return `${days > 0 ? '+' : ''}${days} days`;
   }
 
   deleteDependency(milestoneId: string, dependencyId: string): void {
@@ -708,6 +757,10 @@ export class MilestonesTabComponent implements OnInit {
           ...item,
           sort_order: item.sort_order ?? index * 10,
         })));
+        if (this.focusMilestoneId && r.items.some(item => item.id === this.focusMilestoneId)) {
+          this.expandedId.set(this.focusMilestoneId);
+          this.loadDetail(this.focusMilestoneId);
+        }
         this.loading.set(false);
       },
       error: () => this.loading.set(false),

@@ -1301,6 +1301,8 @@ def insert_initiatives(
     metric_value_rows = []
     cost_rows = []
     baseline_rows = []
+    milestone_dependency_rows: list[dict[str, object]] = []
+    milestone_ids_by_code: dict[str, dict[str, str]] = {}
     for index, row in enumerate(initiatives, start=1):
         (
             code,
@@ -1661,6 +1663,11 @@ def insert_initiatives(
         baseline_milestone_id = str(uuid4())
         delivery_milestone_id = str(uuid4())
         realization_milestone_id = str(uuid4())
+        milestone_ids_by_code[code] = {
+            "baseline": baseline_milestone_id,
+            "delivery": delivery_milestone_id,
+            "realization": realization_milestone_id,
+        }
         client.table("milestones").insert(
             [
                 {
@@ -1736,6 +1743,46 @@ def insert_initiatives(
                 },
             ]
         ).execute()
+        milestone_dependency_rows.extend(
+            [
+                {
+                    "id": str(uuid4()),
+                    "tenant_id": tenant_id,
+                    "upstream_milestone_id": baseline_milestone_id,
+                    "downstream_milestone_id": delivery_milestone_id,
+                    "dependency_type": "finish_to_start",
+                    "lag_days": 0,
+                },
+                {
+                    "id": str(uuid4()),
+                    "tenant_id": tenant_id,
+                    "upstream_milestone_id": delivery_milestone_id,
+                    "downstream_milestone_id": realization_milestone_id,
+                    "dependency_type": "start_to_start",
+                    "lag_days": 30,
+                },
+            ]
+        )
+    for upstream_code, downstream_code, lag_days in [
+        ("ENT-004", "ENT-005", 14),
+        ("ENT-006", "ENT-002", 7),
+        ("ENT-010", "ENT-008", 0),
+    ]:
+        if upstream_code in milestone_ids_by_code and downstream_code in milestone_ids_by_code:
+            milestone_dependency_rows.append(
+                {
+                    "id": str(uuid4()),
+                    "tenant_id": tenant_id,
+                    "upstream_milestone_id": milestone_ids_by_code[upstream_code]["delivery"],
+                    "downstream_milestone_id": milestone_ids_by_code[downstream_code][
+                        "realization"
+                    ],
+                    "dependency_type": "finish_to_start",
+                    "lag_days": lag_days,
+                }
+            )
+    if milestone_dependency_rows:
+        client.table("milestone_dependencies").insert(milestone_dependency_rows).execute()
     client.table("financial_initiative_annual_baselines").insert(baseline_rows).execute()
     client.table("financial_benefit_lines").insert(benefit_line_rows).execute()
     client.table("financial_benefit_line_validation_events").insert(

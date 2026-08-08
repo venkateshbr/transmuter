@@ -1422,6 +1422,8 @@ async function main() {
           select.dispatchEvent(new Event('input', { bubbles: true }));
           select.dispatchEvent(new Event('change', { bubbles: true }));
           globalThis.__transmuterMilestones.dependencyDraft = ${JSON.stringify(crossUpstreamMilestone.id)};
+          globalThis.__transmuterMilestones.dependencyTypeDraft = 'finish_to_start';
+          globalThis.__transmuterMilestones.dependencyLagDraft = 2;
           globalThis.__transmuterMilestones.addDependency(${JSON.stringify(downstreamMilestone.id)});
           return true;
         })()
@@ -1431,18 +1433,18 @@ async function main() {
         return detail.dependencies.some(dep => dep.upstream_milestone_id === crossUpstreamMilestone.id);
       }, 'cross-initiative milestone dependency persistence');
       await waitFor(async () => {
-        const [milestones, dependencies] = await Promise.all([
-          api('/milestones'),
-          api('/dependencies'),
-        ]);
-        const upstreamVisible = milestones.items.some(
+        const roadmap = await api('/portfolio/roadmap');
+        const upstreamVisible = roadmap.milestones.some(
           item => item.id === crossUpstreamMilestone.id && item.planned_end === '2026-07-15',
         );
-        const downstreamVisible = milestones.items.some(
+        const downstreamVisible = roadmap.milestones.some(
           item => item.id === downstreamMilestone.id && item.planned_end === '2026-08-15',
         );
-        const edgeVisible = dependencies.edges.some(
-          edge => edge.source === crossUpstreamMilestone.id && edge.target === downstreamMilestone.id,
+        const edgeVisible = roadmap.dependencies.some(
+          edge => edge.source === crossUpstreamMilestone.id
+            && edge.target === downstreamMilestone.id
+            && edge.dependency_type === 'finish_to_start'
+            && edge.lag_days === 2,
         );
         return upstreamVisible && downstreamVisible && edgeVisible;
       }, 'cross-initiative roadmap dependency data');
@@ -1452,12 +1454,10 @@ async function main() {
           () => evalJs(page, `
             (() => {
               const bodyText = document.body?.innerText || '';
-              const expectedTitle = ${JSON.stringify(`${crossUpstreamMilestone.name} blocks ${downstreamMilestoneName}`)};
               return bodyText.includes('Roadmap Explorer')
                 && bodyText.includes(${JSON.stringify(crossUpstreamMilestone.name)})
-                && !!document.querySelector('[data-testid="roadmap-milestone-${downstreamMilestone.id}"]')
-                && [...document.querySelectorAll('svg path[stroke-dasharray="3 4"] title')]
-                  .some(title => title.textContent === expectedTitle);
+                && !!document.querySelector('[data-milestone-id="${downstreamMilestone.id}"]')
+                && document.querySelectorAll('path.roadmap-link').length > 0;
             })()
           `),
           'roadmap dotted dependency link',
@@ -1466,10 +1466,9 @@ async function main() {
       } catch (error) {
         const roadmapState = await evalJs(page, `
           (() => ({
-            pathCount: document.querySelectorAll('svg path[stroke-dasharray="3 4"]').length,
-            downstreamMarker: !!document.querySelector('[data-testid="roadmap-milestone-${downstreamMilestone.id}"]'),
+            pathCount: document.querySelectorAll('path.roadmap-link').length,
+            downstreamMarker: !!document.querySelector('[data-milestone-id="${downstreamMilestone.id}"]'),
             upstreamNameVisible: (document.body?.innerText || '').includes(${JSON.stringify(crossUpstreamMilestone.name)}),
-            titles: [...document.querySelectorAll('svg path[stroke-dasharray="3 4"] title')].map(title => title.textContent),
             bodyText: (document.body?.innerText || '').slice(0, 2000),
           }))()
         `);
@@ -1477,7 +1476,7 @@ async function main() {
       }
       await evalJs(page, `
         (() => {
-          const button = document.querySelector('[data-testid="roadmap-milestone-${downstreamMilestone.id}"]');
+          const button = document.querySelector('[data-milestone-id="${downstreamMilestone.id}"]');
           if (!button) throw new Error('Missing downstream roadmap milestone marker');
           button.scrollIntoView({ block: 'center', inline: 'center' });
           button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
@@ -1494,10 +1493,10 @@ async function main() {
               return !!modal
                 && text.includes(${JSON.stringify(downstreamMilestoneName)})
                 && text.includes(${JSON.stringify(crossUpstreamMilestone.name)})
-                && text.includes('Upstream Dependencies')
-                && text.includes('Downstream Dependencies')
-                && normalizedText.includes('previous due')
-                && normalizedText.includes('next due');
+                && text.includes('Upstream dependencies')
+                && text.includes('Downstream dependents')
+                && normalizedText.includes('finish to start')
+                && normalizedText.includes('+2 days');
             })()
           `),
           'roadmap milestone dependency modal',
@@ -1508,7 +1507,7 @@ async function main() {
           (() => {
             const modal = document.querySelector('[data-testid="roadmap-milestone-modal"]');
             return {
-              markerExists: !!document.querySelector('[data-testid="roadmap-milestone-${downstreamMilestone.id}"]'),
+              markerExists: !!document.querySelector('[data-milestone-id="${downstreamMilestone.id}"]'),
               modalExists: !!modal,
               modalText: (modal?.innerText || '').slice(0, 2000),
               upstreamPanelText: (document.querySelector('[data-testid="roadmap-upstream-dependencies"]')?.innerText || '').slice(0, 1000),
@@ -1518,11 +1517,17 @@ async function main() {
         `);
         throw new Error(`${error.message}\nRoadmap modal state:\n${JSON.stringify(modalState, null, 2)}`);
       }
-      await evalJs(page, `document.querySelector('[data-testid="roadmap-milestone-modal"] button[aria-label="Close milestone detail"]')?.click()`);
-      await setField(page, 'select.input-field', '6');
+      await evalJs(page, `
+        (() => {
+          const modal = document.querySelector('[data-testid="roadmap-milestone-modal"]');
+          const trace = [...modal.querySelectorAll('button')].find(button => button.textContent.includes('Trace dependency chain'));
+          trace?.click();
+          document.querySelector('[data-testid="roadmap-milestone-modal"] button[aria-label="Close milestone detail"]')?.click();
+        })()
+      `);
       await waitFor(
-        () => evalJs(page, "document.body.innerText.includes('links hidden by timeframe') || !!document.querySelector('svg path[stroke-dasharray=\"3 4\"]')"),
-        'roadmap dependency visibility after timeframe change',
+        () => evalJs(page, "document.querySelectorAll('.roadmap-row-dimmed').length > 0 && document.querySelectorAll('path.roadmap-link').length > 0"),
+        'roadmap selected dependency chain',
       );
       await page.send('Page.navigate', { url: `${uiBaseUrl}/initiatives/${manualInitiativeId}` });
       await waitFor(

@@ -36,6 +36,62 @@ Deployment note:
 
 ## Current Release Entries
 
+### 2026-08-08 - Dependency-aware Roadmap Explorer Gantt
+
+Status: deployed to development; authenticated UI/API acceptance pending
+
+GitHub tracking:
+
+- Parent issue `#473`, acceptance issue `#478`, deploy-readiness issue `#479`,
+  draft stacked PR `#480`.
+- Deployed application commit: `714cc73fde985a51a5718e3536973d879aea1296`.
+- Initial Gantt application commit: `0f61ecba7b2eaac16a477b9837f44250771c5939`.
+- PR base: `feat/462-dashboard-improvements`; production promotion therefore
+  also depends on completing the dashboard reorganization release.
+
+Runtime changes:
+
+- Replace the completion-dot roadmap with a read-only, full-range portfolio
+  Gantt grouped by workstream and initiative.
+- Show planned milestone spans, completion diamonds, typed FS/SS/FF/SF
+  dependencies, lead/lag, zoom controls, fit-to-range, filtering, mobile
+  chronology, and dependency-chain tracing.
+- Add a bulk tenant-scoped portfolio roadmap API and deterministic dependency
+  fixtures while retaining milestone and dependency editing in Operations.
+- Replace the initial DHTMLX adapter after its unavailable `addMarker()` method
+  caused initialization to stop before milestones or click handlers rendered.
+  The corrected Angular/SVG timeline follows the ApexGantt range-bar visual
+  pattern without introducing its commercial/OEM licensing obligation.
+- Make both milestone register rows and timeline bars selectable, and deep-link
+  **Open milestone details** to the matching expanded initiative milestone.
+
+Schema:
+
+- Applied `supabase/migrations/20260808000001_roadmap_gantt.sql` to
+  `transmuter_dev` through Hostinger schema job
+  `transmuter-schema-dev-20260808154647`.
+- Production requires the same migration before application promotion.
+
+Dev deployment and acceptance:
+
+- Environment: `https://transmuter-dev.ishirock.tech`.
+- Initial Hostinger deployment action `108325741` reached terminal state
+  `success`; regression-fix action `108333564` also reached `success`.
+- Public `/health` and `/api/health` validation passed.
+- Local verification before the initial deploy: Ruff, `3/3` focused backend
+  tests, `43/43` frontend tests, Angular compilation, and the production build
+  passed. Regression-fix verification added the failing renderer test, then
+  passed `44/44` frontend tests and an Angular production build without
+  warnings. The roadmap lazy chunk reduced from about 690 kB to 38.53 kB.
+- Final real authenticated API/browser acceptance remains open. The ignored
+  saved fixture credential returns HTTP `401` for both the role and
+  tenant-admin identities, and no reusable browser backend is available in the
+  current execution environment. No credential was reset or exposed.
+
+Production promotion:
+
+- Not requested.
+
 ### 2026-08-08 - Dashboard And Operations Reorganization
 
 Status: deployed to development; authenticated API validation complete; browser acceptance pending
