@@ -61,7 +61,9 @@ REQUIRED_WIDGETS: dict[str, set[str]] = {
         "waterline",
     },
 }
-ALLOWED_WIDGETS = {key: {item.widget_key for item in items} for key, items in SYSTEM_LAYOUTS.items()}
+ALLOWED_WIDGETS = {
+    key: {item.widget_key for item in items} for key, items in SYSTEM_LAYOUTS.items()
+}
 
 
 class DashboardLayoutService:
@@ -92,7 +94,11 @@ class DashboardLayoutService:
     ) -> DashboardLayoutResponse:
         if data.publish_as_tenant_default and self._role not in LAYOUT_ADMIN_ROLES:
             raise HTTPException(status_code=403, detail="Insufficient role to publish layouts")
-        if data.publish_as_tenant_default and data.role_key and data.role_key not in LAYOUT_TARGET_ROLES:
+        if (
+            data.publish_as_tenant_default
+            and data.role_key
+            and data.role_key not in LAYOUT_TARGET_ROLES
+        ):
             raise HTTPException(status_code=422, detail="Unknown dashboard layout role")
         self._validate_widgets(dashboard_key, data.widgets)
         owner_type = "tenant" if data.publish_as_tenant_default else "user"
@@ -171,7 +177,9 @@ class DashboardLayoutService:
                 detail=f"Required widgets must remain visible: {', '.join(invalid)}",
             )
         required_orders = [
-            widget.order for widget in widgets if widget.widget_key in REQUIRED_WIDGETS[dashboard_key]
+            widget.order
+            for widget in widgets
+            if widget.widget_key in REQUIRED_WIDGETS[dashboard_key]
         ]
         optional_orders = [
             widget.order
@@ -220,5 +228,7 @@ class DashboardLayoutService:
             breakpoint=breakpoint,
             source="tenant" if source == "tenant" else "personal",
             layout_version=int(row.get("layout_version") or 1),
-            widgets=[DashboardWidgetLayout.model_validate(widget) for widget in row.get("widgets") or []],
+            widgets=[
+                DashboardWidgetLayout.model_validate(widget) for widget in row.get("widgets") or []
+            ],
         )
