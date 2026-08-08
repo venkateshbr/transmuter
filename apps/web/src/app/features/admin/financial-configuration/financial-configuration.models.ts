@@ -1,5 +1,7 @@
 export type FinancialSubtab = 'settings' | 'metrics' | 'planning' | 'bridge' | 'taxonomy';
 
+export type FinancialMetricOrigin = 'default_catalog' | 'tenant' | 'legacy_default';
+
 export interface FinancialMetricDefinition {
   id?: string;
   key: string;
@@ -20,6 +22,9 @@ export interface FinancialMetricDefinition {
   display_order: number;
   applies_to?: string;
   validation?: Record<string, unknown>;
+  origin?: FinancialMetricOrigin | null;
+  catalog_version?: string | null;
+  semantic_role?: string | null;
   is_system?: boolean;
   is_active: boolean;
   keyManuallyEdited?: boolean;
@@ -38,9 +43,20 @@ export interface FinancialMetricDeletionCategory {
 }
 
 export interface FinancialMetricDeletionImpact {
-  metric: Pick<FinancialMetricDefinition, 'id' | 'key' | 'label' | 'is_system' | 'is_active'>;
+  metric: Pick<
+    FinancialMetricDefinition,
+    | 'id'
+    | 'key'
+    | 'label'
+    | 'origin'
+    | 'catalog_version'
+    | 'semantic_role'
+    | 'is_system'
+    | 'is_active'
+  >;
   can_delete: boolean;
-  blocked_by_system: boolean;
+  /** @deprecated Compatibility with pre-catalogue deletion-impact responses. */
+  blocked_by_system?: boolean;
   blocker_total: number;
   blockers: Record<string, FinancialMetricDeletionCategory>;
   cleanup: { tenant_annual_baselines: FinancialMetricDeletionCategory };

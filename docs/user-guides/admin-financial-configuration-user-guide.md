@@ -237,8 +237,8 @@ Metric definitions are the heart of the configurable financial model.
 
 | Field | Purpose | Example |
 |---|---|---|
-| Key | Stable machine key used in formulas and imports. | `gm_uplift` |
-| Label | User-facing row name. | `Gross Margin Uplift` |
+| Key | Stable machine key used in formulas and imports. | `gross_profit_uplift` |
+| Label | User-facing row name. | `Gross Profit Uplift` |
 | Group key | Logical grouping. | `margin` |
 | Value type | `currency`, `percent`, or `number`. | `currency` |
 | Unit | Optional unit label. | `%`, `hours`, `USD/hour` |
@@ -247,8 +247,11 @@ Metric definitions are the heart of the configurable financial model.
 | Rollup type | Reporting rollup hint. | `benefit`, `total_cost` |
 | Is benefit | Whether values count as benefits. | `true` |
 | Benefit class | Benefit type. | `revenue`, `margin`, `savings`, `avoidance`, `other` |
-| Formula | Expression for computed rows. | `gm_uplift / revenue_uplift * 100` |
-| Formula inputs | Metric keys referenced by the formula. | `gm_uplift`, `revenue_uplift` |
+| Formula | Expression for computed rows. | `target_gross_profit / target_revenue * 100` |
+| Formula inputs | Metric keys referenced by the formula. | `target_gross_profit`, `target_revenue` |
+| Evaluation grain | Whether a formula is evaluated for each period or once from annual rolled-up inputs. | `annual` |
+| Semantic role | Stable reporting meaning used independently of a tenant's display label. | `gross_profit_uplift` |
+| Provenance | Read-only source metadata shown by the **Default metric** badge. | `default_catalog`, version `financial-v2` |
 | Precision | Decimal precision for display/calculation. | `4` |
 | Applies to | Whether all initiatives inherit it or opt in. | `all`, `opt_in` |
 | Active | Whether the metric appears and participates. | `true` |
@@ -260,7 +263,7 @@ Use these metric patterns.
 | Pattern | Typical configuration | Example |
 |---|---|---|
 | Baseline metric | `aggregation = last`, `is_benefit = false` | Annual Revenue Baseline |
-| Benefit input metric | `aggregation = sum`, `is_benefit = true` | Gross Margin Uplift |
+| Benefit input metric | `aggregation = sum`, `is_benefit = true` | Gross Profit Uplift |
 | Driver metric | `aggregation = sum`, often `is_benefit = false` or `benefit_class = revenue` | Revenue Uplift |
 | Formula metric | `aggregation = formula`, `is_benefit = false` unless intentionally a computed benefit | Gross Margin % |
 | Operational quantity | `value_type = number`, often `is_benefit = false` | Hours Saved |
@@ -324,24 +327,22 @@ Formula validation:
 - Formula metrics cannot reference themselves.
 - Formula dependency cycles are rejected.
 - Formula rows are computed on read, not stored as user-entered values.
-- Divide-by-zero currently results in a computed zero in rendered values.
-
-Operational caution: because divide-by-zero currently renders as zero, Finance
-users should treat a zero percentage on a formula row as a possible missing
-denominator, not automatically as true zero performance. For example, a zero
-`revenue_growth_pct` can mean no growth, but it can also mean the baseline
-revenue denominator was not configured.
+- Annual formula metrics use annual totals and return one annual result rather
+  than adding monthly percentages together.
+- A missing input, zero denominator, or result outside a configured valid range
+  is reported as **Not available** with a reason. It is never presented as a
+  genuine zero.
 
 Example:
 
 ```text
-gm_uplift_pct = gm_uplift / revenue_uplift * 100
+target_gross_margin_pct = target_gross_profit / target_revenue * 100
 ```
 
 Example with baseline:
 
 ```text
-target_revenue = baseline_annual_revenue_baseline + revenue_uplift
+target_revenue = annual_revenue_baseline + revenue_uplift
 ```
 
 ### 5.6 Hide, discard, or permanently delete a metric
@@ -352,15 +353,17 @@ Use the three actions for different situations:
 |---|---|---|
 | **Discard metric** | The row has never been saved. | Removes only the local unsaved editor row. |
 | **Hide** | The metric has history, dependencies, or may be needed later. | Keeps all values and references but removes the metric from normal active entry choices. |
-| **Delete metric** | A saved custom metric is genuinely unused. | Permanently removes the definition after dependency review and exact-key confirmation. |
+| **Delete metric** | Any saved tenant metric, including an installed default, is genuinely unused. | Permanently removes the definition after dependency review and exact-key confirmation. |
 
-System metrics do not show a Delete action. Hiding is the safe default for any
-metric that has been used in a live or archived initiative.
+Installed defaults are starting templates owned by the tenant. The **Default
+metric** badge records where they came from; it does not make them undeletable.
+Hiding remains the safe default for any metric that has been used in a live or
+archived initiative.
 
-To delete a custom metric:
+To delete a saved metric:
 
 1. Open **Admin → Financial Configuration → Metrics & formulas**.
-2. Select the saved custom metric.
+2. Select the saved metric.
 3. Choose **Delete metric**.
 4. Review the dependency ledger. It checks benefit lines, monthly values,
    initiative scope, initiative baselines, legacy selections, formulas, value
@@ -396,6 +399,9 @@ Important safeguards:
   may its formerly used metric become deletable.
 - A failed or blocked delete has no partial effect.
 - Reusing a deleted key creates a new definition and does not restore old data.
+- A deleted default is not recreated at the next sign-in or tenant bootstrap.
+- A recreated metric is tenant-created and does not inherit the **Default
+  metric** provenance badge.
 
 ### 5.7 Impact if metrics are missing or misconfigured
 
@@ -408,7 +414,7 @@ Important safeguards:
 | Formula metric expected as input | Users cannot enter it because formula metrics are read-only. |
 | Percentage metric uses `sum` instead of `formula` or carefully chosen `avg` | Portfolio percentages can be mathematically wrong. |
 | Baseline metrics missing | Baseline cards, initiative portfolio reconciliation, and target/rate formulas are incomplete. |
-| Inactive metrics used in formulas | Formula save or calculation can fail or return zero. |
+| Inactive metrics used in formulas | Formula save fails, or an existing calculation reports **Not available** with its reason. |
 
 ---
 
@@ -1253,25 +1259,36 @@ Use this as a starting point.
 | Key | Label | Type | Aggregation | Benefit class | Benefit? |
 |---|---|---|---|---|---|
 | `annual_revenue_baseline` | Annual Revenue Baseline | currency | last | none | no |
-| `annual_gross_margin_baseline` | Annual Gross Margin Baseline | currency | last | none | no |
+| `annual_gross_profit_baseline` | Annual Gross Profit Baseline | currency | last | none | no |
 | `revenue_uplift` | Revenue Uplift | currency | sum | revenue | yes |
-| `gm_uplift` | Gross Margin Uplift | currency | sum | margin | yes |
+| `gross_profit_uplift` | Gross Profit Uplift | currency | sum | margin | yes |
 | `cost_savings` | Cost Savings | currency | sum | savings | yes |
 | `target_revenue` | Target Revenue | currency | formula | none | no |
-| `target_gross_margin` | Target Gross Margin | currency | formula | none | no |
+| `target_gross_profit` | Target Gross Profit | currency | formula | none | no |
+| `target_cogs` | Target COGS | currency | formula | none | no |
 | `revenue_growth_pct` | Revenue Growth % | percent | formula | none | no |
-| `gross_margin_run_rate_pct` | Gross Margin Run-rate % | percent | formula | none | no |
-| `gm_improvement_pct` | Gross Margin Improvement % | percent | formula | none | no |
+| `baseline_gross_margin_pct` | Baseline Gross Margin % | percent | formula | none | no |
+| `target_gross_margin_pct` | Target Gross Margin % | percent | formula | none | no |
+| `gross_margin_change_pp` | Gross Margin Change (pp) | number | formula | none | no |
+| `target_cogs_pct` | Target COGS % | percent | formula | none | no |
 
 Formulas:
 
 ```text
-target_revenue = baseline_annual_revenue_baseline + revenue_uplift
-target_gross_margin = baseline_annual_gross_margin_baseline + gm_uplift
-revenue_growth_pct = revenue_uplift / baseline_annual_revenue_baseline * 100
-gross_margin_run_rate_pct = target_gross_margin / target_revenue * 100
-gm_improvement_pct = gm_uplift / baseline_annual_gross_margin_baseline * 100
+target_revenue = annual_revenue_baseline + revenue_uplift
+target_gross_profit = annual_gross_profit_baseline + gross_profit_uplift
+target_cogs = target_revenue - target_gross_profit
+revenue_growth_pct = revenue_uplift / annual_revenue_baseline * 100
+baseline_gross_margin_pct = annual_gross_profit_baseline / annual_revenue_baseline * 100
+target_gross_margin_pct = target_gross_profit / target_revenue * 100
+gross_margin_change_pp = target_gross_margin_pct - baseline_gross_margin_pct
+target_cogs_pct = target_cogs / target_revenue * 100
 ```
+
+For example, a $100M revenue baseline, $40M gross-profit baseline, $5M revenue
+uplift, and $3M gross-profit uplift produces $105M target revenue, $43M target
+gross profit, $62M target COGS, 40.0000% baseline gross margin, 40.9524% target
+gross margin, a 0.9524 percentage-point improvement, and 59.0476% target COGS.
 
 ### 16.2 Scenarios
 
@@ -1301,7 +1318,7 @@ gm_improvement_pct = gm_uplift / baseline_annual_gross_margin_baseline * 100
 | Row | Kind | Inputs | Sign |
 |---|---|---|---:|
 | Revenue Uplift | metric_set | `revenue_uplift` | + |
-| Gross Margin Uplift | metric_set | `gm_uplift` | + |
+| Gross Profit Uplift | metric_set | `gross_profit_uplift` | + |
 | Cost Savings | metric_set | `cost_savings` | + |
 | Recurring Costs | cost_set | software, maintenance, labor | - |
 | One-off Investment | cost_set | implementation, consulting, tooling, training | - |
@@ -1312,7 +1329,7 @@ gm_improvement_pct = gm_uplift / baseline_annual_gross_margin_baseline * 100
 Set at least:
 
 - Annual Revenue Baseline,
-- Annual Gross Margin Baseline.
+- Annual Gross Profit Baseline.
 
 Then allocate the same baseline metrics across initiatives. The Initiative
 Portfolio should reconcile to zero variance or an explained rounding variance.

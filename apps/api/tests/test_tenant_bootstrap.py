@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+from app.services.financial_metric_catalog import (
+    CANONICAL_FINANCIAL_METRICS,
+    FINANCIAL_METRIC_CATALOG_VERSION,
+)
 from app.services.tenant_bootstrap import TenantBootstrapService
 
 
 class _Result:
     def __init__(self, data: object = None) -> None:
         self.data = data
+
+    def execute(self) -> _Result:
+        return self
 
 
 class _Query:
@@ -58,6 +65,21 @@ class _Client:
         self.touched_tables.append(table_name)
         return _Query(self, table_name)
 
+    def rpc(self, function_name: str, payload: dict[str, object]) -> _Result:
+        assert function_name == "install_financial_metric_catalog"
+        assert payload["p_catalog_version"] == FINANCIAL_METRIC_CATALOG_VERSION
+        catalog = payload["p_catalog"]
+        assert isinstance(catalog, dict)
+        self.rows["financial_metric_definitions"] = list(catalog["metrics"])
+        return _Result(
+            {
+                "financial_scenarios": len(catalog["scenarios"]),
+                "financial_metric_definitions": len(catalog["metrics"]),
+                "financial_cost_categories": len(catalog["cost_categories"]),
+                "financial_bridge_rows": len(catalog["bridge_rows"]),
+            }
+        )
+
 
 def test_tenant_bootstrap_creates_financial_and_dashboard_defaults_only() -> None:
     client = _Client()
@@ -66,7 +88,7 @@ def test_tenant_bootstrap_creates_financial_and_dashboard_defaults_only() -> Non
 
     assert result["settings"] == 1
     assert result["financial_scenarios"] == 4
-    assert result["financial_metric_definitions"] == 10
+    assert result["financial_metric_definitions"] == 13
     assert result["financial_cost_categories"] == 8
     assert result["financial_bridge_rows"] == 6
     assert result["dashboards"] == 10
@@ -74,6 +96,13 @@ def test_tenant_bootstrap_creates_financial_and_dashboard_defaults_only() -> Non
     assert result["stage_gate_definitions"] == 0
     assert "business_units" not in client.touched_tables
     assert "workstreams" not in client.touched_tables
+    assert all(metric["semantic_role"] for metric in CANONICAL_FINANCIAL_METRICS)
+    assert all(
+        metric["evaluation_grain"] == "annual"
+        for metric in CANONICAL_FINANCIAL_METRICS
+        if metric["aggregation"] == "formula"
+    )
+    assert "roi_actual" not in {metric["key"] for metric in CANONICAL_FINANCIAL_METRICS}
     dashboards = client.rows["tenant_dashboard_config"]
     enabled = {row["dashboard_key"] for row in dashboards if row["is_enabled"]}  # type: ignore[index]
     assert enabled == {

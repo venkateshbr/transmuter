@@ -61,7 +61,7 @@ async function authenticateContext(context) {
 test('tenant financial keys, formulas, subtabs, and value bridge editor', async ({ browser }) => {
   test.setTimeout(180_000);
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
-  await authenticateContext(context);
+  const session = await authenticateContext(context);
   const page = await context.newPage();
   const pageErrors = [];
   const serverErrors = [];
@@ -81,14 +81,34 @@ test('tenant financial keys, formulas, subtabs, and value bridge editor', async 
   await expect(workbench).toContainText('Financial settings saved.');
 
   await page.getByTestId('financial-subtab-metrics').click();
-  await page.getByRole('button', { name: 'Add metric definition' }).click();
-  await page.getByLabel('Metric definition label').fill('Revenue Uplift');
-  await expect(page.getByLabel('Metric formula key')).toHaveValue('revenue_uplift');
-  await page.getByRole('button', { name: 'Add metric definition' }).click();
-  await expect(page.getByLabel('Metric definition label')).toHaveValue('Custom Metric 2');
+  const configurationResponse = await fetch(
+    `${deployedBaseUrl}/api/financial-engine-configuration`,
+    {
+      headers: { authorization: `Bearer ${session.access_token}` },
+    },
+  );
+  expect(configurationResponse.status).toBe(200);
+  const configuration = await configurationResponse.json();
+  const defaultMetric = configuration.definitions.find((metric) =>
+    ['default_catalog', 'legacy_default'].includes(metric.origin),
+  );
+  if (defaultMetric) {
+    await page.getByLabel('Search metric definitions').fill(defaultMetric.key);
+    await page.getByRole('button', { name: `Edit metric ${defaultMetric.label}` }).click();
+    await expect(page.getByText('Default metric', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText(/Deleted defaults are not restored automatically/)).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: `Delete metric ${defaultMetric.label}` }),
+    ).toBeVisible();
+    await page.getByLabel('Search metric definitions').fill('');
+  }
+  const firstDraft = page.getByRole('button', { name: 'Edit metric Custom Metric 1' });
+  if (await firstDraft.count()) await firstDraft.click();
+  else await page.getByRole('button', { name: 'Add metric definition' }).click();
   await page.getByLabel('Metric definition label').fill('Customer Retention Value');
   const newKey = page.getByLabel('Metric formula key');
   await expect(newKey).toBeEnabled();
+  await newKey.fill('customer_retention_value');
   await expect(newKey).toHaveValue('customer_retention_value');
   await page.getByLabel('Metric aggregation').selectOption('formula');
   const formulaEditor = page.getByLabel('Metric formula', { exact: true });

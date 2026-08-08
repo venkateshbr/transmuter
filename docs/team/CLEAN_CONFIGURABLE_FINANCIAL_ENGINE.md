@@ -1,16 +1,22 @@
 # Clean Configurable Financial Engine
 
-Status: Draft architecture contract for issue #228
-Parent: #227
+Status: Canonical architecture contract
+Current feature: #491
 Baseline release: `v0.4.0`
 
 ## Decision
 
-Transmuter will replace the current hardcoded financial model with a clean
-tenant-configurable metric engine. Current local/seed financial and initiative
-data may be deleted and reloaded. There is no requirement for a v1/v2 dual-write
-period, no legacy financial response compatibility, and no migration of existing
-demo data except through the new workbook reload path.
+Transmuter uses a tenant-configurable metric engine. Recommended metrics are
+installed as tenant-owned starter templates exactly once when a tenant is
+created. A starter metric is not a permanently protected platform object: an
+administrator may edit it or permanently delete it through the same governed,
+dependency-aware workflow used for any other tenant metric.
+
+Existing tenant financial history is durable. Catalogue upgrades must preserve
+metric IDs and references unless a tenant explicitly completes a reviewed
+migration. Re-running registration, billing provisioning, or environment
+bootstrap must never recreate a starter metric that a tenant intentionally
+deleted.
 
 The release tag `v0.4.0` preserves the pre-refactor implementation.
 
@@ -47,8 +53,10 @@ Core tables:
   Required semantics: `key`, `label`, `value_type`, `unit`, `direction`,
   `aggregation`, `rollup_type`, `is_benefit`, `benefit_class`,
   `cost_behavior`, `formula`, `formula_inputs`, `precision`,
-  `display_order`, `applies_to`, `validation`, active/system flags, audit
-  columns.
+  `display_order`, `applies_to`, `validation`, `origin`, `catalog_version`,
+  optional `semantic_role`, formula evaluation grain, active flag, and audit
+  columns. `is_system` is reserved for genuinely platform-invariant records;
+  financial starter metrics are tenant-owned.
 
 - `financial_scenarios`
   Defines tenant lanes such as baseline, plan base, plan high, actual, downside,
@@ -109,8 +117,8 @@ Existing structures to remove or demote:
 Admin/config APIs:
 
 - list/create/update/deactivate metric definitions
-- preview dependency-aware metric deletion and permanently delete an unused
-  custom metric only after exact-key confirmation
+- preview dependency-aware metric deletion and permanently delete any unused
+  tenant-owned metric only after exact-key confirmation
 - list/create/update/deactivate scenarios
 - get/update reporting settings
 - list/update bridge rows
@@ -144,16 +152,56 @@ Required behavior:
 - supported operators: `+`, `-`, `*`, `/`, parentheses, metric keys
 - formula inputs must be validated against active metric definitions
 - dependency cycles must be rejected before saving definitions
-- divide-by-zero returns null/blank, not an exception in report rendering
+- missing inputs and divide-by-zero return an explicit not-computable status,
+  not a financial zero
 - formula metrics are read-only in entry grids
 - percentages should be recomputed from rolled-up inputs at each grain, not
   averaged unless the tenant explicitly chooses average aggregation
+- annual formulas aggregate their period inputs by initiative, scenario, and
+  year before injecting an annual baseline once
+- computed outputs must satisfy the definition's validation range
+
+## Default Financial Metric Catalogue
+
+The current starter catalogue for a newly created tenant is versioned and
+installed once. Entered metrics are:
+
+| Key | Label | Meaning |
+|---|---|---|
+| `annual_revenue_baseline` | Annual Revenue Baseline | Original annual revenue. |
+| `annual_gross_profit_baseline` | Annual Gross Profit Baseline | Original annual gross-profit amount. |
+| `revenue_uplift` | Revenue Uplift | Incremental revenue. |
+| `gross_profit_uplift` | Gross Profit Uplift | Incremental gross profit. |
+| `cost_savings` | Cost Savings | Savings not already represented as gross-profit uplift. |
+
+Derived annual metrics are:
+
+```text
+target_revenue = annual_revenue_baseline + revenue_uplift
+target_gross_profit = annual_gross_profit_baseline + gross_profit_uplift
+target_cogs = target_revenue - target_gross_profit
+revenue_growth_pct = revenue_uplift / annual_revenue_baseline * 100
+baseline_gross_margin_pct = annual_gross_profit_baseline / annual_revenue_baseline * 100
+target_gross_margin_pct = target_gross_profit / target_revenue * 100
+gross_margin_change_pp = target_gross_margin_pct - baseline_gross_margin_pct
+target_cogs_pct = target_cogs / target_revenue * 100
+```
+
+The catalogue does not seed a generic ROI metric. ROI requires a governed
+definition of eligible costs, benefit basis, measurement horizon, and
+annualization. Gross profit is a currency amount; gross margin is a percentage.
+
+Catalogue installation has a durable tenant-scoped installation record. It is
+not a missing-key repair loop. An explicit future restore action may offer
+recommended defaults, but it must disclose conflicts and never overwrite a
+tenant metric.
 
 ## Metric Deletion Contract
 
 Metric deletion is a governed destructive action, not a generic table delete.
-System metrics are immutable. A custom metric is deletable only when no
-surviving tenant record depends on it.
+A tenant-owned metric is deletable only when no surviving tenant record depends
+on it. `default_catalog`, `legacy_default`, and `tenant` provenance all use the
+same safety policy.
 
 | Reference | Metric-side action | Deletion treatment |
 |---|---|---|
@@ -189,9 +237,10 @@ impact is safe. A database trigger rejects direct authenticated deletes that do
 not pass through this confirmed workflow. Missing and cross-tenant metric IDs
 both return `404`; blockers return `409` with the refreshed impact.
 
-Tenant-facing create input does not contain `is_system`. The service forces new
-metrics to custom and a database trigger prevents a direct authenticated insert
-from claiming system status. API capability checks and RLS both permit financial
+Tenant-facing create input does not contain `is_system`, catalogue provenance,
+or catalogue version. The service creates tenant-origin metrics, and database
+controls prevent a direct authenticated insert from claiming platform or
+catalogue provenance. API capability checks and RLS both permit financial
 configuration only to `transformation_office`, `tenant_admin`, and
 `finance_lead`.
 

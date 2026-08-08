@@ -36,6 +36,75 @@ Deployment note:
 
 ## Current Release Entries
 
+### 2026-08-08 - Tenant-Owned Canonical Financial Metric Catalogue
+
+Status: deployed to development; database, API, security, and browser acceptance complete; production pending explicit founder approval
+
+GitHub tracking:
+
+- Parent issue `#491`; stacked PR `#498` based on
+  `feat/454-financial-metric-deletion`.
+- Runtime and migration commit: `4d48073`.
+- Reproducible browser and database acceptance head: `2f78b30`.
+
+Runtime changes:
+
+- New tenants receive the versioned `financial-v2` catalogue exactly once: five
+  entered metrics and eight annual formula metrics covering revenue, gross
+  profit, COGS, growth, gross-margin rates, and percentage-point change.
+- Existing metric IDs and financial history remain unchanged. Prior starter
+  rows become tenant-owned `legacy_default` metrics; no legacy formula or value
+  is silently reinterpreted.
+- `default_catalog`, `legacy_default`, and tenant-created metrics use the same
+  dependency-aware deletion, RBAC, exact-key, row-lock, and direct-delete
+  protections. Deleting a default does not cause bootstrap to recreate it.
+- Formula results preserve Decimal string values and add explicit calculation
+  status/reason. Annual percentages use ratios of rolled-up inputs; missing
+  inputs, zero denominators, and invalid ranges are not presented as true zero.
+- Financial Configuration shows default provenance and exposes Delete for every
+  saved tenant metric. Administration and detailed financial guides include the
+  corrected catalogue and a worked numerical example.
+
+Validation:
+
+- Focused catalogue, bootstrap, formula, migration, and deletion tests passed
+  `22/22`; the broader backend slice passed `73/73`.
+- Auth, RLS, identity, and security controls passed `73/73`, with 13
+  environment-dependent cases skipped.
+- Ruff, TypeScript, Angular production build, diff checks, and graphify refresh
+  passed.
+- Real rollback-only PostgreSQL acceptance verified default deletion,
+  confirmation enforcement, tenant isolation, dependency cleanup disclosure,
+  direct-delete rejection, atomic first installation, repeated-install no-op,
+  and non-resurrection after deletion with no persistent test data.
+- Real authenticated API acceptance passed formula-blocked deletion followed by
+  dependency removal and permanent deletion.
+- Both deployed Playwright Financial Configuration scenarios passed. A
+  reversible `acceptance-fixture` default metric showed the provenance badge,
+  explanation, and Delete action, then was deleted through the authenticated
+  API and confirmed absent.
+
+Development deployment:
+
+- Environment: `https://transmuter-dev.ishirock.tech`.
+- Schema: `transmuter_dev`.
+- Migration/schema job: `transmuter-schema-dev-20260808223130`.
+- Hostinger application action: `108381706` from runtime commit `4d48073`.
+- Public validation passed. Production was not changed.
+
+Schema SQL applied to development:
+
+- `supabase/migrations/20260808000004_tenant_owned_financial_metric_catalog.sql`
+
+Schema SQL required for production if explicitly promoted later:
+
+- `supabase/migrations/20260808000004_tenant_owned_financial_metric_catalog.sql`
+
+Production validation:
+
+- Not run. Production remains unchanged and must not be promoted without an
+  explicit founder instruction.
+
 ### 2026-08-08 - Dependency-Aware Financial Metric Deletion
 
 Status: deployed to development; real database, API, and browser acceptance complete; production pending explicit founder approval
