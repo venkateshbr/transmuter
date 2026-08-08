@@ -45,7 +45,7 @@ GitHub tracking:
 - Parent issue `#491`; stacked PR `#498` based on
   `feat/454-financial-metric-deletion`.
 - Runtime and migration commit: `4d48073`.
-- Reproducible browser-fixture/test head: `f30b053`.
+- Reproducible browser and database acceptance head: `2f78b30`.
 
 Runtime changes:
 
@@ -75,7 +75,8 @@ Validation:
   passed.
 - Real rollback-only PostgreSQL acceptance verified default deletion,
   confirmation enforcement, tenant isolation, dependency cleanup disclosure,
-  and direct-delete rejection with no persistent test data.
+  direct-delete rejection, atomic first installation, repeated-install no-op,
+  and non-resurrection after deletion with no persistent test data.
 - Real authenticated API acceptance passed formula-blocked deletion followed by
   dependency removal and permanent deletion.
 - Both deployed Playwright Financial Configuration scenarios passed. A
