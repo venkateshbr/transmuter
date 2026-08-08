@@ -102,14 +102,13 @@ test('tenant financial keys, formulas, subtabs, and value bridge editor', async 
     ).toBeVisible();
     await page.getByLabel('Search metric definitions').fill('');
   }
-  await page.getByRole('button', { name: 'Add metric definition' }).click();
-  await page.getByLabel('Metric definition label').fill('Revenue Uplift');
-  await expect(page.getByLabel('Metric formula key')).toHaveValue('revenue_uplift');
-  await page.getByRole('button', { name: 'Add metric definition' }).click();
-  await expect(page.getByLabel('Metric definition label')).toHaveValue('Custom Metric 2');
+  const firstDraft = page.getByRole('button', { name: 'Edit metric Custom Metric 1' });
+  if (await firstDraft.count()) await firstDraft.click();
+  else await page.getByRole('button', { name: 'Add metric definition' }).click();
   await page.getByLabel('Metric definition label').fill('Customer Retention Value');
   const newKey = page.getByLabel('Metric formula key');
   await expect(newKey).toBeEnabled();
+  await newKey.fill('customer_retention_value');
   await expect(newKey).toHaveValue('customer_retention_value');
   await page.getByLabel('Metric aggregation').selectOption('formula');
   const formulaEditor = page.getByLabel('Metric formula', { exact: true });

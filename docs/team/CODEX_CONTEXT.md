@@ -23,18 +23,21 @@ replace them.
   and web image `transmuter-web:hostinger`.
 - Hostinger dev Docker project uses API image `transmuter-api:hostinger-dev`
   and web image `transmuter-web:hostinger-dev`.
-- Current deployed application commit is `1991116` in dev and `4860a8a` in
+- Current deployed application commit is `4d48073` in dev and `4860a8a` in
   production. Dev includes the Dashboard/Operations reorganization, the
   dependency-aware Roadmap Explorer Gantt, the three-discipline operating
-  navigation, and dependency-aware financial metric deletion; production
-  remains on the earlier launch state.
+  navigation, dependency-aware financial metric deletion, and the tenant-owned
+  `financial-v2` starter metric catalogue; production remains on the earlier
+  launch state.
   Both environments include the five-tenant launch fixes, native meeting/browser
   acceptance, authenticated export and template-upload browser fixes, and the
   initiative Annual Baseline editor required for the ACME end-to-end demo, the
   sequential strategic-parameter persistence fix from issue `#422`, plus the
   earlier Microsoft Graph isolation controls. Production promotion completed
   on `2026-07-16` after the two required migrations were applied offline.
-- The latest dev financial-metric-deletion action is `108368538`; its schema and
+- The latest dev tenant-owned-metric-catalogue action is `108381706`; migration
+  `20260808000004_tenant_owned_financial_metric_catalog.sql` is applied only to
+  `transmuter_dev`. The prior financial-metric-deletion action is `108368538`; its schema and
   initial application action is `108367914`. The prior dev
   operating-navigation action is `108336503`; the Roadmap Explorer correction
   action is `108333564`; the initial
