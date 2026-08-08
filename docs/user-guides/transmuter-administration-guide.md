@@ -144,6 +144,25 @@ ACME example: FY2027 baseline revenue of $100M plus $4M revenue uplift produces 
 
 Financial scope controls which configured metrics and categories an initiative may use. For ACC-101 enable cost saving, implementation cost, and software cost. Avoid enabling every metric for every initiative; a smaller scope makes entry and review clearer.
 
+### 4.6 Metric lifecycle: hide before delete
+
+Unsaved metric rows can be discarded locally. Saved system metrics cannot be
+deleted. For a saved custom metric, choose **Delete metric** to run the full
+dependency check. Benefit lines, values, initiative scope and baselines,
+formulas, value-bridge membership, shared-cost rules, and historical allocations
+all block deletion. The dialog identifies the records that must be changed and
+offers **Hide instead**.
+
+Example: ACME cannot delete `cost_savings` while ACC-101 has a Cost Savings
+benefit line or while a Net Value formula references it. Finance should hide the
+metric if it is being retired. If the metric was a disposable unused pilot,
+type its exact immutable key in the confirmation field and permanently delete
+it. The dialog discloses any tenant annual-baseline rows that will be removed;
+no surviving initiative data is cascaded.
+
+For the field-by-field workflow and dependency examples, see the historical
+deep reference [Admin Financial Configuration User Guide](admin-financial-configuration-user-guide.md#56-hide-discard-or-permanently-delete-a-metric).
+
 ## 5. Dashboard administration
 
 The tenant navigation publishes only:

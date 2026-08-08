@@ -1147,6 +1147,17 @@ def test_financial_engine_consolidation_migration_is_dirty_rollup_tolerant() -> 
 def test_platform_tenant_delete_preview_includes_annual_baselines() -> None:
     assert "financial_initiative_annual_baselines" in TENANT_DELETE_TABLES
     assert "financial_tenant_annual_baselines" in TENANT_DELETE_TABLES
+    metric_index = TENANT_DELETE_TABLES.index("financial_metric_definitions")
+    for dependency_table in (
+        "financial_metric_formula_dependencies",
+        "financial_bridge_metric_memberships",
+        "financial_bridge_rows",
+        "initiative_financial_selections",
+        "financial_config_items",
+        "shared_cost_allocations",
+        "shared_cost_allocation_rules",
+    ):
+        assert TENANT_DELETE_TABLES.index(dependency_table) < metric_index
 
 
 def test_custom_tag_migration_removes_legacy_fixed_tag_constraint() -> None:

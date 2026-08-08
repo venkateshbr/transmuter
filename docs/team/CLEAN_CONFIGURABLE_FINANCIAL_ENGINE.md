@@ -109,6 +109,8 @@ Existing structures to remove or demote:
 Admin/config APIs:
 
 - list/create/update/deactivate metric definitions
+- preview dependency-aware metric deletion and permanently delete an unused
+  custom metric only after exact-key confirmation
 - list/create/update/deactivate scenarios
 - get/update reporting settings
 - list/update bridge rows
@@ -146,6 +148,52 @@ Required behavior:
 - formula metrics are read-only in entry grids
 - percentages should be recomputed from rolled-up inputs at each grain, not
   averaged unless the tenant explicitly chooses average aggregation
+
+## Metric Deletion Contract
+
+Metric deletion is a governed destructive action, not a generic table delete.
+System metrics are immutable. A custom metric is deletable only when no
+surviving tenant record depends on it.
+
+| Reference | Metric-side action | Deletion treatment |
+|---|---|---|
+| `financial_benefit_lines` | `RESTRICT` | Blocks and identifies benefit line and initiative. |
+| `financial_metric_values` | `RESTRICT` | Blocks and identifies initiative and period. |
+| `initiative_financial_scope` | `RESTRICT` | Blocks even when the scope row is inactive. |
+| `financial_initiative_annual_baselines` | `RESTRICT` | Blocks and identifies initiative and year. |
+| `initiative_financial_selections` | `RESTRICT` through normalized metric ID | Blocks legacy key-based initiative usage. |
+| `financial_config_items` | `RESTRICT` through normalized metric ID | Blocks compatibility configuration usage. |
+| `financial_metric_formula_dependencies` | `RESTRICT` on input metric | Blocks direct and `baseline_` formula references, including inactive formulas. |
+| `financial_bridge_metric_memberships` | `RESTRICT` | Blocks active and inactive value-bridge membership. |
+| `shared_cost_allocation_rules` | `RESTRICT` | Prevents an allocation driver from changing silently. |
+| `shared_cost_allocations` | `RESTRICT` | Preserves the metric used by historical allocation evidence. |
+| `financial_tenant_annual_baselines` | `CASCADE` | Allowed cleanup, but the preview must disclose its count. |
+
+Formula dependencies and bridge membership are normalized and maintained by
+database triggers while the public configuration response retains formula keys
+and bridge metric-ID arrays. Legacy selection and compatibility rows retain
+their text keys but also store a tenant-composite metric ID.
+
+The API contract is:
+
+```text
+GET    /admin/financial-engine/metrics/{metric_id}/deletion-impact
+DELETE /admin/financial-engine/metrics/{metric_id}
+       body: { "confirmation_key": "immutable_metric_key" }
+```
+
+The preview groups blocker counts and a bounded list of actionable references.
+The delete function locks the metric, recomputes impact in the same PostgreSQL
+transaction, validates the immutable key, and deletes only when the current
+impact is safe. A database trigger rejects direct authenticated deletes that do
+not pass through this confirmed workflow. Missing and cross-tenant metric IDs
+both return `404`; blockers return `409` with the refreshed impact.
+
+Tenant-facing create input does not contain `is_system`. The service forces new
+metrics to custom and a database trigger prevents a direct authenticated insert
+from claiming system status. API capability checks and RLS both permit financial
+configuration only to `transformation_office`, `tenant_admin`, and
+`finance_lead`.
 
 ## Workbook Reload
 

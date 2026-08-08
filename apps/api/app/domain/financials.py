@@ -171,7 +171,6 @@ class FinancialMetricDefinitionBase(BaseModel):
     display_order: int = 0
     applies_to: FinancialMetricAppliesTo = "opt_in"
     validation: dict[str, object] = Field(default_factory=dict)
-    is_system: bool = False
     is_active: bool = True
 
 
@@ -202,8 +201,60 @@ class FinancialMetricDefinitionUpdate(BaseModel):
 
 class FinancialMetricDefinition(FinancialMetricDefinitionBase):
     id: str
+    is_system: bool = False
     created_by: str | None = None
     updated_by: str | None = None
+
+
+class FinancialMetricDeletionReference(BaseModel):
+    id: str
+    initiative_id: str | None = None
+    initiative_name: str | None = None
+    label: str
+
+
+class FinancialMetricDeletionCategory(BaseModel):
+    count: int = 0
+    references: list[FinancialMetricDeletionReference] = Field(default_factory=list)
+
+
+class FinancialMetricDeletionBlockers(BaseModel):
+    benefit_lines: FinancialMetricDeletionCategory
+    metric_values: FinancialMetricDeletionCategory
+    initiative_scope: FinancialMetricDeletionCategory
+    initiative_baselines: FinancialMetricDeletionCategory
+    legacy_selections: FinancialMetricDeletionCategory
+    legacy_configuration: FinancialMetricDeletionCategory
+    formula_dependencies: FinancialMetricDeletionCategory
+    bridge_rows: FinancialMetricDeletionCategory
+    shared_cost_rules: FinancialMetricDeletionCategory
+    shared_cost_allocations: FinancialMetricDeletionCategory
+
+
+class FinancialMetricDeletionCleanup(BaseModel):
+    tenant_annual_baselines: FinancialMetricDeletionCategory
+
+
+class FinancialMetricDeletionMetric(BaseModel):
+    id: str
+    key: str
+    label: str
+    is_system: bool
+    is_active: bool
+
+
+class FinancialMetricDeletionImpact(BaseModel):
+    metric: FinancialMetricDeletionMetric
+    can_delete: bool
+    blocked_by_system: bool
+    blocker_total: int
+    blockers: FinancialMetricDeletionBlockers
+    cleanup: FinancialMetricDeletionCleanup
+    confirmation_key: str
+
+
+class FinancialMetricDeleteRequest(BaseModel):
+    confirmation_key: str = Field(..., min_length=1, max_length=120)
 
 
 class FinancialScenarioDefinitionBase(BaseModel):
